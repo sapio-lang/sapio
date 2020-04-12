@@ -35,7 +35,7 @@ class Transaction:
 
 from contract import *
 
-class UndoSend(metaclass=MetaContract):
+class UndoSend(Contract):
     class Fields:
         from_contract: Contract
         to_key: PubKey
@@ -52,7 +52,7 @@ class UndoSend(metaclass=MetaContract):
         return tx
 
 
-class Vault(metaclass=MetaContract):
+class Vault(Contract):
     class Fields:
         cold_storage: Contract
         hot_storage: Contract
@@ -89,7 +89,7 @@ class Vault(metaclass=MetaContract):
         return tx
 
 
-class PayToPubKey(metaclass=MetaContract):
+class PayToPubKey(Contract):
     class Fields:
         key: PubKey
         amount: Amount
@@ -122,7 +122,7 @@ class TreePay(metaclass=MetaContract):
 def libsecp_make_musig(x):
     return "0"*32
 
-class CollapsibleTree(metaclass=MetaContract):
+class CollapsibleTree(Contract):
     class Fields:
         payments: List[Tuple[Amount, PubKey]]
         radix: int
@@ -158,6 +158,7 @@ def main() -> None:
     pk1 = PayToPubKey(key=key1, amount=1)
     t= TransactionTemplate()
     t.add_output(10, Vault(cold_storage=pk1, hot_storage=key2, n_steps=10, timeout=Weeks(1), mature=Weeks(2), amount_step=1))
+
     import os
     payments = [(10, PayToPubKey(key=os.urandom(4), amount=10)) for _ in range(102)]
     CollapsibleTree(payments=payments, radix=4)

@@ -1,5 +1,4 @@
 from __future__ import annotations
-class Contract: pass
 
 from typing import TypeVar
 
@@ -12,7 +11,7 @@ class MetaContract(type):
         super().__init__(cls, name, bases)
         cls.variables = typing.get_type_hints(cls.Fields)
 
-        def __init__(self, **kwargs):
+        def __init__(self, **kwargs : Any):
             if len(kwargs) != len(cls.variables):
                 raise AssertionError("args {} does not cover {}".format(kwargs.keys(), cls.variables.keys()))
             for key in kwargs:
@@ -181,3 +180,7 @@ class TransactionTemplate:
         self.outputs.append((amount, contract))
     def total_amount(self):
         return sum(a for (a,_) in self.outputs)
+
+class Contract(metaclass=MetaContract):
+    class Fields:
+        pass
