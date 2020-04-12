@@ -3,6 +3,7 @@ from util import *
 from typing import List
 from typing import TypeVar, Generic, Any
 from typing import Union
+from bitcoinlib.script import CScript
 
 from opcodes import Op, PushNumber
 from my_types import *
@@ -166,21 +167,18 @@ class ProgramBuilder:
         if cases == 2:
             witnesses[0] = [1]
             witnesses[1] = [0]
-            branchA = b""
-            branchB = b""
-            for frag in cnf[0]:
-                branchA += self._compile(frag, witnesses[0])
-            for frag in cnf[1]:
-                branchB += self._compile(frag, witnesses[1])
-            script = b"".join([Op.If,
-                               branchA,
+            # note order of side effects!
+            branch_a = CScript([self._compile(frag, witnesses[0]) for frag in cnf[0]])
+            branch_b = CScript([self._compile(frag, witnesses[1]) for frag in cnf[1]])
+            script = CScript([Op.If,
+                               branch_a,
                                Op.Else,
-                               branchB,
+                               branch_b,
                                Op.EndIf,
-                               PushNumber(1)])
+                               1])
         else:
             # Check that the first argument passed is an in range execution path
-            script = b"".join([Op.Dup, PushNumber(0), PushNumber(cases), Op.Within, Op.Verify])
+            script = CScript([Op.Dup, 0, cases, Op.Within, Op.Verify])
             for (idx, frag) in enumerate(cnf):
                 witnesses[idx] = [idx + 1]
                 script += Op.SubOne + Op.IfDup + Op.NotIf
@@ -285,36 +283,36 @@ class ProgramBuilder:
         return [[arg]]
 
     @methdispatch
-    def _compile(self, arg: Clause, witness) -> bytes:
+    def _compile(self, arg: Clause, witness) -> CScript:
         raise NotImplementedError("Cannot Compile Arg", arg)
 
     @_compile.register
-    def _(self, arg: SignatureCheckClause, witness) -> bytes:
-        return self._compile(arg.b, witness) + self._compile(arg.a, witness) + Op.Check_sig_verify
+    def _(self, arg: SignatureCheckClause, witness) -> CScript:
+        return self._compile(arg.b, witness) + self._compile(arg.a, witness) + CScript([Op.Check_sig_verify])
 
     @_compile.register
-    def _(self, arg: PreImageCheckClause, witness) -> bytes:
+    def _(self, arg: PreImageCheckClause, witness) -> CScript:
         return self._compile(arg.b, witness) + Op.Sha256 + self._compile(arg.a, witness) + Op.Equal
 
     @_compile.register
-    def _(self, arg: CheckTemplateVerifyClause, witness) -> bytes:
+    def _(self, arg: CheckTemplateVerifyClause, witness) -> CScript:
         # While valid to make this a witness variable, this is likely an error
         print(arg, arg.a, arg.a.value)
         assert arg.a.value is not None
-        return self._compile(arg.a, witness) + Op.CheckTemplateVerify + Op.Drop
+        return self._compile(arg.a, witness) + CScript([Op.CheckTemplateVerify, Op.Drop])
 
     @_compile.register
-    def _(self, arg: AfterClause, witness) -> bytes:
+    def _(self, arg: AfterClause, witness) -> CScript:
         # While valid to make this a witness variable, this is likely an error
         assert arg.a.value is not None
         if isinstance(arg.a.value, AbsoluteTimeSpec):
-            return  PushNumber(arg.a.value.time) + Op.CheckLockTimeVerify + Op.Drop
+            return CScript([arg.a.value.time, Op.CheckLockTimeVerify, Op.Drop])
         if isinstance(arg.a.value, RelativeTimeSpec):
-            return PushNumber(arg.a.value.time) + Op.CheckSequenceVerify + Op.Drop
+            return CScript([arg.a.value.time, Op.CheckSequenceVerify, Op.Drop])
         raise ValueError
 
     @_compile.register
-    def _(self, arg: Variable, witness) -> bytes:
+    def _(self, arg: Variable, witness) -> CScript:
         if arg.value is None:
             # Todo: this is inefficient...
             witness.insert(0, arg.name)
