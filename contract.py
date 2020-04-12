@@ -1,66 +1,7 @@
 from __future__ import annotations
-
 from typing import TypeVar
-
 import typing
 from lang import *
-
-
-class MetaContract(type):
-    def __init__(cls, name, bases, dct):
-        super().__init__(cls, name, bases)
-        cls.variables = typing.get_type_hints(cls.Fields)
-
-        def __init__(self, **kwargs : Any):
-            if len(kwargs) != len(cls.variables):
-                raise AssertionError("args {} does not cover {}".format(kwargs.keys(), cls.variables.keys()))
-            for key in kwargs:
-                if key not in cls.variables:
-                    raise AssertionError("Key '{}' not in {}".format(key, cls.variables.keys()))
-                setattr(self, key, Variable(key, kwargs[key]) if not isinstance(kwargs[key], Variable) else kwargs[key])
-
-            paths = []
-            self.amount_range = [21e6*100e6,0]
-            for (k, v) in dct.items():
-                if hasattr(v, 'is_path'):
-                    txn = getattr(self, k)()
-                    amount = txn.total_amount()
-                    self.amount_range = [min(self.amount_range[0], amount),
-                                         max(self.amount_range[1], amount)]
-                    ctv_hash = txn.get_ctv_hash()
-                    ctv = CheckTemplateVerifyClause(Variable(ctv_hash, ctv_hash))
-                    if v.unlock_with is None:
-                        paths.append(ctv)
-                    else:
-                        unlock_clause: Clause = v.unlock_with(self)
-                        paths.append(
-                            AndClause(unlock_clause, ctv)
-                        )
-
-                if hasattr(v, 'is_condition'):
-                    paths.append((v.unlock_with)(self))
-            while len(paths) >= 2:
-                a = paths.pop()
-                b = paths.pop()
-                paths.append(OrClause(a, b))
-            else:
-                if len(paths):
-                    paths = paths[0]
-                else:
-                    paths = None
-            self.scriptPubKey, self.witnesses = ProgramBuilder().compile(paths)
-            print("\nContract:")
-            print(paths)
-            print(repr(self.scriptPubKey))
-            print((self.scriptPubKey))
-            print(type(self.scriptPubKey))
-            print(self.witnesses)
-
-        setattr(cls, "__init__", __init__)
-
-
-T = TypeVar("T")
-
 from functools import singledispatch, wraps
 
 T = TypeVar("T")
@@ -181,6 +122,72 @@ class TransactionTemplate:
     def total_amount(self):
         return sum(a for (a,_) in self.outputs)
 
+
+import inspect
+class ExtraArgumentError(AssertionError): pass
+class MissingArgumentError(AssertionError): pass
+class MetaContract(type):
+    def __init__(cls, name, bases, dct):
+        super().__init__(cls, name, bases)
+        variables = typing.get_type_hints(cls.Fields)
+        params = [inspect.Parameter("self", inspect.Parameter.POSITIONAL_ONLY)] + \
+                 [inspect.Parameter(param,
+                                    inspect.Parameter.KEYWORD_ONLY,
+                                    annotation=type_)
+                  for param, type_ in variables.items()]
+        path_funcs = [v for (k,v) in cls.__dict__.items() if hasattr(v, 'is_path')]
+        unlock_funcs = [v for (k,v) in cls.__dict__.items() if hasattr(v, 'is_condition')]
+        def init_class(self, **kwargs: Any):
+            if kwargs.keys() != variables.keys():
+                for key in variables:
+                    if key not in kwargs:
+                        raise MissingArgumentError("Missing Argument: Keyword arg {} missing".format(key))
+                for key in kwargs:
+                    if key not in variables:
+                        raise ExtraArgumentError("Extra Argument: Key '{}' not in {}".format(key, variables.keys()))
+            for key in kwargs:
+                # todo: type check here?
+                if isinstance(kwargs[key], Variable):
+                    setattr(self, key, kwargs[key])
+                else:
+                    setattr(self, key, Variable(key, kwargs[key]))
+
+            paths = []
+            self.amount_range = [21e6 * 100e6, 0]
+            for func in path_funcs:
+                txn = func(self)
+                amount = txn.total_amount()
+                self.amount_range = [min(self.amount_range[0], amount),
+                                     max(self.amount_range[1], amount)]
+                ctv_hash = txn.get_ctv_hash()
+                ctv = CheckTemplateVerifyClause(Variable(ctv_hash, ctv_hash))
+                paths.append(ctv)
+                if func.unlock_with is not None:
+                    unlock_clause: Clause = func.unlock_with(self)
+                    paths[-1] = AndClause(paths[-1], unlock_clause)
+            for func in unlock_funcs:
+                paths.append(func.unlock_with(self))
+
+            # prepare for passing to the API...
+            # TODO: this gets undone immediately, so maybe
+            # provide interface to skip it
+            if not paths:
+                raise AssertionError("Must Have at least one spending condition")
+            while len(paths) > 1:
+                p = paths.pop()
+                paths[0] = OrClause(paths[-1], p)
+            self.scriptPubKey, self.witnesses = ProgramBuilder().compile(paths[0])
+            print("\nContract:")
+            print(repr(self.scriptPubKey))
+            print(self.witnesses)
+
+        sig = inspect.signature(init_class)
+        init_class.__signature__ = inspect.Signature(params)
+        init_class.__annotations__ = variables.copy()
+        setattr(cls, "__init__", init_class)
+
+
 class Contract(metaclass=MetaContract):
     class Fields:
         pass
+

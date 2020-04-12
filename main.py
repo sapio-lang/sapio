@@ -102,7 +102,7 @@ def segment_by_radix(L, n):
     for i in range(0, len(L), size):
         yield L[i:i+size]
 from typing import Tuple
-class TreePay(metaclass=MetaContract):
+class TreePay(Contract):
     class Fields:
         payments: List[Tuple[Amount, Contract]]
         radix: int
@@ -145,6 +145,7 @@ class CollapsibleTree(Contract):
     def _(self):pass
 
 
+#import sys; sys.exit()
 
 
 
