@@ -49,10 +49,12 @@ class MetaContract(type):
                     paths = paths[0]
                 else:
                     paths = None
-            print("\nContract:")
-            print("{}".format(paths))
             self.scriptPubKey, self.witnesses = ProgramBuilder().compile(paths)
-            print(self.scriptPubKey)
+            print("\nContract:")
+            print(paths)
+            print(repr(self.scriptPubKey))
+            print((self.scriptPubKey))
+            print(type(self.scriptPubKey))
             print(self.witnesses)
 
         setattr(cls, "__init__", __init__)

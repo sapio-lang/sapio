@@ -5,7 +5,7 @@ from typing import TypeVar, Generic, Any
 from typing import Union
 from bitcoinlib.script import CScript
 
-from opcodes import Op, PushNumber
+from opcodes import Op
 from my_types import *
 
 MODE = "+"  # "str"
@@ -152,19 +152,20 @@ class ProgramBuilder:
             clause = self.normalize(clause)
         return self.flatten(clause)
 
-    def compile(self, clause: Clause) -> (bytes, List[Any]):
+    def compile(self, clause: Clause) -> (CScript, List[Any]):
         cnf = self.compile_cnf(clause)
         cases = len(cnf)
         witnesses = [[]] * len(cnf)
-        script = b""
+        script = CScript()
         # If we have one or two cases, special case the emitted scripts
         # 3 or more, use a generic wrapper
         if cases == 1:
             for frag in cnf[0]:
-                script += self._compile(frag, witnesses[0])
-                # Hack because the fragment compiler leaves stack empty
-                script += PushNumber(1)
-        if cases == 2:
+                compiled_frag = self._compile(frag, witnesses[0])
+                script += compiled_frag
+            # Hack because the fragment compiler leaves stack empty
+            script += CScript([1])
+        elif cases == 2:
             witnesses[0] = [1]
             witnesses[1] = [0]
             # note order of side effects!
@@ -181,11 +182,11 @@ class ProgramBuilder:
             script = CScript([Op.Dup, 0, cases, Op.Within, Op.Verify])
             for (idx, frag) in enumerate(cnf):
                 witnesses[idx] = [idx + 1]
-                script += Op.SubOne + Op.IfDup + Op.NotIf
+                script += CScript([Op.SubOne, Op.IfDup, Op.NotIf])
 
                 for cl in frag:
                     script += self._compile(cl, witnesses[idx])
-                script += Op.Zero + Op.EndIf
+                script += CScript([Op.Zero,  Op.EndIf])
         return script, witnesses
 
     # Normalize Bubbles up all the OR clauses into a CNF
@@ -292,14 +293,16 @@ class ProgramBuilder:
 
     @_compile.register
     def _(self, arg: PreImageCheckClause, witness) -> CScript:
-        return self._compile(arg.b, witness) + Op.Sha256 + self._compile(arg.a, witness) + Op.Equal
+        return self._compile(arg.b, witness) +\
+               CScript([Op.Sha256]) + self._compile(arg.a, witness) + CScript([Op.Equal])
 
     @_compile.register
     def _(self, arg: CheckTemplateVerifyClause, witness) -> CScript:
         # While valid to make this a witness variable, this is likely an error
-        print(arg, arg.a, arg.a.value)
         assert arg.a.value is not None
-        return self._compile(arg.a, witness) + CScript([Op.CheckTemplateVerify, Op.Drop])
+        assert isinstance(arg.a.value, bytes)
+        s= CScript([arg.a.value, Op.CheckTemplateVerify, Op.Drop])
+        return s
 
     @_compile.register
     def _(self, arg: AfterClause, witness) -> CScript:
@@ -316,6 +319,6 @@ class ProgramBuilder:
         if arg.value is None:
             # Todo: this is inefficient...
             witness.insert(0, arg.name)
-            return b""
+            return CScript()
         else:
-            return arg.value
+            return CScript([arg.value])

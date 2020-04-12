@@ -430,6 +430,8 @@ class CScript(bytes):
                 other = bytes([OP_1NEGATE])
             else:
                 other = CScriptOp.encode_op_pushdata(bn2vch(other))
+        elif isinstance(other, CScript):
+            pass
         elif isinstance(other, (bytes, bytearray)):
             other = CScriptOp.encode_op_pushdata(other)
         return other

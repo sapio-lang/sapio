@@ -33,32 +33,3 @@ class Op:
     If = OP_IF
     Else = OP_ELSE
 
-
-# TODO: Make real
-def PushData(data):
-    if isinstance(data, bytes):
-        op = Op.PushByte + bytes([len(data)])
-        return b"".join([op, data])
-    if isinstance(data, int):
-        return b"".join(bytes([Op.PushByte, data]), data)
-
-
-def PushNumber(value):
-    if value <= 16:
-        return b" "+b(value)
-    else:
-        r = bytearray(0)
-        if value == 0:
-            return bytes(r)
-        neg = value < 0
-        absvalue = -value if neg else value
-        while (absvalue):
-            r.append(absvalue & 0xff)
-            absvalue >>= 8
-        if r[-1] & 0x80:
-            r.append(0x80 if neg else 0)
-        elif neg:
-            r[-1] |= 0x80
-        return bytes([len(r)]) + r
-
-

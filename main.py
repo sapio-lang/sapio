@@ -158,7 +158,6 @@ def main() -> None:
     pk1 = PayToPubKey(key=key1, amount=1)
     t= TransactionTemplate()
     t.add_output(10, Vault(cold_storage=pk1, hot_storage=key2, n_steps=10, timeout=Weeks(1), mature=Weeks(2), amount_step=1))
-
     import os
     payments = [(10, PayToPubKey(key=os.urandom(4), amount=10)) for _ in range(102)]
     CollapsibleTree(payments=payments, radix=4)
