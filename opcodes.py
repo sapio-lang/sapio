@@ -1,19 +1,7 @@
 def b(i):
     return    bytes([i])
-# Todo: copy out of script/interpreter
-class Op:
-    And = b(1)
-    Or = b(2)
-    Not = b(3)
-    Check_sig_verify = b(4)
-    Sha256 = b(5)
-    Equal = b(6)
-    Drop = b(7)
-    Pick = b(8)
-    Depth = b(9)
-    PushByte = b(10)
-    Sub = b(11)
-    Drop2 = b(12)
+
+from .bitcoinlib import script
 
 class Op:
     And = b" AND"
