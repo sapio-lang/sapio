@@ -47,48 +47,9 @@ class HasEnoughFunds:
             raise ValueError("Contract May Burn Funds!")
 
 
-# From Bitcoin Core messages.py test framework
+
 import struct
-def ser_compact_size(l):
-    r = b""
-    if l < 253:
-        r = struct.pack("B", l)
-    elif l < 0x10000:
-        r = struct.pack("<BH", 253, l)
-    elif l < 0x100000000:
-        r = struct.pack("<BI", 254, l)
-    else:
-        r = struct.pack("<BQ", 255, l)
-    return r
-
-def ser_string(s):
-    return ser_compact_size(len(s)) + s
-
-
-class CTxOut:
-    __slots__ = ("nValue", "scriptPubKey")
-
-    def __init__(self, nValue=0, scriptPubKey=b""):
-        self.nValue = nValue
-        self.scriptPubKey = scriptPubKey
-
-    def serialize(self):
-        r = b""
-        r += struct.pack("<q", self.nValue)
-        r += ser_string(self.scriptPubKey)
-        return r
-
-    def __repr__(self):
-        return "CTxOut(nValue=%i.%08i scriptPubKey=%s)" \
-               % (self.nValue // COIN, self.nValue % COIN,
-                  self.scriptPubKey.hex())
-
-
-import hashlib
-def sha256(s):
-    return hashlib.new('sha256', s).digest()
-
-
+from bitcoinlib.messages import CTransaction, CTxIn, CTxOut
 class TransactionTemplate:
     def __init__(self) -> None:
         self.n_inputs: int = 0
@@ -102,18 +63,12 @@ class TransactionTemplate:
         return self.get_standard_template_hash(0)
 
     def get_standard_template_hash(self, nIn):
-        r = b""
-        r += struct.pack("<i", self.version.value)
-        r += struct.pack("<I", self.lock_time.value)
-#        if any(inp.scriptSig for inp in self.vin):
-#            r += sha256(b"".join(ser_string(inp.scriptSig) for inp in self.vin))
-        r += struct.pack("<I", self.n_inputs)
-        r += sha256(b"".join(struct.pack("<I", seq.value) for seq in self.sequences))
-        r += struct.pack("<I", len(self.outputs))
-        outs = [CTxOut(a,b.scriptPubKey) for (a,b) in self.outputs]
-        r += sha256(b"".join(out.serialize() for out in outs))
-        r += struct.pack("<I", nIn)
-        return sha256(r)
+        tx = CTransaction()
+        tx.nVersion = self.version.value
+        tx.nLockTime = self.lock_time.value
+        self.vin = [CTxIn(None, None, sequence.value) for sequence in self.sequences]
+        self.vouts = [CTxOut(a,b.scriptPubKey) for (a,b) in self.outputs]
+        return tx.get_standard_template_hash(nIn)
 
     def add_output(self, amount, contract):
         WithinFee(contract, amount)
@@ -189,5 +144,7 @@ class MetaContract(type):
 
 class Contract(metaclass=MetaContract):
     class Fields:
+        pass
+    def __init__(self, **kwargs:Any):
         pass
 
