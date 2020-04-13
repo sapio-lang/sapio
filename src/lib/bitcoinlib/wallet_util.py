@@ -5,7 +5,7 @@
 """Useful util functions for testing the wallet"""
 from collections import namedtuple
 
-from test_framework.address import (
+from .address import (
     key_to_p2pkh,
     key_to_p2sh_p2wpkh,
     key_to_p2wpkh,
@@ -13,7 +13,7 @@ from test_framework.address import (
     script_to_p2sh_p2wsh,
     script_to_p2wsh,
 )
-from test_framework.script import (
+from .script import (
     CScript,
     OP_0,
     OP_2,
@@ -25,9 +25,9 @@ from test_framework.script import (
     OP_EQUALVERIFY,
     OP_HASH160,
     hash160,
-    sha256,
 )
-from test_framework.util import hex_str_to_bytes
+from .hash_functions import sha256
+from .util import hex_str_to_bytes
 
 Key = namedtuple('Key', ['privkey',
                          'pubkey',

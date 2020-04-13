@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing
 from typing import Optional, Callable
 
+import src.lib.bitcoinlib.hash_functions
 from .lang import *
 
 T = TypeVar("T")
@@ -214,7 +215,7 @@ class Contract(metaclass=MetaContract):
                 tx = child.bind_tx(out, witnesses_by_name[name])
             else:
                 tx = child.bind_tx(out, CTxWitness())
-            txid = tx.sha256
+            txid = src.lib.bitcoinlib.hash_functions.sha256
             txns.append(tx)
             for (idx, (_, contract)) in enumerate(child.outputs):
                 txns.extend(contract.bind(COutPoint(txid, idx)))

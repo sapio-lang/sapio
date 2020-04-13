@@ -6,7 +6,8 @@
 
 import enum
 
-from .script import hash256, hash160, sha256, CScript, OP_0
+from .script import hash256, hash160, CScript, OP_0
+from .hash_functions import sha256
 from .util import hex_str_to_bytes
 
 from . import segwit_addr

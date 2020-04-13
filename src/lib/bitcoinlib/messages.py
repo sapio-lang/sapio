@@ -18,17 +18,19 @@ ser_*, deser_*: functions that handle serialization/deserialization.
 Classes use __slots__ to ensure extraneous attributes aren't accidentally added
 by tests, compromising their intended effect.
 """
-from codecs import encode
 import copy
-import hashlib
-from io import BytesIO
 import random
 import socket
 import struct
 import time
+from codecs import encode
+from io import BytesIO
 from typing import List
 
+import src.lib.bitcoinlib.hash_functions
+from .hash_functions import sha256, hash256
 from .script import CScript
+
 from .siphash import siphash256
 from .static_types import Version, LockTime, Amount, Sequence
 from .util import hex_str_to_bytes, assert_equal
@@ -57,11 +59,6 @@ MSG_WITNESS_FLAG = 1 << 30
 MSG_TYPE_MASK = 0xffffffff >> 2
 
 # Serialization/deserialization tools
-def sha256(s):
-    return hashlib.new('sha256', s).digest()
-
-def hash256(s):
-    return sha256(sha256(s))
 
 def ser_compact_size(l):
     r = b""
@@ -439,7 +436,7 @@ class CTransaction:
             self.vin = copy.deepcopy(tx.vin)
             self.vout = copy.deepcopy(tx.vout)
             self.nLockTime = tx.nLockTime
-            self.sha256 = tx.sha256
+            self.sha256 = src.lib.bitcoinlib.hash_functions.sha256
             self.hash = tx.hash
             self.wit = copy.deepcopy(tx.wit)
 
@@ -557,7 +554,7 @@ class CBlockHeader:
             self.nTime = header.nTime
             self.nBits = header.nBits
             self.nNonce = header.nNonce
-            self.sha256 = header.sha256
+            self.sha256 = src.lib.bitcoinlib.hash_functions.sha256
             self.hash = header.hash
             self.calc_sha256()
 
@@ -651,7 +648,7 @@ class CBlock(CBlockHeader):
         hashes = []
         for tx in self.vtx:
             tx.calc_sha256()
-            hashes.append(ser_uint256(tx.sha256))
+            hashes.append(ser_uint256(src.lib.bitcoinlib.hash_functions.sha256))
         return self.get_merkle_root(hashes)
 
     def calc_witness_merkle_root(self):
@@ -836,7 +833,7 @@ class HeaderAndShortIDs:
         [k0, k1] = self.get_siphash_keys()
         for i in range(len(block.vtx)):
             if i not in prefill_list:
-                tx_hash = block.vtx[i].sha256
+                tx_hash = src.lib.bitcoinlib.hash_functions.sha256
                 if use_witness:
                     tx_hash = block.vtx[i].calc_sha256(with_witness=True)
                 self.shortids.append(calculate_shortid(k0, k1, tx_hash))

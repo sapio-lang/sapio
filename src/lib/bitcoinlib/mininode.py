@@ -21,7 +21,8 @@ import struct
 import sys
 import threading
 
-from test_framework.messages import (
+import src.lib.bitcoinlib.hash_functions
+from .messages import (
     CBlockHeader,
     MIN_VERSION_SUPPORTED,
     msg_addr,
@@ -50,9 +51,9 @@ from test_framework.messages import (
     msg_version,
     NODE_NETWORK,
     NODE_WITNESS,
-    sha256,
 )
-from test_framework.util import wait_until
+from .hash_functions import sha256
+from .util import wait_until
 
 logger = logging.getLogger("TestFramework.mininode")
 
@@ -552,8 +553,8 @@ class P2PDataStore(P2PInterface):
 
         with mininode_lock:
             for block in blocks:
-                self.block_store[block.sha256] = block
-                self.last_block_hash = block.sha256
+                self.block_store[src.lib.bitcoinlib.hash_functions.sha256] = block
+                self.last_block_hash = src.lib.bitcoinlib.hash_functions.sha256
 
         reject_reason = [reject_reason] if reject_reason else []
         with node.assert_debug_log(expected_msgs=reject_reason):
@@ -562,7 +563,7 @@ class P2PDataStore(P2PInterface):
                     self.send_message(msg_block(block=b))
             else:
                 self.send_message(msg_headers([CBlockHeader(block) for block in blocks]))
-                wait_until(lambda: blocks[-1].sha256 in self.getdata_requests, timeout=timeout, lock=mininode_lock)
+                wait_until(lambda: src.lib.bitcoinlib.hash_functions.sha256 in self.getdata_requests, timeout=timeout, lock=mininode_lock)
 
             if expect_disconnect:
                 self.wait_for_disconnect(timeout=timeout)
@@ -585,7 +586,7 @@ class P2PDataStore(P2PInterface):
 
         with mininode_lock:
             for tx in txs:
-                self.tx_store[tx.sha256] = tx
+                self.tx_store[src.lib.bitcoinlib.hash_functions.sha256] = tx
 
         reject_reason = [reject_reason] if reject_reason else []
         with node.assert_debug_log(expected_msgs=reject_reason):

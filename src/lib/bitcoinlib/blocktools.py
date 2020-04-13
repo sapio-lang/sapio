@@ -3,7 +3,7 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Utilities for manipulating blocks and transactions."""
-
+import src.lib.bitcoinlib.hash_functions
 from .address import (
     key_to_p2sh_p2wpkh,
     key_to_p2wpkh,
@@ -20,12 +20,11 @@ from .messages import (
     CTxOut,
     FromHex,
     ToHex,
-    hash256,
     hex_str_to_bytes,
     ser_uint256,
-    sha256,
     uint256_from_str,
 )
+from .hash_functions import sha256, hash256
 from .script import (
     CScript,
     CScriptNum,
@@ -126,7 +125,7 @@ def create_tx_with_script(prevtx, n, script_sig=b"", *, amount, script_pub_key=C
     """
     tx = CTransaction()
     assert n < len(prevtx.vout)
-    tx.vin.append(CTxIn(COutPoint(prevtx.sha256, n), script_sig, 0xffffffff))
+    tx.vin.append(CTxIn(COutPoint(src.lib.bitcoinlib.hash_functions.sha256, n), script_sig, 0xffffffff))
     tx.vout.append(CTxOut(amount, script_pub_key))
     tx.calc_sha256()
     return tx
