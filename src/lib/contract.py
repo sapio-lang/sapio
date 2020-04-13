@@ -1,12 +1,10 @@
 from __future__ import annotations
-from typing import TypeVar
+
 import typing
-from lang import *
-from functools import singledispatch, wraps
+
+from .lang import *
 
 T = TypeVar("T")
-
-import types
 
 
 def path(arg: Union[Optional[str], Callable[[T], TransactionTemplate]] = None):
@@ -54,8 +52,7 @@ class HasEnoughFunds:
             raise ValueError("Contract May Burn Funds!")
 
 
-import struct
-from bitcoinlib.messages import CTransaction, CTxIn, CTxOut, COutPoint, uint256_from_str
+from .bitcoinlib.messages import CTransaction, CTxIn, CTxOut, COutPoint
 
 
 class TransactionTemplate:

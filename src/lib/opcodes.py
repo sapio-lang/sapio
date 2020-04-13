@@ -2,8 +2,7 @@ def b(i):
     return    bytes([i])
 
 
-import bitcoinlib
-from bitcoinlib.script import *
+from .bitcoinlib.script import *
 
 
 # TODO: Phase these out or re-think this as required ops subset

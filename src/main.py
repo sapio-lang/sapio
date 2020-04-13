@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from typing import Callable
 
-from lang import *
-from util import *
-
-from my_types import *
+from lib.contract import *
+from lib.my_types import *
+from lib.util import *
 
 
 class Input:
@@ -33,7 +32,6 @@ class Transaction:
         return os.urandom(32)
 
 
-from contract import *
 
 class UndoSend(Contract):
     class Fields:

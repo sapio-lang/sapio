@@ -1,6 +1,6 @@
 
-from typing import Optional, List, NewType
 from ctypes import c_uint32, c_uint8, c_uint16, c_uint64, c_int8, c_int16, c_int32, c_int64
+from typing import List, NewType
 
 u8 = NewType("u8", c_uint8)
 u16 = NewType("u16", c_uint16)

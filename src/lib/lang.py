@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-from bitcoinlib.messages import CTxInWitness
-from util import *
-from typing import List
 from typing import TypeVar, Generic, Any
 from typing import Union
-from bitcoinlib.script import CScript
 
-from opcodes import Op
-from my_types import *
+from .bitcoinlib.script import CScript
+from .my_types import *
+from .opcodes import Op
+from .util import *
 
 MODE = "+"  # "str"
 
