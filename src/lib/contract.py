@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing
+from typing import Optional, Callable
 
 from .lang import *
 
@@ -52,7 +53,7 @@ class HasEnoughFunds:
             raise ValueError("Contract May Burn Funds!")
 
 
-from .bitcoinlib.messages import CTransaction, CTxIn, CTxOut, COutPoint
+from .bitcoinlib.messages import CTransaction, CTxIn, CTxOut, COutPoint, CTxWitness
 
 
 class TransactionTemplate:
