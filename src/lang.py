@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from bitcoinlib.messages import CTxInWitness
 from util import *
 from typing import List
 from typing import TypeVar, Generic, Any
@@ -12,6 +14,9 @@ MODE = "+"  # "str"
 
 
 class StandardClauseMixin:
+    a : Any
+    b : Any
+    n_args : int
     def __add__(self: Clause, other: Clause) -> Clause:
         return OrClause(self, other)
 
@@ -68,6 +73,8 @@ class SignatureCheckClause(StandardClauseMixin):
 class PreImageCheckClause(StandardClauseMixin):
     n_args = 1
 
+    a : Variable[Hash]
+    b : Variable[Hash]
     def __init__(self, a: Variable[Hash]):
         self.a = a
         self.b = a.sub_variable("preimage")
@@ -152,10 +159,18 @@ class ProgramBuilder:
             clause = self.normalize(clause)
         return self.flatten(clause)
 
+    class WitnessTemplate:
+        def __init__(self):
+            self.witness = []
+            self.nickname = None
+        def add(self, it):
+            self.witness.insert(0, it)
+        def name(self, nickname):
+            self.nickname = nickname
     def compile(self, clause: Clause) -> (CScript, List[Any]):
         cnf = self.compile_cnf(clause)
         cases = len(cnf)
-        witnesses = [[]] * len(cnf)
+        witnesses = [ProgramBuilder.WitnessTemplate() for  _ in cnf]
         script = CScript()
         # If we have one or two cases, special case the emitted scripts
         # 3 or more, use a generic wrapper
@@ -166,8 +181,8 @@ class ProgramBuilder:
             # Hack because the fragment compiler leaves stack empty
             script += CScript([1])
         elif cases == 2:
-            witnesses[0] = [1]
-            witnesses[1] = [0]
+            witnesses[0].add(1)
+            witnesses[1].add(0)
             # note order of side effects!
             branch_a = CScript([self._compile(frag, witnesses[0]) for frag in cnf[0]])
             branch_b = CScript([self._compile(frag, witnesses[1]) for frag in cnf[1]])
@@ -284,7 +299,7 @@ class ProgramBuilder:
         return [[arg]]
 
     @methdispatch
-    def _compile(self, arg: Clause, witness) -> CScript:
+    def _compile(self, arg: Clause, witness : ProgramBuilder.WitnessTemplate) -> CScript:
         raise NotImplementedError("Cannot Compile Arg", arg)
 
     @_compile.register
@@ -301,7 +316,8 @@ class ProgramBuilder:
         # While valid to make this a witness variable, this is likely an error
         assert arg.a.value is not None
         assert isinstance(arg.a.value, bytes)
-        s= CScript([arg.a.value, Op.CheckTemplateVerify, Op.Drop])
+        s = CScript([arg.a.value, Op.CheckTemplateVerify, Op.Drop])
+        witness.name(arg.a.value)
         return s
 
     @_compile.register
@@ -318,7 +334,7 @@ class ProgramBuilder:
     def _(self, arg: Variable, witness) -> CScript:
         if arg.value is None:
             # Todo: this is inefficient...
-            witness.insert(0, arg.name)
+            witness.add(arg.name)
             return CScript()
         else:
             return CScript([arg.value])
