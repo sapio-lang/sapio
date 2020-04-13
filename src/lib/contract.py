@@ -27,12 +27,16 @@ def unlock(s: Optional[str] = None) -> object:
         if hasattr(f, "is_condition") and f.is_condition:
             f.unlock_with = OrClause(f.unlock_with, s)
         else:
-            f = classmethod(f)
+            f = (f)
             f.is_condition = True
             f.unlock_with = s
         return f
 
     return wrapper
+
+def check(s: Callable[[T], bool]) -> Callable[[T], bool]:
+    s.is_assertion_function = True
+    return s
 
 
 class WithinFee:
@@ -128,6 +132,7 @@ class MetaContract(type):
                   for param, type_ in fields.items()]
         path_funcs = [v for (k, v) in nmspc.items() if hasattr(v, 'is_path')]
         unlock_funcs = [v for (k, v) in nmspc.items() if hasattr(v, 'is_condition')]
+        assertions = [v for (k, v) in nmspc.items() if hasattr(v, 'is_assertion_function')]
 
         def init_class(self, **kwargs: Any):
             if kwargs.keys() != fields.keys():
@@ -148,6 +153,8 @@ class MetaContract(type):
             self.amount_range = [21e6 * 100e6, 0]
 
             self.transactions = {}
+            for func in assertions:
+                func(self)
             for func in path_funcs:
                 name = func.__name__
                 txn = func(self)
@@ -203,12 +210,10 @@ class Contract(metaclass=MetaContract):
             # todo: find correct witness?
             name = child.get_ctv_hash()
             if name in witnesses_by_name:
-                print(witnesses_by_name[name])
                 # Todo: Incorrect type because we can't fill in things like signatures!
                 tx = child.bind_tx(out, witnesses_by_name[name])
             else:
                 tx = child.bind_tx(out, CTxWitness())
-            print(repr(tx))
             txid = tx.sha256
             txns.append(tx)
             for (idx, (_, contract)) in enumerate(child.outputs):

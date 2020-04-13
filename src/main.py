@@ -21,12 +21,11 @@ def main() -> None:
     t= TransactionTemplate()
     v = Vault(cold_storage=pk1, hot_storage=key2, n_steps=10, timeout=Weeks(1), mature=Weeks(2), amount_step=1)
     t.add_output(10, v)
-    print(v.bind(COutPoint(0, 0)))
 
 
 def main2():
     key2 = b"1" * 32
-    pk2 = PayToPubKey(key=key2, amount=10)
+    pk2 = PayToPubKey(key=key2, amount=int(10))
     import os
     payments = [(10, PayToPubKey(key=os.urandom(4), amount=10)) for _ in range(102)]
     CollapsibleTree(payments=payments, radix=4)
@@ -34,13 +33,13 @@ def main2():
 
     def cold_storage(v):
         #TODO: Use a real PubKey Generator
-        payments = [(v / 10, PayToPubKey(key=os.urandom(4), amount=v / 10)) for _ in range(10)]
+        payments = [(v // 10, PayToPubKey(key=os.urandom(4), amount=v // 10)) for _ in range(10)]
         return TreePay(payments=payments, radix=4)
     SmarterVault(cold_storage=cold_storage, hot_storage=key2, n_steps=10, timeout=Weeks(1), mature=Weeks(2), amount_step=100)
 
     def cold_storage(v):
         #TODO: Use a real PubKey Generator
-        return SmarterVault(cold_storage=lambda x: pk2, hot_storage=key2, n_steps=10, timeout=Weeks(1), mature=Weeks(2), amount_step=v / 10)
+        return SmarterVault(cold_storage=lambda x: pk2, hot_storage=key2, n_steps=10, timeout=Weeks(1), mature=Weeks(2), amount_step= (v // 10))
     s = SmarterVault(cold_storage=cold_storage, hot_storage=key2, n_steps=10, timeout=Weeks(1), mature=Weeks(2), amount_step=100)
     return s
 

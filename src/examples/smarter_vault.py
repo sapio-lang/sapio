@@ -1,6 +1,6 @@
 from typing import Callable
 
-from src.lib.contract import Contract, Amount, TimeSpec, TransactionTemplate, path
+from src.lib.contract import Contract, Amount, TimeSpec, TransactionTemplate, path, check
 
 from src.examples.undo_send import UndoSend
 
@@ -38,6 +38,6 @@ class SmarterVault(Contract):
     def to_cold(self) -> TransactionTemplate:
         tx = TransactionTemplate()
         value = self.n_steps.value * self.amount_step.value
-        tx.add_output(value,
-        self.cold_storage.value(value))
+        tx.add_output(value, self.cold_storage.value(value))
         return tx
+

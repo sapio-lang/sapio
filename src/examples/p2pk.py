@@ -8,3 +8,4 @@ class PayToPubKey(Contract):
 
     @unlock(lambda self: SignatureCheckClause(self.key))
     def _(self): pass
+
