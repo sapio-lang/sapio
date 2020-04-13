@@ -26,8 +26,11 @@ import random
 import socket
 import struct
 import time
+from typing import List
 
+from .script import CScript
 from .siphash import siphash256
+from .static_types import Version, LockTime, Amount, Sequence
 from .util import hex_str_to_bytes, assert_equal
 
 MIN_VERSION_SUPPORTED = 60001
@@ -295,7 +298,9 @@ class COutPoint:
 
 class CTxIn:
     __slots__ = ("nSequence", "prevout", "scriptSig")
-
+    scriptSig: CScript
+    nSequence: Sequence
+    prevout: COutPoint
     def __init__(self, outpoint=None, scriptSig=b"", nSequence=0):
         if outpoint is None:
             self.prevout = COutPoint()
@@ -325,7 +330,8 @@ class CTxIn:
 
 class CTxOut:
     __slots__ = ("nValue", "scriptPubKey")
-
+    nValue: Amount
+    scriptPubKey: CScript
     def __init__(self, nValue=0, scriptPubKey=b""):
         self.nValue = nValue
         self.scriptPubKey = scriptPubKey
@@ -415,7 +421,10 @@ class CTxWitness:
 class CTransaction:
     __slots__ = ("hash", "nLockTime", "nVersion", "sha256", "vin", "vout",
                  "wit")
-
+    nVersion : Version
+    nLockTime: LockTime
+    vin: List[CTxIn]
+    vout: List[CTxOut]
     def __init__(self, tx=None):
         if tx is None:
             self.nVersion = 1

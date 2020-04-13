@@ -4,7 +4,7 @@ from typing import TypeVar, Generic, Any
 from typing import Union
 
 from .bitcoinlib.script import CScript
-from .my_types import *
+from src.lib.bitcoinlib.static_types import *
 from .opcodes import Op
 from .util import *
 

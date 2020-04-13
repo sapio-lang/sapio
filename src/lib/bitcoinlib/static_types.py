@@ -18,9 +18,5 @@ LockTime = NewType("LockTime", u32)
 Amount = NewType("Amount", i64)
 
 
-StackItem = NewType("StackItem", bytes)
-Stack = NewType("Stack", List[StackItem])
-Script = NewType("Script", bytes)
-
 PubKey = NewType("PubKey", bytes)
 Hash = NewType("Hash", bytes)
