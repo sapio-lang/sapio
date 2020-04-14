@@ -45,12 +45,85 @@ class WitnessManager:
         return CScript([AllowedOp.OP_0, sha256(self.program)])
 
 
+class NormalizationPass:
+    def __init__(self):
+        self.took_action = False
+    # Normalize Bubbles up all the OR clauses into a CNF
+    @methdispatch
+    def normalize(self, arg: Clause) -> Clause:
+        raise NotImplementedError("Cannot Compile Arg")
+
+    @normalize.register
+    def normalize_and(self, arg: AndClause) -> Clause:
+        a: AndClauseArgument = arg.a
+        b: AndClauseArgument = arg.b
+        if isinstance(a, OrClause) and isinstance(b, OrClause):
+            self.took_action = True
+            a0: AndClauseArgument = a.a
+            a1: AndClauseArgument = a.b
+            b0: AndClauseArgument = b.a
+            b1: AndClauseArgument = b.b
+            return a0 * b0 + a0 * b1 + a1 * b0 + a1 * b1
+        elif isinstance(b, AndClause) and isinstance(a, OrClause):
+            self.took_action = True
+            _or, _and = a, b
+            return _and * _or.a + _and * _or.b
+        elif isinstance(a, AndClause) and isinstance(b, OrClause):
+            self.took_action = True
+            _or, _and = b, a
+            return _and * _or.a + _and * _or.b
+        # Other Clause can be ignored...
+        elif isinstance(a, AndClause):
+            self.took_action = True
+            return AndClause(self.normalize(a), b)
+        elif isinstance(a, OrClause):
+            self.took_action = True
+            a0, a1 = a.a, a.b
+            return a0 * b + a1 * b
+        elif isinstance(b, AndClause):
+            self.took_action = True
+            return AndClause(self.normalize(b), a)
+        elif isinstance(b, OrClause):
+            self.took_action = True
+            b0, b1 = b.a, b.b
+            return b0 * a + b1 * a
+        else:
+            return arg
+
+    @normalize.register
+    def normalize_or(self, arg: OrClause) -> Clause:
+        return OrClause(self.normalize(arg.a), self.normalize(arg.b))
+
+    # TODO: Unionize!
+
+    @normalize.register
+    def normalize_signaturecheck(self, arg: SignatureCheckClause) -> Clause:
+        return arg
+
+    @normalize.register
+    def normalize_preimagecheck(self, arg: PreImageCheckClause) -> Clause:
+        return arg
+
+    @normalize.register
+    def normalize_ctv(self, arg: CheckTemplateVerifyClause) -> Clause:
+        return arg
+
+    @normalize.register
+    def normalize_after(self, arg: AfterClause) -> Clause:
+        return arg
+
+    @normalize.register
+    def normalize_var(self, arg: Variable) -> Clause:
+        return arg
+
+
 class ProgramBuilder:
     def compile_cnf(self, clause: Clause) -> List[List[Clause]]:
-        # TODO: Figure out how many passes are required / abort when stable
-        # 1000 should be enough that covers all valid scripts...
-        for x in range(1000):
-            clause = self.normalize(clause)
+        normalizer = NormalizationPass()
+        while True:
+            clause = normalizer.normalize(clause)
+            if not normalizer.took_action:
+                break
         return self.flatten(clause)
 
 
@@ -115,66 +188,6 @@ class ProgramBuilder:
             witness_manager.program += CScript([AllowedOp.OP_1])
         return witness_manager
 
-    # Normalize Bubbles up all the OR clauses into a CNF
-    @methdispatch
-    def normalize(self, arg: Clause) -> Clause:
-        raise NotImplementedError("Cannot Compile Arg")
-
-    @normalize.register
-    def normalize_and(self, arg: AndClause) -> Clause:
-        a: AndClauseArgument = arg.a
-        b: AndClauseArgument = arg.b
-        if isinstance(a, OrClause) and isinstance(b, OrClause):
-            a0: AndClauseArgument = a.a
-            a1: AndClauseArgument = a.b
-            b0: AndClauseArgument = b.a
-            b1: AndClauseArgument = b.b
-            return a0 * b0 + a0 * b1 + a1 * b0 + a1 * b1
-        elif isinstance(b, AndClause) and isinstance(a, OrClause):
-            _or, _and = a, b
-            return _and * _or.a + _and * _or.b
-        elif isinstance(a, AndClause) and isinstance(b, OrClause):
-            _or, _and = b, a
-            return _and * _or.a + _and * _or.b
-        # Other Clause can be ignored...
-        elif isinstance(a, AndClause):
-            return AndClause(self.normalize(a), b)
-        elif isinstance(a, OrClause):
-            a0, a1 = a.a, a.b
-            return a0 * b + a1 * b
-        elif isinstance(b, AndClause):
-            return AndClause(self.normalize(b), a)
-        elif isinstance(b, OrClause):
-            b0, b1 = b.a, b.b
-            return b0 * a + b1 * a
-        else:
-            return arg
-
-    @normalize.register
-    def normalize_or(self, arg: OrClause) -> Clause:
-        return OrClause(self.normalize(arg.a), self.normalize(arg.b))
-
-    # TODO: Unionize!
-
-    @normalize.register
-    def normalize_signaturecheck(self, arg: SignatureCheckClause) -> Clause:
-        return arg
-
-    @normalize.register
-    def normalize_preimagecheck(self, arg: PreImageCheckClause) -> Clause:
-        return arg
-
-    @normalize.register
-    def normalize_ctv(self, arg: CheckTemplateVerifyClause) -> Clause:
-        return arg
-
-    @normalize.register
-    def normalize_after(self, arg: AfterClause) -> Clause:
-        return arg
-
-    @normalize.register
-    def normalize_var(self, arg: Variable) -> Clause:
-        return arg
 
     @methdispatch
     def flatten(self, arg: Clause) -> List[List[Clause]]:
