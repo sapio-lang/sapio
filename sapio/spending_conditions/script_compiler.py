@@ -7,7 +7,7 @@ from sapio.bitcoinlib.script import CScript
 from sapio.spending_conditions.opcodes import AllowedOp
 from sapio.spending_conditions.script_lang import Variable, Clause, AndClause, AndClauseArgument, OrClause, \
     SignatureCheckClause, \
-    PreImageCheckClause, CheckTemplateVerifyClause, AfterClause, AbsoluteTimeSpec, RelativeTimeSpec
+    PreImageCheckClause, CheckTemplateVerifyClause, AfterClause, AbsoluteTimeSpec, RelativeTimeSpec, SatisfiedClause
 from sapio.util import methdispatch
 
 T = TypeVar('T')
@@ -164,7 +164,7 @@ class FlattenPass:
         return [[arg]]
 
 try:
-    FlattenPass().flatten(AndClause(OrClause(1,2), OrClause(1,2)))
+    FlattenPass().flatten(AndClause(OrClause(SatisfiedClause(),SatisfiedClause()), OrClause(SatisfiedClause(), SatisfiedClause())))
     raise AssertionError("this sanity check should fail")
 except AssertionError:
    pass
@@ -180,69 +180,7 @@ class ClauseToCNF:
         return FlattenPass().flatten(clause)
 
 
-class ProgramBuilder:
-
-    def compile(self, clause: Clause) -> WitnessManager:
-        cnf: CNF = ClauseToCNF().compile_cnf(clause)
-        n_cases = len(cnf)
-        witness_manager: WitnessManager = WitnessManager()
-
-        # If we have one or two cases, special case the emitted scripts
-        # 3 or more, use a generic wrapper
-        if n_cases == 1:
-            witness = witness_manager.make_witness(0)
-            for cl in cnf[0]:
-                compiled_frag = self._compile(cl, witness)
-                witness_manager.program += compiled_frag
-            # Hack because the fragment compiler leaves stack empty
-            witness_manager.program += CScript([AllowedOp.OP_1])
-        elif n_cases == 2:
-            wit_0 = witness_manager.make_witness(0)
-            wit_1 = witness_manager.make_witness(1)
-            wit_0.add(1)
-            wit_1.add(0)
-            # note order of side effects!
-            branch_a = CScript([self._compile(frag, wit_0) for frag in cnf[0]])
-            branch_b = CScript([self._compile(frag, wit_1) for frag in cnf[1]])
-            witness_manager.program = CScript([AllowedOp.OP_IF,
-                                               branch_a,
-                                               AllowedOp.OP_ELSE,
-                                               branch_b,
-                                               AllowedOp.OP_ENDIF,
-                                               AllowedOp.OP_1])
-        else:
-            # Check that the first argument passed is an in range execution path
-            # Note the first branch does not subtract one, so we have arg in [0, N)
-            script = CScript([AllowedOp.OP_DUP,
-                              AllowedOp.OP_0,
-                              n_cases,
-                              AllowedOp.OP_WITHIN,
-                              AllowedOp.OP_VERIFY])
-            for (idx, frag) in enumerate(cnf):
-                wit = witness_manager.make_witness(idx)
-                wit.add(idx)
-                if idx == 0:
-                    # Don't subtract one on first check
-                    witness_manager.program += CScript([AllowedOp.OP_IFDUP,
-                                                        AllowedOp.OP_NOTIF])
-                else:
-                    witness_manager.program += CScript([AllowedOp.OP_1SUB,
-                                                        AllowedOp.OP_IFDUP,
-                                                        AllowedOp.OP_NOTIF])
-
-                for cl in frag:
-                    script += self._compile(cl, wit)
-                # We push an OP_0 onto the stack as it will cause
-                # all following branches to not execute,
-                # unless we are the last branch
-                if idx+1 < len(cnf):
-                    witness_manager.program += CScript([AllowedOp.OP_0, AllowedOp.OP_ENDIF])
-                else:
-                    witness_manager.program += CScript([AllowedOp.OP_ENDIF])
-            # Push an OP_1 so that we succeed
-            witness_manager.program += CScript([AllowedOp.OP_1])
-        return witness_manager
-
+class FragmentCompiler:
 
     @methdispatch
     def _compile(self, arg: Clause, witness: WitnessTemplate) -> CScript:
@@ -284,3 +222,65 @@ class ProgramBuilder:
             return CScript()
         else:
             return CScript([arg.assigned_value])
+class ProgramBuilder:
+
+    def compile(self, clause: Clause) -> WitnessManager:
+        cnf: CNF = ClauseToCNF().compile_cnf(clause)
+        n_cases = len(cnf)
+        witness_manager: WitnessManager = WitnessManager()
+
+        # If we have one or two cases, special case the emitted scripts
+        # 3 or more, use a generic wrapper
+        if n_cases == 1:
+            witness = witness_manager.make_witness(0)
+            for cl in cnf[0]:
+                compiled_frag = FragmentCompiler()._compile(cl, witness)
+                witness_manager.program += compiled_frag
+            # Hack because the fragment compiler leaves stack empty
+            witness_manager.program += CScript([AllowedOp.OP_1])
+        elif n_cases == 2:
+            wit_0 = witness_manager.make_witness(0)
+            wit_1 = witness_manager.make_witness(1)
+            wit_0.add(1)
+            wit_1.add(0)
+            # note order of side effects!
+            branch_a = CScript([FragmentCompiler()._compile(frag, wit_0) for frag in cnf[0]])
+            branch_b = CScript([FragmentCompiler()._compile(frag, wit_1) for frag in cnf[1]])
+            witness_manager.program = CScript([AllowedOp.OP_IF,
+                                               branch_a,
+                                               AllowedOp.OP_ELSE,
+                                               branch_b,
+                                               AllowedOp.OP_ENDIF,
+                                               AllowedOp.OP_1])
+        else:
+            # Check that the first argument passed is an in range execution path
+            # Note the first branch does not subtract one, so we have arg in [0, N)
+            script = CScript([AllowedOp.OP_DUP,
+                              AllowedOp.OP_0,
+                              n_cases,
+                              AllowedOp.OP_WITHIN,
+                              AllowedOp.OP_VERIFY])
+            for (idx, frag) in enumerate(cnf):
+                wit = witness_manager.make_witness(idx)
+                wit.add(idx)
+                if idx == 0:
+                    # Don't subtract one on first check
+                    witness_manager.program += CScript([AllowedOp.OP_IFDUP,
+                                                        AllowedOp.OP_NOTIF])
+                else:
+                    witness_manager.program += CScript([AllowedOp.OP_1SUB,
+                                                        AllowedOp.OP_IFDUP,
+                                                        AllowedOp.OP_NOTIF])
+
+                for cl in frag:
+                    script += FragmentCompiler()._compile(cl, wit)
+                # We push an OP_0 onto the stack as it will cause
+                # all following branches to not execute,
+                # unless we are the last branch
+                if idx+1 < len(cnf):
+                    witness_manager.program += CScript([AllowedOp.OP_0, AllowedOp.OP_ENDIF])
+                else:
+                    witness_manager.program += CScript([AllowedOp.OP_ENDIF])
+            # Push an OP_1 so that we succeed
+            witness_manager.program += CScript([AllowedOp.OP_1])
+        return witness_manager
