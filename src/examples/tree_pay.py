@@ -1,6 +1,7 @@
 from typing import Tuple, List
 
-from src.lib.contract import Contract, Amount, TransactionTemplate, path, unlock, PubKey, Variable
+from src.lib.bitcoinlib.static_types import PubKey
+from src.lib.contract import Contract, Amount, TransactionTemplate, path, unlock, Variable
 from src.lib.script_lang import AfterClause, Weeks, SignatureCheckClause
 
 

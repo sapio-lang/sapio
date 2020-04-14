@@ -472,6 +472,7 @@ class CTransaction:
 
     def get_standard_template_hash(self, nIn):
         r = b""
+        print(self.nVersion)
         r += struct.pack("<i", self.nVersion)
         r += struct.pack("<I", self.nLockTime)
         if any(inp.scriptSig for inp in self.vin):

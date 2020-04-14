@@ -1,45 +1,58 @@
 from __future__ import annotations
 
 import typing
-from typing import Callable, TypeVar, List, Optional, Any, Union
+from typing import Callable, TypeVar, List, Any, Union, Tuple
 
 import src.lib.bitcoinlib.hash_functions
-from src.lib.script_lang import CheckTemplateVerifyClause, AndClause, OrClause, Clause, Variable
+from src.lib.script_lang import CheckTemplateVerifyClause, AndClause, OrClause, Clause, Variable, AndClauseArgument
+from .bitcoinlib.script import CScript
+from .bitcoinlib.static_types import Sequence, Amount, Version, LockTime, u32, c_uint32
 from .script_compiler import ProgramBuilder
-from .bitcoinlib.static_types import Sequence, Amount, Version, LockTime, PubKey, u32, c_uint32
 
 T = TypeVar("T")
+T2 = TypeVar("T2")
+class PathFunction():
+    # TODO: Improve arg type, which we know is an AndClauseArugment Callable or None
+    def __init__(self, f: Any, arg: Any):
+        self.f = f
+        self.unlock_with = arg
+        self.__name__ = f.__name__
+    def __call__(self, *args, **kwargs):
+        return self.f(*args, **kwargs)
 
-
-def path(arg: Union[Optional[str], Callable[[T], TransactionTemplate]] = None):
-    if arg.__name__ == "<lambda>" or arg is None:
+def path(arg: Union[Callable[[T2], AndClauseArgument], Callable[[T], TransactionTemplate], None] = None)\
+        -> Union[Callable[[Any], PathFunction], PathFunction]:
+    if arg is None or (hasattr(arg, "__name__") and arg.__name__ == "<lambda>"):
         def wrapper(f: Callable[[T], TransactionTemplate]):
-            f.is_path = True
-            f.unlock_with = arg
-            return f
-
+            return PathFunction(f, arg)
         return wrapper
     else:
-        arg.is_path = True
-        arg.unlock_with = None
-        return arg
+        return PathFunction(arg, None)
 
 
-def unlock(s: Optional[str] = None) -> object:
+class UnlockFunction():
+    # TODO: Improve arg type, which we know is an AndClauseArugment Callable or None
+    def __init__(self, condition: Callable[[T], AndClauseArgument], name):
+        self.unlock_with = condition
+        self.__name__ = name
+    def __call__(self, *args, **kwargs):
+        return self.unlock_with(*args, **kwargs)
+
+def unlock(s: Callable[[Any], AndClauseArgument]):
     def wrapper(f: Callable[[T], List[Contract]]):
-        if hasattr(f, "is_condition") and f.is_condition:
-            f.unlock_with = OrClause(f.unlock_with, s)
-        else:
-            f = (f)
-            f.is_condition = True
-            f.unlock_with = s
-        return f
-
+        return UnlockFunction(s, f.__name__)
     return wrapper
 
+
+class CheckFunction():
+    def __init__(self, func):
+        self.func = func
+        self.__name__ = func.__name__
+    def __call__(self, *args, **kwargs):
+        self.func(*args, **kwargs)
+
 def check(s: Callable[[T], bool]) -> Callable[[T], bool]:
-    s.is_assertion_function = True
-    return s
+    return CheckFunction(s)
 
 
 class WithinFee:
@@ -68,7 +81,7 @@ class TransactionTemplate:
     def __init__(self) -> None:
         self.n_inputs: int = 0
         self.sequences: List[Sequence] = [Sequence(u32(c_uint32(0)))]
-        self.outputs: List[(Amount, Contract)] = []
+        self.outputs: List[Tuple[Amount, Contract]] = []
         self.version: Version = Version(u32(c_uint32(2)))
         self.lock_time: LockTime = LockTime(u32(c_uint32(0)))
 
@@ -78,8 +91,8 @@ class TransactionTemplate:
 
     def get_base_transaction(self) -> CTransaction:
         tx = CTransaction()
-        tx.nVersion = self.version.value
-        tx.nLockTime = self.lock_time.value
+        tx.nVersion = self.version
+        tx.nLockTime = self.lock_time
         tx.vin = [CTxIn(None, b"", sequence.value) for sequence in self.sequences]
         tx.vout = [CTxOut(a, b.scriptPubKey) for (a, b) in self.outputs]
         return tx
@@ -133,9 +146,9 @@ class MetaContract(type):
                                     inspect.Parameter.KEYWORD_ONLY,
                                     annotation=type_)
                   for param, type_ in fields.items()]
-        path_funcs = [v for (k, v) in nmspc.items() if hasattr(v, 'is_path')]
-        unlock_funcs = [v for (k, v) in nmspc.items() if hasattr(v, 'is_condition')]
-        assertions = [v for (k, v) in nmspc.items() if hasattr(v, 'is_assertion_function')]
+        path_funcs = [v for (k, v) in nmspc.items() if isinstance(v, PathFunction)]
+        unlock_funcs = [v for (k, v) in nmspc.items() if isinstance(v, UnlockFunction)]
+        assertions = [v for (k, v) in nmspc.items() if isinstance(v, CheckFunction)]
 
         def init_class(self, **kwargs: Any):
             if kwargs.keys() != fields.keys():
@@ -152,7 +165,7 @@ class MetaContract(type):
                 else:
                     setattr(self, key, Variable(key, kwargs[key]))
 
-            paths = []
+            paths : List[AndClauseArgument] = []
             self.amount_range = [21e6 * 100e6, 0]
 
             self.transactions = {}
@@ -169,10 +182,10 @@ class MetaContract(type):
                 ctv = CheckTemplateVerifyClause(Variable(ctv_hash, ctv_hash))
                 paths.append(ctv)
                 if func.unlock_with is not None:
-                    unlock_clause: Clause = func.unlock_with(self)
+                    unlock_clause: AndClauseArgument = func.unlock_with(self)
                     paths[-1] = AndClause(paths[-1], unlock_clause)
             for func in unlock_funcs:
-                paths.append(func.unlock_with(self))
+                paths.append(func(self))
 
             # prepare for passing to the API...
             # TODO: this gets undone immediately, so maybe
@@ -196,14 +209,15 @@ def final(m):
 class Contract(metaclass=MetaContract):
     # These slots will be extended later on
     __slots__ = ('amount_range', 'transactions', 'witnesses', 'scriptPubKey')
+    scriptPubKey: CScript
+    witnesses: typing.Dict[Any, Any]
+    transactions: typing.Dict[Any, Any]
+    amount_range: Tuple[int, int]
     class Fields:
         pass
     # Null __init__ defined to supress sanitizer complaints...
     def __init__(self, **kwargs: Any):
         pass
-
-    @final
-    def clear(self): pass
 
     @final
     def bind(self, out: COutPoint):
