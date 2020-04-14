@@ -222,6 +222,11 @@ class FragmentCompiler:
             return CScript()
         else:
             return CScript([arg.assigned_value])
+class CNFClauseCompiler:
+    def compile(self, cl: Clause, w: WitnessTemplate) -> CScript:
+        return CScript([FragmentCompiler()._compile(frag, w) for frag in cl])
+
+
 class ProgramBuilder:
 
     def compile(self, clause: Clause) -> WitnessManager:
@@ -233,9 +238,7 @@ class ProgramBuilder:
         # 3 or more, use a generic wrapper
         if n_cases == 1:
             witness = witness_manager.make_witness(0)
-            for cl in cnf[0]:
-                compiled_frag = FragmentCompiler()._compile(cl, witness)
-                witness_manager.program += compiled_frag
+            witness_manager.program += CNFClauseCompiler().compile(cnf[0], witness)
             # Hack because the fragment compiler leaves stack empty
             witness_manager.program += CScript([AllowedOp.OP_1])
         elif n_cases == 2:
@@ -244,8 +247,8 @@ class ProgramBuilder:
             wit_0.add(1)
             wit_1.add(0)
             # note order of side effects!
-            branch_a = CScript([FragmentCompiler()._compile(frag, wit_0) for frag in cnf[0]])
-            branch_b = CScript([FragmentCompiler()._compile(frag, wit_1) for frag in cnf[1]])
+            branch_a = CNFClauseCompiler().compile(cnf[0], wit_0)
+            branch_b = CNFClauseCompiler().compile(cnf[1], wit_1)
             witness_manager.program = CScript([AllowedOp.OP_IF,
                                                branch_a,
                                                AllowedOp.OP_ELSE,
@@ -253,34 +256,53 @@ class ProgramBuilder:
                                                AllowedOp.OP_ENDIF,
                                                AllowedOp.OP_1])
         else:
+            # If we have more than 3 cases, we can use a nice gadget
+            # to emulate a select/jump table in Bitcoin Script.
+            # It has an overhead of 5 bytes per branch.
+            # Future work can optimize this by inspecting the sub-branches
+            # and sharing code...
+
+
             # Check that the first argument passed is an in range execution path
             # Note the first branch does not subtract one, so we have arg in [0, N)
-            script = CScript([AllowedOp.OP_DUP,
+            witness_manager.program = CScript([AllowedOp.OP_DUP,
                               AllowedOp.OP_0,
                               n_cases,
                               AllowedOp.OP_WITHIN,
                               AllowedOp.OP_VERIFY])
-            for (idx, frag) in enumerate(cnf):
+            for (idx, cl) in enumerate(cnf):
                 wit = witness_manager.make_witness(idx)
                 wit.add(idx)
+                sub_script = CNFClauseCompiler().compile(cl, wit)
                 if idx == 0:
-                    # Don't subtract one on first check
-                    witness_manager.program += CScript([AllowedOp.OP_IFDUP,
-                                                        AllowedOp.OP_NOTIF])
+                    witness_manager.program += \
+                        CScript([AllowedOp.OP_IFDUP,
+                                 AllowedOp.OP_NOTIF,
+                                 sub_script,
+                                 # We push an OP_0 onto the stack as it will cause
+                                 # all following branches to not execute,
+                                 # unless we are the last branch
+                                 AllowedOp.OP_0,
+                                 AllowedOp.OP_ENDIF,
+                                 # set up for next clause...
+                                 AllowedOp.OP_1SUB])
+                elif idx+1 < len(cnf):
+                    witness_manager.program += \
+                        CScript([AllowedOp.OP_IFDUP,
+                                 AllowedOp.OP_NOTIF,
+                                 sub_script,
+                                 AllowedOp.OP_0,
+                                 AllowedOp.OP_ENDIF,
+                                 AllowedOp.OP_1SUB])
+                # Last clause!
                 else:
-                    witness_manager.program += CScript([AllowedOp.OP_1SUB,
-                                                        AllowedOp.OP_IFDUP,
-                                                        AllowedOp.OP_NOTIF])
+                    # No ifdup required since we are last, no need for data on
+                    # stack
+                    # End with an OP_1 so that we succeed after all cases
+                    witness_manager.program += \
+                        CScript([AllowedOp.OP_NOTIF,
+                                 sub_script,
+                                 AllowedOp.OP_ENDIF,
+                                 AllowedOp.OP_1])
 
-                for cl in frag:
-                    script += FragmentCompiler()._compile(cl, wit)
-                # We push an OP_0 onto the stack as it will cause
-                # all following branches to not execute,
-                # unless we are the last branch
-                if idx+1 < len(cnf):
-                    witness_manager.program += CScript([AllowedOp.OP_0, AllowedOp.OP_ENDIF])
-                else:
-                    witness_manager.program += CScript([AllowedOp.OP_ENDIF])
-            # Push an OP_1 so that we succeed
-            witness_manager.program += CScript([AllowedOp.OP_1])
         return witness_manager
