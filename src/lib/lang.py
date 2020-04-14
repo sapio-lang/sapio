@@ -1,74 +1,109 @@
 from __future__ import annotations
 
-from typing import TypeVar, Generic, Any
-from typing import Union
+from typing import TypeVar, Generic, Any, Union, Optional, Tuple
+from typing_extensions import Protocol
 
-from .bitcoinlib.script import CScript
 from src.lib.bitcoinlib.static_types import *
+from .bitcoinlib.script import CScript
 from .opcodes import Op
 from .util import *
 
-MODE = "+"  # "str"
 
 
-class StandardClauseMixin:
-    a : Any
-    b : Any
-    n_args : int
-    def __add__(self: Clause, other: Clause) -> Clause:
-        return OrClause(self, other)
+class ClauseProtocol(Protocol):
+    @property
+    def a(self) -> Any:
+        pass
+    @property
+    def b(self) -> Any:
+        pass
+    @property
+    def n_args(self) -> int:
+        return 0
+    @property
+    def symbol(self) -> str:
+        return ""
 
-    def __mul__(self: Clause, other: Clause) -> Clause:
-        return AndClause(self, other)
-
-    def __str__(self) -> str:
-        if MODE == "+":
+class StringClauseMixin:
+    MODE = "+"  # "str"
+    def __str__(self: ClauseProtocol) -> str:
+        if StringClauseMixin.MODE == "+":
             if self.__class__.n_args == 1:
                 return "{}({})".format(self.__class__.__name__, self.a)
             elif self.__class__.n_args == 2:
                 return "{}{}{}".format(self.a, self.symbol, self.b)
             else:
                 return "{}()".format(self.__class__.__name__)
-        if self.__class__.n_args == 1:
-            return "{}({})".format(self.__class__.__name__, self.a)
-        elif self.__class__.n_args == 2:
-            return "{}({}, {})".format(self.__class__.__name__, self.a, self.b)
         else:
-            return "{}()".format(self.__class__.__name__)
+            if self.__class__.n_args == 1:
+                return "{}({})".format(self.__class__.__name__, self.a)
+            elif self.__class__.n_args == 2:
+                return "{}({}, {})".format(self.__class__.__name__, self.a, self.b)
+            else:
+                return "{}()".format(self.__class__.__name__)
 
 
-class SatisfiedClause(StandardClauseMixin):
+class SatisfiedClause(StringClauseMixin):
+    def __add__(self, other: AndClauseArgument) -> OrClause:
+        return OrClause(self, other)
+
+    def __mul__(self, other: AndClauseArgument) -> AndClause:
+        return AndClause(self, other)
     n_args = 0
-class UnsatisfiableClause(StandardClauseMixin):
+class UnsatisfiableClause(StringClauseMixin):
+    def __add__(self, other: AndClauseArgument) -> OrClause:
+        return OrClause(self, other)
+
+    def __mul__(self, other: AndClauseArgument) -> AndClause:
+        return AndClause(self, other)
     n_args = 0
 
 
-class AndClause(StandardClauseMixin):
+class AndClause(StringClauseMixin):
+    def __add__(self, other: AndClauseArgument) -> OrClause:
+        return OrClause(self, other)
+
+    def __mul__(self, other: AndClauseArgument) -> AndClause:
+        return AndClause(self, other)
     n_args = 2
     symbol = "*"
 
-    def __init__(self, a: Clause, b: Clause):
+    def __init__(self, a: AndClauseArgument, b: AndClauseArgument):
         self.a = a
         self.b = b
 
 
-class OrClause(StandardClauseMixin):
+class OrClause(StringClauseMixin):
+    def __add__(self, other: AndClauseArgument) -> OrClause:
+        return OrClause(self, other)
+
+    def __mul__(self, other: AndClauseArgument) -> AndClause:
+        return AndClause(self, other)
     n_args = 2
     symbol = "+"
+    def __init__(self, a: AndClauseArgument, b: AndClauseArgument):
+        self.a: AndClauseArgument = a
+        self.b: AndClauseArgument = b
 
-    def __init__(self, a: Clause, b: Clause):
-        self.a = a
-        self.b = b
 
+class SignatureCheckClause(StringClauseMixin):
+    def __add__(self, other: AndClauseArgument) -> OrClause:
+        return OrClause(self, other)
 
-class SignatureCheckClause(StandardClauseMixin):
+    def __mul__(self, other: AndClauseArgument) -> AndClause:
+        return AndClause(self, other)
     n_args = 1
     def __init__(self, a: Variable[PubKey]):
         self.a = a
         self.b = a.sub_variable("signature")
 
 
-class PreImageCheckClause(StandardClauseMixin):
+class PreImageCheckClause(StringClauseMixin):
+    def __add__(self, other: AndClauseArgument) -> OrClause:
+        return OrClause(self, other)
+
+    def __mul__(self, other: AndClauseArgument) -> AndClause:
+        return AndClause(self, other)
     n_args = 1
 
     a : Variable[Hash]
@@ -78,20 +113,22 @@ class PreImageCheckClause(StandardClauseMixin):
         self.b = a.sub_variable("preimage")
 
 
-class CheckTemplateVerifyClause(StandardClauseMixin):
+class CheckTemplateVerifyClause(StringClauseMixin):
+    def __add__(self, other: AndClauseArgument) -> OrClause:
+        return OrClause(self, other)
+
+    def __mul__(self, other: AndClauseArgument) -> AndClause:
+        return AndClause(self, other)
     n_args = 1
 
     def __init__(self, a: Variable[Hash]):
         self.a = a
 
-    @staticmethod
-    def make(name: str, outputs: List[(int, Clause)], n_inputs=1, input_index=0, sequences=(0,), lock_time: int = 0):
-        # TODO: Return the actual Hash here
-        a: Variable[Hash] = Variable(name, Hash(b" <h(x)>"))
-        return CheckTemplateVerifyClause(a)
 
 
-class AbsoluteTimeSpec: pass
+class AbsoluteTimeSpec:
+    def __init__(self, t):
+        self.time = t
 
 
 class RelativeTimeSpec:
@@ -105,7 +142,12 @@ def Weeks(n):
     return Variable("RelativeTimeSpec({} Weeks)".format(n), RelativeTimeSpec(n))
 
 
-class AfterClause(StandardClauseMixin):
+class AfterClause(StringClauseMixin):
+    def __add__(self, other: AndClauseArgument) -> OrClause:
+        return OrClause(self, other)
+
+    def __mul__(self, other: AndClauseArgument) -> AndClause:
+        return AndClause(self, other)
     n_args = 1
 
     def __init__(self, a: Variable[TimeSpec]):
@@ -132,7 +174,16 @@ class Variable(Generic[V]):
         return "{}('{}', {})".format(self.__class__.__name__, self.name, self.value)
 
 
-Clause: object = Union[UnsatisfiableClause, SatisfiedClause,
+AndClauseArgument = Union[
+               SatisfiedClause,
+               UnsatisfiableClause,
+               OrClause,
+               AndClause,
+               SignatureCheckClause,
+               PreImageCheckClause,
+               CheckTemplateVerifyClause,
+               AfterClause]
+Clause = Union[SatisfiedClause, UnsatisfiableClause,
                Variable,
                OrClause,
                AndClause,
@@ -149,8 +200,7 @@ class ProgramBuilder:
     def bind(self, variable: Variable[T], value: T):
         pass
 
-    def compile_cnf(self, clause: Clause) -> List[List[Union[
-        SatisfiedClause, Variable, OrClause, AndClause, SignatureCheckClause, PreImageCheckClause, CheckTemplateVerifyClause, AfterClause]]]:
+    def compile_cnf(self, clause: Clause) -> List[List[Clause]]:
         # TODO: Figure out how many passes are required / abort when stable
         # 1000 should be enough that covers all valid scripts...
         for x in range(1000):
@@ -165,20 +215,20 @@ class ProgramBuilder:
             self.witness.insert(0, it)
         def name(self, nickname):
             self.nickname = nickname
-    def compile(self, clause: Clause) -> (CScript, List[Any]):
-        cnf = self.compile_cnf(clause)
-        cases = len(cnf)
-        witnesses = [ProgramBuilder.WitnessTemplate() for  _ in cnf]
+    def compile(self, clause: Clause) -> Tuple[CScript, List[Any]]:
+        cnf: List[List[Clause]] = self.compile_cnf(clause)
+        n_cases = len(cnf)
+        witnesses : List[ProgramBuilder.WitnessTemplate] = [ProgramBuilder.WitnessTemplate() for  _ in cnf]
         script = CScript()
         # If we have one or two cases, special case the emitted scripts
         # 3 or more, use a generic wrapper
-        if cases == 1:
-            for frag in cnf[0]:
-                compiled_frag = self._compile(frag, witnesses[0])
+        if n_cases == 1:
+            for cl in cnf[0]:
+                compiled_frag = self._compile(cl, witnesses[0])
                 script += compiled_frag
             # Hack because the fragment compiler leaves stack empty
             script += CScript([1])
-        elif cases == 2:
+        elif n_cases == 2:
             witnesses[0].add(1)
             witnesses[1].add(0)
             # note order of side effects!
@@ -192,9 +242,9 @@ class ProgramBuilder:
                                1])
         else:
             # Check that the first argument passed is an in range execution path
-            script = CScript([Op.Dup, 0, cases, Op.Within, Op.Verify])
+            script = CScript([Op.Dup, 0, n_cases, Op.Within, Op.Verify])
             for (idx, frag) in enumerate(cnf):
-                witnesses[idx] = [idx + 1]
+                witnesses[idx].add(idx + 1)
                 script += CScript([Op.SubOne, Op.IfDup, Op.NotIf])
 
                 for cl in frag:
@@ -208,53 +258,59 @@ class ProgramBuilder:
         raise NotImplementedError("Cannot Compile Arg")
 
     @normalize.register
-    def _(self, arg: AndClause) -> Clause:
-        class_key = (arg.a.__class__, arg.b.__class__)
-        try:
-            return self.normalize({
-                                      # Swap values to go to other case
-                                      (OrClause, AndClause): lambda: AndClause(arg.b, arg.a),
-                                      (AndClause, OrClause): lambda: OrClause(AndClause(arg.a, arg.b.a),
-                                                                      AndClause(arg.a, arg.b.b)),
-                                      (OrClause, OrClause): lambda: OrClause(
-                                          OrClause(AndClause(arg.a.a, arg.b.a), AndClause(arg.a.a, arg.b.b)),
-                                          OrClause(AndClause(arg.a.b, arg.b.a), AndClause(arg.a.b, arg.b.b))),
-                                  }[class_key])()
-        except KeyError:
-            if isinstance(arg.a, AndClause):
-                return AndClause(self.normalize(arg.a), arg.b)
-            if isinstance(arg.a, OrClause):
-                return OrClause(AndClause(arg.a.a, arg.b), AndClause(arg.a.b, arg.b))
-            if isinstance(arg.b, AndClause):
-                return AndClause(self.normalize(arg.b), arg.a)
-            if isinstance(arg.b, OrClause):
-                return OrClause(AndClause(arg.b.a, arg.a), AndClause(arg.b.b, arg.a))
+    def normalize_and(self, arg: AndClause) -> Clause:
+        a :AndClauseArgument = arg.a
+        b: AndClauseArgument = arg.b
+        if isinstance(a, OrClause) and isinstance(b, OrClause):
+            a0: AndClauseArgument = a.a
+            a1: AndClauseArgument = a.b
+            b0: AndClauseArgument = b.a
+            b1: AndClauseArgument = b.b
+            return a0*b0 + a0*b1 + a1*b0 + a1*b1
+        elif isinstance(b, AndClause) and isinstance(a, OrClause):
+            _or, _and = a, b
+            return _and * _or.a + _and * _or.b
+        elif isinstance(a, AndClause) and isinstance(b, OrClause):
+            _or, _and = b, a
+            return _and * _or.a + _and * _or.b
+        # Other Clause can be ignored...
+        elif isinstance(a, AndClause):
+            return AndClause(self.normalize(a), b)
+        elif isinstance(a, OrClause):
+            a0, a1 = a.a, a.b
+            return a0*b + a1*b
+        elif isinstance(b, AndClause):
+            return AndClause(self.normalize(b), a)
+        elif isinstance(b, OrClause):
+            b0, b1 = b.a, b.b
+            return b0*a + b1*a
+        else:
             return arg
 
     @normalize.register
-    def _(self, arg: OrClause) -> Clause:
+    def normalize_or(self, arg: OrClause) -> Clause:
         return OrClause(self.normalize(arg.a), self.normalize(arg.b))
 
     # TODO: Unionize!
 
     @normalize.register
-    def _(self, arg: SignatureCheckClause) -> Clause:
+    def normalize_signaturecheck(self, arg: SignatureCheckClause) -> Clause:
         return arg
 
     @normalize.register
-    def _(self, arg: PreImageCheckClause) -> Clause:
+    def normalize_preimagecheck(self, arg: PreImageCheckClause) -> Clause:
         return arg
 
     @normalize.register
-    def _(self, arg: CheckTemplateVerifyClause) -> Clause:
+    def normalize_ctv(self, arg: CheckTemplateVerifyClause) -> Clause:
         return arg
 
     @normalize.register
-    def _(self, arg: AfterClause) -> Clause:
+    def normalize_after(self, arg: AfterClause) -> Clause:
         return arg
 
     @normalize.register
-    def _(self, arg: Variable) -> Clause:
+    def normalize_var(self, arg: Variable) -> Clause:
         return arg
 
     @methdispatch
@@ -262,7 +318,7 @@ class ProgramBuilder:
         raise NotImplementedError("Cannot Compile Arg")
 
     @flatten.register
-    def _(self, arg: AndClause) -> List[List[Clause]]:
+    def flatten_and(self, arg: AndClause) -> List[List[Clause]]:
         assert not isinstance(arg.a, OrClause)
         assert not isinstance(arg.b, OrClause)
         l = self.flatten(arg.a)
@@ -273,27 +329,27 @@ class ProgramBuilder:
         return l
 
     @flatten.register
-    def _(self, arg: OrClause) -> List[List[Clause]]:
+    def flatten_or(self, arg: OrClause) -> List[List[Clause]]:
         return self.flatten(arg.a) + self.flatten(arg.b)
 
     @flatten.register
-    def _(self, arg: SignatureCheckClause) -> List[List[Clause]]:
+    def flatten_sigcheck(self, arg: SignatureCheckClause) -> List[List[Clause]]:
         return [[arg]]
 
     @flatten.register
-    def _(self, arg: PreImageCheckClause) -> List[List[Clause]]:
+    def flatten_preimage(self, arg: PreImageCheckClause) -> List[List[Clause]]:
         return [[arg]]
 
     @flatten.register
-    def _(self, arg: CheckTemplateVerifyClause) -> List[List[Clause]]:
+    def flatten_ctv(self, arg: CheckTemplateVerifyClause) -> List[List[Clause]]:
         return [[arg]]
 
     @flatten.register
-    def _(self, arg: AfterClause) -> List[List[Clause]]:
+    def flatten_after(self, arg: AfterClause) -> List[List[Clause]]:
         return [[arg]]
 
     @flatten.register
-    def _(self, arg: Variable) -> List[List[Clause]]:
+    def flatten_var(self, arg: Variable) -> List[List[Clause]]:
         return [[arg]]
 
     @methdispatch
@@ -301,16 +357,16 @@ class ProgramBuilder:
         raise NotImplementedError("Cannot Compile Arg", arg)
 
     @_compile.register
-    def _(self, arg: SignatureCheckClause, witness) -> CScript:
+    def _compile_and(self, arg: SignatureCheckClause, witness) -> CScript:
         return self._compile(arg.b, witness) + self._compile(arg.a, witness) + CScript([Op.Check_sig_verify])
 
     @_compile.register
-    def _(self, arg: PreImageCheckClause, witness) -> CScript:
+    def _compile_preimage(self, arg: PreImageCheckClause, witness) -> CScript:
         return self._compile(arg.b, witness) +\
                CScript([Op.Sha256]) + self._compile(arg.a, witness) + CScript([Op.Equal])
 
     @_compile.register
-    def _(self, arg: CheckTemplateVerifyClause, witness) -> CScript:
+    def _compile_ctv(self, arg: CheckTemplateVerifyClause, witness) -> CScript:
         # While valid to make this a witness variable, this is likely an error
         assert arg.a.value is not None
         assert isinstance(arg.a.value, bytes)
@@ -319,7 +375,7 @@ class ProgramBuilder:
         return s
 
     @_compile.register
-    def _(self, arg: AfterClause, witness) -> CScript:
+    def _compile_after(self, arg: AfterClause, witness) -> CScript:
         # While valid to make this a witness variable, this is likely an error
         assert arg.a.value is not None
         if isinstance(arg.a.value, AbsoluteTimeSpec):
@@ -329,7 +385,7 @@ class ProgramBuilder:
         raise ValueError
 
     @_compile.register
-    def _(self, arg: Variable, witness) -> CScript:
+    def _compile_var(self, arg: Variable, witness) -> CScript:
         if arg.value is None:
             # Todo: this is inefficient...
             witness.add(arg.name)

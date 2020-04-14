@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import struct
-from typing import Dict
+from typing import Dict, List
 
 from .hash_functions import sha256
 from .bignum import bn2vch
@@ -23,7 +23,7 @@ def hash160(s):
     return hashlib.new('ripemd160', sha256(s)).digest()
 
 
-_opcode_instances = []
+_opcode_instances: List[CScriptOp] = []
 class CScriptOp(int):
     """A single script opcode"""
     __slots__ = ()
