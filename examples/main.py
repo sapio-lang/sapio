@@ -1,17 +1,14 @@
 from __future__ import annotations
 
+from .context import  txlang
 import os
 from functools import lru_cache
 
-from src.examples.basic_vault import Vault
-from src.examples.p2pk import PayToPubKey
-from src.examples.smarter_vault import SmarterVault
-from src.examples.tree_pay import TreePay, CollapsibleTree
-from src.examples.undo_send import UndoSend
+from txlang import TransactionTemplate
 # import sys; sys.exit()
-from src.lib.bitcoinlib.static_types import Sats, Bitcoin
-from src.lib.contract import TransactionTemplate
-from src.lib.script_lang import Weeks, Amount
+from txlang.bitcoinlib.static_types import Sats, Bitcoin
+from txlang.script_lang import Weeks, Amount
+from examples.p2pk import PayToPubKey
 
 
 def main() -> None:
@@ -33,6 +30,8 @@ def main2():
         TreePay(payments=payments, radix=radix)
 
     key2 = os.urandom(32)
+
+
     @lru_cache()
     def cold_storage(v : Amount):
         #TODO: Use a real PubKey Generator

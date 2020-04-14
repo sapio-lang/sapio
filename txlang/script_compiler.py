@@ -1,10 +1,10 @@
 from typing import TypeVar, List, Tuple, Any
 
-from src.lib.bitcoinlib.script import CScript
-from src.lib.opcodes import Op
-from src.lib.script_lang import Variable, Clause, AndClause, AndClauseArgument, OrClause, SignatureCheckClause, \
+from txlang.bitcoinlib.script import CScript
+from txlang.opcodes import Op
+from txlang.script_lang import Variable, Clause, AndClause, AndClauseArgument, OrClause, SignatureCheckClause, \
     PreImageCheckClause, CheckTemplateVerifyClause, AfterClause, AbsoluteTimeSpec, RelativeTimeSpec
-from src.lib.util import methdispatch
+from txlang.util import methdispatch
 
 T = TypeVar('T')
 

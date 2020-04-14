@@ -30,7 +30,7 @@ ServiceProxy class:
 - sends proper, incrementing 'id'
 - sends Basic HTTP authentication headers
 - parses all JSON numbers that look like floats as Decimal
-- uses standard Python json lib
+- uses standard Python json txlang
 """
 
 import base64

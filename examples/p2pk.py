@@ -1,6 +1,6 @@
-from src.lib.bitcoinlib.static_types import PubKey, Amount
-from src.lib.contract import Contract, unlock
-from src.lib.script_lang import SignatureCheckClause
+from txlang.bitcoinlib.static_types import PubKey, Amount
+from txlang import Contract, unlock
+from txlang.script_lang import SignatureCheckClause
 
 
 class PayToPubKey(Contract):

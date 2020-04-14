@@ -1,8 +1,8 @@
 from typing import Tuple, List
 
-from src.lib.bitcoinlib.static_types import PubKey
-from src.lib.contract import Contract, Amount, TransactionTemplate, path, unlock, Variable
-from src.lib.script_lang import AfterClause, Weeks, SignatureCheckClause
+from txlang.bitcoinlib.static_types import PubKey
+from txlang import Contract, Amount, TransactionTemplate, path, unlock, Variable
+from txlang.script_lang import AfterClause, Weeks, SignatureCheckClause
 import functools
 
 

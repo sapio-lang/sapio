@@ -1,5 +1,5 @@
-from src.lib.contract import Contract, TransactionTemplate, unlock, path
-from src.lib.script_lang import *
+from txlang import Contract, TransactionTemplate, unlock, path
+from txlang.script_lang import *
 
 
 class UndoSend(Contract):

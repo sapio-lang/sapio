@@ -3,8 +3,8 @@ from __future__ import annotations
 import typing
 from typing import Callable, TypeVar, List, Any, Union, Tuple
 
-import src.lib.bitcoinlib.hash_functions
-from src.lib.script_lang import CheckTemplateVerifyClause, AndClause, OrClause, Clause, Variable, AndClauseArgument
+import txlang.bitcoinlib.hash_functions
+from txlang.script_lang import CheckTemplateVerifyClause, AndClause, OrClause, Variable, AndClauseArgument
 from .bitcoinlib.script import CScript
 from .bitcoinlib.static_types import Sequence, Amount, Version, LockTime, uint32, Sats
 from .script_compiler import ProgramBuilder
@@ -231,7 +231,7 @@ class Contract(metaclass=MetaContract):
                 tx = child.bind_tx(out, witnesses_by_name[name])
             else:
                 tx = child.bind_tx(out, CTxWitness())
-            txid = src.lib.bitcoinlib.hash_functions.sha256
+            txid = txlang.bitcoinlib.hash_functions.sha256
             txns.append(tx)
             for (idx, (_, contract)) in enumerate(child.outputs):
                 txns.extend(contract.bind(COutPoint(txid, idx)))
