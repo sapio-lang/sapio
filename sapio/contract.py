@@ -197,7 +197,9 @@ class MetaContract(type):
             while len(paths) > 1:
                 p = paths.pop()
                 paths[0] = OrClause(paths[-1], p)
-            self.scriptPubKey, self.witnesses = ProgramBuilder().compile(paths[0])
+            wm = ProgramBuilder().compile(paths[0])
+            self.scriptPubKey, self.witnesses = wm.program, wm.witnesses
+
 
 
         sig = inspect.signature(init_class)

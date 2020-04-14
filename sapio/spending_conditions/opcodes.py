@@ -1,4 +1,4 @@
-from .bitcoinlib.script import *
+from sapio.bitcoinlib.script import *
 
 class AllowedOp:
     OP_AND = OP_AND
@@ -13,6 +13,7 @@ class AllowedOp:
     OP_SUB = OP_SUB
     OP_2DROP = OP_2DROP
     OP_1SUB = OP_1SUB
+    OP_1 = OP_1
     OP_IFDUP = OP_IFDUP
     OP_NOTIF = OP_NOTIF
     OP_ENDIF = OP_ENDIF

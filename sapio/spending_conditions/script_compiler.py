@@ -1,19 +1,40 @@
-from typing import TypeVar, List, Tuple, Any
+from typing import TypeVar, List, Tuple, Any, Dict
 
 from sapio.bitcoinlib.script import CScript
-from sapio.opcodes import AllowedOp
-from sapio.spending_conditions.script_lang import Variable, Clause, AndClause, AndClauseArgument, OrClause, SignatureCheckClause, \
+from sapio.spending_conditions.opcodes import AllowedOp
+from sapio.spending_conditions.script_lang import Variable, Clause, AndClause, AndClauseArgument, OrClause, \
+    SignatureCheckClause, \
     PreImageCheckClause, CheckTemplateVerifyClause, AfterClause, AbsoluteTimeSpec, RelativeTimeSpec
 from sapio.util import methdispatch
 
 T = TypeVar('T')
 
 
+class WitnessTemplate:
+    def __init__(self):
+        self.witness = []
+        self.nickname = None
+
+    def add(self, it):
+        self.witness.insert(0, it)
+
+    def name(self, nickname):
+        self.nickname = nickname
+
+
+class WitnessManager:
+    def __init__(self):
+        self.program: CScript = CScript()
+        self.witnesses : Dict[Any, WitnessTemplate] = {}
+    def get_witness(self, key) -> WitnessTemplate:
+        return self.witnesses[key]
+    def make_witness(self, key) -> WitnessTemplate:
+        assert key not in self.witnesses
+        self.witnesses[key] = WitnessTemplate()
+        return self.witnesses[key]
+
+
 class ProgramBuilder:
-
-    def bind(self, variable: Variable[T], value: T):
-        pass
-
     def compile_cnf(self, clause: Clause) -> List[List[Clause]]:
         # TODO: Figure out how many passes are required / abort when stable
         # 1000 should be enough that covers all valid scripts...
@@ -21,50 +42,67 @@ class ProgramBuilder:
             clause = self.normalize(clause)
         return self.flatten(clause)
 
-    class WitnessTemplate:
-        def __init__(self):
-            self.witness = []
-            self.nickname = None
-        def add(self, it):
-            self.witness.insert(0, it)
-        def name(self, nickname):
-            self.nickname = nickname
-    def compile(self, clause: Clause) -> Tuple[CScript, List[Any]]:
+
+    def compile(self, clause: Clause) -> WitnessManager:
         cnf: List[List[Clause]] = self.compile_cnf(clause)
         n_cases = len(cnf)
-        witnesses : List[ProgramBuilder.WitnessTemplate] = [ProgramBuilder.WitnessTemplate() for  _ in cnf]
-        script = CScript()
+        witness_manager: WitnessManager = WitnessManager()
+
         # If we have one or two cases, special case the emitted scripts
         # 3 or more, use a generic wrapper
         if n_cases == 1:
+            witness = witness_manager.make_witness(0)
             for cl in cnf[0]:
-                compiled_frag = self._compile(cl, witnesses[0])
-                script += compiled_frag
+                compiled_frag = self._compile(cl, witness)
+                witness_manager.program += compiled_frag
             # Hack because the fragment compiler leaves stack empty
-            script += CScript([1])
+            witness_manager.program += CScript([AllowedOp.OP_1])
         elif n_cases == 2:
-            witnesses[0].add(1)
-            witnesses[1].add(0)
+            wit_0 = witness_manager.make_witness(0)
+            wit_1 = witness_manager.make_witness(1)
+            wit_0.add(1)
+            wit_1.add(0)
             # note order of side effects!
-            branch_a = CScript([self._compile(frag, witnesses[0]) for frag in cnf[0]])
-            branch_b = CScript([self._compile(frag, witnesses[1]) for frag in cnf[1]])
-            script = CScript([AllowedOp.OP_IF,
-                              branch_a,
-                              AllowedOp.OP_ELSE,
-                              branch_b,
-                              AllowedOp.OP_ENDIF,
-                              1])
+            branch_a = CScript([self._compile(frag, wit_0) for frag in cnf[0]])
+            branch_b = CScript([self._compile(frag, wit_1) for frag in cnf[1]])
+            witness_manager.program = CScript([AllowedOp.OP_IF,
+                                               branch_a,
+                                               AllowedOp.OP_ELSE,
+                                               branch_b,
+                                               AllowedOp.OP_ENDIF,
+                                               AllowedOp.OP_1])
         else:
             # Check that the first argument passed is an in range execution path
-            script = CScript([AllowedOp.OP_DUP, 0, n_cases, AllowedOp.OP_WITHIN, AllowedOp.OP_VERIFY])
+            # Note the first branch does not subtract one, so we have arg in [0, N)
+            script = CScript([AllowedOp.OP_DUP,
+                              AllowedOp.OP_0,
+                              n_cases,
+                              AllowedOp.OP_WITHIN,
+                              AllowedOp.OP_VERIFY])
             for (idx, frag) in enumerate(cnf):
-                witnesses[idx].add(idx + 1)
-                script += CScript([AllowedOp.OP_1SUB, AllowedOp.OP_IFDUP, AllowedOp.OP_NOTIF])
+                wit = witness_manager.make_witness(idx)
+                wit.add(idx)
+                if idx == 0:
+                    # Don't subtract one on first check
+                    witness_manager.program += CScript([AllowedOp.OP_IFDUP,
+                                                        AllowedOp.OP_NOTIF])
+                else:
+                    witness_manager.program += CScript([AllowedOp.OP_1SUB,
+                                                        AllowedOp.OP_IFDUP,
+                                                        AllowedOp.OP_NOTIF])
 
                 for cl in frag:
-                    script += self._compile(cl, witnesses[idx])
-                script += CScript([AllowedOp.OP_0, AllowedOp.OP_ENDIF])
-        return script, witnesses
+                    script += self._compile(cl, wit)
+                # We push an OP_0 onto the stack as it will cause
+                # all following branches to not execute,
+                # unless we are the last branch
+                if idx+1 < len(cnf):
+                    witness_manager.program += CScript([AllowedOp.OP_0, AllowedOp.OP_ENDIF])
+                else:
+                    witness_manager.program += CScript([AllowedOp.OP_ENDIF])
+            # Push an OP_1 so that we succeed
+            witness_manager.program += CScript([AllowedOp.Op_1])
+        return witness_manager
 
     # Normalize Bubbles up all the OR clauses into a CNF
     @methdispatch
@@ -73,14 +111,14 @@ class ProgramBuilder:
 
     @normalize.register
     def normalize_and(self, arg: AndClause) -> Clause:
-        a :AndClauseArgument = arg.a
+        a: AndClauseArgument = arg.a
         b: AndClauseArgument = arg.b
         if isinstance(a, OrClause) and isinstance(b, OrClause):
             a0: AndClauseArgument = a.a
             a1: AndClauseArgument = a.b
             b0: AndClauseArgument = b.a
             b1: AndClauseArgument = b.b
-            return a0*b0 + a0*b1 + a1*b0 + a1*b1
+            return a0 * b0 + a0 * b1 + a1 * b0 + a1 * b1
         elif isinstance(b, AndClause) and isinstance(a, OrClause):
             _or, _and = a, b
             return _and * _or.a + _and * _or.b
@@ -92,12 +130,12 @@ class ProgramBuilder:
             return AndClause(self.normalize(a), b)
         elif isinstance(a, OrClause):
             a0, a1 = a.a, a.b
-            return a0*b + a1*b
+            return a0 * b + a1 * b
         elif isinstance(b, AndClause):
             return AndClause(self.normalize(b), a)
         elif isinstance(b, OrClause):
             b0, b1 = b.a, b.b
-            return b0*a + b1*a
+            return b0 * a + b1 * a
         else:
             return arg
 
@@ -167,7 +205,7 @@ class ProgramBuilder:
         return [[arg]]
 
     @methdispatch
-    def _compile(self, arg: Clause, witness : WitnessTemplate) -> CScript:
+    def _compile(self, arg: Clause, witness: WitnessTemplate) -> CScript:
         raise NotImplementedError("Cannot Compile Arg", arg)
 
     @_compile.register
