@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
-import sapio
 from sapio.contract import TransactionTemplate
 
 from sapio.examples.undo_send import UndoSend

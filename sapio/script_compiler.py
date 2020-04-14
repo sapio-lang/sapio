@@ -1,7 +1,7 @@
 from typing import TypeVar, List, Tuple, Any
 
 from sapio.bitcoinlib.script import CScript
-from sapio.opcodes import Op
+from sapio.opcodes import AllowedOp
 from sapio.script_lang import Variable, Clause, AndClause, AndClauseArgument, OrClause, SignatureCheckClause, \
     PreImageCheckClause, CheckTemplateVerifyClause, AfterClause, AbsoluteTimeSpec, RelativeTimeSpec
 from sapio.util import methdispatch
@@ -48,22 +48,22 @@ class ProgramBuilder:
             # note order of side effects!
             branch_a = CScript([self._compile(frag, witnesses[0]) for frag in cnf[0]])
             branch_b = CScript([self._compile(frag, witnesses[1]) for frag in cnf[1]])
-            script = CScript([Op.If,
-                               branch_a,
-                               Op.Else,
-                               branch_b,
-                               Op.EndIf,
-                               1])
+            script = CScript([AllowedOp.OP_IF,
+                              branch_a,
+                              AllowedOp.OP_ELSE,
+                              branch_b,
+                              AllowedOp.OP_ENDIF,
+                              1])
         else:
             # Check that the first argument passed is an in range execution path
-            script = CScript([Op.Dup, 0, n_cases, Op.Within, Op.Verify])
+            script = CScript([AllowedOp.OP_DUP, 0, n_cases, AllowedOp.OP_WITHIN, AllowedOp.OP_VERIFY])
             for (idx, frag) in enumerate(cnf):
                 witnesses[idx].add(idx + 1)
-                script += CScript([Op.SubOne, Op.IfDup, Op.NotIf])
+                script += CScript([AllowedOp.OP_1SUB, AllowedOp.OP_IFDUP, AllowedOp.OP_NOTIF])
 
                 for cl in frag:
                     script += self._compile(cl, witnesses[idx])
-                script += CScript([Op.Zero,  Op.EndIf])
+                script += CScript([AllowedOp.OP_0, AllowedOp.OP_ENDIF])
         return script, witnesses
 
     # Normalize Bubbles up all the OR clauses into a CNF
@@ -172,19 +172,19 @@ class ProgramBuilder:
 
     @_compile.register
     def _compile_and(self, arg: SignatureCheckClause, witness) -> CScript:
-        return self._compile(arg.b, witness) + self._compile(arg.a, witness) + CScript([Op.Check_sig_verify])
+        return self._compile(arg.b, witness) + self._compile(arg.a, witness) + CScript([AllowedOp.OP_CHECKSIGVERIFY])
 
     @_compile.register
     def _compile_preimage(self, arg: PreImageCheckClause, witness) -> CScript:
-        return self._compile(arg.b, witness) +\
-               CScript([Op.Sha256]) + self._compile(arg.a, witness) + CScript([Op.Equal])
+        return self._compile(arg.b, witness) + \
+               CScript([AllowedOp.OP_SHA256]) + self._compile(arg.a, witness) + CScript([AllowedOp.OP_EQUAL])
 
     @_compile.register
     def _compile_ctv(self, arg: CheckTemplateVerifyClause, witness) -> CScript:
         # While valid to make this a witness variable, this is likely an error
         assert arg.a.assigned_value is not None
         assert isinstance(arg.a.assigned_value, bytes)
-        s = CScript([arg.a.assigned_value, Op.CheckTemplateVerify, Op.Drop])
+        s = CScript([arg.a.assigned_value, AllowedOp.OP_CHECKTEMPLATEVERIFY, AllowedOp.OP_DROP])
         witness.name(arg.a.assigned_value)
         return s
 
@@ -193,9 +193,9 @@ class ProgramBuilder:
         # While valid to make this a witness variable, this is likely an error
         assert arg.a.assigned_value is not None
         if isinstance(arg.a.assigned_value, AbsoluteTimeSpec):
-            return CScript([arg.a.assigned_value.time, Op.CheckLockTimeVerify, Op.Drop])
+            return CScript([arg.a.assigned_value.time, AllowedOp.OP_CHECKLOCKTIMEVERIFY, AllowedOp.OP_DROP])
         if isinstance(arg.a.assigned_value, RelativeTimeSpec):
-            return CScript([arg.a.assigned_value.time, Op.CheckSequenceVerify, Op.Drop])
+            return CScript([arg.a.assigned_value.time, AllowedOp.OP_CHECKSEQUENCEVERIFY, AllowedOp.OP_DROP])
         raise ValueError
 
     @_compile.register
