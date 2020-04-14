@@ -116,19 +116,70 @@ class NormalizationPass:
     def normalize_var(self, arg: Variable) -> Clause:
         return arg
 
+# Assumes that there is no OR which comes after an AND
+class FlattenPass:
+    @methdispatch
+    def flatten(self, arg: Clause) -> List[List[Clause]]:
+        raise NotImplementedError("Cannot Compile Arg")
 
-class ProgramBuilder:
-    def compile_cnf(self, clause: Clause) -> List[List[Clause]]:
+
+    @flatten.register
+    def flatten_and(self, arg: AndClause) -> List[List[Clause]]:
+        assert not isinstance(arg.a, OrClause)
+        assert not isinstance(arg.b, OrClause)
+        l = self.flatten(arg.a)
+        l2 = self.flatten(arg.b)
+        assert len(l) == 1
+        assert len(l2) == 1
+        l[0].extend(l2[0])
+        return l
+
+
+    @flatten.register
+    def flatten_or(self, arg: OrClause) -> List[List[Clause]]:
+        return self.flatten(arg.a) + self.flatten(arg.b)
+
+
+    @flatten.register
+    def flatten_sigcheck(self, arg: SignatureCheckClause) -> List[List[Clause]]:
+        return [[arg]]
+
+
+    @flatten.register
+    def flatten_preimage(self, arg: PreImageCheckClause) -> List[List[Clause]]:
+        return [[arg]]
+
+
+    @flatten.register
+    def flatten_ctv(self, arg: CheckTemplateVerifyClause) -> List[List[Clause]]:
+        return [[arg]]
+
+
+    @flatten.register
+    def flatten_after(self, arg: AfterClause) -> List[List[Clause]]:
+        return [[arg]]
+
+
+    @flatten.register
+    def flatten_var(self, arg: Variable) -> List[List[Clause]]:
+        return [[arg]]
+
+
+CNF = List[List[Clause]]
+class ClauseToCNF:
+    def compile_cnf(self, clause: Clause) -> CNF:
         normalizer = NormalizationPass()
         while True:
             clause = normalizer.normalize(clause)
             if not normalizer.took_action:
                 break
-        return self.flatten(clause)
+        return FlattenPass().flatten(clause)
 
+
+class ProgramBuilder:
 
     def compile(self, clause: Clause) -> WitnessManager:
-        cnf: List[List[Clause]] = self.compile_cnf(clause)
+        cnf: CNF = ClauseToCNF().compile_cnf(clause)
         n_cases = len(cnf)
         witness_manager: WitnessManager = WitnessManager()
 
@@ -188,45 +239,6 @@ class ProgramBuilder:
             witness_manager.program += CScript([AllowedOp.OP_1])
         return witness_manager
 
-
-    @methdispatch
-    def flatten(self, arg: Clause) -> List[List[Clause]]:
-        raise NotImplementedError("Cannot Compile Arg")
-
-    @flatten.register
-    def flatten_and(self, arg: AndClause) -> List[List[Clause]]:
-        assert not isinstance(arg.a, OrClause)
-        assert not isinstance(arg.b, OrClause)
-        l = self.flatten(arg.a)
-        l2 = self.flatten(arg.b)
-        assert len(l) == 1
-        assert len(l2) == 1
-        l[0].extend(l2[0])
-        return l
-
-    @flatten.register
-    def flatten_or(self, arg: OrClause) -> List[List[Clause]]:
-        return self.flatten(arg.a) + self.flatten(arg.b)
-
-    @flatten.register
-    def flatten_sigcheck(self, arg: SignatureCheckClause) -> List[List[Clause]]:
-        return [[arg]]
-
-    @flatten.register
-    def flatten_preimage(self, arg: PreImageCheckClause) -> List[List[Clause]]:
-        return [[arg]]
-
-    @flatten.register
-    def flatten_ctv(self, arg: CheckTemplateVerifyClause) -> List[List[Clause]]:
-        return [[arg]]
-
-    @flatten.register
-    def flatten_after(self, arg: AfterClause) -> List[List[Clause]]:
-        return [[arg]]
-
-    @flatten.register
-    def flatten_var(self, arg: Variable) -> List[List[Clause]]:
-        return [[arg]]
 
     @methdispatch
     def _compile(self, arg: Clause, witness: WitnessTemplate) -> CScript:
