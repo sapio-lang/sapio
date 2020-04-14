@@ -214,7 +214,7 @@ class Contract(metaclass=MetaContract):
     scriptPubKey: CScript
     witnesses: typing.Dict[Any, Any]
     transactions: typing.Dict[Any, Any]
-    amount_range: Tuple[int, int]
+    amount_range: Tuple[Amount, Amount]
     class Fields:
         pass
     # Null __init__ defined to supress sanitizer complaints...
