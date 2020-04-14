@@ -119,16 +119,14 @@ class NormalizationPass:
 # Assumes that there is no OR which comes after an AND
 class FlattenPass:
     @methdispatch
-    def flatten(self, arg: Clause) -> List[List[Clause]]:
+    def flatten(self, arg: Clause, or_allowed: bool=True) -> List[List[Clause]]:
         raise NotImplementedError("Cannot Compile Arg")
 
 
     @flatten.register
-    def flatten_and(self, arg: AndClause) -> List[List[Clause]]:
-        assert not isinstance(arg.a, OrClause)
-        assert not isinstance(arg.b, OrClause)
-        l = self.flatten(arg.a)
-        l2 = self.flatten(arg.b)
+    def flatten_and(self, arg: AndClause, or_allowed=False) -> List[List[Clause]]:
+        l = self.flatten(arg.a, or_allowed)
+        l2 = self.flatten(arg.b, or_allowed)
         assert len(l) == 1
         assert len(l2) == 1
         l[0].extend(l2[0])
@@ -136,34 +134,40 @@ class FlattenPass:
 
 
     @flatten.register
-    def flatten_or(self, arg: OrClause) -> List[List[Clause]]:
-        return self.flatten(arg.a) + self.flatten(arg.b)
+    def flatten_or(self, arg: OrClause, or_allowed=True) -> List[List[Clause]]:
+        assert or_allowed
+        return self.flatten(arg.a, or_allowed) + self.flatten(arg.b, or_allowed)
 
 
     @flatten.register
-    def flatten_sigcheck(self, arg: SignatureCheckClause) -> List[List[Clause]]:
+    def flatten_sigcheck(self, arg: SignatureCheckClause, or_allowed=False) -> List[List[Clause]]:
         return [[arg]]
 
 
     @flatten.register
-    def flatten_preimage(self, arg: PreImageCheckClause) -> List[List[Clause]]:
+    def flatten_preimage(self, arg: PreImageCheckClause, or_allowed=False) -> List[List[Clause]]:
         return [[arg]]
 
 
     @flatten.register
-    def flatten_ctv(self, arg: CheckTemplateVerifyClause) -> List[List[Clause]]:
+    def flatten_ctv(self, arg: CheckTemplateVerifyClause, or_allowed=False) -> List[List[Clause]]:
         return [[arg]]
 
 
     @flatten.register
-    def flatten_after(self, arg: AfterClause) -> List[List[Clause]]:
+    def flatten_after(self, arg: AfterClause, or_allowed=False) -> List[List[Clause]]:
         return [[arg]]
 
 
     @flatten.register
-    def flatten_var(self, arg: Variable) -> List[List[Clause]]:
+    def flatten_var(self, arg: Variable, or_allowed=False) -> List[List[Clause]]:
         return [[arg]]
 
+try:
+    FlattenPass().flatten(AndClause(OrClause(1,2), OrClause(1,2)))
+    raise AssertionError("this sanity check should fail")
+except AssertionError:
+   pass
 
 CNF = List[List[Clause]]
 class ClauseToCNF:
