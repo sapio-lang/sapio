@@ -16,6 +16,7 @@ class Vault(Contract):
     @path
     def step(self) -> TransactionTemplate:
         tx = TransactionTemplate()
+        tx.set_sequence(self.timeout.assigned_value.time)
         tx.add_output(self.amount_step.assigned_value,
                       UndoSend(from_contract=self.cold_storage,
                                to_key=self.hot_storage,

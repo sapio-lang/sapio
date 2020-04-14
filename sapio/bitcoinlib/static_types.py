@@ -2,7 +2,6 @@
 from typing import List, NewType
 from numpy import uint8, uint16, uint32, uint64, int8, int16, int32, int64
 
-uint32 : uint32
 Sequence = NewType("Sequence", uint32)
 Version = NewType("Version", uint32)
 LockTime = NewType("LockTime", uint32)

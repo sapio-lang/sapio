@@ -88,6 +88,8 @@ class TransactionTemplate:
     def get_ctv_hash(self):
         # Implicitly always at index 0!
         return self.get_standard_template_hash(0)
+    def set_sequence(self, sequence:Sequence, idx:int =0):
+        self.sequences[idx] = sequence
 
     def get_base_transaction(self) -> CTransaction:
         tx = CTransaction()

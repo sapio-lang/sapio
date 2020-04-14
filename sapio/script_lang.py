@@ -5,6 +5,7 @@ from typing import TypeVar, Generic, Any, Union, Optional
 from typing_extensions import Protocol
 
 from sapio.bitcoinlib.static_types import *
+from sapio.util import methdispatch
 
 
 class ClauseProtocol(Protocol):
@@ -125,18 +126,36 @@ class CheckTemplateVerifyClause(StringClauseMixin):
 
 class AbsoluteTimeSpec:
     def __init__(self, t):
-        self.time = t
-
+        self.time : LockTime = t
 
 class RelativeTimeSpec:
     def __init__(self, t):
-        self.time = t
+        self.time : Sequence = t
+    @staticmethod
+    def from_seconds(seconds: float) -> RelativeTimeSpec:
+        t = uint32((seconds + 511) // 512)
+        if t > 0x0000ffff:
+            raise ValueError("Time Span {} seconds is too long! ".format(seconds))
+        # Bit 22 enables time based locks.
+        l = uint32(1 << 22) | t
+        return RelativeTimeSpec(Sequence(uint32(l)))
 
 
 TimeSpec = Union[AbsoluteTimeSpec, RelativeTimeSpec]
 
-def Weeks(n):
-    return Variable("RelativeTimeSpec({} Weeks)".format(n), RelativeTimeSpec(n))
+def Weeks(n:float) -> RelativeTimeSpec:
+    if n > (0xFFFF*512//60//60//24//7):
+        raise ValueError("{} Week Span is too long! ".format(n))
+    # lock times are in groups of 512 seconds
+    seconds = n*7*24*60*60
+    return RelativeTimeSpec.from_seconds(seconds)
+
+def Days(n:float) -> RelativeTimeSpec:
+    if n > (0xFFFF*512//60//60//24):
+        raise ValueError("{} Day Span too long! ".format(n))
+    # lock times are in groups of 512 seconds
+    seconds = n*24*60*60
+    return RelativeTimeSpec.from_seconds(seconds)
 
 
 class AfterClause(StringClauseMixin):
@@ -147,8 +166,18 @@ class AfterClause(StringClauseMixin):
         return AndClause(self, other)
     n_args = 1
 
-    def __init__(self, a: Variable[TimeSpec]):
+    @methdispatch
+    def initialize(self, a: Variable[TimeSpec]):
         self.a = a
+    @initialize.register
+    def _with_relative(self, a: RelativeTimeSpec):
+        self.a = Variable("", a)
+    @initialize.register
+    def _with_absolute(self, a: AbsoluteTimeSpec):
+        self.a = Variable("", a)
+    def __init__(self, a: Union[Variable[TimeSpec], TimeSpec]):
+        self.initialize(a)
+
 
 
 V = TypeVar('V')
