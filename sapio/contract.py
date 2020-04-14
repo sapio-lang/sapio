@@ -7,7 +7,7 @@ import sapio.bitcoinlib.hash_functions
 from sapio.spending_conditions.script_lang import CheckTemplateVerifyClause, AndClause, OrClause, Variable, AndClauseArgument
 from .bitcoinlib.script import CScript
 from .bitcoinlib.static_types import Sequence, Amount, Version, LockTime, uint32, Sats
-from sapio.spending_conditions.script_compiler import ProgramBuilder
+from sapio.spending_conditions.script_compiler import ProgramBuilder, WitnessManager
 
 T = TypeVar("T")
 T2 = TypeVar("T2")
@@ -96,12 +96,12 @@ class TransactionTemplate:
         tx.nVersion = self.version
         tx.nLockTime = self.lock_time
         tx.vin = [CTxIn(None, b"", sequence) for sequence in self.sequences]
-        tx.vout = [CTxOut(a, b.scriptPubKey) for (a, b) in self.outputs]
+        tx.vout = [CTxOut(a, b.witness_manager.get_p2wsh_script()) for (a, b) in self.outputs]
         return tx
     def bind_tx(self, point:COutPoint, witness:CTxWitness) -> CTransaction:
         tx = self.get_base_transaction()
         tx.vin[0].prevout = point
-        tx.wit.vtxinwit.append(witness)
+        tx.wit = witness
         tx.rehash()
         return tx
 
@@ -142,7 +142,7 @@ class MetaContract(type):
                     else:
                         raise ValueError("Cannot Override Final ???")
 
-        nmspc['__slots__'] = ('amount_range', 'transactions', 'witnesses', 'scriptPubKey') + tuple(fields.keys())
+        nmspc['__slots__'] = ('amount_range', 'transactions', 'witness_manager') + tuple(fields.keys())
         params = [inspect.Parameter("self", inspect.Parameter.POSITIONAL_ONLY)] + \
                  [inspect.Parameter(param,
                                     inspect.Parameter.KEYWORD_ONLY,
@@ -197,8 +197,7 @@ class MetaContract(type):
             while len(paths) > 1:
                 p = paths.pop()
                 paths[0] = OrClause(paths[-1], p)
-            wm = ProgramBuilder().compile(paths[0])
-            self.scriptPubKey, self.witnesses = wm.program, wm.witnesses
+            self.witness_manager = ProgramBuilder().compile(paths[0])
 
 
 
@@ -212,9 +211,8 @@ def final(m):
     return m
 class Contract(metaclass=MetaContract):
     # These slots will be extended later on
-    __slots__ = ('amount_range', 'transactions', 'witnesses', 'scriptPubKey')
-    scriptPubKey: CScript
-    witnesses: typing.Dict[Any, Any]
+    __slots__ = ('amount_range', 'transactions', 'witness_manager')
+    witness_manager: WitnessManager
     transactions: typing.Dict[Any, Any]
     amount_range: Tuple[Amount, Amount]
     class Fields:
@@ -226,16 +224,11 @@ class Contract(metaclass=MetaContract):
     @final
     def bind(self, out: COutPoint):
         txns = []
-        witnesses_by_name = {wit.nickname:wit.witness for wit in self.witnesses}
         for (_, child) in self.transactions.items():
             # todo: find correct witness?
             name = child.get_ctv_hash()
-            if name in witnesses_by_name:
-                # Todo: Incorrect type because we can't fill in things like signatures!
-                tx = child.bind_tx(out, witnesses_by_name[name])
-            else:
-                tx = child.bind_tx(out, CTxWitness())
-            txid = sapio.bitcoinlib.hash_functions.sha256
+            tx = child.bind_tx(out, CTxWitness())
+            txid = tx.sha256
             txns.append(tx)
             for (idx, (_, contract)) in enumerate(child.outputs):
                 txns.extend(contract.bind(COutPoint(txid, idx)))

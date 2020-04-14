@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
+
+from sapio.bitcoinlib.messages import COutPoint
 from sapio.contract import TransactionTemplate
 
 from sapio.examples.undo_send import UndoSend
@@ -49,6 +51,8 @@ def main2():
         #TODO: Use a real PubKey Generator
         return SmarterVault(cold_storage=cold_storage, hot_storage=key2, n_steps=10, timeout=Weeks(1), mature=Weeks(2), amount_step= (v // 10))
     s = SmarterVault(cold_storage=cold_storage2, hot_storage=key2, n_steps=10, timeout=Weeks(1), mature=Weeks(2), amount_step=100)
+
+    s.bind(COutPoint())
     return s
 
 

@@ -5,8 +5,10 @@
 """Encode and decode BASE58, P2PKH and P2SH addresses."""
 
 import enum
+from typing import Union
 
-from .script import hash256, hash160, CScript, OP_0
+from .hash_functions import  hash256
+from .script import hash160, CScript, OP_0
 from .hash_functions import sha256
 from .util import hex_str_to_bytes
 
@@ -67,7 +69,7 @@ def key_to_p2sh_p2wpkh(key, main = False):
     p2shscript = CScript([OP_0, hash160(key)])
     return script_to_p2sh(p2shscript, main)
 
-def program_to_witness(version, program, main = False):
+def program_to_witness(version: int, program: Union[bytes, str, CScript], main: bool = False) -> str:
     if (type(program) is str):
         program = hex_str_to_bytes(program)
     assert 0 <= version <= 16
@@ -75,9 +77,9 @@ def program_to_witness(version, program, main = False):
     assert version > 0 or len(program) in [20, 32]
     return segwit_addr.encode("bc" if main else "bcrt", version, program)
 
-def script_to_p2wsh(script, main = False):
-    script = check_script(script)
-    return program_to_witness(0, sha256(script), main)
+def script_to_p2wsh(script : Union[CScript, str, bytes], main = False):
+    script_checked : Union[CScript, bytes] = check_script(script)
+    return program_to_witness(0, sha256(script_checked), main)
 
 def key_to_p2wpkh(key, main = False):
     key = check_key(key)
@@ -95,9 +97,10 @@ def check_key(key):
         return key
     assert False
 
-def check_script(script):
-    if (type(script) is str):
-        script = hex_str_to_bytes(script) # Assuming this is hex string
-    if (type(script) is bytes or type(script) is CScript):
+def check_script(script : Union[bytes, str, CScript]) -> Union[CScript, bytes]:
+    if (isinstance(script, str)):
+        script_conv : bytes = hex_str_to_bytes(script) # Assuming this is hex string
+        return script_conv
+    if (isinstance(script, (bytes, CScript))):
         return script
     assert False

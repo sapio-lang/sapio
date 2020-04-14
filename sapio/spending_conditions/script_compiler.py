@@ -1,5 +1,8 @@
+from functools import lru_cache
 from typing import TypeVar, List, Tuple, Any, Dict
 
+from sapio.bitcoinlib.address import script_to_p2wsh
+from sapio.bitcoinlib.hash_functions import sha256
 from sapio.bitcoinlib.script import CScript
 from sapio.spending_conditions.opcodes import AllowedOp
 from sapio.spending_conditions.script_lang import Variable, Clause, AndClause, AndClauseArgument, OrClause, \
@@ -21,17 +24,25 @@ class WitnessTemplate:
     def name(self, nickname):
         self.nickname = nickname
 
-
 class WitnessManager:
     def __init__(self):
         self.program: CScript = CScript()
         self.witnesses : Dict[Any, WitnessTemplate] = {}
-    def get_witness(self, key) -> WitnessTemplate:
-        return self.witnesses[key]
+        self.is_final = False
+    def finalize(self):
+        self.is_final = True
+    def get_witness(self, key) -> List[Any]:
+        assert self.is_final
+        item = self.witnesses[key].witness.copy()
+        item.insert(0, self.program)
+        return item
     def make_witness(self, key) -> WitnessTemplate:
+        assert not self.is_final
         assert key not in self.witnesses
         self.witnesses[key] = WitnessTemplate()
         return self.witnesses[key]
+    def get_p2wsh_script(self):
+        return CScript([AllowedOp.OP_0, sha256(self.program)])
 
 
 class ProgramBuilder:
@@ -101,7 +112,7 @@ class ProgramBuilder:
                 else:
                     witness_manager.program += CScript([AllowedOp.OP_ENDIF])
             # Push an OP_1 so that we succeed
-            witness_manager.program += CScript([AllowedOp.Op_1])
+            witness_manager.program += CScript([AllowedOp.OP_1])
         return witness_manager
 
     # Normalize Bubbles up all the OR clauses into a CNF
