@@ -1,5 +1,5 @@
-from src.lib.contract import Contract, Amount, TimeSpec, TransactionTemplate, PubKey, AfterClause, SignatureCheckClause, \
-    unlock, path
+from src.lib.contract import Contract, TransactionTemplate, unlock, path
+from src.lib.script_lang import *
 
 
 class UndoSend(Contract):

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import typing
-from typing import Optional, Callable
+from typing import Callable, TypeVar, List, Optional, Any, Union
 
 import src.lib.bitcoinlib.hash_functions
-from .lang import *
+from src.lib.script_lang import CheckTemplateVerifyClause, AndClause, OrClause, Clause, Variable
+from .script_compiler import ProgramBuilder
+from .bitcoinlib.static_types import Sequence, Amount, Version, LockTime, PubKey, u32, c_uint32
 
 T = TypeVar("T")
 

@@ -8,7 +8,7 @@ from src.examples.undo_send import UndoSend
 # import sys; sys.exit()
 from src.lib.bitcoinlib.messages import COutPoint
 from src.lib.contract import TransactionTemplate
-from src.lib.lang import Weeks
+from src.lib.script_lang import Weeks
 
 
 def main() -> None:

@@ -1,5 +1,7 @@
 from src.examples.undo_send import UndoSend
-from src.lib.contract import Contract, Amount, TimeSpec, TransactionTemplate, path
+from src.lib.bitcoinlib.static_types import Amount
+from src.lib.script_lang import TimeSpec
+from src.lib.contract import Contract, TransactionTemplate, path
 
 
 class Vault(Contract):

@@ -1,7 +1,7 @@
 from typing import Tuple, List
 
-from src.lib.contract import Contract, Amount, TimeSpec, TransactionTemplate, path, unlock, PubKey, AfterClause, \
-    Variable, SignatureCheckClause, Weeks
+from src.lib.contract import Contract, Amount, TransactionTemplate, path, unlock, PubKey, Variable
+from src.lib.script_lang import AfterClause, Weeks, SignatureCheckClause
 
 
 def segment_by_radix(L, n):
