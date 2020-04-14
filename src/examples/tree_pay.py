@@ -3,6 +3,7 @@ from typing import Tuple, List
 from src.lib.bitcoinlib.static_types import PubKey
 from src.lib.contract import Contract, Amount, TransactionTemplate, path, unlock, Variable
 from src.lib.script_lang import AfterClause, Weeks, SignatureCheckClause
+import functools
 
 
 def segment_by_radix(L, n):
@@ -18,10 +19,11 @@ class TreePay(Contract):
     @path
     def expand(self) -> TransactionTemplate:
         tx = TransactionTemplate()
-        for segment in segment_by_radix(self.payments.value, self.radix.value):
-            if len(segment) > self.radix.value:
-                tx.add_output( sum(a for (a, _) in segment),
-                    TreePay(payments=segment, radix=self.radix.value)
+        for segment in segment_by_radix(self.payments.assigned_value, self.radix.assigned_value):
+            if len(segment) > self.radix.assigned_value:
+                tx.add_output(
+                    functools.reduce(lambda x,y: x+y, [a for (a, _) in segment], Amount(0)),
+                    TreePay(payments=segment, radix=self.radix.assigned_value)
                 )
             else:
                 for payment in segment:
@@ -40,10 +42,11 @@ class CollapsibleTree(Contract):
     @path(lambda _: AfterClause(Weeks(2)))
     def expand(self) -> TransactionTemplate:
         tx = TransactionTemplate()
-        for segment in segment_by_radix(self.payments.value, self.radix.value):
-            if len(segment) > self.radix.value:
-                tx.add_output( sum(a for (a, _) in segment),
-                               CollapsibleTree(payments=segment, radix=self.radix.value)
+        for segment in segment_by_radix(self.payments.assigned_value, self.radix.assigned_value):
+            if len(segment) > self.radix.assigned_value:
+                tx.add_output(
+                               functools.reduce(lambda x, y: x + y, [a for (a, _) in segment], Amount(0)),
+                               CollapsibleTree(payments=segment, radix=self.radix.assigned_value)
                                )
             else:
                 for payment in segment:

@@ -15,5 +15,5 @@ class UndoSend(Contract):
     @path(lambda self: SignatureCheckClause(self.to_key))
     def undo(self) -> TransactionTemplate:
         tx = TransactionTemplate()
-        tx.add_output(self.amount.value, self.from_contract.value)
+        tx.add_output(self.amount.assigned_value, self.from_contract.assigned_value)
         return tx

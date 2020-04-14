@@ -24,6 +24,7 @@ import socket
 import struct
 import time
 from codecs import encode
+from ctypes import c_int64
 from io import BytesIO
 from typing import List
 
@@ -32,7 +33,7 @@ from .hash_functions import sha256, hash256
 from .script import CScript
 
 from .siphash import siphash256
-from .static_types import Version, LockTime, Amount, Sequence
+from .static_types import Version, LockTime, Amount, Sequence, int64, uint32
 from .util import hex_str_to_bytes, assert_equal
 
 MIN_VERSION_SUPPORTED = 60001
@@ -329,7 +330,7 @@ class CTxOut:
     __slots__ = ("nValue", "scriptPubKey")
     nValue: Amount
     scriptPubKey: CScript
-    def __init__(self, nValue=0, scriptPubKey=b""):
+    def __init__(self, nValue=Amount(int64(0)), scriptPubKey=b""):
         self.nValue = nValue
         self.scriptPubKey = scriptPubKey
 
@@ -424,11 +425,11 @@ class CTransaction:
     vout: List[CTxOut]
     def __init__(self, tx=None):
         if tx is None:
-            self.nVersion = 1
+            self.nVersion = Version(uint32(1))
             self.vin = []
             self.vout = []
             self.wit = CTxWitness()
-            self.nLockTime = 0
+            self.nLockTime = LockTime(uint32(0))
             self.sha256 = None
             self.hash = None
         else:
@@ -472,7 +473,6 @@ class CTransaction:
 
     def get_standard_template_hash(self, nIn):
         r = b""
-        print(self.nVersion)
         r += struct.pack("<i", self.nVersion)
         r += struct.pack("<I", self.nLockTime)
         if any(inp.scriptSig for inp in self.vin):

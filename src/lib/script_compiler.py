@@ -182,27 +182,27 @@ class ProgramBuilder:
     @_compile.register
     def _compile_ctv(self, arg: CheckTemplateVerifyClause, witness) -> CScript:
         # While valid to make this a witness variable, this is likely an error
-        assert arg.a.value is not None
-        assert isinstance(arg.a.value, bytes)
-        s = CScript([arg.a.value, Op.CheckTemplateVerify, Op.Drop])
-        witness.name(arg.a.value)
+        assert arg.a.assigned_value is not None
+        assert isinstance(arg.a.assigned_value, bytes)
+        s = CScript([arg.a.assigned_value, Op.CheckTemplateVerify, Op.Drop])
+        witness.name(arg.a.assigned_value)
         return s
 
     @_compile.register
     def _compile_after(self, arg: AfterClause, witness) -> CScript:
         # While valid to make this a witness variable, this is likely an error
-        assert arg.a.value is not None
-        if isinstance(arg.a.value, AbsoluteTimeSpec):
-            return CScript([arg.a.value.time, Op.CheckLockTimeVerify, Op.Drop])
-        if isinstance(arg.a.value, RelativeTimeSpec):
-            return CScript([arg.a.value.time, Op.CheckSequenceVerify, Op.Drop])
+        assert arg.a.assigned_value is not None
+        if isinstance(arg.a.assigned_value, AbsoluteTimeSpec):
+            return CScript([arg.a.assigned_value.time, Op.CheckLockTimeVerify, Op.Drop])
+        if isinstance(arg.a.assigned_value, RelativeTimeSpec):
+            return CScript([arg.a.assigned_value.time, Op.CheckSequenceVerify, Op.Drop])
         raise ValueError
 
     @_compile.register
     def _compile_var(self, arg: Variable, witness) -> CScript:
-        if arg.value is None:
+        if arg.assigned_value is None:
             # Todo: this is inefficient...
             witness.add(arg.name)
             return CScript()
         else:
-            return CScript([arg.value])
+            return CScript([arg.assigned_value])

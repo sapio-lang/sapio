@@ -6,7 +6,7 @@ from typing import Callable, TypeVar, List, Any, Union, Tuple
 import src.lib.bitcoinlib.hash_functions
 from src.lib.script_lang import CheckTemplateVerifyClause, AndClause, OrClause, Clause, Variable, AndClauseArgument
 from .bitcoinlib.script import CScript
-from .bitcoinlib.static_types import Sequence, Amount, Version, LockTime, u32, c_uint32
+from .bitcoinlib.static_types import Sequence, Amount, Version, LockTime, uint32, Sats
 from .script_compiler import ProgramBuilder
 
 T = TypeVar("T")
@@ -56,7 +56,7 @@ def check(s: Callable[[T], bool]) -> Callable[[T], bool]:
 
 
 class WithinFee:
-    fee_modifier = 100
+    fee_modifier : Amount = Sats(100)
 
     def __init__(self, contract, b):
         if contract.amount_range[0] + self.fee_modifier < b:
@@ -80,10 +80,10 @@ class TransactionTemplate:
     __slots__ = ["n_inputs", "sequences", "outputs", "version", "lock_time"]
     def __init__(self) -> None:
         self.n_inputs: int = 0
-        self.sequences: List[Sequence] = [Sequence(u32(c_uint32(0)))]
+        self.sequences: List[Sequence] = [Sequence(uint32(0))]
         self.outputs: List[Tuple[Amount, Contract]] = []
-        self.version: Version = Version(u32(c_uint32(2)))
-        self.lock_time: LockTime = LockTime(u32(c_uint32(0)))
+        self.version: Version = Version(uint32(2))
+        self.lock_time: LockTime = LockTime(uint32(0))
 
     def get_ctv_hash(self):
         # Implicitly always at index 0!
@@ -93,7 +93,7 @@ class TransactionTemplate:
         tx = CTransaction()
         tx.nVersion = self.version
         tx.nLockTime = self.lock_time
-        tx.vin = [CTxIn(None, b"", sequence.value) for sequence in self.sequences]
+        tx.vin = [CTxIn(None, b"", sequence) for sequence in self.sequences]
         tx.vout = [CTxOut(a, b.scriptPubKey) for (a, b) in self.outputs]
         return tx
     def bind_tx(self, point:COutPoint, witness:CTxWitness) -> CTransaction:
@@ -107,7 +107,7 @@ class TransactionTemplate:
     def get_standard_template_hash(self, nIn):
         return self.get_base_transaction().get_standard_template_hash(nIn)
 
-    def add_output(self, amount, contract):
+    def add_output(self, amount : Amount, contract):
         WithinFee(contract, amount)
         HasEnoughFunds(contract, amount)
         self.outputs.append((amount, contract))
@@ -166,7 +166,7 @@ class MetaContract(type):
                     setattr(self, key, Variable(key, kwargs[key]))
 
             paths : List[AndClauseArgument] = []
-            self.amount_range = [21e6 * 100e6, 0]
+            self.amount_range = [Sats(21_000_000 * 100_000_000), Sats(0)]
 
             self.transactions = {}
             for func in assertions:
