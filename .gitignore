@@ -1,0 +1,6 @@
+**/__pycache__/
+.idea/
+.mypy_cache/
+build/
+venv/
+
