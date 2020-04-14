@@ -1,14 +1,20 @@
 from __future__ import annotations
 
-from .context import  sapio
 import os
 from functools import lru_cache
+import sapio
+from sapio.contract import TransactionTemplate
 
-from sapio import TransactionTemplate
+from sapio.examples.undo_send import UndoSend
+from sapio.examples.p2pk import PayToPubKey
+from sapio.examples.tree_pay import TreePay, CollapsibleTree
+from sapio.examples.basic_vault import Vault
+from sapio.examples.smarter_vault import SmarterVault
+
+
 # import sys; sys.exit()
 from sapio.bitcoinlib.static_types import Sats, Bitcoin
 from sapio.script_lang import Weeks, Amount
-from examples.p2pk import PayToPubKey
 
 
 def main() -> None:
