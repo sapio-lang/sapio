@@ -2,7 +2,7 @@ from typing import TypeVar, List, Tuple, Any
 
 from sapio.bitcoinlib.script import CScript
 from sapio.opcodes import AllowedOp
-from sapio.script_lang import Variable, Clause, AndClause, AndClauseArgument, OrClause, SignatureCheckClause, \
+from sapio.spending_conditions.script_lang import Variable, Clause, AndClause, AndClauseArgument, OrClause, SignatureCheckClause, \
     PreImageCheckClause, CheckTemplateVerifyClause, AfterClause, AbsoluteTimeSpec, RelativeTimeSpec
 from sapio.util import methdispatch
 

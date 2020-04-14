@@ -1,6 +1,6 @@
 from sapio.bitcoinlib.static_types import PubKey, Amount
 from sapio.contract import Contract, unlock
-from sapio.script_lang import SignatureCheckClause
+from sapio.spending_conditions.script_lang import SignatureCheckClause
 
 
 class PayToPubKey(Contract):

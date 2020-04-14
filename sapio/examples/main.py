@@ -13,7 +13,7 @@ from sapio.examples.smarter_vault import SmarterVault
 
 # import sys; sys.exit()
 from sapio.bitcoinlib.static_types import Sats, Bitcoin
-from sapio.script_lang import Weeks, Amount
+from sapio.spending_conditions.script_lang import Weeks, Amount
 
 
 def main() -> None:

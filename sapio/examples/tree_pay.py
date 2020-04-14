@@ -2,7 +2,7 @@ from typing import Tuple, List
 
 from sapio.bitcoinlib.static_types import PubKey
 from sapio.contract import Contract, Amount, TransactionTemplate, path, unlock, Variable
-from sapio.script_lang import AfterClause, Weeks, SignatureCheckClause
+from sapio.spending_conditions.script_lang import AfterClause, Weeks, SignatureCheckClause
 import functools
 
 

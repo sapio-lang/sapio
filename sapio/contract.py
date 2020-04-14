@@ -4,10 +4,10 @@ import typing
 from typing import Callable, TypeVar, List, Any, Union, Tuple
 
 import sapio.bitcoinlib.hash_functions
-from sapio.script_lang import CheckTemplateVerifyClause, AndClause, OrClause, Variable, AndClauseArgument
+from sapio.spending_conditions.script_lang import CheckTemplateVerifyClause, AndClause, OrClause, Variable, AndClauseArgument
 from .bitcoinlib.script import CScript
 from .bitcoinlib.static_types import Sequence, Amount, Version, LockTime, uint32, Sats
-from .script_compiler import ProgramBuilder
+from sapio.spending_conditions.script_compiler import ProgramBuilder
 
 T = TypeVar("T")
 T2 = TypeVar("T2")
