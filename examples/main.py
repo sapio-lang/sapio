@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from .context import  txlang
+from .context import  sapio
 import os
 from functools import lru_cache
 
-from txlang import TransactionTemplate
+from sapio import TransactionTemplate
 # import sys; sys.exit()
-from txlang.bitcoinlib.static_types import Sats, Bitcoin
-from txlang.script_lang import Weeks, Amount
+from sapio.bitcoinlib.static_types import Sats, Bitcoin
+from sapio.script_lang import Weeks, Amount
 from examples.p2pk import PayToPubKey
 
 

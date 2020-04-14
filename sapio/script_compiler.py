@@ -1,10 +1,10 @@
 from typing import TypeVar, List, Tuple, Any
 
-from txlang.bitcoinlib.script import CScript
-from txlang.opcodes import Op
-from txlang.script_lang import Variable, Clause, AndClause, AndClauseArgument, OrClause, SignatureCheckClause, \
+from sapio.bitcoinlib.script import CScript
+from sapio.opcodes import Op
+from sapio.script_lang import Variable, Clause, AndClause, AndClauseArgument, OrClause, SignatureCheckClause, \
     PreImageCheckClause, CheckTemplateVerifyClause, AfterClause, AbsoluteTimeSpec, RelativeTimeSpec
-from txlang.util import methdispatch
+from sapio.util import methdispatch
 
 T = TypeVar('T')
 

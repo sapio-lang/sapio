@@ -1,6 +1,6 @@
-from txlang.bitcoinlib.static_types import PubKey, Amount
-from txlang import Contract, unlock
-from txlang.script_lang import SignatureCheckClause
+from sapio.bitcoinlib.static_types import PubKey, Amount
+from sapio import Contract, unlock
+from sapio.script_lang import SignatureCheckClause
 
 
 class PayToPubKey(Contract):

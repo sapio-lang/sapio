@@ -1,8 +1,8 @@
 from typing import Tuple, List
 
-from txlang.bitcoinlib.static_types import PubKey
-from txlang import Contract, Amount, TransactionTemplate, path, unlock, Variable
-from txlang.script_lang import AfterClause, Weeks, SignatureCheckClause
+from sapio.bitcoinlib.static_types import PubKey
+from sapio import Contract, Amount, TransactionTemplate, path, unlock, Variable
+from sapio.script_lang import AfterClause, Weeks, SignatureCheckClause
 import functools
 
 

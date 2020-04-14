@@ -1,5 +1,5 @@
-from txlang import Contract, TransactionTemplate, unlock, path
-from txlang.script_lang import *
+from sapio import Contract, TransactionTemplate, unlock, path
+from sapio.script_lang import *
 
 
 class UndoSend(Contract):

@@ -1,8 +1,8 @@
-from .context import  txlang
+from .context import  sapio
 from examples import UndoSend
-from txlang.bitcoinlib.static_types import Amount
-from txlang.script_lang import TimeSpec
-from txlang import Contract, TransactionTemplate, path
+from sapio.bitcoinlib.static_types import Amount
+from sapio.script_lang import TimeSpec
+from sapio import Contract, TransactionTemplate, path
 
 
 class Vault(Contract):

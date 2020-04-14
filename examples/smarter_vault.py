@@ -1,9 +1,9 @@
 from typing import Callable
 
 from examples import UndoSend
-from txlang.bitcoinlib.static_types import Amount
-from txlang import Contract, TransactionTemplate, path
-from txlang.script_lang import TimeSpec
+from sapio.bitcoinlib.static_types import Amount
+from sapio import Contract, TransactionTemplate, path
+from sapio.script_lang import TimeSpec
 
 
 class SmarterVault(Contract):

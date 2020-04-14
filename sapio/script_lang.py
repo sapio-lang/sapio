@@ -4,7 +4,7 @@ from typing import TypeVar, Generic, Any, Union, Optional
 
 from typing_extensions import Protocol
 
-from txlang.bitcoinlib.static_types import *
+from sapio.bitcoinlib.static_types import *
 
 
 class ClauseProtocol(Protocol):
