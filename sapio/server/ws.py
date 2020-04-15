@@ -64,10 +64,12 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
         self.write_message(cached)
         self.compilation_cache = {}
     """
-    Start Protocol:
+    Start/End Protocol:
     # Server enumerates available Contract Blocks and their arguments
         Server: {type: "menu", content: {contract_name : {arg_name: data type, ...}, ...}}
         Server: {type: "session_id", content: [bool, String]}
+        ...
+        Client: {type: "close"}
     
     Create Contract:
     # Attempt to create a Contract
@@ -129,7 +131,11 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
                 self.write_message(
                     {"type": "created", 'content': [int(amount), addr]}
                 )
-
+        elif request['type'] == "bind": raise NotImplementedError('Pending!')
+        elif request['type'] == "load_auth": raise NotImplementedError('Pending!')
+        elif request['type'] == "export_auth": raise NotImplementedError('Pending!')
+        elif request['type'] == "export": raise NotImplementedError('Pending!')
+        elif request['type'] == "save": raise NotImplementedError('Pending!')
         elif request['type'] == "close":
             self.close()
         else:
