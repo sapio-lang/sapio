@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import TypeVar, List, Tuple, Any, Dict
+from typing import TypeVar, List, Tuple, Any, Dict, NewType
 
 from sapio.bitcoinlib.address import script_to_p2wsh
 from sapio.bitcoinlib.hash_functions import sha256
@@ -13,16 +13,23 @@ from sapio.util import methdispatch
 T = TypeVar('T')
 
 
+CTVHash = NewType("CTVHash", bytes)
 class WitnessTemplate:
     def __init__(self):
         self.witness = []
-        self.nickname = None
-
-    def add(self, it):
+        self.ctv_hash : Optional[CTVHash] = None
+    @methdispatch
+    def add(self, it : CScript):
         self.witness.insert(0, it)
+    @add.register
+    def _(self, it: int):
+        self.add(CScript([it]))
+    def will_execute_ctv(self, ctv:CTVHash):
+        if self.ctv_hash is not None and ctv != self.ctv_hash:
+            raise AssertionError("Two CTV Hashes cannot be in the same witness")
+        self.ctv_hash = ctv
 
-    def name(self, nickname):
-        self.nickname = nickname
+
 
 class WitnessManager:
     def __init__(self):
@@ -49,52 +56,54 @@ class WitnessManager:
 
 class NormalizationPass:
     def __init__(self):
-        self.took_action = False
+        self.took_action: bool = False
     # Normalize Bubbles up all the OR clauses into a CNF
     @methdispatch
     def normalize(self, arg: Clause) -> Clause:
-        raise NotImplementedError("Cannot Compile Arg")
+        raise NotImplementedError("Cannot Compile Arg", arg)
 
     @normalize.register
     def normalize_and(self, arg: AndClause) -> Clause:
         a: AndClauseArgument = arg.a
         b: AndClauseArgument = arg.b
+        ret = arg
+        took = self.took_action
         if isinstance(a, OrClause) and isinstance(b, OrClause):
             self.took_action = True
-            a0: AndClauseArgument = a.a
-            a1: AndClauseArgument = a.b
-            b0: AndClauseArgument = b.a
-            b1: AndClauseArgument = b.b
-            return a0 * b0 + a0 * b1 + a1 * b0 + a1 * b1
+            a0: AndClauseArgument = self.normalize(a.a)
+            a1: AndClauseArgument = self.normalize(a.b)
+            b0: AndClauseArgument = self.normalize(b.a)
+            b1: AndClauseArgument = self.normalize(b.b)
+            ret = a0 * b0 + a0 * b1 + a1 * b0 + a1 * b1
         elif isinstance(b, AndClause) and isinstance(a, OrClause):
             self.took_action = True
-            _or, _and = a, b
-            return _and * _or.a + _and * _or.b
+            _or, _and = self.normalize(a), self.normalize(b)
+            ret = _and * _or.a + _and * _or.b
         elif isinstance(a, AndClause) and isinstance(b, OrClause):
             self.took_action = True
-            _or, _and = b, a
-            return _and * _or.a + _and * _or.b
+            _or, _and = self.normalize(b), self.normalize(a)
+            ret =_and * _or.a + _and * _or.b
         # Other Clause can be ignored...
         elif isinstance(a, AndClause):
-            self.took_action = True
-            return AndClause(self.normalize(a), b)
+            ret = self.normalize(a)*b
         elif isinstance(a, OrClause):
             self.took_action = True
-            a0, a1 = a.a, a.b
-            return a0 * b + a1 * b
+            a0, a1 = self.normalize(a.a), self.normalize(a.b)
+            ret = a0 * b + a1 * b
         elif isinstance(b, AndClause):
-            self.took_action = True
-            return AndClause(self.normalize(b), a)
+            ret = self.normalize(b)*a
         elif isinstance(b, OrClause):
             self.took_action = True
-            b0, b1 = b.a, b.b
-            return b0 * a + b1 * a
-        else:
-            return arg
+            b0, b1 = self.normalize(b.a), self.normalize(b.b)
+            ret = b0 * a + b1 * a
+        if self.took_action and not took:
+            print()
+            print(ret)
+        return ret
 
     @normalize.register
     def normalize_or(self, arg: OrClause) -> Clause:
-        return OrClause(self.normalize(arg.a), self.normalize(arg.b))
+        return self.normalize(arg.a) + self.normalize(arg.b)
 
     # TODO: Unionize!
 
@@ -174,8 +183,8 @@ except AssertionError:
 CNF = List[List[Clause]]
 class ClauseToCNF:
     def compile_cnf(self, clause: Clause) -> CNF:
-        normalizer = NormalizationPass()
         while True:
+            normalizer = NormalizationPass()
             clause = normalizer.normalize(clause)
             if not normalizer.took_action:
                 break
@@ -198,12 +207,12 @@ class FragmentCompiler:
                CScript([AllowedOp.OP_SHA256]) + self._compile(arg.a, witness) + CScript([AllowedOp.OP_EQUAL])
 
     @_compile.register
-    def _compile_ctv(self, arg: CheckTemplateVerifyClause, witness) -> CScript:
+    def _compile_ctv(self, arg: CheckTemplateVerifyClause, witness: WitnessTemplate) -> CScript:
         # While valid to make this a witness variable, this is likely an error
         assert arg.a.assigned_value is not None
         assert isinstance(arg.a.assigned_value, bytes)
+        witness.will_execute_ctv(CTVHash(arg.a.assigned_value))
         s = CScript([arg.a.assigned_value, AllowedOp.OP_CHECKTEMPLATEVERIFY, AllowedOp.OP_DROP])
-        witness.name(arg.a.assigned_value)
         return s
 
     @_compile.register
@@ -215,15 +224,16 @@ class FragmentCompiler:
         if isinstance(arg.a.assigned_value, RelativeTimeSpec):
             return CScript([arg.a.assigned_value.time, AllowedOp.OP_CHECKSEQUENCEVERIFY, AllowedOp.OP_DROP])
         raise ValueError
-
+    PREFIX = sha256(bytes(1000))
     @_compile.register
-    def _compile_var(self, arg: Variable, witness) -> CScript:
+    def _compile_var(self, arg: Variable, witness: WitnessTemplate) -> CScript:
+        PREFIX = bytes(20)
         if arg.assigned_value is None:
-            # Todo: this is inefficient...
-            witness.add(arg.name)
+            witness.add(self.PREFIX+ arg.name)
             return CScript()
         else:
             return CScript([arg.assigned_value])
+
 class CNFClauseCompiler:
     def compile(self, cl: Clause, w: WitnessTemplate) -> CScript:
         return CScript([FragmentCompiler()._compile(frag, w) for frag in cl])
