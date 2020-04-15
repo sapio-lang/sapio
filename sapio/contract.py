@@ -4,7 +4,8 @@ import typing
 from typing import Callable, TypeVar, List, Any, Union, Tuple
 
 import sapio.bitcoinlib.hash_functions
-from sapio.spending_conditions.script_lang import CheckTemplateVerifyClause, AndClause, OrClause, Variable, AndClauseArgument
+from sapio.spending_conditions.script_lang import CheckTemplateVerifyClause, AndClause, OrClause, Variable, \
+    AndClauseArgument, SignatureCheckClause
 from .bitcoinlib.script import CScript
 from .bitcoinlib.static_types import Sequence, Amount, Version, LockTime, uint32, Sats
 from sapio.spending_conditions.script_compiler import ProgramBuilder, WitnessManager, CTVHash
@@ -43,6 +44,15 @@ def unlock(s: Callable[[Any], AndClauseArgument]):
         return UnlockFunction(s, f.__name__)
     return wrapper
 
+class PayAddress():
+    def __init__(self, address):
+        self.address = address
+    def __call__(self, *args, **kwargs):
+        return self.address(*args, **kwargs)
+def pay_address(f):
+    return PayAddress(f)
+
+
 
 class CheckFunction():
     def __init__(self, func):
@@ -70,7 +80,7 @@ class WithinFee:
 class HasEnoughFunds:
     def __init__(self, contract, b):
         if contract.amount_range[1] > b:
-            raise ValueError("Contract May Burn Funds!")
+            raise ValueError("Insufficient Funds", "Contract May Burn Funds!", contract, contract.amount_range, b)
 
 
 from .bitcoinlib.messages import CTransaction, CTxIn, CTxOut, COutPoint, CTxWitness, CTxInWitness
@@ -147,9 +157,14 @@ class MetaContract(type):
                                     inspect.Parameter.KEYWORD_ONLY,
                                     annotation=type_)
                   for param, type_ in fields.items()]
+        pay_funcs = [v for (k, v) in nmspc.items() if isinstance(v, PayAddress)]
         path_funcs = [v for (k, v) in nmspc.items() if isinstance(v, PathFunction)]
         unlock_funcs = [v for (k, v) in nmspc.items() if isinstance(v, UnlockFunction)]
         assertions = [v for (k, v) in nmspc.items() if isinstance(v, CheckFunction)]
+        if len(pay_funcs):
+            assert len(pay_funcs) == 1
+            assert len(path_funcs) == 0
+            assert len(unlock_funcs) == 0
 
         def init_class(self, **kwargs: Any):
             if kwargs.keys() != fields.keys():
@@ -165,6 +180,12 @@ class MetaContract(type):
                     setattr(self, key, kwargs[key])
                 else:
                     setattr(self, key, Variable(key, kwargs[key]))
+            if len(pay_funcs):
+                amt, addr = pay_funcs[0](self)
+                self.amount_range = [amt, 0]
+                self.witness_manager = WitnessManager()
+                self.witness_manager.override_program = addr
+                return
 
             paths : List[AndClauseArgument] = []
             self.amount_range = [Sats(21_000_000 * 100_000_000), Sats(0)]
@@ -246,4 +267,5 @@ class Contract(metaclass=MetaContract):
                 t.wit = witness
                 txns.append(t.serialize_with_witness())
         return txns
+
 

@@ -33,6 +33,7 @@ class WitnessTemplate:
 
 class WitnessManager:
     def __init__(self):
+        self.override_program: str = None
         self.program: CScript = CScript()
         self.witnesses : Dict[Any, WitnessTemplate] = {}
         self.is_final = False
@@ -50,7 +51,9 @@ class WitnessManager:
         return self.witnesses[key]
     def get_p2wsh_script(self):
         return CScript([AllowedOp.OP_0, sha256(self.program)])
-    def get_p2wsh_address(self):
+    def get_p2wsh_address(self) -> str:
+        if self.override_program is not None:
+            return self.override_program
         return script_to_p2wsh(self.program)
 
 
