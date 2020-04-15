@@ -2,5 +2,7 @@
 .idea/
 .mypy_cache/
 build/
+dist/
 venv/
+*.pyc
 
