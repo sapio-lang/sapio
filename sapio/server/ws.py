@@ -63,7 +63,50 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
             cached = json.dumps({"type": "menu", "content":self.menu})
         self.write_message(cached)
         self.compilation_cache = {}
-
+    """
+    Start Protocol:
+    # Server enumerates available Contract Blocks and their arguments
+        Server: {type: "menu", content: {contract_name : {arg_name: data type, ...}, ...}}
+        Server: {type: "session_id", content: [bool, String]}
+    
+    Create Contract:
+    # Attempt to create a Contract
+    # Contract may access a compilation cache of both saved and not saved Contracts
+        Client: {type: "create", content: {type: contract_name, {arg_name:data, ...}...}} 
+        Server: {type: "created", content: [Amount, Address]}
+        
+    Save Contract:
+    # Attempt to save Contract to durable storage for this session
+    # If session id was [false, _] should not return true (but may!)
+        Client: {type: "save", content: Address}
+        Server: {type: "saved", content: Bool}
+        
+    Export Session:
+    # Provide a JSON of all saved data for this session
+        Client: {type: "export"}
+        Server: {type: "exported", content: ...}
+    
+    Export Authenticated:
+    # Provide a signed Pickle object which can be re-loaded
+    # directly if the signature checks
+        Client: {type: "export_auth"}
+        Server: {type: "exported_auth", content: ...}
+    
+    Load Authenticated:
+    # Provide a signed Pickle object which can be re-loaded
+    # directly if the signature checks to the current session
+        Client: {type: "load_auth", content:...}
+        Server: {type: "loaded_auth", content: bool}
+    
+    Bind Contract:
+    # Attach a Contract to a particular UTXO
+    # Return all Transactions
+        Client: {type: "bind", content: [COutPoint, Address]}
+        Server: {type: "bound", content: [Transactions]}
+    
+        
+    
+    """
     def on_message(self, message):
         request = json.loads(message)
         if request['type'] == "create":
