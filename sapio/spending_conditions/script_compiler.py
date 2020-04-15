@@ -67,7 +67,6 @@ class NormalizationPass:
         a: AndClauseArgument = arg.a
         b: AndClauseArgument = arg.b
         ret = arg
-        took = self.took_action
         if isinstance(a, OrClause) and isinstance(b, OrClause):
             self.took_action = True
             a0: AndClauseArgument = self.normalize(a.a)
@@ -96,9 +95,6 @@ class NormalizationPass:
             self.took_action = True
             b0, b1 = self.normalize(b.a), self.normalize(b.b)
             ret = b0 * a + b1 * a
-        if self.took_action and not took:
-            print()
-            print(ret)
         return ret
 
     @normalize.register
