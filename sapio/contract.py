@@ -235,8 +235,6 @@ class Contract(metaclass=MetaContract):
             for (idx, (_, contract)) in enumerate(txn_template.outputs):
                 txns.extend(contract.bind(COutPoint(txid, idx)))
             candidates = [wit for wit in self.witness_manager.witnesses.values() if wit.ctv_hash == ctv_hash]
-            list(print(candidate.witness) for candidate in candidates)
-            assert len(candidates) == 1
             # Create all possible candidates
             for wit in candidates:
                 t = copy.deepcopy(tx)
