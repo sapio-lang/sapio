@@ -161,6 +161,28 @@ Sapio will look to make sure that all paths of our contract are sufficiently
 funded, only losing an amount for fees (user configurable).
 
 
+If you wanted to fund this contract from an exchange, all you need to do is request a withdrawal of the form:
+
+```python
+>>> print(t2.amount_range[1]/100e6, t2.witness_manager.get_p2wsh_address())
+2.0001 bcrt1qh4ddpny622fcjf5m02nmdare7wgsuys5sau3jh5tdhm2kzwg9rzqw2sk00
+```
+
+#### TODO: Managing Smart Contracts
+
+The wallet manager can be configured to save and watch a contract you create.
+
+```
+with Wallet() as w:
+    w.watch(t2)
+```
+
+The wallet will automatically watch for payments to
+bcrt1qh4ddpny622fcjf5m02nmdare7wgsuys5sau3jh5tdhm2kzwg9rzqw2sk00 and bind an
+instance of the contract to the output.
+
+
+
 
 # Getting Started With Sapio
 

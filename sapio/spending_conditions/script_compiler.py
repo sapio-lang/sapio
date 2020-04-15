@@ -43,6 +43,8 @@ class WitnessManager:
         return self.witnesses[key]
     def get_p2wsh_script(self):
         return CScript([AllowedOp.OP_0, sha256(self.program)])
+    def get_p2wsh_address(self):
+        return script_to_p2wsh(self.program)
 
 
 class NormalizationPass:

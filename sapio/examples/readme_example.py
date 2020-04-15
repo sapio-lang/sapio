@@ -65,6 +65,8 @@ if __name__ == "__main__":
                         alice_escrow=(Bitcoin(1), PayToPublicKey(key=key_alice)),
                         bob_escrow=(Sats(10000)+Bitcoin(1), t1))
     print(t2.bind(COutPoint()))
+    print(t2.witness_manager.get_p2wsh_script())
+    print(t2.amount_range[1]/100e6, t2.witness_manager.get_p2wsh_address())
 
     # t3 throws an error because we would lose value
     try:
