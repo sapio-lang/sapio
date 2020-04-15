@@ -12,7 +12,6 @@ def multisig(l, n):
     l2 = [SignatureCheckClause(Variable("key_"+str(i), v)) for i,v in enumerate(l)]
     l3 = [reduce(lambda a, b: a * b, combo[1:], combo[0])
           for combo in combinations(l2, n)]
-    print(l3)
     return reduce(lambda  a,b: a+b, l3[1:], l3[0])
 
 
