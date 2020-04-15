@@ -1,3 +1,5 @@
+from functools import singledispatch
+
 import tornado
 import tornado.websocket
 import json
@@ -20,44 +22,67 @@ typeconv = {
     int: "int",
 }
 id = lambda x: x
-typeconvf = {
-    PubKey: lambda b: bytes(b, 'utf-8'),
-    Contract: lambda x: sapio.examples.p2pk.PayToSegwitAddress(amount=x[0], address=x[1]),
-    int: int,
-    Amount: int,
-    Sequence: lambda x: (RelativeTimeSpec(Sequence(x))),
-    TimeSpec: lambda x: (RelativeTimeSpec(Sequence(x)))
-}
+
+conversion_functions = {}
+def register(type_):
+    def deco(f):
+        conversion_functions[type_] = f
+        return f
+    return deco
+
+
+@register(PubKey)
+def convert(arg: PubKey,ctx):
+    return bytes(b, 'utf-8')
+@register(Contract)
+def convert(arg: Contract,ctx):
+    if arg[1] in ctx.compilation_cache:
+        return ctx.compilation_cache[arg[1]]
+    return sapio.examples.p2pk.PayToSegwitAddress(amount=arg[0], address=arg[1])
+
+@register(Sequence)
+@register(RelativeTimeSpec)
+@register(TimeSpec)
+def convert(arg: Sequence, ctx):
+    return (RelativeTimeSpec(Sequence(arg)))
+@register(Amount)
+@register(Sequence)
+@register(int)
+def id(x, ctx):
+    return x
 
 class CompilerWebSocket(tornado.websocket.WebSocketHandler):
     contracts: Dict[str, Type[Contract]] = {}
     menu: Dict[str, Dict[str, str]]= {}
     conv: Dict[str, Dict[str, Callable[[Any], Any]]]= {}
     cached :str = None
+    compilation_cache : Dict[str, Contract] = None
     def open(self):
         if self.cached is None:
             print(self.menu)
             cached = json.dumps({"type": "menu", "content":self.menu})
         self.write_message(cached)
+        self.compilation_cache = {}
 
     def on_message(self, message):
         request = json.loads(message)
         if request['type'] == "create":
-            req = request['content']
-            if req['type'] in self.menu:
-                args = req['args']
-                args_t = self.menu[req['type']]
-                conv_args = self.conv[req['type']]
+            create_req = request['content']
+            type_ = create_req['type']
+            if type_ in self.menu:
+                args = create_req['args']
+                args_t = self.menu[type_]
+                conv_args = self.conv[type_]
                 if args.keys() != args_t.keys():
                     self.close()
                 for (name, value) in args.items():
                     typ = args_t[name]
-                    args[name] = conv_args[name](value)
-                    # TODO: Type Check/Cast?
+                    args[name] = conv_args[name](value, self)
                 print("ARGS", args)
-                contract = self.contracts[req['type']](**args)
+                contract = self.contracts[type_](**args)
                 addr = contract.witness_manager.get_p2wsh_address()
                 amount = contract.amount_range[1]
+                self.compilation_cache[addr] = contract
                 self.write_message(
                     {"type": "created", 'content': [int(amount), addr]}
                 )
@@ -78,7 +103,7 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
         for key,hint in hints.items():
             if hint in typeconv:
                 menu[key] = typeconv[hint]
-                conv[key] = typeconvf[hint]
+                conv[key] = conversion_functions[hint]
             else:
                 print(key, str(hint))
                 assert False
