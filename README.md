@@ -2,9 +2,22 @@
 
 Welcome!
 
-Sapio is a framework for creating multi-transaction Bitcoin Smart Contracts.
+Sapio is a framework for creating composable multi-transaction Bitcoin Smart Contracts.
 
 ### Why is Sapio Different?
+Sapio helps you build payment protocol specifiers that oblivious third parties
+can participate in being none the wiser.
+
+For example, with Sapio you can generate an address that represents a lightning
+channel between you and friend and give that address to a third party service
+like an exchange and have them create the channel without requiring any
+signature interaction from you or your friend, zero trusted parties, and an
+inability to differentiate your address from any other.
+
+That's the tip of the iceberg of what Sapio lets you accomplish.
+
+
+#### Say more...
 Before Sapio, most Bitcoin smart contracts primarily focused on who can redeem
 coins when and what unlocking conditions were required (see Ivy,
 Policy/Miniscript, etc). A few languages, such as BitML, placed emphasis on
@@ -12,8 +25,16 @@ multi-transaction and multi-party use cases.
 
 Sapio in particular focuses on transactions using BIP-119
 OP_CHECKTEMPLATEVERIFY. OP_CHECKTEMPLATEVERIFY enables Bitcoin Script to support
-complex multi-step smart contracts without a trusted setup. Sapio is a tool for
-defining such smart contracts in an easy way.
+complex multi-step smart contracts without a trusted setup. 
+
+Sapio is a tool for defining such smart contracts in an easy way and exporting
+easy to integrate APIs for managing open contracts. With Sapio you can turn what
+previously would require months or years of careful tinkering with Bitcoin
+internals into a 20 minute project and get a fully functional Bitcoin
+application.
+
+Sapio has intelligent built in features which help developers design safe smart
+contracts and limit risk of losing funds.
 
 ### Show Me The Money! Sapio Crash Course:
 Let's look at some example Sapio contracts (see
@@ -26,7 +47,7 @@ A Basic Pay to Public Key contract can be generated as follows:
 ```python
 class PayToPublicKey(Contract):
     class Fields:
-        key: PublicKey
+        key: PubKey
     @unlock(lambda self: SignatureCheckClause(self.key))
     def _(self): pass
 ```
@@ -39,9 +60,9 @@ where (+) is OR and (*) is and. These can also be written as `OrClause(a,b)` and
 ```python
 class BasicEscrow(Contract):
     class Fields:
-        alice: PublicKey
-        bob: PublicKey
-        escrow: PublicKey
+        alice: PubKey
+        bob: PubKey
+        escrow: PubKey
     @unlock(lambda self: SignatureCheckClause(self.escrow) *\
         (SignatureCheckClause(self.alice) + SignatureCheckClause(self.bob)) + \
         (SignatureCheckClause(self.alice) * SignatureCheckClause(self.bob))
@@ -54,9 +75,9 @@ We can also write this a bit more clearly as:
 ```python
 class BasicEscrow(Contract):
     class Fields:
-        alice: PublicKey
-        bob: PublicKey
-        escrow: PublicKey
+        alice: PubKey
+        bob: PubKey
+        escrow: PubKey
     @unlock(lambda self: SignatureCheckClause(self.escrow) *\
         (SignatureCheckClause(self.alice) + SignatureCheckClause(self.bob))
     )
@@ -76,8 +97,8 @@ escrow or Bob and the escrow from cheating?
 ```python
 class TrustlessEscrow(Contract):
     class Fields:
-        alice: PublicKey
-        bob: PublicKey
+        alice: PubKey
+        bob: PubKey
         alice_escrow: Tuple[Amount, Contract]        
         bob_escrow: Tuple[Amount, Contract]        
     @path
@@ -85,7 +106,7 @@ class TrustlessEscrow(Contract):
         tx = TransactionTemplate()                    
         tx.add_output(*self.alice_escrow.assigned_value)
         tx.add_output(*self.bob_escrow.assigned_value)
-        tx.set_sequence(Days(10))        
+        tx.set_sequence(Days(10).time)        
         return tx    
 
     @unlock(lambda self: SignatureCheckClause(self.alice) * SignatureCheckClause(self.bob))
