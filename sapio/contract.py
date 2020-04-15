@@ -7,7 +7,7 @@ import sapio.bitcoinlib.hash_functions
 from sapio.spending_conditions.script_lang import CheckTemplateVerifyClause, AndClause, OrClause, Variable, AndClauseArgument
 from .bitcoinlib.script import CScript
 from .bitcoinlib.static_types import Sequence, Amount, Version, LockTime, uint32, Sats
-from sapio.spending_conditions.script_compiler import ProgramBuilder, WitnessManager
+from sapio.spending_conditions.script_compiler import ProgramBuilder, WitnessManager, CTVHash
 
 T = TypeVar("T")
 T2 = TypeVar("T2")
@@ -73,7 +73,7 @@ class HasEnoughFunds:
             raise ValueError("Contract May Burn Funds!")
 
 
-from .bitcoinlib.messages import CTransaction, CTxIn, CTxOut, COutPoint, CTxWitness
+from .bitcoinlib.messages import CTransaction, CTxIn, CTxOut, COutPoint, CTxWitness, CTxInWitness
 
 
 class TransactionTemplate:
@@ -98,10 +98,9 @@ class TransactionTemplate:
         tx.vin = [CTxIn(None, b"", sequence) for sequence in self.sequences]
         tx.vout = [CTxOut(a, b.witness_manager.get_p2wsh_script()) for (a, b) in self.outputs]
         return tx
-    def bind_tx(self, point:COutPoint, witness:CTxWitness) -> CTransaction:
+    def bind_tx(self, point:COutPoint) -> CTransaction:
         tx = self.get_base_transaction()
         tx.vin[0].prevout = point
-        tx.wit = witness
         tx.rehash()
         return tx
 
@@ -142,7 +141,7 @@ class MetaContract(type):
                     else:
                         raise ValueError("Cannot Override Final ???")
 
-        nmspc['__slots__'] = ('amount_range', 'transactions', 'witness_manager') + tuple(fields.keys())
+        nmspc['__slots__'] = ('amount_range', 'specific_transactions', 'witness_manager') + tuple(fields.keys())
         params = [inspect.Parameter("self", inspect.Parameter.POSITIONAL_ONLY)] + \
                  [inspect.Parameter(param,
                                     inspect.Parameter.KEYWORD_ONLY,
@@ -170,13 +169,12 @@ class MetaContract(type):
             paths : List[AndClauseArgument] = []
             self.amount_range = [Sats(21_000_000 * 100_000_000), Sats(0)]
 
-            self.transactions = {}
+            self.specific_transactions = []
             for func in assertions:
                 func(self)
             for func in path_funcs:
                 name = func.__name__
                 txn = func(self)
-                self.transactions[name] = txn
                 amount = txn.total_amount()
                 self.amount_range = [min(self.amount_range[0], amount),
                                      max(self.amount_range[1], amount)]
@@ -186,6 +184,7 @@ class MetaContract(type):
                 if func.unlock_with is not None:
                     unlock_clause: AndClauseArgument = func.unlock_with(self)
                     paths[-1] = AndClause(paths[-1], unlock_clause)
+                self.specific_transactions.append((CTVHash(ctv_hash), txn))
             for func in unlock_funcs:
                 paths.append(func(self))
 
@@ -209,11 +208,12 @@ class MetaContract(type):
 def final(m):
     m.__is_final_method__ = True
     return m
+import copy
 class Contract(metaclass=MetaContract):
     # These slots will be extended later on
-    __slots__ = ('amount_range', 'transactions', 'witness_manager')
+    __slots__ = ('amount_range', 'specific_transactions', 'witness_manager')
     witness_manager: WitnessManager
-    transactions: typing.Dict[Any, Any]
+    specific_transactions: typing.Tuple[CTVHash, TransactionTemplate]
     amount_range: Tuple[Amount, Amount]
     class Fields:
         pass
@@ -223,14 +223,29 @@ class Contract(metaclass=MetaContract):
 
     @final
     def bind(self, out: COutPoint):
+        # todo: Note that if a contract has any secret state, it may be a hack
+        # attempt to bind it to an output with insufficient funds
         txns = []
-        for (_, child) in self.transactions.items():
+        for (ctv_hash, txn_template) in self.specific_transactions:
             # todo: find correct witness?
-            name = child.get_ctv_hash()
-            tx = child.bind_tx(out, CTxWitness())
+            assert ctv_hash == txn_template.get_ctv_hash()
+
+            tx = txn_template.bind_tx(out)
             txid = tx.sha256
-            txns.append(tx)
-            for (idx, (_, contract)) in enumerate(child.outputs):
+            for (idx, (_, contract)) in enumerate(txn_template.outputs):
                 txns.extend(contract.bind(COutPoint(txid, idx)))
+            candidates = [wit for wit in self.witness_manager.witnesses.values() if wit.ctv_hash == ctv_hash]
+            list(print(candidate.witness) for candidate in candidates)
+            assert len(candidates) == 1
+            # Create all possible candidates
+            for wit in candidates:
+                t = copy.deepcopy(tx)
+                witness = CTxWitness()
+                in_witness = CTxInWitness()
+                witness.vtxinwit.append(in_witness)
+                in_witness.scriptWitness.stack.append(self.witness_manager.program)
+                in_witness.scriptWitness.stack.extend(wit.witness)
+                t.wit = witness
+                txns.append(t.serialize_with_witness())
         return txns
 
