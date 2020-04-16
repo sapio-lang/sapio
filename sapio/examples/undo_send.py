@@ -25,6 +25,9 @@ class UndoSend2(Contract):
         amount: Amount
         timeout: TimeSpec
 
+    class MetaData:
+        color = lambda self: "red"
+
     @path
     def complete(self) -> TransactionTemplate:
         tx = TransactionTemplate()

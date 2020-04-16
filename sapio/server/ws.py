@@ -134,8 +134,8 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
                 addr = contract.witness_manager.get_p2wsh_address()
                 amount = contract.amount_range[1]
                 self.compilation_cache[addr] = contract
-                txns = contract.bind(COutPoint())
-                data = [{'hex':tx.serialize_with_witness().hex(), 'label':"Generic", 'color':"green"} for tx in txns]
+                txns, colors = contract.bind(COutPoint())
+                data = [{'hex':tx.serialize_with_witness().hex(), 'label':"Generic", 'color':color} for (tx, color) in zip(txns, colors)]
                 self.write_message(
                     {"type": "created", 'content': [int(amount), addr, {'program':data}]}
                 )

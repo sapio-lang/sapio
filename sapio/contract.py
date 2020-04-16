@@ -239,6 +239,8 @@ class Contract(metaclass=MetaContract):
     amount_range: Tuple[Amount, Amount]
     class Fields:
         pass
+    class MetaData:
+        color = lambda self: "green"
     # Null __init__ defined to supress sanitizer complaints...
     def __init__(self, **kwargs: Any):
         pass
@@ -247,15 +249,16 @@ class Contract(metaclass=MetaContract):
     def bind(self, out: COutPoint):
         # todo: Note that if a contract has any secret state, it may be a hack
         # attempt to bind it to an output with insufficient funds
+        color = self.MetaData.color(self)
+
         txns = []
+        metadata = []
         for (ctv_hash, txn_template) in self.specific_transactions:
             # todo: find correct witness?
             assert ctv_hash == txn_template.get_ctv_hash()
 
             tx = txn_template.bind_tx(out)
             txid = tx.sha256
-            for (idx, (_, contract)) in enumerate(txn_template.outputs):
-                txns.extend(contract.bind(COutPoint(txid, idx)))
             candidates = [wit for wit in self.witness_manager.witnesses.values() if wit.ctv_hash == ctv_hash]
             # Create all possible candidates
             for wit in candidates:
@@ -267,6 +270,11 @@ class Contract(metaclass=MetaContract):
                 in_witness.scriptWitness.stack.extend(wit.witness)
                 t.wit = witness
                 txns.append(t)
-        return txns
+                metadata.append(color)
+            for (idx, (_, contract)) in enumerate(txn_template.outputs):
+                new_txns, new_metadata = contract.bind(COutPoint(txid, idx))
+                txns.extend(new_txns)
+                metadata.extend(new_metadata)
+        return txns, metadata
 
 

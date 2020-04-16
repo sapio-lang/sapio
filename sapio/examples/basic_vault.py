@@ -50,6 +50,10 @@ class Vault2(Contract):
         timeout: TimeSpec
         mature: TimeSpec
 
+
+    class MetaData:
+        color = lambda self: "blue"
+
     @path
     def step(self) -> TransactionTemplate:
         tx = TransactionTemplate()
