@@ -185,6 +185,7 @@ class MetaContract(type):
                 self.amount_range = [amt, 0]
                 self.witness_manager = WitnessManager()
                 self.witness_manager.override_program = addr
+                self.specific_transactions = []
                 return
 
             paths : List[AndClauseArgument] = []
@@ -265,7 +266,7 @@ class Contract(metaclass=MetaContract):
                 in_witness.scriptWitness.stack.append(self.witness_manager.program)
                 in_witness.scriptWitness.stack.extend(wit.witness)
                 t.wit = witness
-                txns.append(t.serialize_with_witness())
+                txns.append(t)
         return txns
 
 

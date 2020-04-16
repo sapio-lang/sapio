@@ -6,6 +6,7 @@ import json
 from typing import Dict, Type, List, Tuple, Callable, Any
 import typing
 
+from sapio.bitcoinlib.messages import COutPoint
 from sapio.bitcoinlib.static_types import Amount, Sequence, PubKey
 from sapio.contract import Contract
 import sapio
@@ -33,7 +34,7 @@ def register(type_):
 
 @register(PubKey)
 def convert(arg: PubKey,ctx):
-    return bytes(b, 'utf-8')
+    return bytes(arg, 'utf-8')
 @register(Contract)
 def convert(arg: Contract,ctx):
     if arg[1] in ctx.compilation_cache:
@@ -110,7 +111,12 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
     
     """
     def on_message(self, message):
+        print()
+        print("#####################")
+        print("New Message:")
+        print(message)
         request = json.loads(message)
+        print(request)
         if request['type'] == "create":
             create_req = request['content']
             type_ = create_req['type']
@@ -128,8 +134,10 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
                 addr = contract.witness_manager.get_p2wsh_address()
                 amount = contract.amount_range[1]
                 self.compilation_cache[addr] = contract
+                txns = contract.bind(COutPoint())
+                data = [{'hex':tx.serialize_with_witness().hex(), 'label':"Generic", 'color':"green"} for tx in txns]
                 self.write_message(
-                    {"type": "created", 'content': [int(amount), addr]}
+                    {"type": "created", 'content': [int(amount), addr, {'program':data}]}
                 )
         elif request['type'] == "bind": raise NotImplementedError('Pending!')
         elif request['type'] == "load_auth": raise NotImplementedError('Pending!')
@@ -160,6 +168,12 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
         cls.conv[name] = conv
         cls.contracts[name] = contract
         cls.cached = None
+
+    def check_origin(self, origin):
+        allowed = ["http://localhost:3000", "http://localhost:5000"]
+        if origin in allowed:
+            print("allowed", origin)
+            return 1
 
 
 def make_app():
