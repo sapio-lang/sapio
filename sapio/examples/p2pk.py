@@ -16,6 +16,11 @@ class PayToSegwitAddress(Contract):
     class Fields:
         amount: Amount
         address: str
+
+    class MetaData:
+        color = lambda self: "grey"
+        label = lambda self: "Segwit Address"
+
     @pay_address
     def _(self):
         return (self.amount.assigned_value, self.address.assigned_value)

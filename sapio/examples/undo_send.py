@@ -27,6 +27,7 @@ class UndoSend2(Contract):
 
     class MetaData:
         color = lambda self: "red"
+        label = lambda self: "Undo Send"
 
     @path
     def complete(self) -> TransactionTemplate:

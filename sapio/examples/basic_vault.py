@@ -53,6 +53,7 @@ class Vault2(Contract):
 
     class MetaData:
         color = lambda self: "blue"
+        label = lambda self: "Vault"
 
     @path
     def step(self) -> TransactionTemplate:

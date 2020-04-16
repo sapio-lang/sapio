@@ -86,12 +86,17 @@ class HasEnoughFunds:
 from .bitcoinlib.messages import CTransaction, CTxIn, CTxOut, COutPoint, CTxWitness, CTxInWitness
 
 
+class MetaDataContainer:
+    def __init__(self, color, label):
+        self.color = color
+        self.label = label
 class TransactionTemplate:
-    __slots__ = ["n_inputs", "sequences", "outputs", "version", "lock_time"]
+    __slots__ = ["n_inputs", "sequences", "outputs", "version", "lock_time", "outputs_metadata"]
     def __init__(self) -> None:
         self.n_inputs: int = 0
         self.sequences: List[Sequence] = [Sequence(uint32(0))]
         self.outputs: List[Tuple[Amount, Contract]] = []
+        self.outputs_metadata: List[MetaDataContainer] = []
         self.version: Version = Version(uint32(2))
         self.lock_time: LockTime = LockTime(uint32(0))
 
@@ -122,6 +127,7 @@ class TransactionTemplate:
         WithinFee(contract, amount)
         HasEnoughFunds(contract, amount)
         self.outputs.append((amount, contract))
+        self.outputs_metadata.append(MetaDataContainer(contract.MetaData.color(contract), contract.MetaData.label(contract)))
 
     def total_amount(self):
         return sum(a for (a, _) in self.outputs)
@@ -240,7 +246,8 @@ class Contract(metaclass=MetaContract):
     class Fields:
         pass
     class MetaData:
-        color = lambda self: "green"
+        color = lambda self: "brown"
+        label = lambda self: "generic"
     # Null __init__ defined to supress sanitizer complaints...
     def __init__(self, **kwargs: Any):
         pass
@@ -250,6 +257,8 @@ class Contract(metaclass=MetaContract):
         # todo: Note that if a contract has any secret state, it may be a hack
         # attempt to bind it to an output with insufficient funds
         color = self.MetaData.color(self)
+        label = self.MetaData.label(self)
+        print(color, label)
 
         txns = []
         metadata = []
@@ -270,7 +279,9 @@ class Contract(metaclass=MetaContract):
                 in_witness.scriptWitness.stack.extend(wit.witness)
                 t.wit = witness
                 txns.append(t)
-                metadata.append(color)
+                utxo_metadata = [{'color': md.color, 'label': md.label} for md in txn_template.outputs_metadata]
+                metadata.append(
+                    {'color':color, 'label': label, 'utxo_metadata': utxo_metadata})
             for (idx, (_, contract)) in enumerate(txn_template.outputs):
                 new_txns, new_metadata = contract.bind(COutPoint(txid, idx))
                 txns.extend(new_txns)

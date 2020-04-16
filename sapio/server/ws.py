@@ -52,6 +52,7 @@ def convert(arg: Sequence, ctx):
 def id(x, ctx):
     return x
 
+DEBUG = True
 class CompilerWebSocket(tornado.websocket.WebSocketHandler):
     contracts: Dict[str, Type[Contract]] = {}
     menu: Dict[str, Dict[str, str]]= {}
@@ -117,37 +118,44 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
         print(message)
         request = json.loads(message)
         print(request)
-        if request['type'] == "create":
+        request_type = request['type']
+        if request_type == "create":
             create_req = request['content']
-            type_ = create_req['type']
-            if type_ in self.menu:
+            create_type = create_req['type']
+            if create_type in self.menu:
                 args = create_req['args']
-                args_t = self.menu[type_]
-                conv_args = self.conv[type_]
+                args_t = self.menu[create_type]
+                conv_args = self.conv[create_type]
                 if args.keys() != args_t.keys():
-                    self.close()
+                    if not DEBUG:
+                        self.close()
+                    else:
+                        print("Mismatch", args, args_t)
                 for (name, value) in args.items():
                     typ = args_t[name]
                     args[name] = conv_args[name](value, self)
                 print("ARGS", args)
-                contract = self.contracts[type_](**args)
+                contract = self.contracts[create_type](**args)
                 addr = contract.witness_manager.get_p2wsh_address()
                 amount = contract.amount_range[1]
                 self.compilation_cache[addr] = contract
-                txns, colors = contract.bind(COutPoint())
-                data = [{'hex':tx.serialize_with_witness().hex(), 'label':"Generic", 'color':color} for (tx, color) in zip(txns, colors)]
+                txns, metadata = contract.bind(COutPoint())
+                data = [{'hex':tx.serialize_with_witness().hex(), **meta} for (tx, meta) in zip(txns, metadata)]
                 self.write_message(
                     {"type": "created", 'content': [int(amount), addr, {'program':data}]}
                 )
-        elif request['type'] == "bind": raise NotImplementedError('Pending!')
-        elif request['type'] == "load_auth": raise NotImplementedError('Pending!')
-        elif request['type'] == "export_auth": raise NotImplementedError('Pending!')
-        elif request['type'] == "export": raise NotImplementedError('Pending!')
-        elif request['type'] == "save": raise NotImplementedError('Pending!')
-        elif request['type'] == "close":
+        elif request_type == "bind": raise NotImplementedError('Pending!')
+        elif request_type == "load_auth": raise NotImplementedError('Pending!')
+        elif request_type == "export_auth": raise NotImplementedError('Pending!')
+        elif request_type == "export": raise NotImplementedError('Pending!')
+        elif request_type == "save": raise NotImplementedError('Pending!')
+        elif request_type == "close":
             self.close()
         else:
-            self.close()
+            if DEBUG:
+                print("No Type", request_type)
+            else:
+                self.close()
 
     def on_close(self):
         print("WebSocket closed")
