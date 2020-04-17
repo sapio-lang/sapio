@@ -123,10 +123,41 @@ class CheckTemplateVerifyClause(StringClauseMixin):
         self.a = a
 
 
+import time
 
+from datetime import datetime
 class AbsoluteTimeSpec:
+    MIN_DATE = 500_000_000
+
     def __init__(self, t):
         self.time : LockTime = t
+    @staticmethod
+    def from_date(d: datetime):
+        secs = LockTime(uint32(d.timestamp()))
+        if secs < AbsoluteTimeSpec.MIN_DATE:
+            raise ValueError('Date In Past', min_date)
+        return AbsoluteTimeSpec(secs)
+    @staticmethod
+    def at_height(d: int):
+        if d > AbsoluteTimeSpec.MIN_DATE:
+            raise ValueError("Too Many Blocks ", d, ">", AbsoluteTimeSpec.MIN_DATE)
+        return AbsoluteTimeSpec(d)
+
+    @staticmethod
+    def WeeksFromTime(t1:datetime, t2:float):
+        return AbsoluteTimeSpec(AbsoluteTimeSpec.from_date(t1).time + LockTime(uint32(t2*7*24*60*60)))
+    @staticmethod
+    def DaysFromTime(t1: datetime, t2: float):
+        return AbsoluteTimeSpec(AbsoluteTimeSpec.from_date(t1).time + LockTime(uint32(t2*24*60*60)))
+    @staticmethod
+    def MonthsFromTime(t1: datetime, t2: float):
+        return AbsoluteTimeSpec(AbsoluteTimeSpec.from_date(t1).time + LockTime(uint32(t2*30*24*60*60)))
+    def __repr__(self):
+        if self.time < AbsoluteTimeSpec.MIN_DATE:
+            return "{}.at_height({})".format(self.__class__.__name__, self.time)
+        else:
+            return "{}({})".format(self.__class__.__name__, self.time)
+
 
 class RelativeTimeSpec:
     def __init__(self, t):
