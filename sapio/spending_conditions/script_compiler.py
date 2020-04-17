@@ -1,5 +1,4 @@
-from functools import lru_cache
-from typing import TypeVar, List, Tuple, Any, Dict, NewType
+from typing import TypeVar, List, Any, Dict, NewType
 
 from sapio.bitcoinlib.address import script_to_p2wsh
 from sapio.bitcoinlib.hash_functions import sha256
@@ -276,27 +275,33 @@ class ProgramBuilder:
 
             # Check that the first argument passed is an in range execution path
             # Note the first branch does not subtract one, so we have arg in [0, N)
-            witness_manager.program = CScript([AllowedOp.OP_DUP,
-                              AllowedOp.OP_0,
-                              n_cases,
-                              AllowedOp.OP_WITHIN,
-                              AllowedOp.OP_VERIFY])
             for (idx, cl) in enumerate(cnf):
                 wit = witness_manager.make_witness(idx)
                 wit.add(idx)
                 sub_script = CNFClauseCompiler().compile(cl, wit)
                 if idx == 0:
-                    witness_manager.program += \
-                        CScript([AllowedOp.OP_IFDUP,
-                                 AllowedOp.OP_NOTIF,
-                                 sub_script,
-                                 # We push an OP_0 onto the stack as it will cause
-                                 # all following branches to not execute,
-                                 # unless we are the last branch
-                                 AllowedOp.OP_0,
-                                 AllowedOp.OP_ENDIF,
-                                 # set up for next clause...
-                                 AllowedOp.OP_1SUB])
+                    witness_manager.program = \
+                        CScript([
+                            # Verify the top stack item (branch select)
+                            # is in range. This is required or else a witness
+                            # of e.g. n+1 could steal funds
+                            AllowedOp.OP_DUP,
+                            AllowedOp.OP_0,
+                            n_cases,
+                            AllowedOp.OP_WITHIN,
+                            AllowedOp.OP_VERIFY,
+                            # Successfully range-checked!
+                            # If it is 0, do not duplicate as we will take the branch
+                            AllowedOp.OP_IFDUP,
+                            AllowedOp.OP_NOTIF,
+                            sub_script,
+                            # We push an OP_0 onto the stack as it will cause
+                            # all following branches to not execute,
+                            # unless we are the last branch
+                            AllowedOp.OP_0,
+                            AllowedOp.OP_ENDIF,
+                            # set up for testing the next clause...
+                            AllowedOp.OP_1SUB])
                 elif idx+1 < len(cnf):
                     witness_manager.program += \
                         CScript([AllowedOp.OP_IFDUP,
