@@ -1,5 +1,6 @@
 from typing import TypeVar, List, Any, Dict, NewType
 
+from sapio.bitcoinlib import segwit_addr
 from sapio.bitcoinlib.address import script_to_p2wsh
 from sapio.bitcoinlib.hash_functions import sha256
 from sapio.bitcoinlib.script import CScript
@@ -41,14 +42,16 @@ class WitnessManager:
     def get_witness(self, key) -> List[Any]:
         assert self.is_final
         item = self.witnesses[key].witness.copy()
-        item.insert(0, self.program)
+        item.append(self.program)
         return item
     def make_witness(self, key) -> WitnessTemplate:
         assert not self.is_final
         assert key not in self.witnesses
         self.witnesses[key] = WitnessTemplate()
         return self.witnesses[key]
-    def get_p2wsh_script(self):
+    def get_p2wsh_script(self, main=False):
+        if self.override_program is not None:
+            return segwit_addr.encode("bc" if main else "bcrt", self.override_program)
         return CScript([AllowedOp.OP_0, sha256(self.program)])
     def get_p2wsh_address(self) -> str:
         if self.override_program is not None:
