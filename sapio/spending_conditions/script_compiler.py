@@ -49,9 +49,10 @@ class WitnessManager:
         assert key not in self.witnesses
         self.witnesses[key] = WitnessTemplate()
         return self.witnesses[key]
-    def get_p2wsh_script(self, main=False):
+    def get_p2wsh_script(self, main=False) -> CScript:
         if self.override_program is not None:
-            return segwit_addr.encode("bc" if main else "bcrt", self.override_program)
+            script =  segwit_addr.decode("bc" if main else "bcrt", self.override_program)
+            return CScript([script[0], bytes(script[1])])
         return CScript([AllowedOp.OP_0, sha256(self.program)])
     def get_p2wsh_address(self) -> str:
         if self.override_program is not None:
