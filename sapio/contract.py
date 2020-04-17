@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing
+from types import GeneratorType
 from typing import Callable, TypeVar, List, Any, Union, Tuple
 
 import sapio.bitcoinlib.hash_functions
@@ -205,17 +206,25 @@ class MetaContract(type):
                 func(self)
             for func in path_funcs:
                 name = func.__name__
-                txn = func(self)
-                amount = txn.total_amount()
-                self.amount_range = [min(self.amount_range[0], amount),
-                                     max(self.amount_range[1], amount)]
-                ctv_hash = txn.get_ctv_hash()
-                ctv = CheckTemplateVerifyClause(Variable(ctv_hash, ctv_hash))
-                paths.append(ctv)
-                if func.unlock_with is not None:
-                    unlock_clause: AndClauseArgument = func.unlock_with(self)
-                    paths[-1] = AndClause(paths[-1], unlock_clause)
-                self.specific_transactions.append((CTVHash(ctv_hash), txn))
+                ret : Union[typing.Iterator[TransactionTemplate], TransactionTemplate] = func(self)
+                txns : typing.Iterator[TransactionTemplate]
+                if isinstance(ret, TransactionTemplate):
+                    txns = iter([ret])
+                elif isinstance(ret, GeneratorType):
+                    txns = ret
+                unlock_clause: typing.Optional[AndClauseArgument] = func.unlock_with(self) if func.unlock_with is not None else None
+                for txn in txns:
+                    amount = txn.total_amount()
+                    self.amount_range = [min(self.amount_range[0], amount),
+                                         max(self.amount_range[1], amount)]
+                    ctv_hash = txn.get_ctv_hash()
+                    ctv = CheckTemplateVerifyClause(Variable(ctv_hash, ctv_hash))
+                    # TODO: If we OR all the CTV hashes together
+                    # and then and at the top with the unlock clause,
+                    # it could help with later code generation sharing the
+                    # common clause...
+                    paths.append(ctv if unlock_clause is None else AndClause(unlock_clause, ctv))
+                    self.specific_transactions.append((CTVHash(ctv_hash), txn))
             for func in unlock_funcs:
                 paths.append(func(self))
 
@@ -261,7 +270,6 @@ class Contract(metaclass=MetaContract):
         # attempt to bind it to an output with insufficient funds
         color = self.MetaData.color(self)
         label = self.MetaData.label(self)
-        print(color, label)
 
         txns = []
         metadata = []
