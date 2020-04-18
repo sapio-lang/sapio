@@ -1,6 +1,4 @@
-from sapio.contract.contract import Contract
-from sapio.contract.decorators import path, unlock
-from sapio.contract.txtemplate import TransactionTemplate
+from sapio.contract import Contract, path, TransactionTemplate, unlock
 from sapio.script.clause import *
 
 

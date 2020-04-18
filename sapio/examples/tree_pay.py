@@ -1,11 +1,9 @@
+import functools
 from typing import Tuple, List
 
-from sapio.bitcoinlib.static_types import PubKey
-from sapio.contract.contract import Contract, Amount, Variable
-from sapio.contract.decorators import path, unlock
-from sapio.contract.txtemplate import TransactionTemplate
-from sapio.script.clause import AfterClause, Weeks, SignatureCheckClause
-import functools
+from sapio.bitcoinlib.static_types import PubKey, Amount
+from sapio.contract import Contract, path, TransactionTemplate, unlock
+from sapio.script.clause import AfterClause, Weeks, SignatureCheckClause, Variable
 
 
 def segment_by_radix(L, n):

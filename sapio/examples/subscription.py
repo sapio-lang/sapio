@@ -1,10 +1,8 @@
 from typing import List, Tuple, Iterator
 
-from sapio.examples.p2pk import PayToSegwitAddress
 from sapio.bitcoinlib.static_types import Amount, PubKey
-from sapio.contract.contract import Contract
-from sapio.contract.decorators import path
-from sapio.contract.txtemplate import TransactionTemplate
+from sapio.contract import Contract, path, TransactionTemplate
+from sapio.examples.p2pk import PayToSegwitAddress
 from sapio.script.clause import AbsoluteTimeSpec, RelativeTimeSpec, SignatureCheckClause, \
     int64
 
