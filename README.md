@@ -54,7 +54,7 @@ class PayToPublicKey(Contract):
 
 Now let's look at an Escrow Contract. Here either Alice and Escrow, Bob and
 Escrow, or Alice and Bob can spend the funds. Note that we use logic notation
-where (+) is OR and (*) is and. These can also be written as `OrClause(a,b)` and
+where (|) is OR and (&) is and. These can also be written as `OrClause(a,b)` and
 `AndClause(a,b)`.
 
 ```python
@@ -63,9 +63,9 @@ class BasicEscrow(Contract):
         alice: PubKey
         bob: PubKey
         escrow: PubKey
-    @unlock(lambda self: SignatureCheckClause(self.escrow) *\
-        (SignatureCheckClause(self.alice) + SignatureCheckClause(self.bob)) + \
-        (SignatureCheckClause(self.alice) * SignatureCheckClause(self.bob))
+    @unlock(lambda self: SignatureCheckClause(self.escrow) &\
+        (SignatureCheckClause(self.alice) | SignatureCheckClause(self.bob)) | \
+        (SignatureCheckClause(self.alice) & SignatureCheckClause(self.bob))
     )
     def redeem(self): pass
 ```
@@ -78,12 +78,12 @@ class BasicEscrow(Contract):
         alice: PubKey
         bob: PubKey
         escrow: PubKey
-    @unlock(lambda self: SignatureCheckClause(self.escrow) *\
-        (SignatureCheckClause(self.alice) + SignatureCheckClause(self.bob))
+    @unlock(lambda self: SignatureCheckClause(self.escrow) &\
+        (SignatureCheckClause(self.alice) | SignatureCheckClause(self.bob))
     )
     def use_escrow(self): pass
 
-    @unlock(lambda self: SignatureCheckClause(self.alice) * SignatureCheckClause(self.bob))
+    @unlock(lambda self: SignatureCheckClause(self.alice) & SignatureCheckClause(self.bob))
     def cooperate(self): pass
 ```
 
@@ -109,7 +109,7 @@ class TrustlessEscrow(Contract):
         tx.set_sequence(Days(10).time)        
         return tx    
 
-    @unlock(lambda self: SignatureCheckClause(self.alice) * SignatureCheckClause(self.bob))
+    @unlock(lambda self: SignatureCheckClause(self.alice) & SignatureCheckClause(self.bob))
     def cooperate(self): pass
 ```
 

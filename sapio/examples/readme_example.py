@@ -15,9 +15,9 @@ class BasicEscrow(Contract):
         alice: PubKey
         bob: PubKey
         escrow: PubKey
-    @unlock(lambda self: SignatureCheckClause(self.escrow) *\
-        (SignatureCheckClause(self.alice) + SignatureCheckClause(self.bob)) + \
-        (SignatureCheckClause(self.alice) * SignatureCheckClause(self.bob))
+    @unlock(lambda self: SignatureCheckClause(self.escrow) &\
+        (SignatureCheckClause(self.alice) | SignatureCheckClause(self.bob)) | \
+        (SignatureCheckClause(self.alice) & SignatureCheckClause(self.bob))
     )
     def redeem(self): pass
 class BasicEscrow(Contract):
@@ -25,12 +25,12 @@ class BasicEscrow(Contract):
         alice: PubKey
         bob: PubKey
         escrow: PubKey
-    @unlock(lambda self: SignatureCheckClause(self.escrow) *\
-        (SignatureCheckClause(self.alice) + SignatureCheckClause(self.bob))
+    @unlock(lambda self: SignatureCheckClause(self.escrow) &\
+        (SignatureCheckClause(self.alice) | SignatureCheckClause(self.bob))
     )
     def use_escrow(self): pass
 
-    @unlock(lambda self: SignatureCheckClause(self.alice) * SignatureCheckClause(self.bob))
+    @unlock(lambda self: SignatureCheckClause(self.alice) & SignatureCheckClause(self.bob))
     def cooperate(self): pass
 class TrustlessEscrow(Contract):
     class Fields:
@@ -46,7 +46,7 @@ class TrustlessEscrow(Contract):
         tx.set_sequence(Days(10).time)
         return tx
 
-    @unlock(lambda self: SignatureCheckClause(self.alice) * SignatureCheckClause(self.bob))
+    @unlock(lambda self: SignatureCheckClause(self.alice) & SignatureCheckClause(self.bob))
     def cooperate(self): pass
 if __name__ == "__main__":
     key_alice = b"0"*32

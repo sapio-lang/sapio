@@ -231,10 +231,10 @@ class MetaContract(type):
                     # and then and at the top with the unlock clause,
                     # it could help with later code generation sharing the
                     # common clause...
-                    paths = (ctv * unlock_clause) + paths
+                    paths = (ctv & unlock_clause) | paths
                     self.specific_transactions.append((CTVHash(ctv_hash), txn))
             for func in unlock_funcs:
-                paths = paths + func(self)
+                paths = paths | func(self)
 
             # prepare for passing to the API...
             # TODO: this gets undone immediately, so maybe

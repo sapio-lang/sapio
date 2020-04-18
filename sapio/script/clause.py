@@ -45,12 +45,12 @@ class StringClauseMixin:
 class SatisfiedClause(StringClauseMixin):
     # When or'd to another clause, the other clause disappears
     # because A + True --> True
-    def __add__(self, other: AndClauseArgument) -> SatisfiedClause:
+    def __or__(self, other: AndClauseArgument) -> SatisfiedClause:
         return self
 
     # When and'd to another clause, this clause disappears
     # because A*True --> A
-    def __mul__(self, other: AndClauseArgument) -> AndClauseArgument:
+    def __and__(self, other: AndClauseArgument) -> AndClauseArgument:
         return other
     n_args = 0
 class UnsatisfiableClause(StringClauseMixin):
@@ -59,19 +59,19 @@ class UnsatisfiableClause(StringClauseMixin):
 
     #N.B.: This makes UnsatisfiableClause useful as a "None" value
     # for binary clauses
-    def __add__(self, other: AndClauseArgument) -> AndClauseArgument:
+    def __or__(self, other: AndClauseArgument) -> AndClauseArgument:
         return other
 
     # When and'd to another clause, the other clause disappears
     # because A*False --> False
-    def __mul__(self, other: AndClauseArgument) -> UnsatisfiableClause:
+    def __and__(self, other: AndClauseArgument) -> UnsatisfiableClause:
         return self
     n_args = 0
 class LogicMixin:
-    def __add__(self, other: AndClauseArgument) -> OrClause:
+    def __or__(self, other: AndClauseArgument) -> OrClause:
         return OrClause(cast(AndClauseArgument, self), other)
 
-    def __mul__(self, other: AndClauseArgument) -> AndClause:
+    def __and__(self, other: AndClauseArgument) -> AndClause:
         return AndClause(cast(AndClauseArgument, self), other)
 
 class AndClause(LogicMixin, StringClauseMixin):

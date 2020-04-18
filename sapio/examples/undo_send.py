@@ -9,7 +9,7 @@ class UndoSend(Contract):
         amount: Amount
         timeout: TimeSpec
 
-    @unlock(lambda self: AfterClause(self.timeout)*SignatureCheckClause(self.to_key))
+    @unlock(lambda self: AfterClause(self.timeout)&SignatureCheckClause(self.to_key))
     def _(self): pass
 
     @path(lambda self: SignatureCheckClause(self.to_key))
