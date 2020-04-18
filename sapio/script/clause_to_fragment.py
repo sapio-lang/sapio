@@ -20,7 +20,7 @@ class FragmentCompiler:
     @_compile.register
     def _compile_preimage(self, arg: PreImageCheckClause, witness) -> CScript:
         return self._compile(arg.b, witness) + \
-               CScript([AllowedOp.OP_SHA256]) + self._compile(arg.a, witness) + CScript([AllowedOp.OP_EQUAL])
+               CScript([AllowedOp.OP_SHA256]) + self._compile(arg.a, witness) + CScript([AllowedOp.OP_EQUALVERIFY])
 
     @_compile.register
     def _compile_ctv(self, arg: CheckTemplateVerifyClause, witness: WitnessTemplate) -> CScript:
