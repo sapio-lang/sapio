@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TypeVar, Generic, Any, Union, Optional, cast
+from typing import TypeVar, Generic, Any, Union, Optional, cast, Type
 
 from typing_extensions import Protocol
 
@@ -118,6 +118,11 @@ import time
 
 from datetime import datetime
 class AbsoluteTimeSpec:
+    class Blocks: pass
+    class Time: pass
+    Types = Union[Type[Blocks], Type[Time]]
+    def get_type(self):
+        return self.Blocks if self.time < self.MIN_DATE else self.Time
     MIN_DATE = 500_000_000
 
     def __init__(self, t):
@@ -151,6 +156,9 @@ class AbsoluteTimeSpec:
 
 
 class RelativeTimeSpec:
+    class Blocks: pass
+    class Time: pass
+    Types = Union[Type[Blocks], Type[Time]]
     def __init__(self, t):
         self.time : Sequence = t
     @staticmethod
@@ -161,6 +169,8 @@ class RelativeTimeSpec:
         # Bit 22 enables time based locks.
         l = uint32(1 << 22) | t
         return RelativeTimeSpec(Sequence(uint32(l)))
+    def get_type(self) -> Types:
+        return self.Time  if (self.time & uint32(1 << 22)) else self.Blocks
 
 
 TimeSpec = Union[AbsoluteTimeSpec, RelativeTimeSpec]
@@ -217,6 +227,13 @@ class Variable(Generic[V]):
         return "{}('{}', {})".format(self.__class__.__name__, self.name, self.assigned_value)
 
 
+DNFClause = Union[
+    SatisfiedClause,
+    UnsatisfiableClause,
+    SignatureCheckClause,
+    PreImageCheckClause,
+    CheckTemplateVerifyClause,
+    AfterClause]
 AndClauseArgument = Union[
                SatisfiedClause,
                UnsatisfiableClause,
