@@ -72,7 +72,7 @@ class NormalizationPass:
     def normalize_and(self, arg: AndClause) -> Clause:
         a: AndClauseArgument = arg.a
         b: AndClauseArgument = arg.b
-        ret = arg
+        ret : Clause = arg
         if isinstance(a, OrClause) and isinstance(b, OrClause):
             self.took_action = True
             a0: AndClauseArgument = self.normalize(a.a)
@@ -237,7 +237,7 @@ class FragmentCompiler:
             return CScript([arg.assigned_value])
 
 class CNFClauseCompiler:
-    def compile(self, cl: Clause, w: WitnessTemplate) -> CScript:
+    def compile(self, cl: List[Clause], w: WitnessTemplate) -> CScript:
         return CScript([FragmentCompiler()._compile(frag, w) for frag in cl])
 
 
@@ -247,7 +247,6 @@ class ProgramBuilder:
         cnf: CNF = ClauseToCNF().compile_cnf(clause)
         n_cases = len(cnf)
         witness_manager: WitnessManager = WitnessManager()
-
         # If we have one or two cases, special case the emitted scripts
         # 3 or more, use a generic wrapper
         if n_cases == 1:
@@ -326,3 +325,4 @@ class ProgramBuilder:
                                  AllowedOp.OP_1])
 
         return witness_manager
+

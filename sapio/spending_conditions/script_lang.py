@@ -135,7 +135,7 @@ class AbsoluteTimeSpec:
     def from_date(d: datetime):
         secs = LockTime(uint32(d.timestamp()))
         if secs < AbsoluteTimeSpec.MIN_DATE:
-            raise ValueError('Date In Past', min_date)
+            raise ValueError('Date In Past', AbsoluteTimeSpec.MIN_DATE)
         return AbsoluteTimeSpec(secs)
     @staticmethod
     def at_height(d: int):
