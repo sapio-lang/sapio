@@ -12,14 +12,18 @@ from sapio.contract import Contract
 import sapio
 import sapio.examples.basic_vault
 import sapio.examples.p2pk
-from sapio.spending_conditions.script_lang import TimeSpec, RelativeTimeSpec, Variable
+import sapio.examples.subscription
+from sapio.spending_conditions.script_lang import TimeSpec, RelativeTimeSpec, Variable, AbsoluteTimeSpec
 
-typeconv = {
+placeholder_hint = {
     Amount : "int",
     Sequence: "int",
     TimeSpec: "int",
+    RelativeTimeSpec: "int",
+    AbsoluteTimeSpec: "int",
     PubKey: "String",
     Contract: [0, "String"],
+    sapio.examples.p2pk.PayToSegwitAddress: "Address",
     int: "int",
 }
 id = lambda x: x
@@ -40,6 +44,12 @@ def convert(arg: Contract,ctx):
     if arg[1] in ctx.compilation_cache:
         return ctx.compilation_cache[arg[1]]
     return sapio.examples.p2pk.PayToSegwitAddress(amount=arg[0], address=arg[1])
+
+@register(sapio.examples.p2pk.PayToSegwitAddress)
+def convert(arg: Contract,ctx):
+    if arg in ctx.compilation_cache:
+        return ctx.compilation_cache[arg]
+    return sapio.examples.p2pk.PayToSegwitAddress(amount=0, address=arg)
 
 @register(Sequence)
 @register(RelativeTimeSpec)
@@ -166,8 +176,10 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
         menu = {}
         conv = {}
         for key,hint in hints.items():
-            if hint in typeconv:
-                menu[key] = typeconv[hint]
+            if hint == sapio.examples.subscription.Hide:
+                continue
+            if hint in placeholder_hint:
+                menu[key] = placeholder_hint[hint]
                 conv[key] = conversion_functions[hint]
             else:
                 print(key, str(hint))
@@ -187,11 +199,12 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
 def make_app():
     return tornado.web.Application([
         (r"/", CompilerWebSocket),
-    ])
+    ], autoreload=True)
 
 if __name__ == "__main__":
-    CompilerWebSocket.add_contract("p2pk", sapio.examples.p2pk.PayToPubKey)
-    CompilerWebSocket.add_contract("vault", sapio.examples.basic_vault.Vault2)
+    CompilerWebSocket.add_contract("Pay to Public Key", sapio.examples.p2pk.PayToPubKey)
+    CompilerWebSocket.add_contract("Vault", sapio.examples.basic_vault.Vault2)
+    CompilerWebSocket.add_contract("Subscription", sapio.examples.subscription.auto_pay)
     app = make_app()
     app.listen(8888)
     tornado.ioloop.IOLoop.current().start()
