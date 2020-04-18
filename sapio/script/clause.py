@@ -45,12 +45,12 @@ class StringClauseMixin:
 class SatisfiedClause(StringClauseMixin):
     # When or'd to another clause, the other clause disappears
     # because A + True --> True
-    def __or__(self, other: AndClauseArgument) -> SatisfiedClause:
+    def __or__(self, other: Clause) -> SatisfiedClause:
         return self
 
     # When and'd to another clause, this clause disappears
     # because A*True --> A
-    def __and__(self, other: AndClauseArgument) -> AndClauseArgument:
+    def __and__(self, other: Clause) -> Clause:
         return other
     n_args = 0
 class UnsatisfiableClause(StringClauseMixin):
@@ -59,26 +59,26 @@ class UnsatisfiableClause(StringClauseMixin):
 
     #N.B.: This makes UnsatisfiableClause useful as a "None" value
     # for binary clauses
-    def __or__(self, other: AndClauseArgument) -> AndClauseArgument:
+    def __or__(self, other: Clause) -> Clause:
         return other
 
     # When and'd to another clause, the other clause disappears
     # because A*False --> False
-    def __and__(self, other: AndClauseArgument) -> UnsatisfiableClause:
+    def __and__(self, other: Clause) -> UnsatisfiableClause:
         return self
     n_args = 0
 class LogicMixin:
-    def __or__(self, other: AndClauseArgument) -> OrClause:
-        return OrClause(cast(AndClauseArgument, self), other)
+    def __or__(self, other: Clause) -> OrClause:
+        return OrClause(cast(Clause, self), other)
 
-    def __and__(self, other: AndClauseArgument) -> AndClause:
-        return AndClause(cast(AndClauseArgument, self), other)
+    def __and__(self, other: Clause) -> AndClause:
+        return AndClause(cast(Clause, self), other)
 
 class AndClause(LogicMixin, StringClauseMixin):
     n_args = 2
     symbol = "*"
 
-    def __init__(self, a: AndClauseArgument, b: AndClauseArgument):
+    def __init__(self, a: Clause, b: Clause):
         self.a = a
         self.b = b
 
@@ -86,9 +86,9 @@ class AndClause(LogicMixin, StringClauseMixin):
 class OrClause(LogicMixin, StringClauseMixin):
     n_args = 2
     symbol = "+"
-    def __init__(self, a: AndClauseArgument, b: AndClauseArgument):
-        self.a: AndClauseArgument = a
-        self.b: AndClauseArgument = b
+    def __init__(self, a: Clause, b: Clause):
+        self.a: Clause = a
+        self.b: Clause = b
 
 
 class SignatureCheckClause(LogicMixin, StringClauseMixin):
@@ -227,30 +227,14 @@ class Variable(Generic[V]):
         return "{}('{}', {})".format(self.__class__.__name__, self.name, self.assigned_value)
 
 
-DNFClause = Union[
-    SatisfiedClause,
-    UnsatisfiableClause,
-    SignatureCheckClause,
-    PreImageCheckClause,
-    CheckTemplateVerifyClause,
-    AfterClause]
-
-AndClauseArgument = Union[
-               SatisfiedClause,
-               UnsatisfiableClause,
-               OrClause,
-               AndClause,
-               SignatureCheckClause,
-               PreImageCheckClause,
-               CheckTemplateVerifyClause,
-               AfterClause]
-Clause = Union[SatisfiedClause, UnsatisfiableClause,
-               Variable,
-               OrClause,
-               AndClause,
-               SignatureCheckClause,
-               PreImageCheckClause,
-               CheckTemplateVerifyClause,
-               AfterClause]
+DNFClause = Union[SatisfiedClause,
+                  UnsatisfiableClause,
+                  SignatureCheckClause,
+                  PreImageCheckClause,
+                  CheckTemplateVerifyClause,
+                  AfterClause]
 
 DNF = List[List[DNFClause]]
+
+Clause = Union[OrClause, AndClause, DNFClause]
+

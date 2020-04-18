@@ -1,4 +1,4 @@
-from sapio.script.clause import Clause, AndClause, AndClauseArgument, OrClause, SignatureCheckClause, \
+from sapio.script.clause import Clause, AndClause, Clause, OrClause, SignatureCheckClause, \
     PreImageCheckClause, CheckTemplateVerifyClause, AfterClause, Variable, UnsatisfiableClause
 from sapio.util import methdispatch
 
@@ -8,20 +8,20 @@ class NormalizationPass:
         self.took_action: bool = False
     # Normalize Bubbles up all the OR clauses into a CNF
     @methdispatch
-    def normalize(self, arg: Clause) -> AndClauseArgument:
+    def normalize(self, arg: Clause) -> Clause:
         raise NotImplementedError("Cannot Compile Arg", arg)
 
     @normalize.register
-    def normalize_and(self, arg: AndClause) -> AndClauseArgument:
-        a: AndClauseArgument = arg.a
-        b: AndClauseArgument = arg.b
+    def normalize_and(self, arg: AndClause) -> Clause:
+        a: Clause = arg.a
+        b: Clause = arg.b
         ret : Clause = arg
         if isinstance(a, OrClause) and isinstance(b, OrClause):
             self.took_action = True
-            a0: AndClauseArgument = self.normalize(a.a)
-            a1: AndClauseArgument = self.normalize(a.b)
-            b0: AndClauseArgument = self.normalize(b.a)
-            b1: AndClauseArgument = self.normalize(b.b)
+            a0: Clause = self.normalize(a.a)
+            a1: Clause = self.normalize(a.b)
+            b0: Clause = self.normalize(b.a)
+            b1: Clause = self.normalize(b.b)
             ret = (a0 & b0) | (a0 & b1) | (a1 & b0) | (a1 & b1)
         elif isinstance(b, AndClause) and isinstance(a, OrClause):
             self.took_action = True
@@ -47,7 +47,7 @@ class NormalizationPass:
         return ret
 
     @normalize.register
-    def normalize_or(self, arg: OrClause) -> AndClauseArgument:
+    def normalize_or(self, arg: OrClause) -> Clause:
         # switching order guarantees that successive passes will
         # have a chance to unwind unsatisfiable clauses
         return self.normalize(arg.b) | self.normalize(arg.a)

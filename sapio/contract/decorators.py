@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import TypeVar, Any, Union, Callable, List
 import sapio
 import sapio.contract
-from sapio.script.clause import AndClauseArgument
+from sapio.script.clause import Clause
 
 T = TypeVar("T")
 T2 = TypeVar("T2")
@@ -18,7 +18,7 @@ class PathFunction():
         return self.f(*args, **kwargs)
 
 
-def path(arg: Union[Callable[[T2], AndClauseArgument], Callable[[T], sapio.contract.TransactionTemplate], None] = None)\
+def path(arg: Union[Callable[[T2], Clause], Callable[[T], sapio.contract.TransactionTemplate], None] = None)\
         -> Union[Callable[[Any], PathFunction], PathFunction]:
     if arg is None or (hasattr(arg, "__name__") and arg.__name__ == "<lambda>"):
         def wrapper(f: Callable[[T], sapio.contract.TransactionTemplate]):
@@ -30,14 +30,14 @@ def path(arg: Union[Callable[[T2], AndClauseArgument], Callable[[T], sapio.contr
 
 class UnlockFunction():
     # TODO: Improve arg type, which we know is an AndClauseArugment Callable or None
-    def __init__(self, condition: Callable[[T], AndClauseArgument], name):
+    def __init__(self, condition: Callable[[T], Clause], name):
         self.unlock_with = condition
         self.__name__ = name
     def __call__(self, *args, **kwargs):
         return self.unlock_with(*args, **kwargs)
 
 
-def unlock(s: Callable[[Any], AndClauseArgument]):
+def unlock(s: Callable[[Any], Clause]):
     def wrapper(f: Callable[[T], List[Contract]]):
         return UnlockFunction(s, f.__name__)
     return wrapper

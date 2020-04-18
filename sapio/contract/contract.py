@@ -6,7 +6,7 @@ from types import GeneratorType
 from typing import List, Any, Union, Tuple
 
 from sapio.script.clause import CheckTemplateVerifyClause, Variable, \
-    AndClauseArgument, UnsatisfiableClause, SatisfiedClause
+    Clause, UnsatisfiableClause, SatisfiedClause
 from sapio.script.compiler import ProgramBuilder
 from sapio.bitcoinlib.messages import COutPoint, CTxWitness, CTxInWitness
 from sapio.bitcoinlib.static_types import Amount, Sats
@@ -75,7 +75,7 @@ class MetaContract(type):
                 self.specific_transactions = []
                 return
 
-            paths: AndClauseArgument = UnsatisfiableClause()
+            paths: Clause = UnsatisfiableClause()
             self.amount_range = [Sats(21_000_000 * 100_000_000), Sats(0)]
 
             self.specific_transactions = []
@@ -90,7 +90,7 @@ class MetaContract(type):
                     txns = ret
                 else:
                     raise ValueError("Invalid Return Type", ret)
-                unlock_clause: AndClauseArgument = SatisfiedClause()
+                unlock_clause: Clause = SatisfiedClause()
                 if func.unlock_with is not None:
                     unlock_clause = func.unlock_with(self)
                 for txn in txns:
