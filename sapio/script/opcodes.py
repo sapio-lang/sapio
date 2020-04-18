@@ -1,5 +1,7 @@
 from __future__ import annotations
-from build.lib.txlang.bitcoinlib.static_types import uint32
+
+from numpy import uint32
+
 from sapio.bitcoinlib.script import *
 
 class AllowedOp:
