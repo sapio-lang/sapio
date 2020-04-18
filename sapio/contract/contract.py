@@ -8,11 +8,11 @@ from typing import List, Any, Union, Tuple
 from sapio.script.clause import CheckTemplateVerifyClause, Variable, \
     AndClauseArgument, UnsatisfiableClause, SatisfiedClause
 from sapio.script.compiler import ProgramBuilder
-from .bitcoinlib.messages import COutPoint, CTxWitness, CTxInWitness
-from .bitcoinlib.static_types import Amount, Sats
+from sapio.bitcoinlib.messages import COutPoint, CTxWitness, CTxInWitness
+from sapio.bitcoinlib.static_types import Amount, Sats
 from .decorators import PathFunction, UnlockFunction, PayAddress, CheckFunction, final
 from .errors import ExtraArgumentError, MissingArgumentError
-from .script.witnessmanager import CTVHash, WitnessManager
+from sapio.script.witnessmanager import CTVHash, WitnessManager
 from .txtemplate import TransactionTemplate
 
 

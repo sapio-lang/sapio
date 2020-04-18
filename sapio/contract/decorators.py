@@ -1,8 +1,8 @@
 from typing import TypeVar, Any, Union, Callable, List
 
-from sapio.contract import Contract
+from sapio.contract.contract import Contract
 from sapio.script.clause import AndClauseArgument
-from sapio.txtemplate import TransactionTemplate
+from sapio.contract.txtemplate import TransactionTemplate
 
 T = TypeVar("T")
 T2 = TypeVar("T2")

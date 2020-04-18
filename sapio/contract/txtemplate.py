@@ -4,8 +4,8 @@ from numpy import uint32
 
 from sapio.bitcoinlib.messages import CTransaction, CTxIn, CTxOut, COutPoint
 from sapio.bitcoinlib.static_types import Sequence, Amount, Version, LockTime
-from sapio.contract import Contract, MetaDataContainer
-from sapio.assertions import WithinFee, HasEnoughFunds
+from sapio.contract.contract import Contract, MetaDataContainer
+from sapio.contract.assertions import WithinFee, HasEnoughFunds
 
 
 class TransactionTemplate:

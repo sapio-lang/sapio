@@ -1,10 +1,10 @@
 from functools import reduce
 
 from sapio.bitcoinlib.static_types import PubKey, Amount
-from sapio.contract import Contract
-from sapio.decorators import path, unlock
-from sapio.txtemplate import TransactionTemplate
-from sapio.script.clause import SignatureCheckClause, Variable, List, Bitcoin
+from sapio.contract.contract import Contract
+from sapio.contract.decorators import path, unlock
+from sapio.contract.txtemplate import TransactionTemplate
+from sapio.script.clause import SignatureCheckClause, Variable, List
 
 from itertools import combinations
 

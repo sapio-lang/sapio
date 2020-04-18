@@ -1,9 +1,9 @@
 from typing import Tuple, List
 
 from sapio.bitcoinlib.static_types import PubKey
-from sapio.contract import Contract, Amount, Variable
-from sapio.decorators import path, unlock
-from sapio.txtemplate import TransactionTemplate
+from sapio.contract.contract import Contract, Amount, Variable
+from sapio.contract.decorators import path, unlock
+from sapio.contract.txtemplate import TransactionTemplate
 from sapio.script.clause import AfterClause, Weeks, SignatureCheckClause
 import functools
 

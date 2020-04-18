@@ -1,19 +1,17 @@
-from functools import singledispatch
-
 import tornado
 import tornado.websocket
 import json
-from typing import Dict, Type, List, Tuple, Callable, Any
+from typing import Dict, Type, Callable, Any
 import typing
 
 from sapio.bitcoinlib.messages import COutPoint
 from sapio.bitcoinlib.static_types import Amount, Sequence, PubKey
-from sapio.contract import Contract
+from sapio.contract.contract import Contract
 import sapio
 import sapio.examples.basic_vault
 import sapio.examples.p2pk
 import sapio.examples.subscription
-from sapio.script.clause import TimeSpec, RelativeTimeSpec, Variable, AbsoluteTimeSpec
+from sapio.script.clause import TimeSpec, RelativeTimeSpec, AbsoluteTimeSpec
 
 placeholder_hint = {
     Amount : "int",
