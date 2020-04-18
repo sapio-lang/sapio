@@ -1,8 +1,8 @@
+from __future__ import annotations
 from typing import TypeVar, Any, Union, Callable, List
-
-from sapio.contract.contract import Contract
+import sapio
+import sapio.contract
 from sapio.script.clause import AndClauseArgument
-from sapio.contract.txtemplate import TransactionTemplate
 
 T = TypeVar("T")
 T2 = TypeVar("T2")
@@ -18,10 +18,10 @@ class PathFunction():
         return self.f(*args, **kwargs)
 
 
-def path(arg: Union[Callable[[T2], AndClauseArgument], Callable[[T], TransactionTemplate], None] = None)\
+def path(arg: Union[Callable[[T2], AndClauseArgument], Callable[[T], sapio.contract.TransactionTemplate], None] = None)\
         -> Union[Callable[[Any], PathFunction], PathFunction]:
     if arg is None or (hasattr(arg, "__name__") and arg.__name__ == "<lambda>"):
-        def wrapper(f: Callable[[T], TransactionTemplate]):
+        def wrapper(f: Callable[[T], sapio.contract.TransactionTemplate]):
             return PathFunction(f, arg)
         return wrapper
     else:
@@ -64,7 +64,6 @@ class CheckFunction():
 
 def check(s: Callable[[T], bool]) -> Callable[[T], bool]:
     return CheckFunction(s)
-
 
 def final(m):
     m.__is_final_method__ = True

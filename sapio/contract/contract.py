@@ -10,16 +10,12 @@ from sapio.script.clause import CheckTemplateVerifyClause, Variable, \
 from sapio.script.compiler import ProgramBuilder
 from sapio.bitcoinlib.messages import COutPoint, CTxWitness, CTxInWitness
 from sapio.bitcoinlib.static_types import Amount, Sats
-from .decorators import PathFunction, UnlockFunction, PayAddress, CheckFunction, final
-from .errors import ExtraArgumentError, MissingArgumentError
 from sapio.script.witnessmanager import CTVHash, WitnessManager
 from .txtemplate import TransactionTemplate
+from .decorators import PathFunction, UnlockFunction, PayAddress, CheckFunction, final
+from .errors import ExtraArgumentError, MissingArgumentError
 
 
-class MetaDataContainer:
-    def __init__(self, color, label):
-        self.color = color
-        self.label = label
 
 
 import inspect

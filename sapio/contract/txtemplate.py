@@ -1,11 +1,18 @@
+from __future__ import annotations
 from typing import List, Tuple
 
 from numpy import uint32
 
 from sapio.bitcoinlib.messages import CTransaction, CTxIn, CTxOut, COutPoint
 from sapio.bitcoinlib.static_types import Sequence, Amount, Version, LockTime
-from sapio.contract.contract import Contract, MetaDataContainer
+import sapio.contract
 from sapio.contract.assertions import WithinFee, HasEnoughFunds
+
+
+class MetaDataContainer:
+    def __init__(self, color, label):
+        self.color = color
+        self.label = label
 
 
 class TransactionTemplate:
@@ -13,7 +20,7 @@ class TransactionTemplate:
     def __init__(self) -> None:
         self.n_inputs: int = 0
         self.sequences: List[Sequence] = [Sequence(uint32(0))]
-        self.outputs: List[Tuple[Amount, Contract]] = []
+        self.outputs: List[Tuple[Amount, sapio.contract.Contract]] = []
         self.outputs_metadata: List[MetaDataContainer] = []
         self.version: Version = Version(uint32(2))
         self.lock_time: LockTime = LockTime(uint32(0))
