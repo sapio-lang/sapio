@@ -235,7 +235,7 @@ class MetaContract(type):
                 raise AssertionError("Must Have at least one spending condition")
             while len(paths) > 1:
                 p = paths.pop()
-                paths[0] = OrClause(paths[-1], p)
+                paths[0] = OrClause(paths[0], p)
             self.witness_manager = ProgramBuilder().compile(paths[0])
 
 
