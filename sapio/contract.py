@@ -3,6 +3,7 @@ from __future__ import annotations
 import typing
 from types import GeneratorType
 from typing import Callable, TypeVar, List, Any, Union, Tuple
+from collections.abc import Iterable
 
 import sapio.bitcoinlib.hash_functions
 from sapio.spending_conditions.script_lang import CheckTemplateVerifyClause, AndClause, OrClause, Variable, \
@@ -92,7 +93,7 @@ class MetaDataContainer:
         self.color = color
         self.label = label
 class TransactionTemplate:
-    __slots__ = ["n_inputs", "sequences", "outputs", "version", "lock_time", "outputs_metadata"]
+    __slots__ = ["n_inputs", "sequences", "outputs", "version", "lock_time", "outputs_metadata", "label"]
     def __init__(self) -> None:
         self.n_inputs: int = 0
         self.sequences: List[Sequence] = [Sequence(uint32(0))]
@@ -100,6 +101,7 @@ class TransactionTemplate:
         self.outputs_metadata: List[MetaDataContainer] = []
         self.version: Version = Version(uint32(2))
         self.lock_time: LockTime = LockTime(uint32(0))
+        self.label: str = ""
 
     def get_ctv_hash(self):
         # Implicitly always at index 0!
@@ -147,6 +149,7 @@ class MissingArgumentError(AssertionError): pass
 
 
 class MetaContract(type):
+
     def __new__(mcl, name, bases, nmspc):
         fields = typing.get_type_hints(nmspc['Fields'])
         nmspc['__annotations__'] = fields.copy()
@@ -180,7 +183,7 @@ class MetaContract(type):
             if kwargs.keys() != fields.keys():
                 for key in fields:
                     if key not in kwargs:
-                        raise MissingArgumentError("Missing Argument: Keyword arg {} missing".format(key))
+                        raise MissingArgumentError("Missing Argument: Keyword arg {} missing from {}".format(key, kwargs.keys()))
                 for key in kwargs:
                     if key not in fields:
                         raise ExtraArgumentError("Extra Argument: Key '{}' not in {}".format(key, fields.keys()))
@@ -205,15 +208,19 @@ class MetaContract(type):
             for func in assertions:
                 func(self)
             for func in path_funcs:
-                name = func.__name__
                 ret : Union[typing.Iterator[TransactionTemplate], TransactionTemplate] = func(self)
                 txns : typing.Iterator[TransactionTemplate]
                 if isinstance(ret, TransactionTemplate):
                     txns = iter([ret])
-                elif isinstance(ret, GeneratorType):
+                elif isinstance(ret, (GeneratorType, Iterable)):
                     txns = ret
-                unlock_clause: typing.Optional[AndClauseArgument] = func.unlock_with(self) if func.unlock_with is not None else None
-                for txn in txns:
+                else:
+                    raise ValueError("Invalid Return Type", ret)
+                unlock_clause: typing.Optional[AndClauseArgument] = None
+                if func.unlock_with is not None:
+                    unlock_clause = func.unlock_with(self)
+                for txn in txn:
+                    txn.label = func.__name__
                     amount = txn.total_amount()
                     self.amount_range = [min(self.amount_range[0], amount),
                                          max(self.amount_range[1], amount)]
@@ -223,7 +230,10 @@ class MetaContract(type):
                     # and then and at the top with the unlock clause,
                     # it could help with later code generation sharing the
                     # common clause...
-                    paths.append(ctv if unlock_clause is None else AndClause(unlock_clause, ctv))
+                    if unlock_clause is None:
+                        paths.append(ctv)
+                    else:
+                        paths.append(ctv * unlock_clause)
                     self.specific_transactions.append((CTVHash(ctv_hash), txn))
             for func in unlock_funcs:
                 paths.append(func(self))
@@ -253,7 +263,7 @@ class Contract(metaclass=MetaContract):
     # These slots will be extended later on
     __slots__ = ('amount_range', 'specific_transactions', 'witness_manager')
     witness_manager: WitnessManager
-    specific_transactions: typing.Tuple[CTVHash, TransactionTemplate]
+    specific_transactions: List[typing.Tuple[CTVHash, TransactionTemplate]]
     amount_range: Tuple[Amount, Amount]
     class Fields:
         pass
@@ -269,13 +279,14 @@ class Contract(metaclass=MetaContract):
         # todo: Note that if a contract has any secret state, it may be a hack
         # attempt to bind it to an output with insufficient funds
         color = self.MetaData.color(self)
-        label = self.MetaData.label(self)
+        output_label = self.MetaData.label(self)
 
         txns = []
         metadata = []
         for (ctv_hash, txn_template) in self.specific_transactions:
             # todo: find correct witness?
             assert ctv_hash == txn_template.get_ctv_hash()
+            tx_label = output_label+":"+txn_template.label
 
             tx = txn_template.bind_tx(out)
             txid = tx.sha256
@@ -292,7 +303,7 @@ class Contract(metaclass=MetaContract):
                 txns.append(t)
                 utxo_metadata = [{'color': md.color, 'label': md.label} for md in txn_template.outputs_metadata]
                 metadata.append(
-                    {'color':color, 'label': label, 'utxo_metadata': utxo_metadata})
+                    {'color':color, 'label': tx_label, 'utxo_metadata': utxo_metadata})
             for (idx, (_, contract)) in enumerate(txn_template.outputs):
                 new_txns, new_metadata = contract.bind(COutPoint(txid, idx))
                 txns.extend(new_txns)
