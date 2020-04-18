@@ -3,8 +3,9 @@ from typing import Callable, List, Tuple, Iterator
 from sapio.examples.p2pk import PayToSegwitAddress
 from sapio.examples.undo_send import UndoSend
 from sapio.bitcoinlib.static_types import Amount, PubKey
-from sapio.contract import Contract, TransactionTemplate, path
-from sapio.spending_conditions.script_lang import TimeSpec, AbsoluteTimeSpec, RelativeTimeSpec, SignatureCheckClause
+from sapio.contract import Contract, TransactionTemplate, path, MetaContract
+from sapio.spending_conditions.script_lang import TimeSpec, AbsoluteTimeSpec, RelativeTimeSpec, SignatureCheckClause, \
+    int64
 
 
 def add_timeout(tx, delay):
@@ -23,7 +24,9 @@ class CancellableSubscription(Contract):
         return_address: PayToSegwitAddress
         watchtower_key: PubKey
         return_timeout: RelativeTimeSpec
-
+    class MetaData:
+        color = lambda self: "blue"
+        label = lambda self: "Cancellable Subscription"
     @path
     def cancel(self):
         tx = TransactionTemplate()
@@ -67,16 +70,20 @@ class CancelContest(Contract):
         return_address: Contract
         watchtower_key: PubKey
         return_timeout: RelativeTimeSpec
+    class MetaData:
+        color = lambda self: "red"
+        label = lambda self: "Cancellation Attempt"
     @path(lambda self: SignatureCheckClause(self.watchtower_key))
     def counterclaim(self) -> Iterator[TransactionTemplate]:
-        total_amount = 0
+        amount_earned = Amount(int64(0))
         for (timeout, amount) in self.schedule.assigned_value:
-            total_amount += amount
+            amount_earned += amount
+            amount_refundable = self.amount.assigned_value-amount_earned
             tx = TransactionTemplate()
-            tx.add_output(total_amount, self.recipient.assigned_value)
-            refund = self.amount.assigned_value-total_amount
-            tx.add_output(refund, self.return_address.assigned_value)
             add_timeout(tx, timeout)
+            tx.add_output(amount_earned, self.recipient.assigned_value)
+            if amount_refundable:
+                tx.add_output(amount_refundable, self.return_address.assigned_value)
             yield tx
     @path
     def finish_cancel(self):
@@ -87,4 +94,25 @@ class CancelContest(Contract):
         tx.add_output(amount, return_address)
         return tx
 
+class Hide: pass
+
+class auto_fields(CancellableSubscription.Fields):
+    period: int
+    per_time: Amount
+    times: int
+    schedule: Hide
+    amount: Hide
+
+
+schedule: Hide
+
+
+def auto_pay(**kwargs):
+    period = kwargs.pop('period')
+    times = kwargs.pop('times')
+    per_time = kwargs.pop('per_time')
+    schedule = [(AbsoluteTimeSpec.at_height((t+1)*period), per_time) for t in range(times)]
+    amount = per_time*times
+    return CancellableSubscription(schedule=schedule, amount=amount, **kwargs)
+auto_pay.Fields = auto_fields
 
