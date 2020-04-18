@@ -38,7 +38,7 @@ class UnlockFunction():
 
 
 def unlock(s: Callable[[Any], Clause]):
-    def wrapper(f: Callable[[T], List[Contract]]):
+    def wrapper(f: Callable[[T], List[sapio.contract.Contract]]):
         return UnlockFunction(s, f.__name__)
     return wrapper
 
