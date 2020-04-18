@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Union
 
 from numpy import uint32
 
@@ -44,7 +45,7 @@ def bool_of_stack_item(v:bytes):
 
 
 # Interpreter Loosely Based on Bitcoin Core, MIT License
-def handle(op:CScriptOp, stack: List[bytes], handle_branch: ConditionStack):
+def handle(op:Union[CScriptOp, int, bytes], stack: List[bytes], handle_branch: ConditionStack):
     should_execute = handle_branch.all_true()
     if isinstance(op, bytes):
         if should_execute:
@@ -97,9 +98,9 @@ def handle(op:CScriptOp, stack: List[bytes], handle_branch: ConditionStack):
             stack.append(bytes(1) if ret else bytes(0))
         # Basic
         elif op == OP_0:
-            stack.append(ZERO)
+            stack.append(ZERO_enc)
         elif op == OP_1:
-            stack.append(ONE)
+            stack.append(ONE_enc)
         # Stack
         elif op == OP_DROP:
             if len(stack) < 1: return False
@@ -110,11 +111,11 @@ def handle(op:CScriptOp, stack: List[bytes], handle_branch: ConditionStack):
             b = bool_of_stack_item(v)
             if b:
                 # TODO: Is Copy needed?
-                stack.append(v.copy())
+                stack.append(v)
 
         elif op == OP_DUP:
             if len(stack) < 1: return False
-            stack.append(stack[-1].copy())
+            stack.append(stack[-1])
         # Verification
         # TODO: Validation assumed true,
         # This just handles the stack operations
@@ -173,8 +174,9 @@ class ConditionStack:
 
 
 def interpret(s:CScript) -> bool:
-    stack = []
+    stack : List[bytes] = []
     handle_branch = ConditionStack()
     for op in iter(s):
         if not handle(op, stack, handle_branch):
             return False
+    return True
