@@ -1,5 +1,5 @@
 from sapio.script.clause import Clause, AndClause, AndClauseArgument, OrClause, SignatureCheckClause, \
-    PreImageCheckClause, CheckTemplateVerifyClause, AfterClause, Variable
+    PreImageCheckClause, CheckTemplateVerifyClause, AfterClause, Variable, UnsatisfiableClause
 from sapio.util import methdispatch
 
 
@@ -48,10 +48,15 @@ class NormalizationPass:
 
     @normalize.register
     def normalize_or(self, arg: OrClause) -> Clause:
-        return self.normalize(arg.a) + self.normalize(arg.b)
+        # switching order guarantees that successive passes will
+        # have a chance to unwind unsatisfiable clauses
+        return self.normalize(arg.b) + self.normalize(arg.a)
 
     # TODO: Unionize!
 
+    @normalize.register
+    def normalize_unsat(self, arg: UnsatisfiableClause) -> Clause:
+        return arg
     @normalize.register
     def normalize_signaturecheck(self, arg: SignatureCheckClause) -> Clause:
         return arg

@@ -10,7 +10,7 @@ from sapio.util import methdispatch
 class FlattenPass:
     @methdispatch
     def flatten(self, arg: Clause, or_allowed: bool=True) -> List[List[Clause]]:
-        raise NotImplementedError("Cannot Compile Arg")
+        raise NotImplementedError("Cannot Compile Arg", arg)
 
 
     @flatten.register
@@ -22,6 +22,10 @@ class FlattenPass:
         l[0].extend(l2[0])
         return l
 
+
+    @flatten.register
+    def flatten_sat(self, arg:SatisfiedClause, or_allowed=False):
+        return [[]]
 
     @flatten.register
     def flatten_or(self, arg: OrClause, or_allowed=True) -> List[List[Clause]]:

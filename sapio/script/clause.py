@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TypeVar, Generic, Any, Union, Optional
+from typing import TypeVar, Generic, Any, Union, Optional, cast
 
 from typing_extensions import Protocol
 
@@ -41,28 +41,40 @@ class StringClauseMixin:
                 return "{}()".format(self.__class__.__name__)
 
 
-class SatisfiedClause(StringClauseMixin):
-    def __add__(self, other: AndClauseArgument) -> OrClause:
-        return OrClause(self, other)
 
-    def __mul__(self, other: AndClauseArgument) -> AndClause:
-        return AndClause(self, other)
+class SatisfiedClause(StringClauseMixin):
+    # When or'd to another clause, the other clause disappears
+    # because A + True --> True
+    def __add__(self, other: AndClauseArgument) -> SatisfiedClause:
+        return self
+
+    # When and'd to another clause, this clause disappears
+    # because A*True --> A
+    def __mul__(self, other: AndClauseArgument) -> AndClauseArgument:
+        return other
     n_args = 0
 class UnsatisfiableClause(StringClauseMixin):
-    def __add__(self, other: AndClauseArgument) -> OrClause:
-        return OrClause(self, other)
+    # When or'd to another clause, this clause disappears
+    # because A + False --> A
 
-    def __mul__(self, other: AndClauseArgument) -> AndClause:
-        return AndClause(self, other)
+    #N.B.: This makes UnsatisfiableClause useful as a "None" value
+    # for binary clauses
+    def __add__(self, other: AndClauseArgument) -> AndClauseArgument:
+        return other
+
+    # When and'd to another clause, the other clause disappears
+    # because A*False --> False
+    def __mul__(self, other: AndClauseArgument) -> UnsatisfiableClause:
+        return self
     n_args = 0
-
-
-class AndClause(StringClauseMixin):
+class LogicMixin:
     def __add__(self, other: AndClauseArgument) -> OrClause:
-        return OrClause(self, other)
+        return OrClause(cast(AndClauseArgument, self), other)
 
     def __mul__(self, other: AndClauseArgument) -> AndClause:
-        return AndClause(self, other)
+        return AndClause(cast(AndClauseArgument, self), other)
+
+class AndClause(LogicMixin, StringClauseMixin):
     n_args = 2
     symbol = "*"
 
@@ -71,12 +83,7 @@ class AndClause(StringClauseMixin):
         self.b = b
 
 
-class OrClause(StringClauseMixin):
-    def __add__(self, other: AndClauseArgument) -> OrClause:
-        return OrClause(self, other)
-
-    def __mul__(self, other: AndClauseArgument) -> AndClause:
-        return AndClause(self, other)
+class OrClause(LogicMixin, StringClauseMixin):
     n_args = 2
     symbol = "+"
     def __init__(self, a: AndClauseArgument, b: AndClauseArgument):
@@ -84,26 +91,15 @@ class OrClause(StringClauseMixin):
         self.b: AndClauseArgument = b
 
 
-class SignatureCheckClause(StringClauseMixin):
-    def __add__(self, other: AndClauseArgument) -> OrClause:
-        return OrClause(self, other)
-
-    def __mul__(self, other: AndClauseArgument) -> AndClause:
-        return AndClause(self, other)
+class SignatureCheckClause(LogicMixin, StringClauseMixin):
     n_args = 1
     def __init__(self, a: Variable[PubKey]):
         self.a = a
         self.b = a.sub_variable("signature")
 
 
-class PreImageCheckClause(StringClauseMixin):
-    def __add__(self, other: AndClauseArgument) -> OrClause:
-        return OrClause(self, other)
-
-    def __mul__(self, other: AndClauseArgument) -> AndClause:
-        return AndClause(self, other)
+class PreImageCheckClause(LogicMixin, StringClauseMixin):
     n_args = 1
-
     a : Variable[Hash]
     b : Variable[Hash]
     def __init__(self, a: Variable[Hash]):
@@ -111,12 +107,7 @@ class PreImageCheckClause(StringClauseMixin):
         self.b = a.sub_variable("preimage")
 
 
-class CheckTemplateVerifyClause(StringClauseMixin):
-    def __add__(self, other: AndClauseArgument) -> OrClause:
-        return OrClause(self, other)
-
-    def __mul__(self, other: AndClauseArgument) -> AndClause:
-        return AndClause(self, other)
+class CheckTemplateVerifyClause(LogicMixin, StringClauseMixin):
     n_args = 1
 
     def __init__(self, a: Variable[Hash]):
@@ -189,12 +180,7 @@ def Days(n:float) -> RelativeTimeSpec:
     return RelativeTimeSpec.from_seconds(seconds)
 
 
-class AfterClause(StringClauseMixin):
-    def __add__(self, other: AndClauseArgument) -> OrClause:
-        return OrClause(self, other)
-
-    def __mul__(self, other: AndClauseArgument) -> AndClause:
-        return AndClause(self, other)
+class AfterClause(LogicMixin,StringClauseMixin):
     n_args = 1
 
     @methdispatch

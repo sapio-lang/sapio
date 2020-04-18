@@ -7,7 +7,7 @@ from collections.abc import Iterable
 
 import sapio.bitcoinlib.hash_functions
 from sapio.script.clause import CheckTemplateVerifyClause, AndClause, OrClause, Variable, \
-    AndClauseArgument, SignatureCheckClause
+    AndClauseArgument, SignatureCheckClause, UnsatisfiableClause, SatisfiedClause
 from .bitcoinlib.script import CScript
 from .bitcoinlib.static_types import Sequence, Amount, Version, LockTime, uint32, Sats
 from sapio.script.compiler import ProgramBuilder
@@ -202,7 +202,7 @@ class MetaContract(type):
                 self.specific_transactions = []
                 return
 
-            paths : typing.Optional[AndClauseArgument] = None
+            paths : AndClauseArgument = UnsatisfiableClause()
             self.amount_range = [Sats(21_000_000 * 100_000_000), Sats(0)]
 
             self.specific_transactions = []
@@ -217,7 +217,7 @@ class MetaContract(type):
                     txns = ret
                 else:
                     raise ValueError("Invalid Return Type", ret)
-                unlock_clause: typing.Optional[AndClauseArgument] = None
+                unlock_clause: AndClauseArgument = SatisfiedClause()
                 if func.unlock_with is not None:
                     unlock_clause = func.unlock_with(self)
                 for txn in txns:
@@ -231,16 +231,15 @@ class MetaContract(type):
                     # and then and at the top with the unlock clause,
                     # it could help with later code generation sharing the
                     # common clause...
-                    new_path = ctv if unlock_clause is None else (ctv * unlock_clause)
-                    paths = new_path if paths is None else paths + new_path
+                    paths = (ctv * unlock_clause) + paths
                     self.specific_transactions.append((CTVHash(ctv_hash), txn))
             for func in unlock_funcs:
-                paths = func(self) if paths is None else paths + func(self)
+                paths = paths + func(self)
 
             # prepare for passing to the API...
             # TODO: this gets undone immediately, so maybe
             # provide interface to skip it
-            if paths is None:
+            if paths is UnsatisfiableClause:
                 raise AssertionError("Must Have at least one spending condition")
             self.witness_manager = ProgramBuilder().compile(paths)
 
