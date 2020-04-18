@@ -8,11 +8,11 @@ from sapio.script.opcodes import AllowedOp
 from sapio.script.clause import Clause
 from sapio.script.witnessmanager import WitnessTemplate, WitnessManager
 
-T = TypeVar('T')
+DNF = List[List[Clause]]
 
-CNF = List[List[Clause]]
-class ClauseToCNF:
-    def compile_cnf(self, clause: Clause) -> CNF:
+
+class ClauseToDNF:
+    def compile_cnf(self, clause: Clause) -> DNF:
         while True:
             normalizer = NormalizationPass()
             clause = normalizer.normalize(clause)
@@ -29,14 +29,14 @@ class CNFClauseCompiler:
 class ProgramBuilder:
 
     def compile(self, clause: Clause) -> WitnessManager:
-        cnf: CNF = ClauseToCNF().compile_cnf(clause)
-        n_cases = len(cnf)
+        dnf: DNF = ClauseToDNF().compile_cnf(clause)
+        n_cases = len(dnf)
         witness_manager: WitnessManager = WitnessManager()
         # If we have one or two cases, special case the emitted scripts
         # 3 or more, use a generic wrapper
         if n_cases == 1:
             witness = witness_manager.make_witness(0)
-            witness_manager.program += CNFClauseCompiler().compile(cnf[0], witness)
+            witness_manager.program += CNFClauseCompiler().compile(dnf[0], witness)
             # Hack because the fragment compiler leaves stack empty
             witness_manager.program += CScript([AllowedOp.OP_1])
         elif n_cases == 2:
@@ -45,8 +45,8 @@ class ProgramBuilder:
             wit_0.add(1)
             wit_1.add(0)
             # note order of side effects!
-            branch_a = CNFClauseCompiler().compile(cnf[0], wit_0)
-            branch_b = CNFClauseCompiler().compile(cnf[1], wit_1)
+            branch_a = CNFClauseCompiler().compile(dnf[0], wit_0)
+            branch_b = CNFClauseCompiler().compile(dnf[1], wit_1)
             witness_manager.program = CScript([AllowedOp.OP_IF,
                                                branch_a,
                                                AllowedOp.OP_ELSE,
@@ -60,10 +60,9 @@ class ProgramBuilder:
             # Future work can optimize this by inspecting the sub-branches
             # and sharing code...
 
-
             # Check that the first argument passed is an in range execution path
             # Note the first branch does not subtract one, so we have arg in [0, N)
-            for (idx, cl) in enumerate(cnf):
+            for (idx, cl) in enumerate(dnf):
                 wit = witness_manager.make_witness(idx)
                 wit.add(idx)
                 sub_script = CNFClauseCompiler().compile(cl, wit)
@@ -90,7 +89,7 @@ class ProgramBuilder:
                             AllowedOp.OP_ENDIF,
                             # set up for testing the next clause...
                             AllowedOp.OP_1SUB])
-                elif idx+1 < len(cnf):
+                elif idx + 1 < len(dnf):
                     witness_manager.program += \
                         CScript([AllowedOp.OP_IFDUP,
                                  AllowedOp.OP_NOTIF,
@@ -110,4 +109,3 @@ class ProgramBuilder:
                                  AllowedOp.OP_1])
 
         return witness_manager
-
