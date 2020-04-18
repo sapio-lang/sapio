@@ -1,5 +1,6 @@
 from sapio.bitcoinlib.static_types import PubKey, Amount
-from sapio.contract import Contract, unlock, pay_address
+from sapio.contract import Contract
+from sapio.decorators import unlock, pay_address
 from sapio.script.clause import SignatureCheckClause
 
 

@@ -1,11 +1,11 @@
 
 import unittest
 
-from sapio.bitcoinlib.static_types import Sats
 from sapio.examples.p2pk import *
 from sapio.examples.undo_send import *
 from sapio.examples.basic_vault import *
 from sapio.script.clause import Weeks
+from sapio.txtemplate import TransactionTemplate
 
 
 class TestBasicVault(unittest.TestCase):

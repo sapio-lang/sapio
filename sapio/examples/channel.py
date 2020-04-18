@@ -1,5 +1,7 @@
 from sapio.bitcoinlib.static_types import Amount, PubKey
-from sapio.contract import Contract, path, TransactionTemplate, unlock
+from sapio.contract import Contract
+from sapio.decorators import path, unlock
+from sapio.txtemplate import TransactionTemplate
 from sapio.script.clause import RelativeTimeSpec, SignatureCheckClause
 
 

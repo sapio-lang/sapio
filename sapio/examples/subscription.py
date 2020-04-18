@@ -3,7 +3,9 @@ from typing import Callable, List, Tuple, Iterator
 from sapio.examples.p2pk import PayToSegwitAddress
 from sapio.examples.undo_send import UndoSend
 from sapio.bitcoinlib.static_types import Amount, PubKey
-from sapio.contract import Contract, TransactionTemplate, path, MetaContract
+from sapio.contract import Contract, MetaContract
+from sapio.decorators import path
+from sapio.txtemplate import TransactionTemplate
 from sapio.script.clause import TimeSpec, AbsoluteTimeSpec, RelativeTimeSpec, SignatureCheckClause, \
     int64
 

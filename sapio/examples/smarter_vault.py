@@ -2,7 +2,9 @@ from typing import Callable
 
 from sapio.examples.undo_send import UndoSend
 from sapio.bitcoinlib.static_types import Amount
-from sapio.contract import Contract, TransactionTemplate, path
+from sapio.contract import Contract
+from sapio.decorators import path
+from sapio.txtemplate import TransactionTemplate
 from sapio.script.clause import TimeSpec
 
 

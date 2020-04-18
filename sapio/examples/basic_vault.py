@@ -1,7 +1,9 @@
 from sapio.examples.undo_send import UndoSend, UndoSend2
 from sapio.bitcoinlib.static_types import Amount
 from sapio.script.clause import TimeSpec
-from sapio.contract import Contract, TransactionTemplate, path
+from sapio.contract import Contract
+from sapio.decorators import path
+from sapio.txtemplate import TransactionTemplate
 
 
 class Vault(Contract):

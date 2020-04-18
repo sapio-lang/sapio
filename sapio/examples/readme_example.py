@@ -1,7 +1,9 @@
 from typing import Tuple
 
 from sapio.bitcoinlib.messages import COutPoint
-from sapio.contract import Contract, path, unlock, TransactionTemplate
+from sapio.contract import Contract
+from sapio.decorators import path, unlock
+from sapio.txtemplate import TransactionTemplate
 from sapio.script.clause import SignatureCheckClause, PubKey, Amount, Bitcoin, Sats, Days
 
 
