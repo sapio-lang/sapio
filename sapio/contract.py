@@ -6,12 +6,12 @@ from typing import Callable, TypeVar, List, Any, Union, Tuple
 from collections.abc import Iterable
 
 import sapio.bitcoinlib.hash_functions
-from sapio.spending_conditions.script_lang import CheckTemplateVerifyClause, AndClause, OrClause, Variable, \
+from sapio.script.clause import CheckTemplateVerifyClause, AndClause, OrClause, Variable, \
     AndClauseArgument, SignatureCheckClause
 from .bitcoinlib.script import CScript
 from .bitcoinlib.static_types import Sequence, Amount, Version, LockTime, uint32, Sats
-from sapio.spending_conditions.compiler import ProgramBuilder
-from .spending_conditions.witnessmanager import CTVHash, WitnessManager
+from sapio.script.compiler import ProgramBuilder
+from .script.witnessmanager import CTVHash, WitnessManager
 
 T = TypeVar("T")
 T2 = TypeVar("T2")

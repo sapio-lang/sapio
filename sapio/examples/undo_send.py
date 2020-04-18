@@ -1,5 +1,5 @@
 from sapio.contract import Contract, TransactionTemplate, unlock, path
-from sapio.spending_conditions.script_lang import *
+from sapio.script.clause import *
 
 
 class UndoSend(Contract):

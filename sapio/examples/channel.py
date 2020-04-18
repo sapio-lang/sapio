@@ -1,6 +1,6 @@
 from sapio.bitcoinlib.static_types import Amount, PubKey
 from sapio.contract import Contract, path, TransactionTemplate, unlock
-from sapio.spending_conditions.script_lang import RelativeTimeSpec, SignatureCheckClause
+from sapio.script.clause import RelativeTimeSpec, SignatureCheckClause
 
 
 class Channel(Contract):

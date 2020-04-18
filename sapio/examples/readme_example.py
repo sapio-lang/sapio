@@ -2,7 +2,7 @@ from typing import Tuple
 
 from sapio.bitcoinlib.messages import COutPoint
 from sapio.contract import Contract, path, unlock, TransactionTemplate
-from sapio.spending_conditions.script_lang import SignatureCheckClause, PubKey, Amount, Bitcoin, Sats, Days
+from sapio.script.clause import SignatureCheckClause, PubKey, Amount, Bitcoin, Sats, Days
 
 
 class PayToPublicKey(Contract):

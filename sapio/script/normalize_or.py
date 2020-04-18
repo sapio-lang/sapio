@@ -1,4 +1,4 @@
-from sapio.spending_conditions.script_lang import Clause, AndClause, AndClauseArgument, OrClause, SignatureCheckClause, \
+from sapio.script.clause import Clause, AndClause, AndClauseArgument, OrClause, SignatureCheckClause, \
     PreImageCheckClause, CheckTemplateVerifyClause, AfterClause, Variable
 from sapio.util import methdispatch
 

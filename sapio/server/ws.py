@@ -13,7 +13,7 @@ import sapio
 import sapio.examples.basic_vault
 import sapio.examples.p2pk
 import sapio.examples.subscription
-from sapio.spending_conditions.script_lang import TimeSpec, RelativeTimeSpec, Variable, AbsoluteTimeSpec
+from sapio.script.clause import TimeSpec, RelativeTimeSpec, Variable, AbsoluteTimeSpec
 
 placeholder_hint = {
     Amount : "int",

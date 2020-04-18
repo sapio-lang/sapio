@@ -4,7 +4,7 @@ from sapio.bitcoinlib.static_types import Sats, Bitcoin
 from sapio.examples.p2pk import *
 from sapio.examples.tree_pay import *
 from sapio.examples.smarter_vault import *
-from sapio.spending_conditions.script_lang import Weeks
+from sapio.script.clause import Weeks
 from sapio.bitcoinlib.messages import COutPoint
 
 import os

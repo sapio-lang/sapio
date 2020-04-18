@@ -8,7 +8,7 @@ from typing import Tuple, List
 from sapio.bitcoinlib.static_types import Amount
 from sapio.contract import Contract, path, TransactionTemplate
 from sapio.examples.tree_pay import TreePay
-from sapio.spending_conditions.script_lang import TimeSpec, RelativeTimeSpec, AbsoluteTimeSpec
+from sapio.script.clause import TimeSpec, RelativeTimeSpec, AbsoluteTimeSpec
 
 
 class AirDrop(Contract):

@@ -1,6 +1,6 @@
 from typing import List
 
-from sapio.spending_conditions.script_lang import Clause, AndClause, OrClause, SignatureCheckClause, \
+from sapio.script.clause import Clause, AndClause, OrClause, SignatureCheckClause, \
     PreImageCheckClause, CheckTemplateVerifyClause, AfterClause, Variable, SatisfiedClause
 from sapio.util import methdispatch
 

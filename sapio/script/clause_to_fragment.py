@@ -1,8 +1,8 @@
 from sapio.bitcoinlib.hash_functions import sha256
 from sapio.bitcoinlib.script import CScript
-from sapio.spending_conditions.opcodes import AllowedOp
-from sapio.spending_conditions.witnessmanager import CTVHash, WitnessTemplate
-from sapio.spending_conditions.script_lang import Clause, SignatureCheckClause, PreImageCheckClause, \
+from sapio.script.opcodes import AllowedOp
+from sapio.script.witnessmanager import CTVHash, WitnessTemplate
+from sapio.script.clause import Clause, SignatureCheckClause, PreImageCheckClause, \
     CheckTemplateVerifyClause, AfterClause, AbsoluteTimeSpec, RelativeTimeSpec, Variable
 from sapio.util import methdispatch
 

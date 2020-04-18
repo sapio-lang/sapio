@@ -5,7 +5,7 @@ from sapio.bitcoinlib.static_types import Sats
 from sapio.examples.p2pk import *
 from sapio.examples.undo_send import *
 from sapio.examples.basic_vault import *
-from sapio.spending_conditions.script_lang import Weeks
+from sapio.script.clause import Weeks
 
 
 class TestBasicVault(unittest.TestCase):

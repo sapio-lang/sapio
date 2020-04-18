@@ -1,12 +1,12 @@
 from typing import TypeVar, List
 
 from sapio.bitcoinlib.script import CScript
-from sapio.spending_conditions.clause_to_fragment import FragmentCompiler
-from sapio.spending_conditions.flatten_and import FlattenPass
-from sapio.spending_conditions.normalize_or import NormalizationPass
-from sapio.spending_conditions.opcodes import AllowedOp
-from sapio.spending_conditions.script_lang import Clause
-from sapio.spending_conditions.witnessmanager import WitnessTemplate, WitnessManager
+from sapio.script.clause_to_fragment import FragmentCompiler
+from sapio.script.flatten_and import FlattenPass
+from sapio.script.normalize_or import NormalizationPass
+from sapio.script.opcodes import AllowedOp
+from sapio.script.clause import Clause
+from sapio.script.witnessmanager import WitnessTemplate, WitnessManager
 
 T = TypeVar('T')
 

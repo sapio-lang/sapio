@@ -4,7 +4,7 @@ from sapio.examples.p2pk import PayToSegwitAddress
 from sapio.examples.undo_send import UndoSend
 from sapio.bitcoinlib.static_types import Amount, PubKey
 from sapio.contract import Contract, TransactionTemplate, path, MetaContract
-from sapio.spending_conditions.script_lang import TimeSpec, AbsoluteTimeSpec, RelativeTimeSpec, SignatureCheckClause, \
+from sapio.script.clause import TimeSpec, AbsoluteTimeSpec, RelativeTimeSpec, SignatureCheckClause, \
     int64
 
 

@@ -7,7 +7,7 @@ from sapio.bitcoinlib.script import CScript
 from sapio.bitcoinlib.static_types import Sats, Bitcoin
 from sapio.examples.p2pk import *
 from sapio.examples.subscription import *
-from sapio.spending_conditions.script_lang import Weeks
+from sapio.script.clause import Weeks
 from sapio.bitcoinlib.messages import COutPoint
 
 
