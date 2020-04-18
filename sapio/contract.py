@@ -201,7 +201,7 @@ class MetaContract(type):
                 self.specific_transactions = []
                 return
 
-            paths : List[AndClauseArgument] = []
+            paths : typing.Optional[AndClauseArgument] = None
             self.amount_range = [Sats(21_000_000 * 100_000_000), Sats(0)]
 
             self.specific_transactions = []
@@ -219,7 +219,7 @@ class MetaContract(type):
                 unlock_clause: typing.Optional[AndClauseArgument] = None
                 if func.unlock_with is not None:
                     unlock_clause = func.unlock_with(self)
-                for txn in txn:
+                for txn in txns:
                     txn.label = func.__name__
                     amount = txn.total_amount()
                     self.amount_range = [min(self.amount_range[0], amount),
@@ -230,23 +230,18 @@ class MetaContract(type):
                     # and then and at the top with the unlock clause,
                     # it could help with later code generation sharing the
                     # common clause...
-                    if unlock_clause is None:
-                        paths.append(ctv)
-                    else:
-                        paths.append(ctv * unlock_clause)
+                    new_path = ctv if unlock_clause is None else (ctv * unlock_clause)
+                    paths = new_path if paths is None else paths + new_path
                     self.specific_transactions.append((CTVHash(ctv_hash), txn))
             for func in unlock_funcs:
-                paths.append(func(self))
+                paths = func(self) if paths is None else paths + func(self)
 
             # prepare for passing to the API...
             # TODO: this gets undone immediately, so maybe
             # provide interface to skip it
-            if not paths:
+            if paths is None:
                 raise AssertionError("Must Have at least one spending condition")
-            while len(paths) > 1:
-                p = paths.pop()
-                paths[0] = OrClause(paths[0], p)
-            self.witness_manager = ProgramBuilder().compile(paths[0])
+            self.witness_manager = ProgramBuilder().compile(paths)
 
 
 
