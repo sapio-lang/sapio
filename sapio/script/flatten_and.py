@@ -1,7 +1,7 @@
 from typing import List
 
 from sapio.script.clause import Clause, AndClause, OrClause, SignatureCheckClause, \
-    PreImageCheckClause, CheckTemplateVerifyClause, AfterClause, Variable, SatisfiedClause, DNFClause
+    PreImageCheckClause, CheckTemplateVerifyClause, AfterClause, Variable, SatisfiedClause, DNFClause, DNF
 from sapio.util import methdispatch
 
 
@@ -9,12 +9,12 @@ from sapio.util import methdispatch
 
 class FlattenPass:
     @methdispatch
-    def flatten(self, arg: Clause, or_allowed: bool=True) -> List[List[DNFClause]]:
+    def flatten(self, arg: Clause, or_allowed: bool=True) -> DNF:
         raise NotImplementedError("Cannot Compile Arg", arg)
 
 
     @flatten.register
-    def flatten_and(self, arg: AndClause, or_allowed=False) -> List[List[DNFClause]]:
+    def flatten_and(self, arg: AndClause, or_allowed=False) -> DNF:
         l = self.flatten(arg.a, or_allowed)
         l2 = self.flatten(arg.b, or_allowed)
         assert len(l) == 1
@@ -24,32 +24,19 @@ class FlattenPass:
 
 
     @flatten.register
-    def flatten_sat(self, arg:SatisfiedClause, or_allowed=False):
+    def flatten_sat(self, arg:SatisfiedClause, or_allowed=False) -> DNF:
         return [[]]
 
     @flatten.register
-    def flatten_or(self, arg: OrClause, or_allowed=True) -> List[List[DNFClause]]:
+    def flatten_or(self, arg: OrClause, or_allowed=True) -> DNF:
         assert or_allowed
         return self.flatten(arg.a, or_allowed) + self.flatten(arg.b, or_allowed)
 
-
-    @flatten.register
-    def flatten_sigcheck(self, arg: SignatureCheckClause, or_allowed=False) -> List[List[DNFClause]]:
-        return [[arg]]
-
-
-    @flatten.register
-    def flatten_preimage(self, arg: PreImageCheckClause, or_allowed=False) -> List[List[DNFClause]]:
-        return [[arg]]
-
-
-    @flatten.register
-    def flatten_ctv(self, arg: CheckTemplateVerifyClause, or_allowed=False) -> List[List[DNFClause]]:
-        return [[arg]]
-
-
-    @flatten.register
-    def flatten_after(self, arg: AfterClause, or_allowed=False) -> List[List[DNFClause]]:
+    @flatten.register(AfterClause)
+    @flatten.register(CheckTemplateVerifyClause)
+    @flatten.register(PreImageCheckClause)
+    @flatten.register(SignatureCheckClause)
+    def flatten_after(self, arg, or_allowed=False) -> DNF:
         return [[arg]]
 
 try:

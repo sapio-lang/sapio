@@ -1,15 +1,13 @@
 from typing import List
 
 from sapio.bitcoinlib.script import CScript
-from sapio.script.clause import Clause, UnsatisfiableClause, DNFClause
+from sapio.script.clause import Clause, UnsatisfiableClause, DNFClause, DNF
 from sapio.script.clause_to_fragment import FragmentCompiler
 from sapio.script.flatten_and import FlattenPass
 from sapio.script.normalize_or import NormalizationPass
 from sapio.script.opcodes import AllowedOp
 from sapio.script.simplify import DNFSimplification
 from sapio.script.witnessmanager import WitnessTemplate, WitnessManager
-
-DNF = List[List[DNFClause]]
 
 
 class ClauseToDNF:

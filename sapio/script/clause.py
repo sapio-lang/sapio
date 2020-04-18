@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TypeVar, Generic, Any, Union, Optional, cast, Type
+from typing import TypeVar, Generic, Any, Union, Optional, cast, Type, List
 
 from typing_extensions import Protocol
 
@@ -234,6 +234,7 @@ DNFClause = Union[
     PreImageCheckClause,
     CheckTemplateVerifyClause,
     AfterClause]
+
 AndClauseArgument = Union[
                SatisfiedClause,
                UnsatisfiableClause,
@@ -252,4 +253,4 @@ Clause = Union[SatisfiedClause, UnsatisfiableClause,
                CheckTemplateVerifyClause,
                AfterClause]
 
-
+DNF = List[List[DNFClause]]
