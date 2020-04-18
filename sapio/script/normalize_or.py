@@ -8,11 +8,11 @@ class NormalizationPass:
         self.took_action: bool = False
     # Normalize Bubbles up all the OR clauses into a CNF
     @methdispatch
-    def normalize(self, arg: Clause) -> Clause:
+    def normalize(self, arg: Clause) -> AndClauseArgument:
         raise NotImplementedError("Cannot Compile Arg", arg)
 
     @normalize.register
-    def normalize_and(self, arg: AndClause) -> Clause:
+    def normalize_and(self, arg: AndClause) -> AndClauseArgument:
         a: AndClauseArgument = arg.a
         b: AndClauseArgument = arg.b
         ret : Clause = arg
@@ -47,32 +47,16 @@ class NormalizationPass:
         return ret
 
     @normalize.register
-    def normalize_or(self, arg: OrClause) -> Clause:
+    def normalize_or(self, arg: OrClause) -> AndClauseArgument:
         # switching order guarantees that successive passes will
         # have a chance to unwind unsatisfiable clauses
         return self.normalize(arg.b) | self.normalize(arg.a)
 
-    # TODO: Unionize!
-
-    @normalize.register
+    @normalize.register(UnsatisfiableClause)
+    @normalize.register(SignatureCheckClause)
+    @normalize.register(PreImageCheckClause)
+    @normalize.register(CheckTemplateVerifyClause)
+    @normalize.register(AfterClause)
     def normalize_unsat(self, arg: UnsatisfiableClause) -> Clause:
         return arg
-    @normalize.register
-    def normalize_signaturecheck(self, arg: SignatureCheckClause) -> Clause:
-        return arg
 
-    @normalize.register
-    def normalize_preimagecheck(self, arg: PreImageCheckClause) -> Clause:
-        return arg
-
-    @normalize.register
-    def normalize_ctv(self, arg: CheckTemplateVerifyClause) -> Clause:
-        return arg
-
-    @normalize.register
-    def normalize_after(self, arg: AfterClause) -> Clause:
-        return arg
-
-    @normalize.register
-    def normalize_var(self, arg: Variable) -> Clause:
-        return arg
