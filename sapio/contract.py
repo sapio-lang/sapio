@@ -10,7 +10,8 @@ from sapio.spending_conditions.script_lang import CheckTemplateVerifyClause, And
     AndClauseArgument, SignatureCheckClause
 from .bitcoinlib.script import CScript
 from .bitcoinlib.static_types import Sequence, Amount, Version, LockTime, uint32, Sats
-from sapio.spending_conditions.script_compiler import ProgramBuilder, WitnessManager, CTVHash
+from sapio.spending_conditions.compiler import ProgramBuilder
+from .spending_conditions.witnessmanager import CTVHash, WitnessManager
 
 T = TypeVar("T")
 T2 = TypeVar("T2")
