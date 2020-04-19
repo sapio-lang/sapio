@@ -9,7 +9,7 @@ import random
 class TestCompiler(unittest.TestCase):
     def test_clause_to_cnf(self):
         clauses = [
-            [AfterClause(AssignedVariable(str(n), AbsoluteTimeSpec.at_height(n))) for n in range(m * 100, (m + 1) * 100)] for m in range(100)]
+            [AfterClause(AssignedVariable(AbsoluteTimeSpec.at_height(n), str(n))) for n in range(m * 100, (m + 1) * 100)] for m in range(100)]
         # shuffle the clauses
         for clause in clauses:
             random.shuffle(clause)
@@ -23,7 +23,7 @@ class TestCompiler(unittest.TestCase):
                          frozenset(frozenset(range(m*100, (m+1)*100)) for m in range(100)), "does not preserves clauses")
 
     def test_clause_to_cnf_random(self):
-        A,B,C,D,E,F,G,H,I,J = [AfterClause(AssignedVariable(str(n), AbsoluteTimeSpec.at_height(n))) for n in range(10)]
+        A,B,C,D,E,F,G,H,I,J = [AfterClause(AssignedVariable(AbsoluteTimeSpec.at_height(n), str(n))) for n in range(10)]
         inputs = ((((A | B) & C) | D | E | F) & G & H | I) | J
         # Checked by Wolfram Alpha...
         # (A ∧ C ∧ G ∧ H) ∨ (B ∧ C ∧ G ∧ H) ∨ (D ∧ G ∧ H) ∨ (E ∧ G ∧ H) ∨ (F ∧ G ∧ H) ∨ J ∨ K

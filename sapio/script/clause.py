@@ -197,10 +197,10 @@ class AfterClause(LogicMixin,StringClauseMixin):
         self.a = a
     @initialize.register
     def _with_relative(self, a: RelativeTimeSpec):
-        self.a = AssignedVariable("", a)
+        self.a = AssignedVariable(a, "")
     @initialize.register
     def _with_absolute(self, a: AbsoluteTimeSpec):
-        self.a = AssignedVariable("", a)
+        self.a = AssignedVariable(a, "")
     def __init__(self, a: Union[AssignedVariable[TimeSpec], TimeSpec]):
         self.initialize(a)
 

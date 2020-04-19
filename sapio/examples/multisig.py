@@ -10,7 +10,7 @@ from sapio.script.variable import AssignedVariable
 def multisig(l, n):
     assert len(l) > n
     assert n > 0
-    l2 = [SignatureCheckClause(AssignedVariable("key_" + str(i), v)) for i, v in enumerate(l)]
+    l2 = [SignatureCheckClause(AssignedVariable(v, "key_" + str(i))) for i, v in enumerate(l)]
     l3 = [reduce(lambda a, b: a & b, combo[1:], combo[0])
           for combo in combinations(l2, n)]
     return reduce(lambda  a,b: a|b, l3[1:], l3[0])

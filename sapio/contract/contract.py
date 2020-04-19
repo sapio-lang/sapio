@@ -66,7 +66,7 @@ class MetaContract(type):
                 if isinstance(kwargs[key], AssignedVariable):
                     setattr(self, key, kwargs[key])
                 else:
-                    setattr(self, key, AssignedVariable(key, kwargs[key]))
+                    setattr(self, key, AssignedVariable(kwargs[key], key))
             if len(pay_funcs):
                 amt, addr = pay_funcs[0](self)
                 self.amount_range = [amt, 0]

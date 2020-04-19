@@ -9,7 +9,7 @@ class UnassignedVariable(Generic[V]):
 
 # The type V must be something that can be put onto the stack...
 class AssignedVariable(Generic[V]):
-    def __init__(self, name: Union[bytes, str], value: V):
+    def __init__(self, value: V, name: Union[bytes, str]):
         self.name: bytes = bytes(name, 'utf-8') if isinstance(name, str) else name
         self.assigned_value: V = value
         self.sub_variable_count = -1
