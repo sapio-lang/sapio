@@ -4,7 +4,7 @@ from sapio.script.opcodes import AllowedOp
 from sapio.script.witnessmanager import CTVHash, WitnessTemplate
 from sapio.script.clause import Clause, SignatureCheckClause, PreImageCheckClause, \
     CheckTemplateVerifyClause, AfterClause, AbsoluteTimeSpec, RelativeTimeSpec
-from sapio.script.variable import Variable
+from sapio.script.variable import AssignedVariable, UnassignedVariable
 from sapio.util import methdispatch
 
 
@@ -43,10 +43,10 @@ class FragmentCompiler:
         raise ValueError
     PREFIX = sha256(bytes(1000))
     @_compile.register
-    def _compile_var(self, arg: Variable, witness: WitnessTemplate) -> CScript:
-        PREFIX = bytes(20)
-        if arg.assigned_value is None:
-            witness.add(self.PREFIX+ arg.name)
-            return CScript()
-        else:
-            return CScript([arg.assigned_value])
+    def _compile_var(self, arg: AssignedVariable, witness: WitnessTemplate) -> CScript:
+        return CScript([arg.assigned_value])
+
+    @_compile.register(UnassignedVariable)
+    def _compile_var(self, arg: AssignedVariable, witness: WitnessTemplate) -> CScript:
+        witness.add(self.PREFIX+ arg.name)
+        return CScript()

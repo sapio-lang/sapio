@@ -6,7 +6,7 @@ from types import GeneratorType
 from typing import List, Any, Union, Tuple
 
 from sapio.script.clause import CheckTemplateVerifyClause, Clause, UnsatisfiableClause, SatisfiedClause
-from ..script.variable import Variable
+from ..script.variable import AssignedVariable
 from sapio.script.compiler import ProgramBuilder
 from sapio.bitcoinlib.messages import COutPoint, CTxWitness, CTxInWitness
 from sapio.bitcoinlib.static_types import Amount, Sats
@@ -63,10 +63,10 @@ class MetaContract(type):
                         raise ExtraArgumentError("Extra Argument: Key '{}' not in {}".format(key, fields.keys()))
             for key in kwargs:
                 # todo: type check here?
-                if isinstance(kwargs[key], Variable):
+                if isinstance(kwargs[key], AssignedVariable):
                     setattr(self, key, kwargs[key])
                 else:
-                    setattr(self, key, Variable(key, kwargs[key]))
+                    setattr(self, key, AssignedVariable(key, kwargs[key]))
             if len(pay_funcs):
                 amt, addr = pay_funcs[0](self)
                 self.amount_range = [amt, 0]
@@ -99,7 +99,7 @@ class MetaContract(type):
                     self.amount_range = [min(self.amount_range[0], amount),
                                          max(self.amount_range[1], amount)]
                     ctv_hash = txn.get_ctv_hash()
-                    ctv = CheckTemplateVerifyClause(Variable(ctv_hash, ctv_hash))
+                    ctv = CheckTemplateVerifyClause(AssignedVariable(ctv_hash, ctv_hash))
                     # TODO: If we OR all the CTV hashes together
                     # and then and at the top with the unlock clause,
                     # it could help with later code generation sharing the

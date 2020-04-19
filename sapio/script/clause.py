@@ -5,7 +5,7 @@ from typing import Any, cast, Type, List
 from typing_extensions import Protocol
 
 from sapio.bitcoinlib.static_types import *
-from sapio.script.variable import Variable
+from sapio.script.variable import AssignedVariable
 from sapio.util import methdispatch
 
 
@@ -94,16 +94,16 @@ class OrClause(LogicMixin, StringClauseMixin):
 
 class SignatureCheckClause(LogicMixin, StringClauseMixin):
     n_args = 1
-    def __init__(self, a: Variable[PubKey]):
+    def __init__(self, a: AssignedVariable[PubKey]):
         self.a = a
         self.b = a.sub_variable("signature")
 
 
 class PreImageCheckClause(LogicMixin, StringClauseMixin):
     n_args = 1
-    a : Variable[Hash]
-    b : Variable[Hash]
-    def __init__(self, a: Variable[Hash]):
+    a : AssignedVariable[Hash]
+    b : AssignedVariable[Hash]
+    def __init__(self, a: AssignedVariable[Hash]):
         self.a = a
         self.b = a.sub_variable("preimage")
 
@@ -111,7 +111,7 @@ class PreImageCheckClause(LogicMixin, StringClauseMixin):
 class CheckTemplateVerifyClause(LogicMixin, StringClauseMixin):
     n_args = 1
 
-    def __init__(self, a: Variable[Hash]):
+    def __init__(self, a: AssignedVariable[Hash]):
         self.a = a
 
 
@@ -193,15 +193,15 @@ class AfterClause(LogicMixin,StringClauseMixin):
     n_args = 1
 
     @methdispatch
-    def initialize(self, a: Variable[TimeSpec]):
+    def initialize(self, a: AssignedVariable[TimeSpec]):
         self.a = a
     @initialize.register
     def _with_relative(self, a: RelativeTimeSpec):
-        self.a = Variable("", a)
+        self.a = AssignedVariable("", a)
     @initialize.register
     def _with_absolute(self, a: AbsoluteTimeSpec):
-        self.a = Variable("", a)
-    def __init__(self, a: Union[Variable[TimeSpec], TimeSpec]):
+        self.a = AssignedVariable("", a)
+    def __init__(self, a: Union[AssignedVariable[TimeSpec], TimeSpec]):
         self.initialize(a)
 
 

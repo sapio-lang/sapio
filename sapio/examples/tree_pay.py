@@ -4,7 +4,7 @@ from typing import Tuple, List
 from sapio.bitcoinlib.static_types import PubKey, Amount
 from sapio.contract import Contract, path, TransactionTemplate, unlock
 from sapio.script.clause import AfterClause, Weeks, SignatureCheckClause
-from sapio.script.variable import Variable
+from sapio.script.variable import AssignedVariable
 
 
 def segment_by_radix(L, n):
@@ -53,8 +53,8 @@ class CollapsibleTree(Contract):
                 for payment in segment:
                     tx.add_output(payment[0], payment[1])
         return tx
-    def get_musig(self) -> Variable[PubKey]:
-        return Variable("musig", b"0"*32)
+    def get_musig(self) -> AssignedVariable[PubKey]:
+        return AssignedVariable("musig", b"0" * 32)
 
     @unlock(lambda self: SignatureCheckClause(self.get_musig()))
     def _(self):pass

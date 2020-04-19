@@ -4,7 +4,7 @@ from typing import Union, Tuple, List, DefaultDict, Type, cast
 
 from sapio.script.clause import UnsatisfiableClause, SatisfiedClause, AfterClause, TimeSpec, RelativeTimeSpec, \
     AbsoluteTimeSpec, DNFClause, CheckTemplateVerifyClause
-from sapio.script.variable import Variable
+from sapio.script.variable import AssignedVariable
 
 
 class AfterClauseSimplification:
@@ -37,7 +37,7 @@ class AfterClauseSimplification:
                 raise AssertionError("Incompatible Relative Time Locks in Branch")
         elif relative_blocks or relative_time:
             (_, tl) = max((tl.time, tl) for tl in relative_blocks + relative_time)
-            ret[0] = AfterClause(Variable("relative_time_lock", tl))
+            ret[0] = AfterClause(AssignedVariable("relative_time_lock", tl))
 
         absolute_blocks_or_time = defaultdict(list)
         for cl3 in absolute:
@@ -53,7 +53,7 @@ class AfterClauseSimplification:
                 raise AssertionError("Incompatible Absolute Time Locks in Branch")
         elif absolute_time or absolute_blocks:
             (_, tl) = max((tl.time, tl) for tl in absolute_blocks + absolute_time)
-            ret[1] = AfterClause(Variable("absolute_time_lock", tl))
+            ret[1] = AfterClause(AssignedVariable("absolute_time_lock", tl))
         return (ret[0], ret[1])
 
 
