@@ -16,11 +16,12 @@ class FragmentCompiler:
 
     @_compile.register
     def _compile_and(self, arg: SignatureCheckClause, witness) -> CScript:
-        return self._compile(arg.b, witness) + self._compile(arg.a, witness) + CScript([AllowedOp.OP_CHECKSIGVERIFY])
+        return self._compile(UnassignedVariable(b"_signature_by_"+arg.a.name), witness) + \
+               self._compile(arg.a, witness) + CScript([AllowedOp.OP_CHECKSIGVERIFY])
 
     @_compile.register
     def _compile_preimage(self, arg: PreImageCheckClause, witness) -> CScript:
-        return self._compile(arg.b, witness) + \
+        return self._compile(UnassignedVariable(b"_preimage_of_"+arg.a.name), witness) + \
                CScript([AllowedOp.OP_SHA256]) + self._compile(arg.a, witness) + CScript([AllowedOp.OP_EQUALVERIFY])
 
     @_compile.register
@@ -43,10 +44,10 @@ class FragmentCompiler:
         raise ValueError
     PREFIX = sha256(bytes(1000))
     @_compile.register
-    def _compile_var(self, arg: AssignedVariable, witness: WitnessTemplate) -> CScript:
+    def _compile_assigned_var(self, arg: AssignedVariable, witness: WitnessTemplate) -> CScript:
         return CScript([arg.assigned_value])
 
     @_compile.register(UnassignedVariable)
-    def _compile_var(self, arg: AssignedVariable, witness: WitnessTemplate) -> CScript:
+    def _compile_unassigned_var(self, arg: AssignedVariable, witness: WitnessTemplate) -> CScript:
         witness.add(self.PREFIX+ arg.name)
         return CScript()

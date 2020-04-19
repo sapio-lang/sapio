@@ -19,11 +19,7 @@ class AssignedVariable(Generic[V]):
         if name is not None:
             # suffix the unique name with our own name
             self.name += b"-"+ bytes(name, 'utf-8') if isinstance(name, str) else name
-        self.sub_variable_count = -1
 
-    def sub_variable(self, purpose: str) -> UnassignedVariable:
-        self.sub_variable_count += 1
-        return UnassignedVariable(self.name + b"_" + bytes(str(self.sub_variable_count), 'utf-8') + b"_" + bytes(purpose, 'utf-8'))
 
     def __str__(self):
         return "{}('{}', {})".format(self.__class__.__name__, self.assigned_value, self.name)

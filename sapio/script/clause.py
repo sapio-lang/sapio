@@ -5,7 +5,7 @@ from typing import Any, cast, Type, List
 from typing_extensions import Protocol
 
 from sapio.bitcoinlib.static_types import *
-from sapio.script.variable import AssignedVariable
+from sapio.script.variable import AssignedVariable, UnassignedVariable
 from sapio.util import methdispatch
 
 
@@ -96,7 +96,6 @@ class SignatureCheckClause(LogicMixin, StringClauseMixin):
     n_args = 1
     def __init__(self, a: AssignedVariable[PubKey]):
         self.a = a
-        self.b = a.sub_variable("signature")
 
 
 class PreImageCheckClause(LogicMixin, StringClauseMixin):
@@ -105,7 +104,6 @@ class PreImageCheckClause(LogicMixin, StringClauseMixin):
     b : AssignedVariable[Hash]
     def __init__(self, a: AssignedVariable[Hash]):
         self.a = a
-        self.b = a.sub_variable("preimage")
 
 
 class CheckTemplateVerifyClause(LogicMixin, StringClauseMixin):
