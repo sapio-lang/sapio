@@ -1,7 +1,8 @@
 from typing import List
 
 from sapio.script.clause import Clause, AndClause, OrClause, SignatureCheckClause, \
-    PreImageCheckClause, CheckTemplateVerifyClause, AfterClause, Variable, SatisfiedClause, DNFClause, DNF
+    PreImageCheckClause, CheckTemplateVerifyClause, AfterClause, SatisfiedClause, DNFClause, DNF
+from sapio.script.variable import Variable
 from sapio.util import methdispatch
 
 

@@ -1,8 +1,6 @@
-
-from typing import List, NewType
-from numpy import uint8, uint16, uint32, uint64, int8, int16, int32, int64
-
-Sequence = NewType("Sequence", uint32)
+from typing import NewType, Union
+from numpy import uint32, int64
+Sequence = NewType("Sequence", Union[uint32])
 Version = NewType("Version", uint32)
 LockTime = NewType("LockTime", uint32)
 Amount = NewType("Amount", int64)

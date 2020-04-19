@@ -3,7 +3,8 @@ from typing import Tuple, List
 
 from sapio.bitcoinlib.static_types import PubKey, Amount
 from sapio.contract import Contract, path, TransactionTemplate, unlock
-from sapio.script.clause import AfterClause, Weeks, SignatureCheckClause, Variable
+from sapio.script.clause import AfterClause, Weeks, SignatureCheckClause
+from sapio.script.variable import Variable
 
 
 def segment_by_radix(L, n):

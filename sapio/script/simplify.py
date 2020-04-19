@@ -3,7 +3,8 @@ from collections import defaultdict
 from typing import Union, Tuple, List, DefaultDict, Type, cast
 
 from sapio.script.clause import UnsatisfiableClause, SatisfiedClause, AfterClause, TimeSpec, RelativeTimeSpec, \
-    AbsoluteTimeSpec, Variable, DNFClause, CheckTemplateVerifyClause
+    AbsoluteTimeSpec, DNFClause, CheckTemplateVerifyClause
+from sapio.script.variable import Variable
 
 
 class AfterClauseSimplification:

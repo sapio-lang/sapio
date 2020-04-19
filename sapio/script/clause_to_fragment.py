@@ -3,7 +3,8 @@ from sapio.bitcoinlib.script import CScript
 from sapio.script.opcodes import AllowedOp
 from sapio.script.witnessmanager import CTVHash, WitnessTemplate
 from sapio.script.clause import Clause, SignatureCheckClause, PreImageCheckClause, \
-    CheckTemplateVerifyClause, AfterClause, AbsoluteTimeSpec, RelativeTimeSpec, Variable
+    CheckTemplateVerifyClause, AfterClause, AbsoluteTimeSpec, RelativeTimeSpec
+from sapio.script.variable import Variable
 from sapio.util import methdispatch
 
 

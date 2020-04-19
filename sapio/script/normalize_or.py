@@ -1,5 +1,6 @@
 from sapio.script.clause import Clause, AndClause, Clause, OrClause, SignatureCheckClause, \
-    PreImageCheckClause, CheckTemplateVerifyClause, AfterClause, Variable, UnsatisfiableClause
+    PreImageCheckClause, CheckTemplateVerifyClause, AfterClause, UnsatisfiableClause
+from sapio.script.variable import Variable
 from sapio.util import methdispatch
 
 

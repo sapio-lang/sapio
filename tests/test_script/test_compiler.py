@@ -2,7 +2,8 @@ import unittest
 from functools import reduce
 from operator import and_, or_
 
-from sapio.script.clause import AfterClause, Variable, AbsoluteTimeSpec
+from sapio.script.clause import AfterClause, AbsoluteTimeSpec
+from sapio.script.variable import Variable
 from sapio.script.compiler import  ClauseToDNF
 import random
 class TestCompiler(unittest.TestCase):

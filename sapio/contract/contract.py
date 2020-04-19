@@ -5,8 +5,8 @@ from collections.abc import Iterable
 from types import GeneratorType
 from typing import List, Any, Union, Tuple
 
-from sapio.script.clause import CheckTemplateVerifyClause, Variable, \
-    Clause, UnsatisfiableClause, SatisfiedClause
+from sapio.script.clause import CheckTemplateVerifyClause, Clause, UnsatisfiableClause, SatisfiedClause
+from ..script.variable import Variable
 from sapio.script.compiler import ProgramBuilder
 from sapio.bitcoinlib.messages import COutPoint, CTxWitness, CTxInWitness
 from sapio.bitcoinlib.static_types import Amount, Sats

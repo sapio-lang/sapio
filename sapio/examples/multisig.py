@@ -3,7 +3,8 @@ from itertools import combinations
 
 from sapio.bitcoinlib.static_types import PubKey, Amount
 from sapio.contract import Contract, path, TransactionTemplate, unlock
-from sapio.script.clause import SignatureCheckClause, Variable, List
+from sapio.script.clause import SignatureCheckClause, List
+from sapio.script.variable import Variable
 
 
 def multisig(l, n):
