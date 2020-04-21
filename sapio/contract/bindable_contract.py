@@ -2,12 +2,11 @@ import copy
 import typing
 from typing import List, Tuple
 
-import sapio.contract.decorators
 from sapio.bitcoinlib.messages import COutPoint, CTxWitness, CTxInWitness
 from sapio.bitcoinlib.static_types import Amount
-from .txtemplate import TransactionTemplate
-from .decorators import final, HasFinal
 from sapio.script.witnessmanager import WitnessManager, CTVHash
+from .decorators import final, HasFinal
+from .txtemplate import TransactionTemplate
 
 
 class BindableContract(metaclass=HasFinal):
@@ -16,9 +15,24 @@ class BindableContract(metaclass=HasFinal):
     witness_manager: WitnessManager
     specific_transactions: List[typing.Tuple[CTVHash, TransactionTemplate]]
     amount_range: Tuple[Amount, Amount]
+
     class MetaData:
         color = lambda self: "brown"
         label = lambda self: "generic"
+
+    @final
+    def to_json(self):
+        return {
+            "witness_manager": self.witness_manager.to_json(),
+            "transactions": {h: transaction.to_json() for (h, transaction) in self.specific_transactions},
+            "min_amount_spent": self.amount_range[0],
+            "max_amount_spent": self.amount_range[1],
+            "metadata": {
+                "color": self.MetaData.color(self),
+                "label": self.MetaData.label(self)
+            }
+        }
+
     @final
     def bind(self, out: COutPoint):
         # todo: Note that if a contract has any secret state, it may be a hack
