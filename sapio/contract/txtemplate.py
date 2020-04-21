@@ -20,7 +20,7 @@ class TransactionTemplate:
     def __init__(self) -> None:
         self.n_inputs: int = 0
         self.sequences: List[Sequence] = [Sequence(uint32(0))]
-        self.outputs: List[Tuple[Amount, sapio.contract.Contract]] = []
+        self.outputs: List[Tuple[Amount, sapio.contract.bindable_contract.BindableContract]] = []
         self.outputs_metadata: List[MetaDataContainer] = []
         self.version: Version = Version(uint32(2))
         self.lock_time: LockTime = LockTime(uint32(0))

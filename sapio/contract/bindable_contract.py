@@ -2,14 +2,15 @@ import copy
 import typing
 from typing import List, Tuple
 
+import sapio.contract.decorators
 from sapio.bitcoinlib.messages import COutPoint, CTxWitness, CTxInWitness
 from sapio.bitcoinlib.static_types import Amount
 from .txtemplate import TransactionTemplate
-from .decorators import final
+from .decorators import final, HasFinal
 from sapio.script.witnessmanager import WitnessManager, CTVHash
 
 
-class BindableContract:
+class BindableContract(metaclass=HasFinal):
     # These slots will be extended later on
     __slots__ = ('amount_range', 'specific_transactions', 'witness_manager')
     witness_manager: WitnessManager
