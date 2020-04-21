@@ -25,7 +25,7 @@ class MetaContract(type):
                     else:
                         raise ValueError("Cannot Override Final ???")
 
-        nmspc['__slots__'] = ('amount_range', 'specific_transactions', 'witness_manager') + tuple(fields.keys())
+        nmspc['__slots__'] = bases[0].__slots__+ tuple(fields.keys())
         params = [inspect.Parameter("self", inspect.Parameter.POSITIONAL_ONLY)] + \
                  [inspect.Parameter(param,
                                     inspect.Parameter.KEYWORD_ONLY,
