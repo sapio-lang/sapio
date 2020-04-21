@@ -11,14 +11,16 @@ import sapio
 import sapio.examples.basic_vault
 import sapio.examples.p2pk
 import sapio.examples.subscription
+from sapio.examples.tree_pay import TreePay
 from sapio.script.clause import TimeSpec, RelativeTimeSpec, AbsoluteTimeSpec
 
 placeholder_hint = {
-    Amount : "int",
+    Amount: "int",
     Sequence: "int",
     TimeSpec: "int",
     RelativeTimeSpec: "int",
     AbsoluteTimeSpec: "int",
+    typing.List[typing.Tuple[Amount, Contract]]: [[0, [0, "address"]]],
     PubKey: "String",
     Contract: [0, "String"],
     sapio.examples.p2pk.PayToSegwitAddress: "Address",
@@ -27,52 +29,72 @@ placeholder_hint = {
 id = lambda x: x
 
 conversion_functions = {}
+
+
 def register(type_):
     def deco(f):
         conversion_functions[type_] = f
         return f
+
     return deco
 
 
 @register(PubKey)
-def convert(arg: PubKey,ctx):
+def convert(arg: PubKey, ctx):
     return bytes(arg, 'utf-8')
+
+
+@register(typing.List[typing.Tuple[Amount, Contract]])
+def convert(arg, ctx):
+    ret =  [(convert_amount(Amount(a), ctx), convert_contract(b, ctx)) for (a, b) in arg]
+    print(ret)
+    return ret
+
+
 @register(Contract)
-def convert(arg: Contract,ctx):
+def convert_contract(arg: Contract, ctx):
     if arg[1] in ctx.compilation_cache:
         return ctx.compilation_cache[arg[1]]
     return sapio.examples.p2pk.PayToSegwitAddress(amount=arg[0], address=arg[1])
 
+
 @register(sapio.examples.p2pk.PayToSegwitAddress)
-def convert(arg: Contract,ctx):
+def convert(arg: Contract, ctx):
     if arg in ctx.compilation_cache:
         return ctx.compilation_cache[arg]
     return sapio.examples.p2pk.PayToSegwitAddress(amount=0, address=arg)
+
 
 @register(Sequence)
 @register(RelativeTimeSpec)
 @register(TimeSpec)
 def convert(arg: Sequence, ctx):
     return (RelativeTimeSpec(Sequence(arg)))
+
+
 @register(Amount)
-@register(Sequence)
 @register(int)
-def id(x, ctx):
+def convert_amount(x, ctx):
     return x
 
+
 DEBUG = True
+
+
 class CompilerWebSocket(tornado.websocket.WebSocketHandler):
     contracts: Dict[str, Type[Contract]] = {}
-    menu: Dict[str, Dict[str, str]]= {}
-    conv: Dict[str, Dict[str, Callable[[Any], Any]]]= {}
-    cached :str = None
-    compilation_cache : Dict[str, Contract] = None
+    menu: Dict[str, Dict[str, str]] = {}
+    conv: Dict[str, Dict[str, Callable[[Any], Any]]] = {}
+    cached: str = None
+    compilation_cache: Dict[str, Contract] = None
+
     def open(self):
         if self.cached is None:
             print(self.menu)
-            cached = json.dumps({"type": "menu", "content":self.menu})
+            cached = json.dumps({"type": "menu", "content": self.menu})
         self.write_message(cached)
         self.compilation_cache = {}
+
     """
     Start/End Protocol:
     # Server enumerates available Contract Blocks and their arguments
@@ -119,6 +141,7 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
         
     
     """
+
     def on_message(self, message):
         print()
         print("#####################")
@@ -148,15 +171,20 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
                 amount = contract.amount_range[1]
                 self.compilation_cache[addr] = contract
                 txns, metadata = contract.bind(COutPoint())
-                data = [{'hex':tx.serialize_with_witness().hex(), **meta} for (tx, meta) in zip(txns, metadata)]
+                data = [{'hex': tx.serialize_with_witness().hex(), **meta} for (tx, meta) in zip(txns, metadata)]
                 self.write_message(
-                    {"type": "created", 'content': [int(amount), addr, {'program':data}]}
+                    {"type": "created", 'content': [int(amount), addr, {'program': data}]}
                 )
-        elif request_type == "bind": raise NotImplementedError('Pending!')
-        elif request_type == "load_auth": raise NotImplementedError('Pending!')
-        elif request_type == "export_auth": raise NotImplementedError('Pending!')
-        elif request_type == "export": raise NotImplementedError('Pending!')
-        elif request_type == "save": raise NotImplementedError('Pending!')
+        elif request_type == "bind":
+            raise NotImplementedError('Pending!')
+        elif request_type == "load_auth":
+            raise NotImplementedError('Pending!')
+        elif request_type == "export_auth":
+            raise NotImplementedError('Pending!')
+        elif request_type == "export":
+            raise NotImplementedError('Pending!')
+        elif request_type == "save":
+            raise NotImplementedError('Pending!')
         elif request_type == "close":
             self.close()
         else:
@@ -167,13 +195,14 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
 
     def on_close(self):
         print("WebSocket closed")
+
     @classmethod
-    def add_contract(cls, name:str, contract:Type[Contract]):
+    def add_contract(cls, name: str, contract: Type[Contract]):
         assert name not in cls.menu
         hints = typing.get_type_hints(contract.Fields)
         menu = {}
         conv = {}
-        for key,hint in hints.items():
+        for key, hint in hints.items():
             if hint == sapio.examples.subscription.Hide:
                 continue
             if hint in placeholder_hint:
@@ -199,10 +228,12 @@ def make_app():
         (r"/", CompilerWebSocket),
     ], autoreload=True)
 
+
 if __name__ == "__main__":
     CompilerWebSocket.add_contract("Pay to Public Key", sapio.examples.p2pk.PayToPubKey)
     CompilerWebSocket.add_contract("Vault", sapio.examples.basic_vault.Vault2)
     CompilerWebSocket.add_contract("Subscription", sapio.examples.subscription.auto_pay)
+    CompilerWebSocket.add_contract("TreePay", TreePay)
     app = make_app()
     app.listen(8888)
     tornado.ioloop.IOLoop.current().start()
