@@ -46,7 +46,4 @@ class Contract(BindableContract, metaclass=MetaContract):
     class Fields:
         pass
 
-    class MetaData:
-        color = lambda self: "brown"
-        label = lambda self: "generic"
 

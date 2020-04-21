@@ -15,6 +15,9 @@ class BindableContract:
     witness_manager: WitnessManager
     specific_transactions: List[typing.Tuple[CTVHash, TransactionTemplate]]
     amount_range: Tuple[Amount, Amount]
+    class MetaData:
+        color = lambda self: "brown"
+        label = lambda self: "generic"
     @final
     def bind(self, out: COutPoint):
         # todo: Note that if a contract has any secret state, it may be a hack

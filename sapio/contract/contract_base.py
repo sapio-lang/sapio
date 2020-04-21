@@ -1,3 +1,4 @@
+from __future__ import annotations
 import typing
 from typing import Dict, Any, List, Optional, Tuple, Union, Generator, Iterable
 
@@ -9,6 +10,7 @@ from sapio.script.clause import Clause, UnsatisfiableClause, SatisfiedClause, Ch
 from sapio.script.compiler import ProgramBuilder
 from sapio.script.variable import AssignedVariable
 from sapio.script.witnessmanager import WitnessManager, CTVHash
+import sapio.contract.contract
 
 
 class ContractBase:
@@ -24,7 +26,7 @@ class ContractBase:
         self.unlock_functions: List[UnlockFunction] = unlock_functions
         self.assertions: List[CheckFunction] = assertions
 
-    def _setup_call(self, obj, kwargs: Dict[str, Any]):
+    def _setup_call(self, obj:sapio.contract.contract.Contract, kwargs: Dict[str, Any]):
         if kwargs.keys() != self.fields.keys():
             for key in self.fields:
                 if key not in kwargs:
@@ -43,7 +45,7 @@ class ContractBase:
 
     def __call__(self, obj, **kwargs: Dict[str, Any]):
         self._setup_call(obj, kwargs)
-        obj.amount_range : Tuple[Amount, Amount] = (Sats(21_000_000 * 100_000_000), Sats(0))
+        obj.amount_range = (Sats(21_000_000 * 100_000_000), Sats(0))
         obj.specific_transactions = []
         if self.pay_functions is not None:
             amt, addr = self.pay_functions(obj)
@@ -55,27 +57,27 @@ class ContractBase:
 
 
         # Check all assertions. Assertions should not return anything.
-        for func in self.assertions: func(obj)
+        for assert_func in self.assertions: assert_func(obj)
 
         # Get the value from all paths.
         # Paths return a TransactionTemplate object, or list, or iterable.
         paths: Clause = UnsatisfiableClause()
-        for func in self.path_functions:
+        for path_func in self.path_functions:
             T = Union[typing.Iterator[TransactionTemplate], TransactionTemplate]
-            ret: T = func(obj)
+            ret: T = path_func(obj)
             transaction_templates: typing.Iterator[TransactionTemplate]
             if isinstance(ret, TransactionTemplate):
                 # Wrap value for uniform handling below
-                transaction_templates = [ret]
+                transaction_templates = iter([ret])
             elif isinstance(ret, (Generator, Iterable)):
                 transaction_templates = ret
             else:
                 raise ValueError("Invalid Return Type", ret)
             unlock_clause: Clause = SatisfiedClause()
-            if func.unlock_with is not None:
-                unlock_clause = func.unlock_with(obj)
+            if path_func.unlock_with is not None:
+                unlock_clause = path_func.unlock_with(obj)
             for template in transaction_templates:
-                template.label = func.__name__
+                template.label = path_func.__name__
                 amount = template.total_amount()
                 obj.amount_range = (min(obj.amount_range[0], amount),
                                      max(obj.amount_range[1], amount))
@@ -87,8 +89,8 @@ class ContractBase:
                 ctv = CheckTemplateVerifyClause(AssignedVariable(ctv_hash, ctv_hash))
                 paths |= (ctv & unlock_clause)
                 obj.specific_transactions.append((CTVHash(ctv_hash), template))
-        for func in self.unlock_functions:
-            paths |= func(obj)
+        for unlock_func in self.unlock_functions:
+            paths |= unlock_func(obj)
 
         if paths is UnsatisfiableClause:
             raise AssertionError("Must Have at least one spending condition")
