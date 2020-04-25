@@ -23,6 +23,6 @@ class MetaContract(HasFinal):
         return super(MetaContract, mcl).__new__(mcl, name, (MetaBase,), nmspc)
 
 
-class Contract(metaclass=MetaContract):
+class Contract(BindableContract, metaclass=MetaContract):
     class Fields:
         pass

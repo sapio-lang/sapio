@@ -1,6 +1,6 @@
 from __future__ import annotations
 import typing
-from typing import Dict, Any, List, Optional, Tuple, Union, Generator, Iterable, Generic, TypeVar
+from typing import Dict, Any, List, Optional, Tuple, Union, Generator, Iterable, Generic, TypeVar, Type
 
 from sapio.bitcoinlib.static_types import Amount, Sats
 from .txtemplate import  TransactionTemplate
@@ -23,7 +23,7 @@ class ContractBase(Generic[T]):
             assert len(path_functions) == 0
             assert len(unlock_functions) == 0
         self.fields_obj = fields
-        self.all_fields: Dict[str, Any] = typing.get_type_hints(self.fields_obj)
+        self.all_fields: Dict[str, Type] = typing.get_type_hints(self.fields_obj)
         self.path_functions: List[PathFunction] = path_functions
         self.pay_functions: Optional[PayAddress] = pay_functions[0] if len(pay_functions) else None
         self.unlock_functions: List[UnlockFunction] = unlock_functions
@@ -38,13 +38,14 @@ class ContractBase(Generic[T]):
             for key in kwargs:
                 if key not in self.all_fields:
                     raise ExtraArgumentError("Extra Argument: Key '{}' not in {}".format(key, self.all_fields.keys()))
-        setattr(obj, 'fields', self.fields_obj())
         for key in kwargs:
             # todo: type check here?
             if isinstance(kwargs[key], AssignedVariable):
-                setattr(obj, key, kwargs[key])
+                setattr(obj.fields, key, kwargs[key])
             else:
-                setattr(obj, key, AssignedVariable(kwargs[key], key))
+                setattr(obj.fields, key, AssignedVariable(kwargs[key], key))
+    def make_new_fields(self):
+        return self.fields_obj()
 
     def __call__(self, obj:sapio.contract.bindable_contract.BindableContract[T], kwargs: Dict[str, Any]):
         self._setup_call(obj, kwargs)

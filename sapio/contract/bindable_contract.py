@@ -1,7 +1,7 @@
 from __future__ import annotations
 import copy
 import typing
-from typing import Dict, Generic, List, Tuple, TypeVar, Any, Callable
+from typing import Dict, Generic, List, Tuple, TypeVar, Any, Callable, Optional
 
 from sapio.bitcoinlib.messages import COutPoint, CTxInWitness, CTxWitness
 from sapio.bitcoinlib.static_types import Amount
@@ -10,18 +10,18 @@ from sapio.script.witnessmanager import CTVHash, WitnessManager
 from sapio.script.variable import Variable
 from .decorators import HasFinal, final
 from .txtemplate import TransactionTemplate
+from sapio.contract.contract_base import ContractBase
 
 T = TypeVar("T")
 class BindableContract(Generic[T], metaclass=HasFinal):
-    Self = TypeVar("Self", bound="BindableContract[T]") # pylint: disable=unsubscriptable-object, undefined-variable
     # These slots will be extended later on
-    __slots__ = ('amount_range', 'specific_transactions', 'witness_manager', 'fields')
+    __slots__ = ('amount_range', 'specific_transactions', 'witness_manager', 'fields', 'is_initialized', 'init_class')
     witness_manager: WitnessManager
     specific_transactions: List[typing.Tuple[CTVHash, TransactionTemplate]]
     amount_range: Tuple[Amount, Amount]
     fields: T
-    is_initialized: bool = False
-    init_class: Callable[[Self, Dict[str, Any]], None]
+    is_initialized: bool
+    init_class: ContractBase[T]
 
     class MetaData:
         color = lambda self: "brown"
@@ -29,13 +29,19 @@ class BindableContract(Generic[T], metaclass=HasFinal):
     def __getattr__(self, attr) -> Variable:
         return self.fields.__getattribute__(attr)
     def __setattr__(self, attr, v):
-        if self.is_initialized and hasattr(self.fields, attr):
+        if attr in self.__slots__:
+            super().__setattr__(attr, v)
+        elif not self.is_initialized:
+            if not hasattr(self, attr):
+                raise AssertionError("No Known field for "+attr+" = "+repr(v))
+            # TODO Type Check
             setattr(self.fields, attr, v)
         else:
-            super().__setattr__(attr, v)
-    def __init__(self: Self, **kwargs: Dict[str, Any]):
-        # will read is_initialized from Class
-        # call through class for mypy
+            raise AssertionError("Assigning a value to a field is probably a mistake! ", attr)
+
+    def __init__(self, **kwargs: Dict[str, Any]):
+        self.is_initialized = False
+        self.fields: T = self.__class__.init_class.make_new_fields()
         self.__class__.init_class(self, kwargs)
         self.is_initialized = True
 
