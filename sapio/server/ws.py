@@ -1,6 +1,6 @@
 import json
 import typing
-from typing import Dict, Type, Callable, Any
+from typing import Dict, Type, Callable, Any, Union, Tuple, Optional
 
 import tornado
 import tornado.websocket
@@ -16,6 +16,8 @@ from sapio.contract.contract import Contract
 from sapio.examples.tree_pay import TreePay
 from sapio.examples.undo_send import UndoSend2
 from sapio.script.clause import TimeSpec, RelativeTimeSpec, AbsoluteTimeSpec, Days
+
+from sapio.contract.bindable_contract import BindableContract
 
 placeholder_hint = {
     Amount: "int",
@@ -48,21 +50,27 @@ def convert(arg: PubKey, ctx):
 
 
 @register(typing.List[typing.Tuple[Amount, Contract]])
-def convert(arg, ctx):
+def convert_dest(arg, ctx):
     ret = [(convert_amount(Amount(a), ctx), convert_contract(b, ctx)) for (a, b) in arg]
     print(ret)
     return ret
 
 
-@register(Contract)
-def convert_contract(arg: Contract, ctx):
+@register(Tuple[Amount, str])
+def convert_contract(arg: Tuple[Amount, str], ctx):
     if arg[1] in ctx.compilation_cache:
         return ctx.compilation_cache[arg[1]]
     return sapio.examples.p2pk.PayToSegwitAddress(amount=arg[0], address=arg[1])
 
+@register(Contract)
+def convert_contract_object(arg: Contract, ctx):
+    if arg.witness_manager.get_p2wsh_address() in ctx.compilation_cache:
+        return ctx.compilation_cache[arg[1]]
+    raise AssertionError("No Known Contract by that name")
+
 
 @register(sapio.examples.p2pk.PayToSegwitAddress)
-def convert(arg: Contract, ctx):
+def convert_p2swa(arg: Contract, ctx):
     if arg in ctx.compilation_cache:
         return ctx.compilation_cache[arg]
     return sapio.examples.p2pk.PayToSegwitAddress(amount=0, address=arg)
@@ -71,7 +79,7 @@ def convert(arg: Contract, ctx):
 @register(Sequence)
 @register(RelativeTimeSpec)
 @register(TimeSpec)
-def convert(arg: Sequence, ctx):
+def convert_time(arg: Sequence, ctx):
     return (RelativeTimeSpec(Sequence(arg)))
 
 
@@ -88,12 +96,12 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
     contracts: Dict[str, Type[Contract]] = {}
     menu: Dict[str, Dict[str, str]] = {}
     conv: Dict[str, Dict[str, Callable[[Any], Any]]] = {}
-    cached: str = None
-    compilation_cache: Dict[str, Contract] = None
+    cached: Optional[str] = None
+    compilation_cache: Dict[str, BindableContract] = None
     example_message: Any = None
 
     @classmethod
-    def set_example(cls, example: Contract):
+    def set_example(cls, example: BindableContract):
         txns, metadata = example.bind(COutPoint())
         addr = example.witness_manager.get_p2wsh_address()
         amount = example.amount_range[1]
@@ -211,14 +219,12 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
         print("WebSocket closed")
 
     @classmethod
-    def add_contract(cls, name: str, contract: Type[Contract]):
+    def add_contract(cls, name: str, contract: Union[Type[BindableContract], Callable[[Any], BindableContract]]):
         assert name not in cls.menu
         hints = typing.get_type_hints(contract.Fields)
         menu = {}
         conv = {}
         for key, hint in hints.items():
-            if hint == sapio.examples.subscription.Hide:
-                continue
             if hint in placeholder_hint:
                 menu[key] = placeholder_hint[hint]
                 conv[key] = conversion_functions[hint]
@@ -261,7 +267,7 @@ if __name__ == "__main__":
     # watchtower_key: PubKey
     # return_timeout: RelativeTimeSpec
 
-    N_EMPLOYEES = 5
+    N_EMPLOYEES = 2
     generate_address = lambda: sapio.examples.p2pk.PayToSegwitAddress(amount=0, address=segwit_addr.encode('bcrt', 0,
                                                                                                            os.urandom(
                                                                                                                32)))
@@ -271,20 +277,20 @@ if __name__ == "__main__":
 
     now = datetime.datetime.now()
     day = datetime.timedelta(1)
-    DURATION = 5
+    DURATION = 2
     employee_payments = [(perdiem * DURATION,
                           sapio.examples.subscription.CancellableSubscription(amount=perdiem * DURATION,
                                                                               recipient=address, schedule=[
                                   (AbsoluteTimeSpec.from_date(now + (1 + x) * day), perdiem) for x in range(DURATION)],
                                                                               return_address=generate_address(),
                                                                               watchtower_key=b"",
-                                                                              return_timeout=Days(2))) for
+                                                                              return_timeout=Days(1))) for
                          (perdiem, address) in employee_addresses]
     tree1 = TreePay(payments=employee_payments, radix=2)
     sum_pay = [((amt*DURATION),addr) for (amt, addr) in employee_addresses]
     tree2 = TreePay(payments=sum_pay, radix=2)
     total_amount = sum(x for (x, _) in sum_pay)
-    example = UndoSend2(from_contract=tree2, to_contract=tree1, amount=total_amount, timeout=Days(10))
+    example = UndoSend2(to_contract=tree2, from_contract=tree1, amount=total_amount, timeout=Days(10))
 
     CompilerWebSocket.set_example(example)
     print(CompilerWebSocket.example_message)
