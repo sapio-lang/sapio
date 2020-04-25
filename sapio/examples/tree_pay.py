@@ -9,7 +9,6 @@ from sapio.script.variable import AssignedVariable
 
 def segment_by_radix(L, n):
     size = max(len(L) // n, n)
-    print(size, n, len(L))
     for i in range(0, len(L), size):
         if i+size+size > len(L):
             yield L[i:]
