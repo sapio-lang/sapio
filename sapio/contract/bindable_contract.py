@@ -13,7 +13,7 @@ from .txtemplate import TransactionTemplate
 
 T = TypeVar("T")
 class BindableContract(Generic[T], metaclass=HasFinal):
-    Self = TypeVar("Self", bound=BindableContract[T])
+    Self = TypeVar("Self", bound=BindableContract[T]) # pylint: disable=unsubscriptable-object, undefined-variable
     # These slots will be extended later on
     __slots__ = ('amount_range', 'specific_transactions', 'witness_manager', 'fields')
     witness_manager: WitnessManager
