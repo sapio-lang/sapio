@@ -1,24 +1,43 @@
+from __future__ import annotations
 import copy
 import typing
-from typing import List, Tuple
+from typing import Dict, Generic, List, Tuple, TypeVar, Any, Callable
 
-from sapio.bitcoinlib.messages import COutPoint, CTxWitness, CTxInWitness
+from sapio.bitcoinlib.messages import COutPoint, CTxInWitness, CTxWitness
 from sapio.bitcoinlib.static_types import Amount
-from sapio.script.witnessmanager import WitnessManager, CTVHash
-from .decorators import final, HasFinal
+from sapio.script.witnessmanager import CTVHash, WitnessManager
+
+from sapio.script.variable import Variable
+from .decorators import HasFinal, final
 from .txtemplate import TransactionTemplate
 
-
-class BindableContract(metaclass=HasFinal):
+T = TypeVar("T")
+Self = TypeVar("Self", bound=BindableContract)
+class BindableContract(Generic[T], metaclass=HasFinal):
     # These slots will be extended later on
-    __slots__ = ('amount_range', 'specific_transactions', 'witness_manager')
+    __slots__ = ('amount_range', 'specific_transactions', 'witness_manager', 'fields')
     witness_manager: WitnessManager
     specific_transactions: List[typing.Tuple[CTVHash, TransactionTemplate]]
     amount_range: Tuple[Amount, Amount]
+    fields: T
+    is_initialized: bool = False
+    init_class: Callable[[Self, Dict[str, Any]], None]
 
     class MetaData:
         color = lambda self: "brown"
         label = lambda self: "generic"
+    def __getattr__(self, attr) -> Variable:
+        return self.fields.__getattribute__(attr)
+    def __setattr__(self, attr, v):
+        if self.is_initialized and hasattr(self.fields, attr):
+            setattr(self.fields, attr, v)
+        else:
+            super().__setattr__(attr, v)
+    def __init__(self: Self, **kwargs: Dict[str, Any]):
+        # will read is_initialized from Class
+        # call through class for mypy
+        self.__class__.init_class(self, kwargs)
+        self.is_initialized = True
 
     @final
     def to_json(self):

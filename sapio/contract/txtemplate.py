@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List, Tuple
 
-from numpy import uint32
+from sapio.bitcoinlib.static_types import uint32
 
 import sapio.contract
 from sapio.bitcoinlib.messages import CTransaction, CTxIn, CTxOut, COutPoint

@@ -1,6 +1,6 @@
 from __future__ import annotations
 import typing
-from typing import Dict, Any, List, Optional, Tuple, Union, Generator, Iterable
+from typing import Dict, Any, List, Optional, Tuple, Union, Generator, Iterable, Generic, TypeVar
 
 from sapio.bitcoinlib.static_types import Amount, Sats
 from .txtemplate import  TransactionTemplate
@@ -12,30 +12,33 @@ from sapio.script.variable import AssignedVariable
 from sapio.script.witnessmanager import WitnessManager, CTVHash
 import sapio.contract.contract
 
+import sapio.contract.bindable_contract
 
-class ContractBase:
-    def __init__(self, fields: Dict[str, Any], path_functions: List[PathFunction], pay_functions: List[PayAddress],
+T = TypeVar('T')
+class ContractBase(Generic[T]):
+    def __init__(self, fields: type, path_functions: List[PathFunction], pay_functions: List[PayAddress],
                  unlock_functions: List[UnlockFunction], assertions: List[CheckFunction]):
         if len(pay_functions):
             assert len(pay_functions) == 1
             assert len(path_functions) == 0
             assert len(unlock_functions) == 0
-        self.fields = fields
+        self.fields_obj = fields
+        self.all_fields: Dict[str, Any] = typing.get_type_hints(self.fields_obj)
         self.path_functions: List[PathFunction] = path_functions
         self.pay_functions: Optional[PayAddress] = pay_functions[0] if len(pay_functions) else None
         self.unlock_functions: List[UnlockFunction] = unlock_functions
         self.assertions: List[CheckFunction] = assertions
 
-    def _setup_call(self, obj:sapio.contract.contract.Contract, kwargs: Dict[str, Any]):
-        if kwargs.keys() != self.fields.keys():
-            for key in self.fields:
+    def _setup_call(self, obj:sapio.contract.bindable_contract.BindableContract[T], kwargs: Dict[str, Any]):
+        if kwargs.keys() != self.all_fields.keys():
+            for key in self.all_fields:
                 if key not in kwargs:
                     raise MissingArgumentError(
                         "Missing Argument: Keyword arg {} missing from {}".format(key, kwargs.keys()))
             for key in kwargs:
-                if key not in self.fields:
-                    raise ExtraArgumentError("Extra Argument: Key '{}' not in {}".format(key, self.fields.keys()))
-
+                if key not in self.all_fields:
+                    raise ExtraArgumentError("Extra Argument: Key '{}' not in {}".format(key, self.all_fields.keys()))
+        setattr(obj, 'fields', self.fields_obj())
         for key in kwargs:
             # todo: type check here?
             if isinstance(kwargs[key], AssignedVariable):
@@ -43,14 +46,14 @@ class ContractBase:
             else:
                 setattr(obj, key, AssignedVariable(kwargs[key], key))
 
-    def __call__(self, obj, **kwargs: Dict[str, Any]):
+    def __call__(self, obj:sapio.contract.bindable_contract.BindableContract[T], kwargs: Dict[str, Any]):
         self._setup_call(obj, kwargs)
         obj.amount_range = (Sats(21_000_000 * 100_000_000), Sats(0))
         obj.specific_transactions = []
         if self.pay_functions is not None:
             amt, addr = self.pay_functions(obj)
             # TODO: Something more robust here...
-            obj.amount_range = (amt, 0)
+            obj.amount_range = (amt, Amount(0))
             obj.witness_manager = WitnessManager()
             obj.witness_manager.override_program = addr
             return

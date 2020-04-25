@@ -1,9 +1,10 @@
 from __future__ import annotations
-from typing import TypeVar, Any, Union, Callable, List
+from typing import TypeVar, Any, Union, Callable, List, Tuple
 import sapio
 import sapio.contract
 from sapio.script.clause import Clause
 
+from sapio.bitcoinlib.static_types import Amount
 T = TypeVar("T")
 T2 = TypeVar("T2")
 
@@ -46,7 +47,7 @@ def unlock(s: Callable[[Any], Clause]):
 class PayAddress():
     def __init__(self, address):
         self.address = address
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, **kwargs) -> Tuple[Amount, Amount]:
         return self.address(*args, **kwargs)
 
 
