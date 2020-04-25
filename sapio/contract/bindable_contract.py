@@ -7,7 +7,7 @@ from sapio.bitcoinlib.messages import COutPoint, CTxInWitness, CTxWitness
 from sapio.bitcoinlib.static_types import Amount
 from sapio.script.witnessmanager import CTVHash, WitnessManager
 
-from sapio.script.variable import Variable
+from sapio.script.variable import AssignedVariable
 from .decorators import HasFinal, final
 from .txtemplate import TransactionTemplate
 from sapio.contract.contract_base import ContractBase
@@ -26,7 +26,7 @@ class BindableContract(Generic[T], metaclass=HasFinal):
     class MetaData:
         color = lambda self: "brown"
         label = lambda self: "generic"
-    def __getattr__(self, attr) -> Variable:
+    def __getattr__(self, attr) -> AssignedVariable:
         return self.fields.__getattribute__(attr)
     def __setattr__(self, attr, v):
         if attr in self.__slots__:
