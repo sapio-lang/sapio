@@ -47,7 +47,7 @@ def unlock(s: Callable[[Any], Clause]):
 class PayAddress():
     def __init__(self, address):
         self.address = address
-    def __call__(self, *args, **kwargs) -> Tuple[Amount, Amount]:
+    def __call__(self, *args, **kwargs) -> Tuple[Amount, str]:
         return self.address(*args, **kwargs)
 
 

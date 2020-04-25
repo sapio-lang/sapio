@@ -12,7 +12,7 @@ import hashlib
 import struct
 from typing import Dict, List
 
-from numpy import int64, iinfo
+from .static_types import min_int64, max_int64
 
 from .hash_functions import sha256
 from .bignum import bn2vch
@@ -365,8 +365,6 @@ class CScriptTruncatedPushDataError(CScriptInvalidError):
 
 
 # This is used, eg, for blockchain heights in coinbase scripts (bip34)
-min_int64 = iinfo(int64).min
-max_int64 = iinfo(int64).max
 class CScriptNum:
     __slots__ = ("value",)
 

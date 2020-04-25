@@ -1,9 +1,9 @@
 from __future__ import annotations
 from typing import Union
 
-from numpy import uint32
 
 from sapio.bitcoinlib.script import *
+from sapio.bitcoinlib.static_types import max_uint32
 
 class AllowedOp:
     # Control Flow
@@ -146,7 +146,7 @@ def handle(op:Union[CScriptOp, int, bytes], stack: List[bytes], handle_branch: C
 
 # Implementation Based on Bitcoin Core Condition Stack, MIT License
 class ConditionStack:
-    NO_FALSE = iinfo(uint32).max
+    NO_FALSE = max_uint32
     def __init__(self):
         self.stack_size = 0
         self.first_false_position = ConditionStack.NO_FALSE
