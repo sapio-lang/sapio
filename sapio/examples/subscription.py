@@ -93,25 +93,24 @@ class CancelContest(Contract):
         tx.add_output(amount, return_address)
         return tx
 
-class Hide: pass
 
-class auto_fields(CancellableSubscription.Fields):
-    period: int
-    per_time: Amount
-    times: int
-    schedule: Hide
-    amount: Hide
+class auto_pay:
+    class Fields:
+        period: int
+        per_time: Amount
+        times: int
+        recipient: PayToSegwitAddress
+        return_address: PayToSegwitAddress
+        watchtower_key: PubKey
+        return_timeout: RelativeTimeSpec
 
 
-schedule: Hide
-
-
-def auto_pay(**kwargs):
-    period = kwargs.pop('period')
-    times = kwargs.pop('times')
-    per_time = kwargs.pop('per_time')
-    schedule = [(AbsoluteTimeSpec.at_height((t+1)*period), per_time) for t in range(times)]
-    amount = per_time*times
-    return CancellableSubscription(schedule=schedule, amount=amount, **kwargs)
-auto_pay.Fields = auto_fields
+    @staticmethod
+    def __call__(**kwargs) -> CancellableSubscription:
+        period = kwargs.pop('period')
+        times = kwargs.pop('times')
+        per_time = kwargs.pop('per_time')
+        kwargs['schedule'] = [(AbsoluteTimeSpec.at_height((t+1)*period), per_time) for t in range(times)]
+        kwargs['amount'] = per_time*times
+        return CancellableSubscription(**kwargs)
 
