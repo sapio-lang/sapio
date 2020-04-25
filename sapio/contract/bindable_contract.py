@@ -39,7 +39,7 @@ class BindableContract(Generic[T], metaclass=HasFinal):
         else:
             raise AssertionError("Assigning a value to a field is probably a mistake! ", attr)
 
-    def __init__(self, **kwargs: Dict[str, Any]):
+    def __init__(self, **kwargs: Any):
         self.is_initialized = False
         self.fields: T = self.__class__.init_class.make_new_fields()
         self.__class__.init_class(self, kwargs)
