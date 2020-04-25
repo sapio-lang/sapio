@@ -12,8 +12,8 @@ from .decorators import HasFinal, final
 from .txtemplate import TransactionTemplate
 
 T = TypeVar("T")
-Self = TypeVar("Self", bound=BindableContract)
 class BindableContract(Generic[T], metaclass=HasFinal):
+    Self = TypeVar("Self", bound=BindableContract[T])
     # These slots will be extended later on
     __slots__ = ('amount_range', 'specific_transactions', 'witness_manager', 'fields')
     witness_manager: WitnessManager
