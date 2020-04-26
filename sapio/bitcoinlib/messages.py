@@ -18,6 +18,7 @@ ser_*, deser_*: functions that handle serialization/deserialization.
 Classes use __slots__ to ensure extraneous attributes aren't accidentally added
 by tests, compromising their intended effect.
 """
+from __future__ import annotations
 import copy
 import random
 import socket
@@ -25,7 +26,7 @@ import struct
 import time
 from codecs import encode
 from io import BytesIO
-from typing import List
+from typing import List, Optional
 
 import sapio.bitcoinlib.hash_functions
 from .hash_functions import sha256, hash256
