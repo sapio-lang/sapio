@@ -1,11 +1,26 @@
-from .ws import *
+import os
+
+import tornado
+
+import sapio
+import sapio.examples.basic_vault
+import sapio.examples.p2pk
+import sapio.examples.subscription
+from sapio.bitcoinlib import segwit_addr
+from sapio.examples.tree_pay import TreePay
+from sapio.examples.undo_send import UndoSend2
+from sapio.script.clause import (AbsoluteTimeSpec, Days, RelativeTimeSpec,
+                                 TimeSpec)
+
+from .ws import CompilerWebSocket
+
+
 def make_app():
     return tornado.web.Application([
         (r"/", CompilerWebSocket),
     ], autoreload=True)
 
 
-import os
 
 if __name__ == "__main__":
     CompilerWebSocket.add_contract("Pay to Public Key", sapio.examples.p2pk.PayToPubKey)
@@ -24,9 +39,9 @@ if __name__ == "__main__":
     # return_timeout: RelativeTimeSpec
 
     N_EMPLOYEES = 2
-    generate_address = lambda: sapio.examples.p2pk.PayToSegwitAddress(amount=0, address=segwit_addr.encode('bcrt', 0,
-                                                                                                           os.urandom(
-                                                                                                               32)))
+    def generate_address():
+        return sapio.examples.p2pk.PayToSegwitAddress(amount=0,
+                                                      address=segwit_addr.encode('bcrt', 0, os.urandom( 32)))
     employee_addresses = [(1, generate_address()) for _ in range(N_EMPLOYEES)]
 
     import datetime

@@ -1,26 +1,18 @@
 import json
 import typing
-from typing import Dict, Type, Callable, Any, Union, Tuple, Optional
+from typing import Any, Callable, Dict, Optional, Tuple, Type, Union
 
 import tornado
 import tornado.websocket
 
 import sapio
-import sapio.examples.basic_vault
-import sapio.examples.p2pk
-import sapio.examples.subscription
 from sapio.bitcoinlib import segwit_addr
 from sapio.bitcoinlib.messages import COutPoint
-from sapio.bitcoinlib.static_types import Amount, Sequence, PubKey
-from sapio.contract.contract import Contract
-from sapio.examples.tree_pay import TreePay
-from sapio.examples.undo_send import UndoSend2
-from sapio.script.clause import TimeSpec, RelativeTimeSpec, AbsoluteTimeSpec, Days
-
+from sapio.bitcoinlib.static_types import Amount, PubKey, Sequence
 from sapio.contract.bindable_contract import BindableContract
-from .api_serialization import *
+from sapio.contract.contract import Contract
 
-
+from .api_serialization import conversion_functions, placeholder_hint
 
 DEBUG = True
 
@@ -174,4 +166,3 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
         if origin in allowed:
             print("allowed", origin)
             return 1
-
