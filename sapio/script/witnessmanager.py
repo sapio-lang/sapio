@@ -27,7 +27,7 @@ class WitnessTemplate:
 
 
 class WitnessManager:
-    def __init__(self):
+    def __init__(self) -> None:
         self.override_program: str = None
         self.program: CScript = CScript()
         self.witnesses : Dict[Any, WitnessTemplate] = {}

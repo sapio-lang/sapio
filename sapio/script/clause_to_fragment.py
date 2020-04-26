@@ -10,6 +10,10 @@ from functools import singledispatchmethod
 from typing import TYPE_CHECKING, Any, ClassVar
 
 class FragmentCompiler:
+    def __call__(self, arg: Clause, witness: WitnessTemplate) -> CScript:
+        if TYPE_CHECKING:
+            assert callable(self._compile)
+        return self._compile(arg, witness)
 
     @singledispatchmethod
     def _compile(self, arg: Clause, witness: WitnessTemplate) -> CScript:

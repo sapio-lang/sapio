@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, TYPE_CHECKING
 
 from sapio.bitcoinlib.script import CScript
 from sapio.script.clause import Clause, UnsatisfiableClause, DNFClause, DNF
@@ -10,19 +10,20 @@ from sapio.script.simplify import DNFSimplification
 from sapio.script.witnessmanager import WitnessTemplate, WitnessManager
 
 
+
 class ClauseToDNF:
     def compile_cnf(self, clause: Clause) -> DNF:
         while True:
             normalizer = NormalizationPass()
-            clause = normalizer.normalize(clause)
+            clause = normalizer(clause)
             if not normalizer.took_action:
                 break
-        return FlattenPass().flatten(clause)
+        return FlattenPass()(clause)
 
 
 class DNFClauseCompiler:
     def compile(self, cl: List[DNFClause], w: WitnessTemplate) -> CScript:
-        return CScript([FragmentCompiler()._compile(frag, w) for frag in cl])
+        return CScript([FragmentCompiler()(frag, w) for frag in cl])
 
 
 class ProgramBuilder:

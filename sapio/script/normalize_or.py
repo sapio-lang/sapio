@@ -18,6 +18,12 @@ class NormalizationPass:
 
     def __init__(self) -> None:
         self.took_action: bool = False
+    def __call__(self, arg:Clause) -> Clause:
+        if TYPE_CHECKING:
+            # TODO: Required for singledispatchmethod to typecheck...
+            assert callable(self.normalize)
+        return self.normalize(arg)
+
 
     # Normalize Bubbles up all the OR clauses into a CNF
     @singledispatchmethod
