@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TypeVar, Any, Union, Callable, List, Tuple, Iterable, Generic, Optional
+from typing import TypeVar, Any, Union, Callable, List, Tuple, Iterator, Generic, Optional
 from .txtemplate import TransactionTemplate
 from sapio.script.clause import Clause, SatisfiedClause
 
@@ -9,9 +9,7 @@ T = TypeVar("T")
 T2 = TypeVar("T2")
 
 
-PathReturnType = Union[
-    TransactionTemplate, List[TransactionTemplate], Iterable[TransactionTemplate]
-]
+PathReturnType = Union[ TransactionTemplate, Iterator[TransactionTemplate] ]
 PathFunctionType = Callable[[T], PathReturnType]
 
 

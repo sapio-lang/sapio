@@ -2,7 +2,7 @@ from __future__ import annotations
 import typing
 from typing import Dict, Any, List, Optional, Tuple, Union, Generator, Iterable, Generic, TypeVar, Type
 
-from sapio.bitcoinlib.static_types import Amount, Sats
+from sapio.bitcoinlib.static_types import Amount, Hash, Sats
 from .txtemplate import  TransactionTemplate
 from .decorators import PathFunction, PayAddress, UnlockFunction, CheckFunction
 from sapio.contract.errors import MissingArgumentError, ExtraArgumentError
@@ -16,20 +16,20 @@ import sapio.contract.bindable_contract
 
 T = TypeVar('T')
 class ContractBase(Generic[T]):
-    def __init__(self, fields: type, path_functions: List[PathFunction], pay_functions: List[PayAddress],
+    def __init__(self, fields: type, path_functions: List[PathFunction[sapio.contract.bindable_contract.BindableContract[T]]], pay_functions: List[PayAddress],
                  unlock_functions: List[UnlockFunction], assertions: List[CheckFunction]):
         if len(pay_functions):
             assert len(pay_functions) == 1
             assert len(path_functions) == 0
             assert len(unlock_functions) == 0
         self.fields_obj = fields
-        self.all_fields: Dict[str, Type] = typing.get_type_hints(self.fields_obj)
-        self.path_functions: List[PathFunction] = path_functions
+        self.all_fields: Dict[str, Type[Any]] = typing.get_type_hints(self.fields_obj)
+        self.path_functions: List[PathFunction[sapio.contract.bindable_contract.BindableContract[T]]] = path_functions
         self.pay_functions: Optional[PayAddress] = pay_functions[0] if len(pay_functions) else None
         self.unlock_functions: List[UnlockFunction] = unlock_functions
         self.assertions: List[CheckFunction] = assertions
 
-    def _setup_call(self, obj:sapio.contract.bindable_contract.BindableContract[T], kwargs: Dict[str, Any]):
+    def _setup_call(self, obj:sapio.contract.bindable_contract.BindableContract[T], kwargs: Dict[str, Any]) -> None:
         if kwargs.keys() != self.all_fields.keys():
             for key in self.all_fields:
                 if key not in kwargs:
@@ -44,10 +44,10 @@ class ContractBase(Generic[T]):
                 setattr(obj.fields, key, kwargs[key])
             else:
                 setattr(obj.fields, key, AssignedVariable(kwargs[key], key))
-    def make_new_fields(self):
+    def make_new_fields(self) -> Any:
         return self.fields_obj()
 
-    def __call__(self, obj:sapio.contract.bindable_contract.BindableContract[T], kwargs: Dict[str, Any]):
+    def __call__(self, obj:sapio.contract.bindable_contract.BindableContract[T], kwargs: Dict[str, Any]) -> None:
         self._setup_call(obj, kwargs)
         obj.amount_range = (Sats(21_000_000 * 100_000_000), Sats(0))
         obj.specific_transactions = []
@@ -67,8 +67,8 @@ class ContractBase(Generic[T]):
         # Paths return a TransactionTemplate object, or list, or iterable.
         paths: Clause = UnsatisfiableClause()
         for path_func in self.path_functions:
-            T = Union[typing.Iterator[TransactionTemplate], TransactionTemplate]
-            ret: T = path_func(obj)
+            Ret = Union[typing.Iterator[TransactionTemplate], TransactionTemplate]
+            ret: Ret = path_func(obj)
             transaction_templates: typing.Iterator[TransactionTemplate]
             if isinstance(ret, TransactionTemplate):
                 # Wrap value for uniform handling below
@@ -90,12 +90,12 @@ class ContractBase(Generic[T]):
                 # and then and at the top with the unlock clause,
                 # it could help with later code generation sharing the
                 # common clause...
-                ctv = CheckTemplateVerifyClause(AssignedVariable(ctv_hash, ctv_hash))
+                ctv = CheckTemplateVerifyClause(AssignedVariable(Hash(ctv_hash), ctv_hash))
                 paths |= (ctv & unlock_clause)
                 obj.specific_transactions.append((CTVHash(ctv_hash), template))
         for unlock_func in self.unlock_functions:
             paths |= unlock_func(obj)
 
-        if paths is UnsatisfiableClause:
+        if isinstance(paths, UnsatisfiableClause):
             raise AssertionError("Must Have at least one spending condition")
         obj.witness_manager = ProgramBuilder().compile(paths)
