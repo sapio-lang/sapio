@@ -30,7 +30,6 @@ class CancellableSubscription(Contract):
     def cancel(self):
         tx = TransactionTemplate()
         amount = self.amount.assigned_value
-        return_address = self.return_address
         cc = CancelContest(
             amount=amount,
             recipient=self.recipient,

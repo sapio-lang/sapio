@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, cast, Type, List
+from datetime import datetime
+from typing import Any, List, Type, Union, cast, Protocol
 
-from typing_extensions import Protocol
 
-from sapio.bitcoinlib.static_types import *
 from sapio.script.variable import AssignedVariable, UnassignedVariable
 from sapio.util import methdispatch
+from sapio.bitcoinlib.static_types import Sequence, uint32, Hash, LockTime
 
 
 class ClauseProtocol(Protocol):
@@ -113,7 +113,6 @@ class CheckTemplateVerifyClause(LogicMixin, StringClauseMixin):
         self.a = a
 
 
-from datetime import datetime
 class AbsoluteTimeSpec:
     class Blocks: pass
     class Time: pass
@@ -166,7 +165,7 @@ class RelativeTimeSpec:
         # Bit 22 enables time based locks.
         l = uint32(1 << 22) | t
         return RelativeTimeSpec(Sequence(uint32(l)))
-    def get_type(self) -> Types:
+    def get_type(self) -> RelativeTimeSpec.Types:
         return self.Time  if (self.time & uint32(1 << 22)) else self.Blocks
 
 
@@ -214,4 +213,3 @@ DNFClause = Union[SatisfiedClause,
 DNF = List[List[DNFClause]]
 
 Clause = Union[OrClause, AndClause, DNFClause]
-
