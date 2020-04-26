@@ -197,7 +197,9 @@ class AfterClause(LogicMixin,StringClauseMixin):
         raise ValueError("Unsupported Type")
     @initialize.register
     def _with_assigned(self, a: AssignedVariable) -> None:
-        self.initialize.dispatcher.dispatch(a.__class__)(self, a)
+        # TODO: Remove when mypy updates...
+        assert callable(self.initialize)
+        self.initialize(a.assigned_value)
     @initialize.register
     def _with_relative(self, a: RelativeTimeSpec)-> None:
         self.a = AssignedVariable(a, "")
@@ -205,7 +207,9 @@ class AfterClause(LogicMixin,StringClauseMixin):
     def _with_absolute(self, a: AbsoluteTimeSpec)->None:
         self.a = AssignedVariable(a, "")
     def __init__(self, a: Union[AssignedVariable[TimeSpec], TimeSpec]):
-        self.initialize.dispatcher.dispatch(a.__class__)(self, a)
+        # TODO: Remove when mypy updates...
+        assert callable(self.initialize)
+        self.initialize(a)
 
 
 DNFClause = Union[SatisfiedClause,
