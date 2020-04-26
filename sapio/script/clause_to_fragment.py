@@ -57,10 +57,10 @@ class FragmentCompiler:
         raise ValueError
     PREFIX : ClassVar[bytes] = sha256(bytes(1000))
     @_compile.register
-    def _compile_assigned_var(self, arg: AssignedVariable[Any], witness: WitnessTemplate) -> CScript:
+    def _compile_assigned_var(self, arg: AssignedVariable, witness: WitnessTemplate) -> CScript:
         return CScript([arg.assigned_value])
 
     @_compile.register(UnassignedVariable)
-    def _compile_unassigned_var(self, arg: UnassignedVariable[Any], witness: WitnessTemplate) -> CScript:
+    def _compile_unassigned_var(self, arg: UnassignedVariable, witness: WitnessTemplate) -> CScript:
         witness.add(self.PREFIX+ arg.name)
         return CScript()

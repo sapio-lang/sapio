@@ -419,8 +419,6 @@ class CScript(bytes):
     iter(script) however does iterate by opcode.
     """
     __slots__ = ()
-    def __init__(self, *args:Any, **kwargs:Any) -> None:
-        super().__init__(self, *args, **kwargs)
 
     @classmethod
     def __coerce_instance(cls, other):
