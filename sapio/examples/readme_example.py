@@ -20,7 +20,7 @@ class BasicEscrow(Contract):
         (SignatureCheckClause(self.alice) & SignatureCheckClause(self.bob))
     )
     def redeem(self): pass
-class BasicEscrow(Contract):
+class BasicEscrow2(Contract):
     class Fields:
         alice: PubKey
         bob: PubKey

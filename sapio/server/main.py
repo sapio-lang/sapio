@@ -61,9 +61,9 @@ if __name__ == "__main__":
     sum_pay = [((amt*DURATION),addr) for (amt, addr) in employee_addresses]
     tree2 = TreePay(payments=sum_pay, radix=2)
     total_amount = sum(x for (x, _) in sum_pay)
-    example = UndoSend2(to_contract=tree2, from_contract=tree1, amount=total_amount, timeout=Days(10))
+    example2 = UndoSend2(to_contract=tree2, from_contract=tree1, amount=total_amount, timeout=Days(10))
 
-    CompilerWebSocket.set_example(example)
+    CompilerWebSocket.set_example(example2)
     print(CompilerWebSocket.example_message)
 
     app = make_app()

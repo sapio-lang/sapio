@@ -6,10 +6,10 @@ from typing import Any, Dict
 
 from .bindable_contract import BindableContract
 from .contract_base import ContractBase
-from .decorators import PathFunction, UnlockFunction, PayAddress, CheckFunction, HasFinal
+from .decorators import PathFunction, UnlockFunction, PayAddress, CheckFunction
 
 
-class MetaContract(HasFinal):
+class MetaContract(type):
 
     def __new__(mcl, name, bases, nmspc):
         pay_funcs = [v for (k, v) in nmspc.items() if isinstance(v, PayAddress)]

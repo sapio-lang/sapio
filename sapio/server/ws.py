@@ -9,7 +9,7 @@ import sapio
 from sapio.bitcoinlib import segwit_addr
 from sapio.bitcoinlib.messages import COutPoint
 from sapio.bitcoinlib.static_types import Amount, PubKey, Sequence
-from sapio.contract.bindable_contract import BindableContract
+from sapio.contract.bindable_contract import BindableContract, ContractProtocol
 from sapio.contract.contract import Contract
 
 from .api_serialization import conversion_functions, placeholder_hint
@@ -18,11 +18,11 @@ DEBUG = True
 
 
 class CompilerWebSocket(tornado.websocket.WebSocketHandler):
-    contracts: Dict[str, Type[Contract]] = {}
+    contracts: Dict[str, Union[BindableContract, ContractProtocol]] = {}
     menu: Dict[str, Dict[str, str]] = {}
     conv: Dict[str, Dict[str, Callable[[Any], Any]]] = {}
     cached: Optional[str] = None
-    compilation_cache: Dict[str, BindableContract] = None
+    compilation_cache: Dict[str, BindableContract]
     example_message: Any = None
 
     @classmethod
@@ -113,7 +113,7 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
                     typ = args_t[name]
                     args[name] = conv_args[name](value, self)
                 print("ARGS", args)
-                contract = self.contracts[create_type](**args)
+                contract = self.contracts[create_type].create_instance(**args)
                 addr = contract.witness_manager.get_p2wsh_address()
                 amount = contract.amount_range[1]
                 self.compilation_cache[addr] = contract
@@ -144,11 +144,12 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
         print("WebSocket closed")
 
     @classmethod
-    def add_contract(cls, name: str, contract: Union[Type[BindableContract], Callable[[Any], BindableContract]]):
+    def add_contract(cls, name: str, contract: Any):
+        assert isinstance(contract, (BindableContract, ContractProtocol))
         assert name not in cls.menu
         hints = typing.get_type_hints(contract.Fields)
-        menu = {}
-        conv = {}
+        menu: Dict[str, Any]= {}
+        conv: Dict[str, Callable] = {}
         for key, hint in hints.items():
             if hint in placeholder_hint:
                 menu[key] = placeholder_hint[hint]

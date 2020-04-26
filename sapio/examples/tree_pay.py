@@ -56,7 +56,7 @@ class CollapsibleTree(Contract):
                 tx.add_output(amount, TreePay(payments=segment, radix=self.radix.assigned_value))
         return tx
     def get_musig(self) -> AssignedVariable[PubKey]:
-        return AssignedVariable(b"0" * 32, "musig")
+        return AssignedVariable(PubKey(b"0" * 32), "musig")
 
     @unlock(lambda self: SignatureCheckClause(self.get_musig()))
     def _(self):pass

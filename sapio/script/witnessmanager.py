@@ -32,6 +32,9 @@ class WitnessManager:
         self.program: CScript = CScript()
         self.witnesses : Dict[Any, WitnessTemplate] = {}
         self.is_final = False
+    def to_json(self):
+        assert self.is_final
+
     def finalize(self):
         self.is_final = True
     def get_witness(self, key) -> List[Any]:

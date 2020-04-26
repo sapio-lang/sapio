@@ -172,6 +172,7 @@ class RelativeTimeSpec:
 
 TimeSpec = Union[AbsoluteTimeSpec, RelativeTimeSpec]
 
+
 def Weeks(n:float) -> RelativeTimeSpec:
     if n > (0xFFFF*512//60//60//24//7):
         raise ValueError("{} Week Span is too long! ".format(n))

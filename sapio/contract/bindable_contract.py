@@ -1,19 +1,22 @@
 from __future__ import annotations
 import copy
 import typing
-from typing import Dict, Generic, List, Tuple, TypeVar, Any, Callable, Optional
+from typing import Dict, Generic, List, Tuple, TypeVar, Any, Callable, Optional, Protocol, Type
 
 from sapio.bitcoinlib.messages import COutPoint, CTxInWitness, CTxWitness
 from sapio.bitcoinlib.static_types import Amount
 from sapio.script.witnessmanager import CTVHash, WitnessManager
 
 from sapio.script.variable import AssignedVariable
-from .decorators import HasFinal, final
 from .txtemplate import TransactionTemplate
 from sapio.contract.contract_base import ContractBase
+from typing_extensions import final
+
 
 T = TypeVar("T")
-class BindableContract(Generic[T], metaclass=HasFinal):
+
+
+class BindableContract(Generic[T]):
     # These slots will be extended later on
     __slots__ = ('amount_range', 'specific_transactions', 'witness_manager', 'fields', 'is_initialized', 'init_class')
     witness_manager: WitnessManager
@@ -22,7 +25,7 @@ class BindableContract(Generic[T], metaclass=HasFinal):
     fields: T
     is_initialized: bool
     init_class: ContractBase[T]
-
+    class Fields: pass
     class MetaData:
         color = lambda self: "brown"
         label = lambda self: "generic"
@@ -44,6 +47,10 @@ class BindableContract(Generic[T], metaclass=HasFinal):
         self.fields: T = self.__class__.init_class.make_new_fields()
         self.__class__.init_class(self, kwargs)
         self.is_initialized = True
+    @final
+    @classmethod
+    def create_instance(cls, **kwargs:Any) -> BindableContract:
+        return cls(**kwargs)
 
     @final
     def to_json(self):
@@ -93,3 +100,12 @@ class BindableContract(Generic[T], metaclass=HasFinal):
                 txns.extend(new_txns)
                 metadata.extend(new_metadata)
         return txns, metadata
+
+from abc import abstractmethod
+from typing import runtime_checkable
+@runtime_checkable
+class ContractProtocol(Protocol):
+    Fields: Type[Any]
+    @abstractmethod
+    def create_instance(self, **kwargs:Any) -> BindableContract:
+        pass

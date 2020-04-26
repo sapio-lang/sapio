@@ -71,14 +71,18 @@ def convert_amount(arg: int, ctx) -> Amount:
     # TODO Assert ranges....
     return Amount(int64(arg))
 
-conversion_functions = {
+conversion_functions : Dict[Type, Callable] = {
     PubKey: convert_pubkey,
     Contract: convert_contract_object,
     List[Tuple[Amount, Contract]]: convert_dest,
     Tuple[Amount, Contract]: convert_contract,
     Amount: convert_amount,
     Sequence: convert_sequence,
-    RelativeTimeSpec: convert_relative_time_spec
+    RelativeTimeSpec: convert_relative_time_spec,
+    int: lambda x, y: x,
+    str: lambda x, y: x,
+    Union[AbsoluteTimeSpec, RelativeTimeSpec]: lambda x: RelativeTimeSpec(Sequence(x)),
+    sapio.examples.p2pk.PayToSegwitAddress: convert_p2swa
 
 }
 

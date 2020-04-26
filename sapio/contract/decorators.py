@@ -65,21 +65,3 @@ class CheckFunction():
 
 def check(s: Callable[[T], bool]) -> Callable[[T], bool]:
     return CheckFunction(s)
-
-def final(m):
-    m.__is_final_method__ = True
-    return m
-
-
-class HasFinal(type):
-    def __new__(mcl, name, bases, nmspc):
-        for base in bases:
-            for method_name in dir(base):
-                method = getattr(base, method_name)
-                if hasattr(method, "__is_final_method__") and method.__is_final_method__:
-                    if hasattr(method, "__call__"):
-                        if method_name in nmspc:
-                            raise ValueError("Cannot Override Final Method")
-                    else:
-                        raise ValueError("Cannot Override Final ???")
-        return super(HasFinal, mcl).__new__(mcl, name, bases, nmspc)

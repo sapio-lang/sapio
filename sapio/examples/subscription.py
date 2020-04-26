@@ -105,8 +105,8 @@ class auto_pay:
         return_timeout: RelativeTimeSpec
 
 
-    @staticmethod
-    def __call__(**kwargs) -> CancellableSubscription:
+    @classmethod
+    def create_instance(cls, **kwargs) -> CancellableSubscription:
         period = kwargs.pop('period')
         times = kwargs.pop('times')
         per_time = kwargs.pop('per_time')
