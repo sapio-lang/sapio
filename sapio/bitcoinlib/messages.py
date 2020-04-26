@@ -276,7 +276,7 @@ class CBlockLocator:
 class COutPoint:
     __slots__ = ("hash", "n")
 
-    def __init__(self, hash=0, n=0):
+    def __init__(self, hash:int=0, n:int=0) -> None:
         self.hash = hash
         self.n = n
 
@@ -299,7 +299,7 @@ class CTxIn:
     scriptSig: CScript
     nSequence: Sequence
     prevout: COutPoint
-    def __init__(self, outpoint: Optional[COutPoint]=None, scriptSig: bytes=b"", nSequence: int=0) -> None:
+    def __init__(self, outpoint: Optional[COutPoint]=None, scriptSig:CScript=CScript(),nSequence: Sequence=Sequence(0)) -> None:
         if outpoint is None:
             self.prevout = COutPoint()
         else:
@@ -330,7 +330,7 @@ class CTxOut:
     __slots__ = ("nValue", "scriptPubKey")
     nValue: Amount
     scriptPubKey: CScript
-    def __init__(self, nValue:Amount=Amount(int64(0)), scriptPubKey:bytes=b"") -> None:
+    def __init__(self, nValue:Amount=Amount(int64(0)), scriptPubKey:CScript = CScript()) -> None:
         self.nValue = nValue
         self.scriptPubKey = scriptPubKey
 
@@ -353,9 +353,9 @@ class CTxOut:
 class CScriptWitness:
     __slots__ = ("stack",)
 
-    def __init__(self):
+    def __init__(self) -> None:
         # stack is a vector of strings
-        self.stack = []
+        self.stack: List[bytes] = []
 
     def __repr__(self):
         return "CScriptWitness(%s)" % \
@@ -370,7 +370,7 @@ class CScriptWitness:
 class CTxInWitness:
     __slots__ = ("scriptWitness",)
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.scriptWitness = CScriptWitness()
 
     def deserialize(self, f):
@@ -389,8 +389,8 @@ class CTxInWitness:
 class CTxWitness:
     __slots__ = ("vtxinwit",)
 
-    def __init__(self):
-        self.vtxinwit = []
+    def __init__(self) -> None:
+        self.vtxinwit: List[CTxInWitness] = []
 
     def deserialize(self, f):
         for i in range(len(self.vtxinwit)):
@@ -437,7 +437,7 @@ class CTransaction:
             self.vin = copy.deepcopy(tx.vin)
             self.vout = copy.deepcopy(tx.vout)
             self.nLockTime = tx.nLockTime
-            self.sha256 = sapio.bitcoinlib.hash_functions.sha256
+            self.sha256 = tx.sha256
             self.hash = tx.hash
             self.wit = copy.deepcopy(tx.wit)
 
@@ -516,6 +516,7 @@ class CTransaction:
     def rehash(self) -> bytes:
         self.sha256 = None
         self.calc_sha256()
+        assert self.sha256 is not None
         return self.hash
 
     # We will only cache the serialization without witness in

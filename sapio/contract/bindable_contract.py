@@ -1,28 +1,31 @@
 from __future__ import annotations
+
 import copy
 import typing
+from abc import abstractmethod
 from typing import (
+    Any,
+    Callable,
     Dict,
     Generic,
     List,
-    Tuple,
-    TypeVar,
-    Any,
-    Callable,
     Optional,
     Protocol,
+    Tuple,
     Type,
+    TypeVar,
+    runtime_checkable,
 )
 
-from sapio.bitcoinlib.messages import COutPoint, CTxInWitness, CTxWitness
-from sapio.bitcoinlib.static_types import Amount
-from sapio.script.witnessmanager import CTVHash, WitnessManager
-
-from sapio.script.variable import AssignedVariable
-from .txtemplate import TransactionTemplate
-from sapio.contract.contract_base import ContractBase
 from typing_extensions import final
 
+from sapio.bitcoinlib.messages import COutPoint, CTransaction, CTxInWitness, CTxWitness
+from sapio.bitcoinlib.static_types import Amount
+from sapio.contract.contract_base import ContractBase
+from sapio.script.variable import AssignedVariable
+from sapio.script.witnessmanager import CTVHash, WitnessManager
+
+from .txtemplate import TransactionTemplate
 
 T = TypeVar("T")
 
@@ -51,10 +54,10 @@ class BindableContract(Generic[T]):
         color: Callable[[Any], str] = lambda self: "brown"
         label: Callable[[Any], str] = lambda self: "generic"
 
-    def __getattr__(self, attr) -> AssignedVariable:
+    def __getattr__(self, attr: str) -> AssignedVariable[Any]:
         return self.fields.__getattribute__(attr)
 
-    def __setattr__(self, attr, v):
+    def __setattr__(self, attr: str, v: Any) -> None:
         if attr in self.__slots__:
             super().__setattr__(attr, v)
         elif not self.is_initialized:
@@ -75,7 +78,7 @@ class BindableContract(Generic[T]):
 
     @final
     @classmethod
-    def create_instance(cls, **kwargs: Any) -> BindableContract:
+    def create_instance(cls, **kwargs: Any) -> BindableContract[T]:
         return cls(**kwargs)
 
     @final
@@ -95,7 +98,7 @@ class BindableContract(Generic[T]):
         }
 
     @final
-    def bind(self, out: COutPoint):
+    def bind(self, out: COutPoint) -> Tuple[List[CTransaction], List[Dict[str, Any]]]:
         # todo: Note that if a contract has any secret state, it may be a hack
         # attempt to bind it to an output with insufficient funds
         color = self.MetaData.color(self)
@@ -109,7 +112,7 @@ class BindableContract(Generic[T]):
             tx_label = output_label + ":" + txn_template.label
 
             tx = txn_template.bind_tx(out)
-            txid = tx.sha256
+            txid = int(tx.rehash(), 16)
             candidates = [
                 wit
                 for wit in self.witness_manager.witnesses.values()
@@ -133,20 +136,17 @@ class BindableContract(Generic[T]):
                     {"color": color, "label": tx_label, "utxo_metadata": utxo_metadata}
                 )
             for (idx, (_, contract)) in enumerate(txn_template.outputs):
+                # TODO: CHeck this is correct type into COutpoint
                 new_txns, new_metadata = contract.bind(COutPoint(txid, idx))
                 txns.extend(new_txns)
                 metadata.extend(new_metadata)
         return txns, metadata
 
 
-from abc import abstractmethod
-from typing import runtime_checkable
-
-
 @runtime_checkable
-class ContractProtocol(Protocol):
+class ContractProtocol(Protocol[T]):
     Fields: Type[Any]
 
     @abstractmethod
-    def create_instance(self, **kwargs: Any) -> BindableContract:
+    def create_instance(self, **kwargs: Any) -> BindableContract[T]:
         pass

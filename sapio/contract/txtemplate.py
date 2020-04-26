@@ -5,7 +5,7 @@ from typing import List, Tuple, Dict, Any
 from sapio.bitcoinlib.static_types import uint32
 
 import sapio.contract
-from sapio.bitcoinlib.messages import CTransaction, CTxIn, CTxOut, COutPoint
+from sapio.bitcoinlib.messages import CTransaction, CTxIn, CTxOut, COutPoint, CScript
 from sapio.bitcoinlib.static_types import Sequence, Amount, Version, LockTime
 from sapio.contract.assertions import WithinFee, HasEnoughFunds
 
@@ -60,7 +60,7 @@ class TransactionTemplate:
         tx = CTransaction()
         tx.nVersion = self.version
         tx.nLockTime = self.lock_time
-        tx.vin = [CTxIn(None, b"", sequence) for sequence in self.sequences]
+        tx.vin = [CTxIn(None, CScript(), sequence) for sequence in self.sequences]
         tx.vout = [CTxOut(a, b.witness_manager.get_p2wsh_script()) for (a, b) in self.outputs]
         return tx
 
