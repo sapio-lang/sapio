@@ -6,6 +6,8 @@ from sapio.bitcoinlib.hash_functions import sha256
 from sapio.bitcoinlib.script import CScript
 from sapio.script.opcodes import AllowedOp
 from sapio.util import methdispatch
+from typing import Optional, Union
+from functools import singledispatchmethod
 
 CTVHash = NewType("CTVHash", bytes)
 
@@ -14,10 +16,13 @@ class WitnessTemplate:
     def __init__(self):
         self.witness = []
         self.ctv_hash : Optional[CTVHash] = None
-    @methdispatch
-    def add(self, it : CScript):
+    def add(self, it: Union[CScript, int, bytes]) -> None:
+        assert callable(self.internal_add)
+        self.internal_add(it)
+    @singledispatchmethod
+    def internal_add(self, it : Union[CScript, bytes]):
         self.witness.insert(0, it)
-    @add.register
+    @internal_add.register
     def _(self, it: int):
         self.add(CScript([it]))
     def will_execute_ctv(self, ctv:CTVHash):
@@ -28,7 +33,7 @@ class WitnessTemplate:
 
 class WitnessManager:
     def __init__(self) -> None:
-        self.override_program: str = None
+        self.override_program: Optional[str] = None
         self.program: CScript = CScript()
         self.witnesses : Dict[Any, WitnessTemplate] = {}
         self.is_final = False

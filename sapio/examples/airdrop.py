@@ -5,7 +5,7 @@ participants on a given schedule...
 """
 from typing import Tuple, List
 
-from sapio.bitcoinlib.static_types import Amount
+from sapio.bitcoinlib.static_types import Amount, Sats
 from sapio.contract import Contract, path, TransactionTemplate
 from sapio.examples.tree_pay import TreePay
 from sapio.script.clause import TimeSpec, RelativeTimeSpec, AbsoluteTimeSpec

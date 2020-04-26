@@ -1,67 +1,81 @@
 from __future__ import annotations
-from typing import TypeVar, Any, Union, Callable, List, Tuple
-import sapio
-import sapio.contract
-from sapio.script.clause import Clause
+from typing import TypeVar, Any, Union, Callable, List, Tuple, Iterable, Generic, Optional
+from .txtemplate import TransactionTemplate
+from sapio.script.clause import Clause, SatisfiedClause
 
 from sapio.bitcoinlib.static_types import Amount
+
 T = TypeVar("T")
 T2 = TypeVar("T2")
 
 
-class PathFunction():
+PathReturnType = Union[
+    TransactionTemplate, List[TransactionTemplate], Iterable[TransactionTemplate]
+]
+PathFunctionType = Callable[[T], PathReturnType]
+
+
+class PathFunction(Generic[T]):
     # TODO: Improve arg type, which we know is an AndClauseArugment Callable or None
-    def __init__(self, f: Any, arg: Any):
+    def __init__(self, f: PathFunctionType[T], unlocker: Callable[[T], Clause]) -> None:
         self.f = f
-        self.unlock_with = arg
+        self.unlock_with = unlocker
         self.__name__ = f.__name__
-    def __call__(self, *args, **kwargs):
-        return self.f(*args, **kwargs)
+
+    def __call__(self, obj:T) -> PathReturnType:
+        return self.f(obj)
 
 
-def path(arg: Union[Callable[[T2], Clause], Callable[[T], sapio.contract.TransactionTemplate], None] = None)\
-        -> Union[Callable[[Any], PathFunction], PathFunction]:
-    if arg is None or (hasattr(arg, "__name__") and arg.__name__ == "<lambda>"):
-        def wrapper(f: Callable[[T], sapio.contract.TransactionTemplate]):
-            return PathFunction(f, arg)
-        return wrapper
-    else:
-        return PathFunction(arg, None)
+def path( arg: PathFunctionType[T]) -> PathFunction[T]:
+    return PathFunction(arg, lambda _: SatisfiedClause())
 
-
-class UnlockFunction():
-    # TODO: Improve arg type, which we know is an AndClauseArugment Callable or None
-    def __init__(self, condition: Callable[[T], Clause], name):
-        self.unlock_with = condition
-        self.__name__ = name
-    def __call__(self, *args, **kwargs):
-        return self.unlock_with(*args, **kwargs)
-
-
-def unlock(s: Callable[[Any], Clause]):
-    def wrapper(f: Callable[[T], List[sapio.contract.Contract]]):
-        return UnlockFunction(s, f.__name__)
+def path_if( arg: Optional[Callable[[T], Clause]] = None) -> Callable[[PathFunctionType[T]], PathFunction[T]]:
+    argw : Callable[[T], Clause] = (lambda _ : SatisfiedClause()) if arg is None else arg
+    def wrapper(f: PathFunctionType[T]) -> PathFunction[T]:
+        return PathFunction(f, lambda _: SatisfiedClause())
     return wrapper
 
 
-class PayAddress():
-    def __init__(self, address):
-        self.address = address
-    def __call__(self, *args, **kwargs) -> Tuple[Amount, str]:
-        return self.address(*args, **kwargs)
+class UnlockFunction:
+    # TODO: Improve arg type, which we know is an AndClauseArugment Callable or None
+    def __init__(self, condition: Callable[[T], Clause], name: str) -> None:
+        self.unlock_with = condition
+        self.__name__ = name
+
+    def __call__(self, obj: T) -> Clause:
+        return self.unlock_with(obj)
 
 
-def pay_address(f):
+def unlock(
+    s: Callable[[Any], Clause]
+) -> Callable[[Callable[[T], None]], UnlockFunction]:
+    def wrapper(f: Callable[[T], None]) -> UnlockFunction:
+        return UnlockFunction(s, f.__name__)
+
+    return wrapper
+
+
+class PayAddress:
+
+    def __init__(self, address: Callable[[T], Tuple[Amount, str]]) -> None:
+        self.address: Callable[[T], Tuple[Amount, str]] = address
+
+    def __call__(self, obj: T) -> Tuple[Amount, str]:
+        return self.address(obj)
+
+
+def pay_address(f: Callable[[T], Tuple[Amount, str]]) -> PayAddress:
     return PayAddress(f)
 
 
-class CheckFunction():
-    def __init__(self, func):
-        self.func = func
+class CheckFunction:
+    def __init__(self, func: Callable[[T], bool]) -> None:
+        self.func : Callable[[T],bool] = func
         self.__name__ = func.__name__
-    def __call__(self, *args, **kwargs):
-        self.func(*args, **kwargs)
+
+    def __call__(self, obj:T)->bool:
+        return self.func(obj)
 
 
-def check(s: Callable[[T], bool]) -> Callable[[T], bool]:
+def check(s: Callable[[T], bool]) -> CheckFunction:
     return CheckFunction(s)

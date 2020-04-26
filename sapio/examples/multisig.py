@@ -2,7 +2,8 @@ from functools import reduce
 from itertools import combinations
 
 from sapio.bitcoinlib.static_types import PubKey, Amount
-from sapio.contract import Contract, path, TransactionTemplate, unlock
+from sapio.contract import Contract, path,  TransactionTemplate, unlock
+from sapio.contract.decorators import path_if
 from sapio.script.clause import SignatureCheckClause, List
 from sapio.script.variable import AssignedVariable
 
@@ -38,7 +39,7 @@ class RawMultiSigWithPath(Contract):
     @unlock(lambda self: multisig(self.keys.assigned_value, self.thresh_all.assigned_value))
     def _(self): pass
 
-    @path(lambda self: multisig(self.keys.assigned_value, self.thresh_path.assigned_value))
+    @path_if(lambda self: multisig(self.keys.assigned_value, self.thresh_path.assigned_value))
     def redeem(self):
         tx = TransactionTemplate()
         tx.add_output(self.amount.assigned_value, self.path.assigned_value)

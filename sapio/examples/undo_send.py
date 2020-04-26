@@ -1,6 +1,7 @@
-from sapio.contract import Contract, path, TransactionTemplate, unlock
-from sapio.script.clause import *
 from sapio.bitcoinlib.static_types import Amount
+from sapio.contract import Contract, TransactionTemplate
+from sapio.contract.decorators import path, path_if, unlock
+from sapio.script.clause import *
 
 
 class UndoSend(Contract):
@@ -13,7 +14,7 @@ class UndoSend(Contract):
     @unlock(lambda self: AfterClause(self.timeout)&SignatureCheckClause(self.to_key))
     def _(self): pass
 
-    @path(lambda self: SignatureCheckClause(self.to_key))
+    @path_if(lambda self: SignatureCheckClause(self.to_key))
     def undo(self) -> TransactionTemplate:
         tx = TransactionTemplate()
         tx.add_output(self.amount.assigned_value, self.from_contract.assigned_value)

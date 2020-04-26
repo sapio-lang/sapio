@@ -1,19 +1,23 @@
+from __future__ import annotations
+import sapio
+import sapio.contract
+import sapio.contract.bindable_contract as bc
 from sapio.bitcoinlib.static_types import Amount, Sats
 
 
 class WithinFee:
     fee_modifier : Amount = Sats(100)
 
-    def __init__(self, contract, b):
+    def __init__(self, contract: bc.BindableContract, b: Amount) -> None:
         if contract.amount_range[0] + self.fee_modifier < b:
             raise ValueError("Contract May Burn Funds!")
 
     @classmethod
-    def change_fee_modifier(cls, fee_modifier):
+    def change_fee_modifier(cls, fee_modifier:Amount):
         cls.fee_modifier = fee_modifier
 
 
 class HasEnoughFunds:
-    def __init__(self, contract, b):
+    def __init__(self, contract: sapio.contract.bindable_contract.BindableContract, b: Amount) -> None:
         if contract.amount_range[1] > b:
             raise ValueError("Insufficient Funds", "Contract May Burn Funds!", contract, contract.amount_range, b)

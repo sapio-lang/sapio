@@ -2,6 +2,7 @@ from typing import Iterator, List, Tuple
 
 from sapio.bitcoinlib.static_types import Amount, PubKey, int64
 from sapio.contract import Contract, TransactionTemplate, path
+from sapio.contract.decorators import path_if
 from sapio.examples.p2pk import PayToSegwitAddress
 from sapio.script.clause import (AbsoluteTimeSpec, RelativeTimeSpec,
                                  SignatureCheckClause)
@@ -71,7 +72,7 @@ class CancelContest(Contract):
     class MetaData:
         color = lambda self: "red"
         label = lambda self: "Cancellation Attempt"
-    @path(lambda self: SignatureCheckClause(self.watchtower_key))
+    @path_if(lambda self: SignatureCheckClause(self.watchtower_key))
     def counterclaim(self) -> Iterator[TransactionTemplate]:
         amount_earned = Amount(int64(0))
         for (timeout, amount) in self.schedule.assigned_value:
