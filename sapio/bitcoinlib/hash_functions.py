@@ -1,7 +1,7 @@
 import hashlib
 
 
-def sha256(s):
+def sha256(s) -> bytes:
     return hashlib.new('sha256', s).digest()
 
 
