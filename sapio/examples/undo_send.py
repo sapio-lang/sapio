@@ -1,5 +1,6 @@
 from sapio.contract import Contract, path, TransactionTemplate, unlock
 from sapio.script.clause import *
+from sapio.bitcoinlib.static_types import Amount
 
 
 class UndoSend(Contract):

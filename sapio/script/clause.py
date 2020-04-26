@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, List, Type, Union, cast, Protocol
+from functools import singledispatchmethod
+from typing import Any, List, Protocol, Type, Union, cast
 
-
+from sapio.bitcoinlib.static_types import (Hash, LockTime, PubKey, Sequence,
+                                           uint32)
 from sapio.script.variable import AssignedVariable, UnassignedVariable
 from sapio.util import methdispatch
-from sapio.bitcoinlib.static_types import Sequence, uint32, Hash, LockTime
 
 
 class ClauseProtocol(Protocol):
@@ -16,12 +17,8 @@ class ClauseProtocol(Protocol):
     @property
     def b(self) -> Any:
         pass
-    @property
-    def n_args(self) -> int:
-        return 0
-    @property
-    def symbol(self) -> str:
-        return ""
+    n_args: int
+    symbol: str
 
 class StringClauseMixin:
     MODE = "+"  # "str"
@@ -117,34 +114,40 @@ class AbsoluteTimeSpec:
     class Blocks: pass
     class Time: pass
     Types = Union[Type[Blocks], Type[Time]]
-    def get_type(self):
+    def get_type(self) -> AbsoluteTimeSpec.Types:
         return self.Blocks if self.time < self.MIN_DATE else self.Time
     MIN_DATE = 500_000_000
 
-    def __init__(self, t):
+    def __init__(self, t:LockTime):
         self.time : LockTime = t
     @staticmethod
-    def from_date(d: datetime):
+    def from_date(d: datetime) -> AbsoluteTimeSpec:
         secs = LockTime(uint32(d.timestamp()))
         if secs < AbsoluteTimeSpec.MIN_DATE:
             raise ValueError('Date In Past', AbsoluteTimeSpec.MIN_DATE)
         return AbsoluteTimeSpec(secs)
     @staticmethod
-    def at_height(d: int):
+    def at_height(d: int) -> AbsoluteTimeSpec:
         if d > AbsoluteTimeSpec.MIN_DATE:
             raise ValueError("Too Many Blocks ", d, ">", AbsoluteTimeSpec.MIN_DATE)
-        return AbsoluteTimeSpec(d)
+        return AbsoluteTimeSpec(LockTime(d))
 
     @staticmethod
-    def WeeksFromTime(t1:datetime, t2:float):
-        return AbsoluteTimeSpec(AbsoluteTimeSpec.from_date(t1).time + LockTime(uint32(t2*7*24*60*60)))
+    def WeeksFromTime(t1:datetime, t2:float) -> AbsoluteTimeSpec:
+        base = AbsoluteTimeSpec.from_date(t1).time
+        delta = LockTime(uint32(t2*7*24*60*60))
+        return AbsoluteTimeSpec(LockTime(base+delta))
     @staticmethod
-    def DaysFromTime(t1: datetime, t2: float):
-        return AbsoluteTimeSpec(AbsoluteTimeSpec.from_date(t1).time + LockTime(uint32(t2*24*60*60)))
+    def DaysFromTime(t1: datetime, t2: float)-> AbsoluteTimeSpec:
+        base = AbsoluteTimeSpec.from_date(t1).time
+        delta = LockTime(uint32(t2*24*60*60))
+        return AbsoluteTimeSpec(LockTime(base+delta))
     @staticmethod
-    def MonthsFromTime(t1: datetime, t2: float):
-        return AbsoluteTimeSpec(AbsoluteTimeSpec.from_date(t1).time + LockTime(uint32(t2*30*24*60*60)))
-    def __repr__(self):
+    def MonthsFromTime(t1: datetime, t2: float)-> AbsoluteTimeSpec:
+        base = AbsoluteTimeSpec.from_date(t1).time 
+        delta = LockTime(uint32(t2*30*24*60*60))
+        return AbsoluteTimeSpec(LockTime(base+delta))
+    def __repr__(self)->str:
         if self.time < AbsoluteTimeSpec.MIN_DATE:
             return "{}.at_height({})".format(self.__class__.__name__, self.time)
         else:
@@ -155,7 +158,7 @@ class RelativeTimeSpec:
     class Blocks: pass
     class Time: pass
     Types = Union[Type[Blocks], Type[Time]]
-    def __init__(self, t):
+    def __init__(self, t:Sequence):
         self.time : Sequence = t
     @staticmethod
     def from_seconds(seconds: float) -> RelativeTimeSpec:
@@ -186,21 +189,23 @@ def Days(n:float) -> RelativeTimeSpec:
     seconds = n*24*60*60
     return RelativeTimeSpec.from_seconds(seconds)
 
-
 class AfterClause(LogicMixin,StringClauseMixin):
     n_args = 1
-
-    @methdispatch
-    def initialize(self, a: AssignedVariable[TimeSpec]):
-        self.a = a
+    a: AssignedVariable[TimeSpec]
+    @singledispatchmethod
+    def initialize(self, a: Any) -> None:
+        raise ValueError("Unsupported Type")
     @initialize.register
-    def _with_relative(self, a: RelativeTimeSpec):
+    def _with_assigned(self, a: AssignedVariable) -> None:
+        self.initialize.dispatcher.dispatch(a.__class__)(self, a)
+    @initialize.register
+    def _with_relative(self, a: RelativeTimeSpec)-> None:
         self.a = AssignedVariable(a, "")
     @initialize.register
-    def _with_absolute(self, a: AbsoluteTimeSpec):
+    def _with_absolute(self, a: AbsoluteTimeSpec)->None:
         self.a = AssignedVariable(a, "")
     def __init__(self, a: Union[AssignedVariable[TimeSpec], TimeSpec]):
-        self.initialize(a)
+        self.initialize.dispatcher.dispatch(a.__class__)(self, a)
 
 
 DNFClause = Union[SatisfiedClause,

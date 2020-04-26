@@ -1,10 +1,10 @@
-from typing import List, Tuple, Iterator
+from typing import Iterator, List, Tuple
 
-from sapio.bitcoinlib.static_types import Amount, PubKey
-from sapio.contract import Contract, path, TransactionTemplate
+from sapio.bitcoinlib.static_types import Amount, PubKey, int64
+from sapio.contract import Contract, TransactionTemplate, path
 from sapio.examples.p2pk import PayToSegwitAddress
-from sapio.script.clause import AbsoluteTimeSpec, RelativeTimeSpec, SignatureCheckClause, \
-    int64
+from sapio.script.clause import (AbsoluteTimeSpec, RelativeTimeSpec,
+                                 SignatureCheckClause)
 
 
 def add_timeout(tx, delay):
@@ -112,4 +112,3 @@ class auto_pay:
         kwargs['schedule'] = [(AbsoluteTimeSpec.at_height((t+1)*period), per_time) for t in range(times)]
         kwargs['amount'] = per_time*times
         return CancellableSubscription(**kwargs)
-
