@@ -1,21 +1,37 @@
-from sapio.script.clause import Clause, AndClause, Clause, OrClause, SignatureCheckClause, \
-    PreImageCheckClause, CheckTemplateVerifyClause, AfterClause, UnsatisfiableClause
-from sapio.util import methdispatch
+from functools import singledispatchmethod
+
+from sapio.script.clause import (
+    AfterClause,
+    AndClause,
+    CheckTemplateVerifyClause,
+    Clause,
+    OrClause,
+    PreImageCheckClause,
+    SignatureCheckClause,
+    UnsatisfiableClause,
+)
+from typing import TYPE_CHECKING, Callable, Union
 
 
 class NormalizationPass:
-    def __init__(self):
+    took_action: bool
+
+    def __init__(self) -> None:
         self.took_action: bool = False
+
     # Normalize Bubbles up all the OR clauses into a CNF
-    @methdispatch
+    @singledispatchmethod
     def normalize(self, arg: Clause) -> Clause:
         raise NotImplementedError("Cannot Compile Arg", arg)
 
     @normalize.register
     def normalize_and(self, arg: AndClause) -> Clause:
+        if TYPE_CHECKING:
+            # TODO: Required for singledispatchmethod to typecheck...
+            assert callable(self.normalize)
         a: Clause = arg.a
         b: Clause = arg.b
-        ret : Clause = arg
+        ret: Clause = arg
         if isinstance(a, OrClause) and isinstance(b, OrClause):
             self.took_action = True
             a0: Clause = self.normalize(a.a)
@@ -30,16 +46,16 @@ class NormalizationPass:
         elif isinstance(a, AndClause) and isinstance(b, OrClause):
             self.took_action = True
             _or, _and = self.normalize(b), self.normalize(a)
-            ret =(_and & _or.a) | (_and & _or.b)
+            ret = (_and & _or.a) | (_and & _or.b)
         # Other Clause can be ignored...
         elif isinstance(a, AndClause):
-            ret = self.normalize(a)&b
+            ret = self.normalize(a) & b
         elif isinstance(a, OrClause):
             self.took_action = True
             a0, a1 = self.normalize(a.a), self.normalize(a.b)
             ret = (a0 & b) | (a1 & b)
         elif isinstance(b, AndClause):
-            ret = self.normalize(b)&a
+            ret = self.normalize(b) & a
         elif isinstance(b, OrClause):
             self.took_action = True
             b0, b1 = self.normalize(b.a), self.normalize(b.b)
@@ -48,15 +64,29 @@ class NormalizationPass:
 
     @normalize.register
     def normalize_or(self, arg: OrClause) -> Clause:
+        if TYPE_CHECKING:
+            # TODO: Required for singledispatchmethod to typecheck...
+            assert callable(self.normalize)
+        a: Clause = arg.a
+        b: Clause = arg.b
         # switching order guarantees that successive passes will
         # have a chance to unwind unsatisfiable clauses
-        return self.normalize(arg.b) | self.normalize(arg.a)
+        ret: Clause = self.normalize(b) | self.normalize(a)
+        return ret
 
     @normalize.register(UnsatisfiableClause)
     @normalize.register(SignatureCheckClause)
     @normalize.register(PreImageCheckClause)
     @normalize.register(CheckTemplateVerifyClause)
     @normalize.register(AfterClause)
-    def normalize_unsat(self, arg: UnsatisfiableClause) -> Clause:
+    def normalize_unsat(
+        self,
+        arg: Union[
+            (UnsatisfiableClause),
+            (SignatureCheckClause),
+            (PreImageCheckClause),
+            (CheckTemplateVerifyClause),
+            (AfterClause),
+        ],
+    ) -> Clause:
         return arg
-
