@@ -1,7 +1,18 @@
 from __future__ import annotations
 import copy
 import typing
-from typing import Dict, Generic, List, Tuple, TypeVar, Any, Callable, Optional, Protocol, Type
+from typing import (
+    Dict,
+    Generic,
+    List,
+    Tuple,
+    TypeVar,
+    Any,
+    Callable,
+    Optional,
+    Protocol,
+    Type,
+)
 
 from sapio.bitcoinlib.messages import COutPoint, CTxInWitness, CTxWitness
 from sapio.bitcoinlib.static_types import Amount
@@ -18,51 +29,69 @@ T = TypeVar("T")
 
 class BindableContract(Generic[T]):
     # These slots will be extended later on
-    __slots__ = ('amount_range', 'specific_transactions', 'witness_manager', 'fields', 'is_initialized', 'init_class')
+    __slots__ = (
+        "amount_range",
+        "specific_transactions",
+        "witness_manager",
+        "fields",
+        "is_initialized",
+        "init_class",
+    )
     witness_manager: WitnessManager
     specific_transactions: List[typing.Tuple[CTVHash, TransactionTemplate]]
     amount_range: Tuple[Amount, Amount]
     fields: T
     is_initialized: bool
     init_class: ContractBase[T]
-    class Fields: pass
+
+    class Fields:
+        pass
+
     class MetaData:
-        color = lambda self: "brown"
-        label = lambda self: "generic"
+        color: Callable[[Any], str] = lambda self: "brown"
+        label: Callable[[Any], str] = lambda self: "generic"
+
     def __getattr__(self, attr) -> AssignedVariable:
         return self.fields.__getattribute__(attr)
+
     def __setattr__(self, attr, v):
         if attr in self.__slots__:
             super().__setattr__(attr, v)
         elif not self.is_initialized:
             if not hasattr(self, attr):
-                raise AssertionError("No Known field for "+attr+" = "+repr(v))
+                raise AssertionError("No Known field for " + attr + " = " + repr(v))
             # TODO Type Check
             setattr(self.fields, attr, v)
         else:
-            raise AssertionError("Assigning a value to a field is probably a mistake! ", attr)
+            raise AssertionError(
+                "Assigning a value to a field is probably a mistake! ", attr
+            )
 
     def __init__(self, **kwargs: Any):
         self.is_initialized = False
         self.fields: T = self.__class__.init_class.make_new_fields()
         self.__class__.init_class(self, kwargs)
         self.is_initialized = True
+
     @final
     @classmethod
-    def create_instance(cls, **kwargs:Any) -> BindableContract:
+    def create_instance(cls, **kwargs: Any) -> BindableContract:
         return cls(**kwargs)
 
     @final
-    def to_json(self):
+    def to_json(self) -> Dict[str, Any]:
         return {
             "witness_manager": self.witness_manager.to_json(),
-            "transactions": {h: transaction.to_json() for (h, transaction) in self.specific_transactions},
+            "transactions": {
+                h: transaction.to_json()
+                for (h, transaction) in self.specific_transactions
+            },
             "min_amount_spent": self.amount_range[0],
             "max_amount_spent": self.amount_range[1],
             "metadata": {
                 "color": self.MetaData.color(self),
-                "label": self.MetaData.label(self)
-            }
+                "label": self.MetaData.label(self),
+            },
         }
 
     @final
@@ -81,7 +110,11 @@ class BindableContract(Generic[T]):
 
             tx = txn_template.bind_tx(out)
             txid = tx.sha256
-            candidates = [wit for wit in self.witness_manager.witnesses.values() if wit.ctv_hash == ctv_hash]
+            candidates = [
+                wit
+                for wit in self.witness_manager.witnesses.values()
+                if wit.ctv_hash == ctv_hash
+            ]
             # Create all possible candidates
             for wit in candidates:
                 t = copy.deepcopy(tx)
@@ -92,20 +125,28 @@ class BindableContract(Generic[T]):
                 in_witness.scriptWitness.stack.extend(wit.witness)
                 t.wit = witness
                 txns.append(t)
-                utxo_metadata = [{'color': md.color, 'label': md.label} for md in txn_template.outputs_metadata]
+                utxo_metadata = [
+                    {"color": md.color, "label": md.label}
+                    for md in txn_template.outputs_metadata
+                ]
                 metadata.append(
-                    {'color': color, 'label': tx_label, 'utxo_metadata': utxo_metadata})
+                    {"color": color, "label": tx_label, "utxo_metadata": utxo_metadata}
+                )
             for (idx, (_, contract)) in enumerate(txn_template.outputs):
                 new_txns, new_metadata = contract.bind(COutPoint(txid, idx))
                 txns.extend(new_txns)
                 metadata.extend(new_metadata)
         return txns, metadata
 
+
 from abc import abstractmethod
 from typing import runtime_checkable
+
+
 @runtime_checkable
 class ContractProtocol(Protocol):
     Fields: Type[Any]
+
     @abstractmethod
-    def create_instance(self, **kwargs:Any) -> BindableContract:
+    def create_instance(self, **kwargs: Any) -> BindableContract:
         pass

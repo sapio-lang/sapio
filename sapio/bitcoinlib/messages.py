@@ -298,7 +298,7 @@ class CTxIn:
     scriptSig: CScript
     nSequence: Sequence
     prevout: COutPoint
-    def __init__(self, outpoint=None, scriptSig=b"", nSequence=0):
+    def __init__(self, outpoint: Optional[COutPoint]=None, scriptSig: bytes=b"", nSequence: int=0) -> None:
         if outpoint is None:
             self.prevout = COutPoint()
         else:
@@ -329,7 +329,7 @@ class CTxOut:
     __slots__ = ("nValue", "scriptPubKey")
     nValue: Amount
     scriptPubKey: CScript
-    def __init__(self, nValue=Amount(int64(0)), scriptPubKey=b""):
+    def __init__(self, nValue:Amount=Amount(int64(0)), scriptPubKey:bytes=b"") -> None:
         self.nValue = nValue
         self.scriptPubKey = scriptPubKey
 
@@ -422,7 +422,7 @@ class CTransaction:
     nLockTime: LockTime
     vin: List[CTxIn]
     vout: List[CTxOut]
-    def __init__(self, tx=None):
+    def __init__(self, tx: Optional[CTransaction]=None) -> None:
         if tx is None:
             self.nVersion = Version(uint32(1))
             self.vin = []
@@ -470,7 +470,7 @@ class CTransaction:
         r += struct.pack("<I", self.nLockTime)
         return r
 
-    def get_standard_template_hash(self, nIn):
+    def get_standard_template_hash(self, nIn:int) -> bytes:
         r = b""
         r += struct.pack("<i", self.nVersion)
         r += struct.pack("<I", self.nLockTime)
@@ -512,7 +512,7 @@ class CTransaction:
         return self.serialize_with_witness()
 
     # Recalculate the txid (transaction hash without witness)
-    def rehash(self):
+    def rehash(self) -> bytes:
         self.sha256 = None
         self.calc_sha256()
         return self.hash
