@@ -368,11 +368,11 @@ class CScriptTruncatedPushDataError(CScriptInvalidError):
 class CScriptNum:
     __slots__ = ("value",)
 
-    def __init__(self, d=0):
+    def __init__(self, d:int=0):
         self.value = d
 
     @staticmethod
-    def encode(obj):
+    def encode(obj:CScriptNum) -> bytes:
         r = bytearray(0)
         if obj.value == 0:
             return bytes(r)
@@ -388,7 +388,7 @@ class CScriptNum:
         return bytes([len(r)]) + r
 
     @staticmethod
-    def decode(vch):
+    def decode(vch:bytes):
         result = 0
         # We assume valid push_size and minimal encoding
         value = vch[1:]

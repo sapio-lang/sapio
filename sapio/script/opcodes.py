@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Union
+from typing import Union, List, ClassVar
 
 
 from sapio.bitcoinlib.script import *
@@ -31,11 +31,11 @@ class AllowedOp:
     OP_VERIFY = OP_VERIFY
     OP_EQUALVERIFY = OP_EQUALVERIFY
 
-ONE = CScriptNum(1)
+ONE : CScriptNum = CScriptNum(1)
 ZERO = CScriptNum(0)
 ONE_enc = CScriptNum.encode(ONE)
 ZERO_enc = CScriptNum.encode(ZERO)
-def bool_of_stack_item(v:bytes):
+def bool_of_stack_item(v:bytes) -> bool:
     for idx, char in enumerate(v):
         if char != 0:
             if idx == len(v) -1 and char == 0x80:
@@ -45,7 +45,7 @@ def bool_of_stack_item(v:bytes):
 
 
 # Interpreter Loosely Based on Bitcoin Core, MIT License
-def handle(op:Union[CScriptOp, int, bytes], stack: List[bytes], handle_branch: ConditionStack):
+def handle(op:Union[CScriptOp, int, bytes], stack: List[bytes], handle_branch: ConditionStack) -> bool:
     should_execute = handle_branch.all_true()
     if isinstance(op, bytes):
         if should_execute:
@@ -131,39 +131,41 @@ def handle(op:Union[CScriptOp, int, bytes], stack: List[bytes], handle_branch: C
             if len(stack) < 1: return False
         elif op == OP_EQUALVERIFY:
             if len(stack) < 2: return False
-            a = stack.pop()
-            b = stack.pop()
-            if a != b:
+            ach = stack.pop()
+            bch = stack.pop()
+            if ach != bch:
                 return False
         elif op == OP_VERIFY:
             if len(stack) < 1: return False
-            b = stack.pop()
-            if not bool_of_stack_item(b):
+            bch = stack.pop()
+            if not bool_of_stack_item(bch):
                 return False
         else:
             raise ValueError("Scripts using ", op, " cannot be interpreted yet!")
-        return True
+    return True
 
 # Implementation Based on Bitcoin Core Condition Stack, MIT License
 class ConditionStack:
-    NO_FALSE = max_uint32
-    def __init__(self):
+    NO_FALSE : ClassVar[bool] = max_uint32
+    stack_size: int
+    first_false_position: int
+    def __init__(self) -> None:
         self.stack_size = 0
         self.first_false_position = ConditionStack.NO_FALSE
-    def empty(self):
+    def empty(self) -> bool:
         return self.stack_size == 0
-    def all_true(self):
+    def all_true(self) -> bool:
         return self.first_false_position == ConditionStack.NO_FALSE
-    def push_back(self, b:bool):
+    def push_back(self, b:bool) -> None:
         if self.first_false_position == ConditionStack.NO_FALSE and not b:
             self.first_false_position = self.stack_size
         self.stack_size +=1
-    def pop_back(self):
+    def pop_back(self) -> None:
         assert self.stack_size > 0
         self.stack_size -= 1
         if self.first_false_position == self.stack_size:
             self.first_false_position = ConditionStack.NO_FALSE
-    def toggle_top(self):
+    def toggle_top(self) -> None:
         assert self.stack_size > 0
         if self.first_false_position == ConditionStack.NO_FALSE:
             self.first_false_position = self.stack_size - 1
