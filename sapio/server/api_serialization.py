@@ -1,7 +1,7 @@
 
 import json
 import typing
-from typing import Dict, Type, Callable, Any, Union, Tuple, Optional
+from typing import Dict, Type, Callable, Any, Union, Tuple, Optional, List
 
 import tornado
 import tornado.websocket
@@ -17,12 +17,13 @@ from sapio.contract.contract import Contract
 from sapio.examples.tree_pay import TreePay
 from sapio.examples.undo_send import UndoSend2
 from sapio.script.clause import TimeSpec, RelativeTimeSpec, AbsoluteTimeSpec, Days
+from sapio.bitcoinlib.static_types import int64
 
 from sapio.contract.bindable_contract import BindableContract
 placeholder_hint = {
     Amount: "int",
     Sequence: "int",
-    TimeSpec: "int",
+    Union[RelativeTimeSpec, AbsoluteTimeSpec]: "int",
     RelativeTimeSpec: "int",
     AbsoluteTimeSpec: "int",
     typing.List[typing.Tuple[Amount, Contract]]: [[0, [0, "address"]]],
@@ -33,57 +34,52 @@ placeholder_hint = {
 }
 id = lambda x: x
 
-conversion_functions = {}
+def convert_pubkey(arg: str, ctx)-> PubKey:
+    return PubKey(bytes(arg, 'utf-8'))
 
 
-def register(type_):
-    def deco(f):
-        conversion_functions[type_] = f
-        return f
 
-    return deco
-
-
-@register(PubKey)
-def convert(arg: PubKey, ctx):
-    return bytes(arg, 'utf-8')
-
-
-@register(typing.List[typing.Tuple[Amount, Contract]])
-def convert_dest(arg, ctx):
-    ret = [(convert_amount(Amount(a), ctx), convert_contract(b, ctx)) for (a, b) in arg]
-    print(ret)
-    return ret
-
-
-@register(Tuple[Amount, str])
-def convert_contract(arg: Tuple[Amount, str], ctx):
-    if arg[1] in ctx.compilation_cache:
-        return ctx.compilation_cache[arg[1]]
-    return sapio.examples.p2pk.PayToSegwitAddress(amount=arg[0], address=arg[1])
-
-@register(Contract)
-def convert_contract_object(arg: Contract, ctx):
-    if arg.witness_manager.get_p2wsh_address() in ctx.compilation_cache:
-        return ctx.compilation_cache[arg[1]]
-    raise AssertionError("No Known Contract by that name")
-
-
-@register(sapio.examples.p2pk.PayToSegwitAddress)
-def convert_p2swa(arg: Contract, ctx):
-    if arg in ctx.compilation_cache:
+def convert_contract_object(arg: str, ctx) -> Contract:
+    try:
         return ctx.compilation_cache[arg]
-    return sapio.examples.p2pk.PayToSegwitAddress(amount=0, address=arg)
+    except KeyError:
+        raise AssertionError("No Known Contract by that name")
+def convert_dest(arg: List[Tuple[int, str]], ctx) -> List[Tuple[Amount, Contract]]:
+    return list(map(lambda x: convert_contract(x, ctx), arg))
+
+def convert_contract(arg: Tuple[int, str], ctx) -> Tuple[Amount, Contract]:
+    try:
+        return (Amount(arg[0]), ctx.compilation_cache[arg[1]])
+    except KeyError:
+        return (Amount(arg[0]), sapio.examples.p2pk.PayToSegwitAddress(amount=Amount(arg[0]), address=arg[1]))
+
+# Don't convert to p2swa if we know what it is... TODO: maybe make this optional?
+def convert_p2swa(arg: str, ctx) -> Contract:
+    try:
+        return ctx.compilation_cache[arg]
+    except KeyError:
+        # default bind to 0
+        return sapio.examples.p2pk.PayToSegwitAddress(amount=0, address=arg)
 
 
-@register(Sequence)
-@register(RelativeTimeSpec)
-@register(TimeSpec)
-def convert_time(arg: Sequence, ctx):
+def convert_sequence(arg: Sequence, ctx) -> Sequence:
+    return Sequence(arg)
+def convert_relative_time_spec(arg: Any, ctx) -> RelativeTimeSpec:
     return (RelativeTimeSpec(Sequence(arg)))
 
+def convert_amount(arg: int, ctx) -> Amount:
+    # TODO Assert ranges....
+    return Amount(int64(arg))
 
-@register(Amount)
-@register(int)
-def convert_amount(x, ctx):
-    return x
+conversion_functions = {
+    PubKey: convert_pubkey,
+    Contract: convert_contract_object,
+    List[Tuple[Amount, Contract]]: convert_dest,
+    Tuple[Amount, Contract]: convert_contract,
+    Amount: convert_amount,
+    Sequence: convert_sequence,
+    RelativeTimeSpec: convert_relative_time_spec
+
+}
+
+
