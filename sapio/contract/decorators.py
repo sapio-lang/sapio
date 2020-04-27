@@ -21,21 +21,19 @@ PathFunctionType = Callable[[ContractType], PathReturnType]
 class PathFunction(Generic[ContractType]):
     # TODO: Improve arg type, which we know is an AndClauseArugment Callable or None
     def __init__(self, f: PathFunctionType[ContractType], unlocker: Callable[[ContractType], Clause]) -> None:
-        self.f = f
-        self.unlock_with = unlocker
+        self.f : PathFunctionType[ContractType] = f
+        self.unlock_with : Callable[[ContractType], Clause] = unlocker
         self.__name__ = f.__name__
 
     def __call__(self, obj:ContractType) -> PathReturnType:
         return self.f(obj)
     @staticmethod
-    def path_if(arg: Callable[[ContractType], Clause]) -> Callable[[PathFunctionType[ContractType]], PathFunction]:
+    def path_if(arg: Callable[[Any], Clause]) -> Callable[[PathFunctionType[ContractType]], PathFunction[ContractType]]:
         return lambda x: PathFunction[ContractType](x, arg)
     @staticmethod
     def path( arg: PathFunctionType[ContractType]) -> PathFunction[ContractType]:
         return PathFunction[ContractType](arg, lambda x: SatisfiedClause())
 
-path_if = PathFunction.path_if
-path = PathFunction.path
 
 class UnlockFunction(Generic[ContractType]):
     # TODO: Improve arg type, which we know is an AndClauseArugment Callable or None
@@ -46,14 +44,14 @@ class UnlockFunction(Generic[ContractType]):
     def __call__(self, obj: ContractType) -> Clause:
         return self.unlock_with(obj)
 
+    @staticmethod
+    def unlock(
+        s: Callable[[Any], Clause]
+    ) -> Callable[[Callable[[ContractType], None]], UnlockFunction[ContractType]]:
+        def wrapper(f: Callable[[ContractType], None]) -> UnlockFunction[ContractType]:
+            return UnlockFunction(s, f.__name__)
 
-def unlock(
-    s: Callable[[Any], Clause]
-) -> Callable[[Callable[[T], None]], UnlockFunction]:
-    def wrapper(f: Callable[[T], None]) -> UnlockFunction:
-        return UnlockFunction(s, f.__name__)
-
-    return wrapper
+        return wrapper
 
 
 class PayAddress(Generic[ContractType]):
@@ -64,9 +62,9 @@ class PayAddress(Generic[ContractType]):
     def __call__(self, obj: ContractType) -> Tuple[Amount, str]:
         return self.address(obj)
 
-
-def pay_address(f: Callable[[ContractType], Tuple[Amount, str]]) -> PayAddress:
-    return PayAddress(f)
+    @staticmethod
+    def pay_address(f: Callable[[ContractType], Tuple[Amount, str]]) -> PayAddress[ContractType]:
+        return PayAddress(f)
 
 
 class CheckFunction(Generic[ContractType]):
@@ -77,6 +75,13 @@ class CheckFunction(Generic[ContractType]):
     def __call__(self, obj:ContractType)->bool:
         return self.func(obj)
 
+    @staticmethod
+    def check(s: Callable[[ContractType], bool]) -> CheckFunction[ContractType]:
+        return CheckFunction(s)
 
-def check(s: Callable[[ContractType], bool]) -> CheckFunction:
-    return CheckFunction(s)
+
+path_if = PathFunction.path_if
+path = PathFunction.path
+unlock = UnlockFunction.unlock
+pay_address = PayAddress.pay_address
+check = CheckFunction.check

@@ -53,12 +53,12 @@ class ContractBase(Generic[FieldsType]):
             assert len(unlock_functions) == 0
         self.fields_obj = fields
         self.all_fields: Dict[str, Type[Any]] = typing.get_type_hints(self.fields_obj)
-        self.path_functions: List[PathFunction] = path_functions
-        self.pay_functions: Optional[PayAddress] = pay_functions[0] if len(
+        self.path_functions: List[PathFunction[ContractBase.ContractType]] = path_functions
+        self.pay_functions: Optional[PayAddress[ContractBase.ContractType]] = pay_functions[0] if len(
             pay_functions
         ) else None
-        self.unlock_functions: List[UnlockFunction] = unlock_functions
-        self.assertions: List[CheckFunction] = assertions
+        self.unlock_functions: List[UnlockFunction[ContractBase.ContractType]] = unlock_functions
+        self.assertions: List[CheckFunction[ContractBase.ContractType]] = assertions
 
     def _setup_call(self, obj: ContractType, kwargs: Dict[str, Any]) -> None:
         if kwargs.keys() != self.all_fields.keys():
