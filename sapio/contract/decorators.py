@@ -1,46 +1,52 @@
 from __future__ import annotations
-from typing import TypeVar, Any, Union, Callable, List, Tuple, Iterator, Generic, Optional
-from .txtemplate import TransactionTemplate
+
+from typing import (Any, Callable, Generic, Iterator, List, Optional, Tuple,
+                    TypeVar, Union)
+
+import sapio
+from sapio.bitcoinlib.static_types import Amount
 from sapio.script.clause import Clause, SatisfiedClause
 
-from sapio.bitcoinlib.static_types import Amount
+from .txtemplate import TransactionTemplate
 
 T = TypeVar("T")
 T2 = TypeVar("T2")
 
+ContractType = TypeVar("ContractType")
 
 PathReturnType = Union[ TransactionTemplate, Iterator[TransactionTemplate] ]
-PathFunctionType = Callable[[T], PathReturnType]
+PathFunctionType = Callable[[ContractType], PathReturnType]
 
 
-class PathFunction(Generic[T]):
+class PathFunction(Generic[ContractType]):
     # TODO: Improve arg type, which we know is an AndClauseArugment Callable or None
-    def __init__(self, f: PathFunctionType[T], unlocker: Callable[[T], Clause]) -> None:
+    def __init__(self, f: PathFunctionType[ContractType], unlocker: Callable[[ContractType], Clause]) -> None:
         self.f = f
         self.unlock_with = unlocker
         self.__name__ = f.__name__
 
-    def __call__(self, obj:T) -> PathReturnType:
+    def __call__(self, obj:ContractType) -> PathReturnType:
         return self.f(obj)
 
 
-def path( arg: PathFunctionType[T]) -> PathFunction[T]:
-    return PathFunction(arg, lambda _: SatisfiedClause())
+def satisfied(arg:ContractType) -> Clause:
+    return SatisfiedClause()
+def path( arg: PathFunctionType[ContractType]) -> PathFunction[ContractType]:
+    return PathFunction(arg, satisfied)
 
-def path_if( arg: Optional[Callable[[T], Clause]] = None) -> Callable[[PathFunctionType[T]], PathFunction[T]]:
-    argw : Callable[[T], Clause] = (lambda _ : SatisfiedClause()) if arg is None else arg
-    def wrapper(f: PathFunctionType[T]) -> PathFunction[T]:
-        return PathFunction(f, lambda _: SatisfiedClause())
+def path_if( arg: Callable[[ContractType], Clause]) -> Callable[[PathFunctionType[ContractType]], PathFunction[ContractType]]:
+    def wrapper(f: PathFunctionType[ContractType]) -> PathFunction[ContractType]:
+        return PathFunction(f, arg)
     return wrapper
 
 
-class UnlockFunction:
+class UnlockFunction(Generic[ContractType]):
     # TODO: Improve arg type, which we know is an AndClauseArugment Callable or None
-    def __init__(self, condition: Callable[[T], Clause], name: str) -> None:
+    def __init__(self, condition: Callable[[ContractType], Clause], name: str) -> None:
         self.unlock_with = condition
         self.__name__ = name
 
-    def __call__(self, obj: T) -> Clause:
+    def __call__(self, obj: ContractType) -> Clause:
         return self.unlock_with(obj)
 
 
@@ -53,27 +59,27 @@ def unlock(
     return wrapper
 
 
-class PayAddress:
+class PayAddress(Generic[ContractType]):
 
-    def __init__(self, address: Callable[[T], Tuple[Amount, str]]) -> None:
-        self.address: Callable[[T], Tuple[Amount, str]] = address
+    def __init__(self, address: Callable[[ContractType], Tuple[Amount, str]]) -> None:
+        self.address: Callable[[ContractType], Tuple[Amount, str]] = address
 
-    def __call__(self, obj: T) -> Tuple[Amount, str]:
+    def __call__(self, obj: ContractType) -> Tuple[Amount, str]:
         return self.address(obj)
 
 
-def pay_address(f: Callable[[T], Tuple[Amount, str]]) -> PayAddress:
+def pay_address(f: Callable[[ContractType], Tuple[Amount, str]]) -> PayAddress:
     return PayAddress(f)
 
 
-class CheckFunction:
-    def __init__(self, func: Callable[[T], bool]) -> None:
-        self.func : Callable[[T],bool] = func
+class CheckFunction(Generic[ContractType]):
+    def __init__(self, func: Callable[[ContractType], bool]) -> None:
+        self.func : Callable[[ContractType],bool] = func
         self.__name__ = func.__name__
 
-    def __call__(self, obj:T)->bool:
+    def __call__(self, obj:ContractType)->bool:
         return self.func(obj)
 
 
-def check(s: Callable[[T], bool]) -> CheckFunction:
+def check(s: Callable[[ContractType], bool]) -> CheckFunction:
     return CheckFunction(s)
