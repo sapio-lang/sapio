@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from functools import reduce
+from itertools import combinations
 from typing import (
-    Any,
     Callable,
     Generic,
     Iterator,
@@ -60,7 +61,6 @@ class UnlockFunction(Generic[ContractType]):
         return UnlockFunction[ContractType](s, s.__name__)
 
 
-
 class PayAddress(Generic[ContractType]):
     def __init__(self, address: Callable[[ContractType], Tuple[Amount, str]]) -> None:
         self.address: Callable[[ContractType], Tuple[Amount, str]] = address
@@ -88,23 +88,85 @@ class CheckFunction(Generic[ContractType]):
         return CheckFunction(s)
 
 
-class Wrapper(Generic[ContractType]):
+class LayeredRequirement(Generic[ContractType]):
     def __init__(self, arg: Callable[[ContractType], Clause]) -> None:
         self.arg: Callable[[ContractType], Clause] = arg
 
-    def __call__(self, pf: PathFunction[ContractType]) -> PathFunction[ContractType]:
-        p: PathFunction[ContractType] = PathFunction[ContractType](
-            pf.f, lambda x: pf.unlock_with(x) & self.arg(x)
+    def __call__(
+        self,
+        decorated: Union[
+            UnlockFunction[ContractType],
+            PathFunction[ContractType],
+            LayeredRequirement[ContractType],
+        ],
+    ) -> Union[
+        UnlockFunction[ContractType],
+        PathFunction[ContractType],
+        LayeredRequirement[ContractType],
+    ]:
+        if isinstance(decorated, UnlockFunction):
+            uf: UnlockFunction[ContractType] = decorated
+
+            def wrap_unlock(contract: ContractType) -> Clause:
+                return uf(contract) & self.arg(contract)
+
+            u: UnlockFunction[ContractType] = UnlockFunction[ContractType](
+                wrap_unlock, uf.__name__
+            )
+            return u
+        elif isinstance(decorated, PathFunction):
+            pf: PathFunction[ContractType] = decorated
+
+            def wrap_path(contract: ContractType) -> Clause:
+                return pf.unlock_with(contract) & self.arg(contract)
+                return pf.unlock_with(contract) & self.arg(contract)
+
+            p: PathFunction[ContractType] = PathFunction[ContractType](pf.f, wrap_path)
+            return p
+        elif isinstance(decorated, LayeredRequirement):
+            l: LayeredRequirement[ContractType] = decorated
+            return self.stack(l)
+        else:
+            raise ValueError(
+                "Applied to wrong type! Maybe you're missing a decorator in the stack..."
+            )
+
+    def stack(
+        self, decorated: LayeredRequirement[ContractType]
+    ) -> LayeredRequirement[ContractType]:
+        def wrap_layer(contract: ContractType) -> Clause:
+            return decorated.arg(contract) & self.arg(contract)
+
+        f: LayeredRequirement[ContractType] = LayeredRequirement[ContractType](
+            wrap_layer
         )
-        return p
+        return f
 
-
-class LayeredRequirement(Generic[ContractType]):
     @staticmethod
     def require(
         arg: Callable[[ContractType], Clause]
-    ) -> Callable[[PathFunction[ContractType]], PathFunction[ContractType]]:
-        return Wrapper[ContractType](arg)
+    ) -> LayeredRequirement[ContractType]:
+        return LayeredRequirement[ContractType](arg)
+
+    @staticmethod
+    def threshold(
+        n: int, l: List[LayeredRequirement[ContractType]]
+    ) -> LayeredRequirement[ContractType]:
+        assert len(l) >= n
+        assert n > 0
+
+        def wrapper(self: ContractType) -> Clause:
+            conds = []
+            for arg in l:
+                # take inner requirement
+                conds.append(arg.arg(self))
+            l3 = [
+                reduce(lambda a, b: a & b, combo[1:], combo[0])
+                for combo in combinations(conds, n)
+            ]
+            return reduce(lambda a, b: a | b, l3[1:], l3[0])
+
+        return LayeredRequirement[ContractType](wrapper)
 
 
 guarantee = PathFunction.guarantee
@@ -113,3 +175,4 @@ require = LayeredRequirement.require
 unlock = UnlockFunction.unlock
 pay_address = PayAddress.pay_address
 check = CheckFunction.check
+threshold = LayeredRequirement.threshold
