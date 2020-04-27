@@ -58,5 +58,6 @@ class CollapsibleTree(Contract):
     def get_musig(self) -> AssignedVariable[PubKey]:
         return AssignedVariable(PubKey(b"0" * 32), "musig")
 
-    @unlock(lambda self: SignatureCheckClause(self.get_musig()))
-    def _(self):pass
+    @unlock
+    def cooperate_out(self):
+        return SignatureCheckClause(self.get_musig())

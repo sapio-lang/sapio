@@ -1,7 +1,16 @@
 from __future__ import annotations
 
-from typing import (Any, Callable, Generic, Iterator, List, Optional, Tuple,
-                    TypeVar, Union)
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Iterator,
+    List,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 import sapio
 from sapio.bitcoinlib.static_types import Amount
@@ -14,21 +23,26 @@ T2 = TypeVar("T2")
 
 ContractType = TypeVar("ContractType")
 
-PathReturnType = Union[ TransactionTemplate, Iterator[TransactionTemplate] ]
+PathReturnType = Union[TransactionTemplate, Iterator[TransactionTemplate]]
 PathFunctionType = Callable[[ContractType], PathReturnType]
 
 
 class PathFunction(Generic[ContractType]):
     # TODO: Improve arg type, which we know is an AndClauseArugment Callable or None
-    def __init__(self, f: PathFunctionType[ContractType], unlocker: Callable[[ContractType], Clause]) -> None:
-        self.f : PathFunctionType[ContractType] = f
-        self.unlock_with : Callable[[ContractType], Clause] = unlocker
+    def __init__(
+        self,
+        f: PathFunctionType[ContractType],
+        unlocker: Callable[[ContractType], Clause],
+    ) -> None:
+        self.f: PathFunctionType[ContractType] = f
+        self.unlock_with: Callable[[ContractType], Clause] = unlocker
         self.__name__ = f.__name__
 
-    def __call__(self, obj:ContractType) -> PathReturnType:
+    def __call__(self, obj: ContractType) -> PathReturnType:
         return self.f(obj)
+
     @staticmethod
-    def guarantee( arg: PathFunctionType[ContractType]) -> PathFunction[ContractType]:
+    def guarantee(arg: PathFunctionType[ContractType]) -> PathFunction[ContractType]:
         return PathFunction[ContractType](arg, lambda x: SatisfiedClause())
 
 
@@ -42,17 +56,12 @@ class UnlockFunction(Generic[ContractType]):
         return self.unlock_with(obj)
 
     @staticmethod
-    def unlock(
-        s: Union[Callable[[Any], Clause], PathFunction[ContractType]]
-    ) -> Callable[[Callable[[ContractType], None]], UnlockFunction[ContractType]]:
-        def wrapper(f: Callable[[ContractType], None]) -> UnlockFunction[ContractType]:
-            return UnlockFunction[ContractType](s, f.__name__)
+    def unlock(s: Callable[[ContractType], Clause]) -> UnlockFunction[ContractType]:
+        return UnlockFunction[ContractType](s, s.__name__)
 
-        return wrapper
 
 
 class PayAddress(Generic[ContractType]):
-
     def __init__(self, address: Callable[[ContractType], Tuple[Amount, str]]) -> None:
         self.address: Callable[[ContractType], Tuple[Amount, str]] = address
 
@@ -60,16 +69,18 @@ class PayAddress(Generic[ContractType]):
         return self.address(obj)
 
     @staticmethod
-    def pay_address(f: Callable[[ContractType], Tuple[Amount, str]]) -> PayAddress[ContractType]:
+    def pay_address(
+        f: Callable[[ContractType], Tuple[Amount, str]]
+    ) -> PayAddress[ContractType]:
         return PayAddress(f)
 
 
 class CheckFunction(Generic[ContractType]):
     def __init__(self, func: Callable[[ContractType], bool]) -> None:
-        self.func : Callable[[ContractType],bool] = func
+        self.func: Callable[[ContractType], bool] = func
         self.__name__ = func.__name__
 
-    def __call__(self, obj:ContractType)->bool:
+    def __call__(self, obj: ContractType) -> bool:
         return self.func(obj)
 
     @staticmethod
@@ -77,23 +88,28 @@ class CheckFunction(Generic[ContractType]):
         return CheckFunction(s)
 
 
+class Wrapper(Generic[ContractType]):
+    def __init__(self, arg: Callable[[ContractType], Clause]) -> None:
+        self.arg: Callable[[ContractType], Clause] = arg
+
+    def __call__(self, pf: PathFunction[ContractType]) -> PathFunction[ContractType]:
+        p: PathFunction[ContractType] = PathFunction[ContractType](
+            pf.f, lambda x: pf.unlock_with(x) & self.arg(x)
+        )
+        return p
+
+
+class LayeredRequirement(Generic[ContractType]):
+    @staticmethod
+    def require(
+        arg: Callable[[ContractType], Clause]
+    ) -> Callable[[PathFunction[ContractType]], PathFunction[ContractType]]:
+        return Wrapper[ContractType](arg)
+
+
 guarantee = PathFunction.guarantee
+require = LayeredRequirement.require
 # TODO: Unify these two and make guarantee a modifier of the above?
 unlock = UnlockFunction.unlock
 pay_address = PayAddress.pay_address
 check = CheckFunction.check
-
-class Wrapper(Generic[ContractType]):
-    def __init__(self, arg: Callable[[ContractType], Clause]) -> None:
-        self.arg : Callable[[ContractType], Clause]= arg
-    def __call__(self, pf: PathFunction[ContractType]) -> PathFunction[ContractType]:
-        p : PathFunction[ContractType] =  PathFunction[ContractType](pf.f, lambda x: pf.unlock_with(x) & self.arg(x))
-        return p
-
-class LayeredRequirement(Generic[ContractType]):
-    @staticmethod
-    def require(arg: Callable[[ContractType], Clause]) -> Callable[[PathFunction[ContractType]], PathFunction[ContractType]]:
-        return Wrapper[ContractType](arg)
-
-require = LayeredRequirement.require
-guarantee = guarantee

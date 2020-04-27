@@ -24,8 +24,9 @@ class RawMultiSig(Contract):
     class Fields:
         keys: List[PubKey]
         thresh: int
-    @unlock(lambda self: multisig(self.keys.assigned_value, self.thresh.assigned_value))
-    def _(self): pass
+    @unlock
+    def _(self):
+        return multisig(self.keys.assigned_value, self.thresh.assigned_value)
 
 # Demonstrates multisig with a default path accessible at a lower threshold
 class RawMultiSigWithPath(Contract):
@@ -36,10 +37,15 @@ class RawMultiSigWithPath(Contract):
         path: Contract
         amount : Amount
 
-    @unlock(lambda self: multisig(self.keys.assigned_value, self.thresh_all.assigned_value))
-    def _(self): pass
+    @unlock
+    def _(self):
+        return multisig(self.keys.assigned_value, self.thresh_all.assigned_value)
 
-    @require(lambda self: multisig(self.keys.assigned_value, self.thresh_path.assigned_value))
+    @require
+    def lower_threshold(self):
+        return multisig(self.keys.assigned_value, self.thresh_path.assigned_value)
+
+    @lower_threshold
     @guarantee
     def redeem(self):
         tx = TransactionTemplate()

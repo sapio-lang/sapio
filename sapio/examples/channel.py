@@ -18,8 +18,9 @@ class Channel(Contract):
                                        mpc_key=self.mpc_key))
         return tx
 
-    @unlock(lambda self: SignatureCheckClause(self.mpc_key))
-    def cooperate(self): pass
+    @unlock
+    def cooperate(self):
+        return SignatureCheckClause(self.mpc_key)
 
 
 class ContestedChannel(Contract):
@@ -35,6 +36,6 @@ class ContestedChannel(Contract):
         tx.set_sequence(self.timeout.assigned_value.time)
         tx.add_output(self.amount.assigned_value, self.initial.assigned_value)
         return tx
-
-    @unlock(lambda self: SignatureCheckClause(self.mpc_key))
-    def cooperate(self): pass
+    @unlock
+    def cooperate(self):
+        return SignatureCheckClause(self.mpc_key)

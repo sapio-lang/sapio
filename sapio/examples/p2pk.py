@@ -8,7 +8,9 @@ class PayToPubKey(Contract):
         key: PubKey
         amount: Amount
 
-    @unlock(lambda self: SignatureCheckClause(self.key))
+    @unlock
+    def with_key(self):
+        return SignatureCheckClause(self.key)
     def _(self): pass
 
 

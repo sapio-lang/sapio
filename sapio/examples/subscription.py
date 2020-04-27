@@ -72,7 +72,12 @@ class CancelContest(Contract):
     class MetaData:
         color = lambda self: "red"
         label = lambda self: "Cancellation Attempt"
-    @require(lambda self: SignatureCheckClause(self.watchtower_key))
+
+    @require
+    def watchtower_selects_best(self):
+        return SignatureCheckClause(self.watchtower_key)
+
+    @watchtower_selects_best
     @guarantee
     def counterclaim(self) -> Iterator[TransactionTemplate]:
         amount_earned = Amount(int64(0))

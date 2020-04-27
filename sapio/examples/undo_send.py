@@ -11,15 +11,21 @@ class UndoSend(Contract):
         amount: Amount
         timeout: TimeSpec
 
-    @unlock(lambda self: AfterClause(self.timeout)&SignatureCheckClause(self.to_key))
-    def _(self): pass
+    @unlock
+    def finish(self):
+        return AfterClause(self.timeout) & SignatureCheckClause(self.to_key)
 
-    @require(lambda self: SignatureCheckClause(self.to_key))
+    @require
+    def check_key(self):
+        return SignatureCheckClause(self.to_key)
+
+    @check_key
     @guarantee
     def undo(self) -> TransactionTemplate:
         tx = TransactionTemplate()
         tx.add_output(self.amount.assigned_value, self.from_contract.assigned_value)
         return tx
+
 
 class UndoSend2(Contract):
     class Fields:
