@@ -34,9 +34,11 @@ class PathFunction(Generic[ContractType]):
         self,
         f: PathFunctionType[ContractType],
         unlocker: Callable[[ContractType], Clause],
+        is_guaranteed=True,
     ) -> None:
         self.f: PathFunctionType[ContractType] = f
         self.unlock_with: Callable[[ContractType], Clause] = unlocker
+        self.is_guaranteed: bool = is_guaranteed
         self.__name__ = f.__name__
 
     def __call__(self, obj: ContractType) -> PathReturnType:
@@ -44,7 +46,11 @@ class PathFunction(Generic[ContractType]):
 
     @staticmethod
     def guarantee(arg: PathFunctionType[ContractType]) -> PathFunction[ContractType]:
-        return PathFunction[ContractType](arg, lambda x: SatisfiedClause())
+        return PathFunction[ContractType](arg, lambda x: SatisfiedClause(), True)
+
+    @staticmethod
+    def unlock_but_suggest(arg: PathFunctionType[ContractType]) -> PathFunction[ContractType]:
+        return PathFunction[ContractType](arg, lambda x: SatisfiedClause(), False)
 
 
 class UnlockFunction(Generic[ContractType]):
@@ -169,10 +175,21 @@ class LayeredRequirement(Generic[ContractType]):
         return LayeredRequirement[ContractType](wrapper)
 
 
+# enable_if is useful to decorate classes that we only want to have a feature on
+# for some known boolean conditional.
+# It should be used with a class factory
+R = TypeVar("R")
+def enable_if(b: bool) -> Union[Callable[[R], R], Callable[[R], None]]:
+    if b:
+        return lambda f: f
+    else:
+        return lambda f: None
+
 guarantee = PathFunction.guarantee
 require = LayeredRequirement.require
 # TODO: Unify these two and make guarantee a modifier of the above?
 unlock = UnlockFunction.unlock
+unlock_but_suggest = PathFunction.unlock_but_suggest
 pay_address = PayAddress.pay_address
 check = CheckFunction.check
 threshold = LayeredRequirement.threshold

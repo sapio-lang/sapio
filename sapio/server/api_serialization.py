@@ -21,7 +21,7 @@ from sapio.bitcoinlib.static_types import int64
 
 from sapio.contract.bindable_contract import BindableContract
 placeholder_hint = {
-    Amount: "int",
+    Amount: 0,
     Sequence: "int",
     Union[RelativeTimeSpec, AbsoluteTimeSpec]: "int",
     RelativeTimeSpec: "int",
@@ -30,7 +30,7 @@ placeholder_hint = {
     PubKey: "String",
     Contract: [0, "String"],
     sapio.examples.p2pk.PayToSegwitAddress: "Address",
-    int: "int",
+    int: 0,
 }
 id = lambda x: x
 
@@ -39,11 +39,12 @@ def convert_pubkey(arg: str, ctx)-> PubKey:
 
 
 
-def convert_contract_object(arg: str, ctx) -> Contract:
+def convert_contract_object(arg: Tuple[Amount,str], ctx) -> Contract:
     try:
-        return ctx.compilation_cache[arg]
+        return ctx.compilation_cache[arg[1]]
     except KeyError:
-        raise AssertionError("No Known Contract by that name")
+        return sapio.examples.p2pk.PayToSegwitAddress(amount=arg[0], address=arg[1])
+        #raise AssertionError("No Known Contract by that name")
 def convert_dest(arg: List[Tuple[int, str]], ctx) -> List[Tuple[Amount, Contract]]:
     return list(map(lambda x: convert_contract(x, ctx), arg))
 

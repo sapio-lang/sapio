@@ -3,6 +3,8 @@ import os
 import tornado
 
 import sapio
+import sapio.examples
+import sapio.examples.channel
 import sapio.examples.basic_vault
 import sapio.examples.p2pk
 import sapio.examples.subscription
@@ -23,6 +25,7 @@ def make_app():
 
 
 if __name__ == "__main__":
+    CompilerWebSocket.add_contract("Channel", sapio.examples.channel.BasicChannel)
     CompilerWebSocket.add_contract("Pay to Public Key", sapio.examples.p2pk.PayToPubKey)
     CompilerWebSocket.add_contract("Vault", sapio.examples.basic_vault.Vault2)
     CompilerWebSocket.add_contract("Subscription", sapio.examples.subscription.auto_pay)

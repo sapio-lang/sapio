@@ -108,8 +108,11 @@ class BindableContract(Generic[T]):
         metadata = []
         for (ctv_hash, txn_template) in self.specific_transactions:
             # todo: find correct witness?
-            assert ctv_hash == txn_template.get_ctv_hash()
             tx_label = output_label + ":" + txn_template.label
+            print()
+            print(tx_label)
+            print(ctv_hash, txn_template.get_ctv_hash())
+            assert ctv_hash == txn_template.get_ctv_hash()
 
             tx = txn_template.bind_tx(out)
             txid = int(tx.rehash(), 16)

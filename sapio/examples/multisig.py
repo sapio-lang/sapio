@@ -1,7 +1,8 @@
 from __future__ import annotations
+
 from functools import reduce
 from itertools import combinations
-from typing import List
+from typing import List, Tuple, Optional
 
 from sapio.bitcoinlib.static_types import Amount, PubKey
 from sapio.contract.contract import Contract
@@ -11,6 +12,7 @@ from sapio.contract.decorators import (
     require,
     threshold,
     unlock,
+    unlock_but_suggest,
 )
 from sapio.contract.txtemplate import TransactionTemplate
 from sapio.script.clause import (
@@ -21,6 +23,8 @@ from sapio.script.clause import (
     Weeks,
 )
 from sapio.script.variable import AssignedVariable
+from sapio.examples.p2pk import PayToSegwitAddress
+from sapio.bitcoinlib.static_types import Hash
 
 
 def multisig(l, n):
@@ -101,6 +105,7 @@ class DemoLayeredConditions(Contract):
     @require
     def c_signed(self) -> Clause:
         return SignatureCheckClause(self.key_c)
+
     @threshold(3, [a_signed, b_signed, c_signed])
     @unlock
     def all_signed(self) -> Clause:
@@ -127,8 +132,8 @@ class DemoLayeredConditions(Contract):
     # Until then, when stacking on top of an @require, .stack must be used in
     # order for it to compose and pass type checks... it's not needed for the
     # program to be correct though.
-    # 
-    #@one_month # broken!
+    #
+    # @one_month # broken!
     @one_month.stack
     @require
     def d_signed_and_one_month(self) -> Clause:
@@ -140,4 +145,33 @@ class DemoLayeredConditions(Contract):
         # maybe make some assertions about timing...
         t: TransactionTemplate = self.setup.assigned_value
         return t
+
+    @threshold(3, [a_signed, b_signed, c_signed])
+    @unlock_but_suggest
+    def cooperate_example(
+        self, state: Optional[List[Tuple[Amount, str]]] = None,
+    ) -> TransactionTemplate:
+        if state is None:
+            # Default example:
+            return self.setup.assigned_value
+        else:
+            tx = TransactionTemplate()
+            tx.add_output(self.amount.assigned_value, ContractClose(amount=self.amount, payments=state))
+            return tx
+
+class ContractClose(Contract):
+    class Fields:
+        amount: Amount
+        payments: List[Tuple[Amount, str]]
+    @require
+    def wait(self):
+        return AfterClause(Weeks(2))
+    @wait
+    @guarantee
+    def make_payments(self) -> TransactionTemplate:
+        tx = TransactionTemplate()
+        for (amt, to) in self.payments.assigned_value:
+            tx.add_output(amt, PayToSegwitAddress(amount=amt, address=to))
+        return tx
+
 
