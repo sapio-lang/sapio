@@ -87,10 +87,10 @@ class BindableContract(Generic[T]):
     def to_json(self) -> Dict[str, Any]:
         return {
             "witness_manager": self.witness_manager.to_json(),
-            "transactions": {
-                h: transaction.to_json()
-                for (h, transaction) in self.specific_transactions
-            },
+            "transactions": [
+                transaction.to_json()
+               for transaction in self.guaranteed_txns+self.suggested_txns
+            ],
             "min_amount_spent": self.amount_range[0],
             "max_amount_spent": self.amount_range[1],
             "metadata": {
