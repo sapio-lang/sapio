@@ -1,7 +1,7 @@
 from typing import Callable
 
 from sapio.bitcoinlib.static_types import Amount
-from sapio.contract import Contract, path, TransactionTemplate
+from sapio.contract import Contract, guarantee, TransactionTemplate
 from sapio.examples.undo_send import UndoSend
 from sapio.script.clause import TimeSpec
 
@@ -15,7 +15,7 @@ class SmarterVault(Contract):
         timeout: TimeSpec
         mature: TimeSpec
 
-    @path
+    @guarantee
     def step(self) -> TransactionTemplate:
         tx = TransactionTemplate()
         tx.set_sequence(self.timeout.assigned_value.time)
@@ -36,7 +36,7 @@ class SmarterVault(Contract):
             tx.add_output(sub_amount, sub_vault)
         return tx
 
-    @path
+    @guarantee
     def to_cold(self) -> TransactionTemplate:
         tx = TransactionTemplate()
         value = self.n_steps.assigned_value * self.amount_step.assigned_value

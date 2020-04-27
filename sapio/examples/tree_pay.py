@@ -2,7 +2,7 @@ import functools
 from typing import Tuple, List
 
 from sapio.bitcoinlib.static_types import PubKey, Amount
-from sapio.contract import Contract, path, TransactionTemplate, unlock
+from sapio.contract import Contract, guarantee, TransactionTemplate, unlock
 from sapio.script.clause import AfterClause, Weeks, SignatureCheckClause
 from sapio.script.variable import AssignedVariable
 
@@ -21,7 +21,7 @@ class TreePay(Contract):
     class Fields:
         payments: List[Tuple[Amount, Contract]]
         radix: int
-    @path
+    @guarantee
     def expand(self) -> TransactionTemplate:
         tx = TransactionTemplate()
         segments = list(segment_by_radix(self.payments.assigned_value, self.radix.assigned_value))
@@ -43,7 +43,7 @@ class CollapsibleTree(Contract):
     class Fields:
         payments: List[Tuple[Amount, Contract]]
         radix: int
-    @path
+    @guarantee
     def expand(self) -> TransactionTemplate:
         tx = TransactionTemplate()
         segments = list(segment_by_radix(self.payments.assigned_value, self.radix.assigned_value))

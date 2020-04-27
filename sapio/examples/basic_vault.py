@@ -1,7 +1,7 @@
 from sapio.examples.undo_send import UndoSend, UndoSend2
 from sapio.bitcoinlib.static_types import Amount
 from sapio.script.clause import TimeSpec
-from sapio.contract import Contract, path, TransactionTemplate
+from sapio.contract import Contract, guarantee, TransactionTemplate
 
 
 class Vault(Contract):
@@ -13,7 +13,7 @@ class Vault(Contract):
         timeout: TimeSpec
         mature: TimeSpec
 
-    @path
+    @guarantee
     def step(self) -> TransactionTemplate:
         tx = TransactionTemplate()
         tx.set_sequence(self.timeout.assigned_value.time)
@@ -34,7 +34,7 @@ class Vault(Contract):
             tx.add_output(sub_amount, sub_vault)
         return tx
 
-    @path
+    @guarantee
     def to_cold(self) -> TransactionTemplate:
         tx = TransactionTemplate()
         tx.add_output(self.n_steps.assigned_value * self.amount_step.assigned_value,
@@ -55,7 +55,7 @@ class Vault2(Contract):
         color = lambda self: "blue"
         label = lambda self: "Vault"
 
-    @path
+    @guarantee
     def step(self) -> TransactionTemplate:
         tx = TransactionTemplate()
         tx.set_sequence(self.timeout.assigned_value.time)
@@ -76,7 +76,7 @@ class Vault2(Contract):
             tx.add_output(sub_amount, sub_vault)
         return tx
 
-    @path
+    @guarantee
     def to_cold(self) -> TransactionTemplate:
         tx = TransactionTemplate()
         tx.add_output(self.n_steps.assigned_value * self.amount_step.assigned_value,

@@ -1,5 +1,5 @@
 from sapio.bitcoinlib.static_types import Amount, PubKey
-from sapio.contract import Contract, path, TransactionTemplate, unlock
+from sapio.contract import Contract, guarantee, TransactionTemplate, unlock
 from sapio.script.clause import RelativeTimeSpec, SignatureCheckClause
 
 
@@ -10,7 +10,7 @@ class Channel(Contract):
         timeout: RelativeTimeSpec
         amount: Amount
 
-    @path
+    @guarantee
     def begin_contest(self):
         tx = TransactionTemplate()
         tx.add_output(self.amount.assigned_value,
@@ -29,7 +29,7 @@ class ContestedChannel(Contract):
         timeout: RelativeTimeSpec
         amount: Amount
 
-    @path
+    @guarantee
     def finish_contest(self):
         tx = TransactionTemplate()
         tx.set_sequence(self.timeout.assigned_value.time)

@@ -1,7 +1,7 @@
 from typing import Tuple
 
 from sapio.bitcoinlib.messages import COutPoint
-from sapio.contract import Contract, path, TransactionTemplate, unlock
+from sapio.contract import Contract, guarantee, TransactionTemplate, unlock
 from sapio.script.clause import SignatureCheckClause, Days
 from sapio.bitcoinlib.static_types import PubKey, Amount, Bitcoin, Sats
 
@@ -39,7 +39,7 @@ class TrustlessEscrow(Contract):
         bob: PubKey
         alice_escrow: Tuple[Amount, Contract]
         bob_escrow: Tuple[Amount, Contract]
-    @path
+    @guarantee
     def use_escrow(self) -> TransactionTemplate:
         tx = TransactionTemplate()
         tx.add_output(*self.alice_escrow.assigned_value)

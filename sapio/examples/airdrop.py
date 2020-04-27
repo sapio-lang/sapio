@@ -6,7 +6,7 @@ participants on a given schedule...
 from typing import Tuple, List
 
 from sapio.bitcoinlib.static_types import Amount, Sats
-from sapio.contract import Contract, path, TransactionTemplate
+from sapio.contract import Contract, guarantee, TransactionTemplate
 from sapio.examples.tree_pay import TreePay
 from sapio.script.clause import TimeSpec, RelativeTimeSpec, AbsoluteTimeSpec
 
@@ -15,7 +15,7 @@ class AirDrop(Contract):
     class Fields:
         batches : List[Tuple[TimeSpec, List[Tuple[Amount, Contract]]]]
         radix : int
-    @path
+    @guarantee
     def payout(self):
         tx = TransactionTemplate()
         delay, current_batch = self.batches.value[0]

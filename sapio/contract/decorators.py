@@ -28,10 +28,7 @@ class PathFunction(Generic[ContractType]):
     def __call__(self, obj:ContractType) -> PathReturnType:
         return self.f(obj)
     @staticmethod
-    def path_if(arg: Callable[[Any], Clause]) -> Callable[[PathFunctionType[ContractType]], PathFunction[ContractType]]:
-        return lambda x: PathFunction[ContractType](x, arg)
-    @staticmethod
-    def path( arg: PathFunctionType[ContractType]) -> PathFunction[ContractType]:
+    def guarantee( arg: PathFunctionType[ContractType]) -> PathFunction[ContractType]:
         return PathFunction[ContractType](arg, lambda x: SatisfiedClause())
 
 
@@ -46,10 +43,10 @@ class UnlockFunction(Generic[ContractType]):
 
     @staticmethod
     def unlock(
-        s: Callable[[Any], Clause]
+        s: Union[Callable[[Any], Clause], PathFunction[ContractType]]
     ) -> Callable[[Callable[[ContractType], None]], UnlockFunction[ContractType]]:
         def wrapper(f: Callable[[ContractType], None]) -> UnlockFunction[ContractType]:
-            return UnlockFunction(s, f.__name__)
+            return UnlockFunction[ContractType](s, f.__name__)
 
         return wrapper
 
@@ -80,8 +77,23 @@ class CheckFunction(Generic[ContractType]):
         return CheckFunction(s)
 
 
-path_if = PathFunction.path_if
-path = PathFunction.path
+guarantee = PathFunction.guarantee
+# TODO: Unify these two and make guarantee a modifier of the above?
 unlock = UnlockFunction.unlock
 pay_address = PayAddress.pay_address
 check = CheckFunction.check
+
+class Wrapper(Generic[ContractType]):
+    def __init__(self, arg: Callable[[ContractType], Clause]) -> None:
+        self.arg : Callable[[ContractType], Clause]= arg
+    def __call__(self, pf: PathFunction[ContractType]) -> PathFunction[ContractType]:
+        p : PathFunction[ContractType] =  PathFunction[ContractType](pf.f, lambda x: pf.unlock_with(x) & self.arg(x))
+        return p
+
+class LayeredRequirement(Generic[ContractType]):
+    @staticmethod
+    def require(arg: Callable[[ContractType], Clause]) -> Callable[[PathFunction[ContractType]], PathFunction[ContractType]]:
+        return Wrapper[ContractType](arg)
+
+require = LayeredRequirement.require
+guarantee = guarantee

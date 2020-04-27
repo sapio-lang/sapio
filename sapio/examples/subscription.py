@@ -1,8 +1,8 @@
 from typing import Iterator, List, Tuple
 
 from sapio.bitcoinlib.static_types import Amount, PubKey, int64
-from sapio.contract import Contract, TransactionTemplate, path
-from sapio.contract.decorators import path_if
+from sapio.contract import Contract, TransactionTemplate
+from sapio.contract.decorators import guarantee, require
 from sapio.examples.p2pk import PayToSegwitAddress
 from sapio.script.clause import (AbsoluteTimeSpec, RelativeTimeSpec,
                                  SignatureCheckClause)
@@ -27,7 +27,7 @@ class CancellableSubscription(Contract):
     class MetaData:
         color = lambda self: "blue"
         label = lambda self: "Cancellable Subscription"
-    @path
+    @guarantee
     def cancel(self):
         tx = TransactionTemplate()
         amount = self.amount.assigned_value
@@ -41,7 +41,7 @@ class CancellableSubscription(Contract):
         tx.add_output(amount, cc)
         return tx
 
-    @path
+    @guarantee
     def claim(self):
         tx = TransactionTemplate()
         (delay, amount) = self.schedule.assigned_value[0]
@@ -72,7 +72,8 @@ class CancelContest(Contract):
     class MetaData:
         color = lambda self: "red"
         label = lambda self: "Cancellation Attempt"
-    @path_if(lambda self: SignatureCheckClause(self.watchtower_key))
+    @require(lambda self: SignatureCheckClause(self.watchtower_key))
+    @guarantee
     def counterclaim(self) -> Iterator[TransactionTemplate]:
         amount_earned = Amount(int64(0))
         for (timeout, amount) in self.schedule.assigned_value:
@@ -84,7 +85,7 @@ class CancelContest(Contract):
             if amount_refundable:
                 tx.add_output(amount_refundable, self.return_address.assigned_value)
             yield tx
-    @path
+    @guarantee
     def finish_cancel(self):
         tx = TransactionTemplate()
         tx.set_sequence(self.return_timeout.assigned_value.time)
