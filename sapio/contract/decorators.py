@@ -34,7 +34,7 @@ class PathFunction(Generic[ContractType]):
         self,
         f: PathFunctionType[ContractType],
         unlocker: Callable[[ContractType], Clause],
-        is_guaranteed=True,
+        is_guaranteed,
     ) -> None:
         self.f: PathFunctionType[ContractType] = f
         self.unlock_with: Callable[[ContractType], Clause] = unlocker
@@ -127,7 +127,7 @@ class LayeredRequirement(Generic[ContractType]):
                 return pf.unlock_with(contract) & self.arg(contract)
                 return pf.unlock_with(contract) & self.arg(contract)
 
-            p: PathFunction[ContractType] = PathFunction[ContractType](pf.f, wrap_path)
+            p: PathFunction[ContractType] = PathFunction[ContractType](pf.f, wrap_path, pf.is_guaranteed)
             return p
         elif isinstance(decorated, LayeredRequirement):
             l: LayeredRequirement[ContractType] = decorated

@@ -93,7 +93,8 @@ class ContractBase(Generic[FieldsType]):
     ) -> None:
         self._setup_call(obj, kwargs)
         obj.amount_range = (Sats(21_000_000 * 100_000_000), Sats(0))
-        obj.specific_transactions = []
+        obj.guaranteed_txns = []
+        obj.suggested_txns = []
         if self.pay_functions is not None:
             amt, addr = self.pay_functions(obj)
             # TODO: Something more robust here...
@@ -130,16 +131,19 @@ class ContractBase(Generic[FieldsType]):
                     min(obj.amount_range[0], amount),
                     max(obj.amount_range[1], amount),
                 )
-                ctv_hash = template.get_ctv_hash()
-                # TODO: If we OR all the CTV hashes together
-                # and then and at the top with the unlock clause,
-                # it could help with later code generation sharing the
-                # common clause...
-                ctv = CheckTemplateVerifyClause(
-                    AssignedVariable(Hash(ctv_hash), ctv_hash)
-                )
-                paths |= ctv & unlock_clause
-                obj.specific_transactions.append((CTVHash(ctv_hash), template))
+                # not all transactions are guaranteed
+                if path_func.is_guaranteed:
+                    # ctv_hash is an identifier and a txid equivalent
+                    ctv_hash = template.get_ctv_hash()
+                    # TODO: If we OR all the CTV hashes together
+                    # and then and at the top with the unlock clause,
+                    # it could help with later code generation sharing the
+                    ctv = CheckTemplateVerifyClause( AssignedVariable(Hash(ctv_hash), ctv_hash))
+                    paths |= ctv & unlock_clause
+                    obj.guaranteed_txns.append(template)
+                else:
+                    paths |= unlock_clause
+                    obj.suggested_txns.append(template)
         for unlock_func in self.unlock_functions:
             paths |= unlock_func(obj)
 
