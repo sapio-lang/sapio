@@ -1,42 +1,44 @@
 from __future__ import annotations
+
 import typing
 from typing import (
-    Dict,
     Any,
+    Dict,
+    Generator,
+    Generic,
+    Iterable,
     List,
     Optional,
     Tuple,
-    Union,
-    Generator,
-    Iterable,
-    Generic,
-    TypeVar,
     Type,
+    TypeVar,
+    Union,
 )
 
+import sapio.contract.bindable_contract
+import sapio.contract.contract
 from sapio.bitcoinlib.static_types import Amount, Hash, Sats
-from .txtemplate import TransactionTemplate
-from .decorators import PathFunction, PayAddress, UnlockFunction, CheckFunction
-from sapio.contract.errors import MissingArgumentError, ExtraArgumentError
+from sapio.contract.errors import ExtraArgumentError, MissingArgumentError
 from sapio.script.clause import (
-    Clause,
-    UnsatisfiableClause,
-    SatisfiedClause,
     CheckTemplateVerifyClause,
+    Clause,
+    SatisfiedClause,
+    UnsatisfiableClause,
 )
 from sapio.script.compiler import ProgramBuilder
 from sapio.script.variable import AssignedVariable
-from sapio.script.witnessmanager import WitnessManager, CTVHash
-import sapio.contract.contract
+from sapio.script.witnessmanager import CTVHash, WitnessManager
 
-import sapio.contract.bindable_contract
+from .decorators import CheckFunction, PathFunction, PayAddress, UnlockFunction
+from .txtemplate import TransactionTemplate
 
 T = TypeVar("T")
 FieldsType = TypeVar("FieldsType")
-ContractType = sapio.contract.bindable_contract.BindableContract[FieldsType]
 
 
 class ContractBase(Generic[FieldsType]):
+    ContractType = TypeVar("ContractType", bound="sapio.contract.bindable_contract.BindableContract[FieldsType]")
+
     def __init__(
         self,
         fields: Type[FieldsType],
@@ -51,7 +53,7 @@ class ContractBase(Generic[FieldsType]):
             assert len(unlock_functions) == 0
         self.fields_obj = fields
         self.all_fields: Dict[str, Type[Any]] = typing.get_type_hints(self.fields_obj)
-        self.path_functions: List[PathFunction[ContractType]] = path_functions
+        self.path_functions: List[PathFunction] = path_functions
         self.pay_functions: Optional[PayAddress] = pay_functions[0] if len(
             pay_functions
         ) else None
@@ -86,7 +88,7 @@ class ContractBase(Generic[FieldsType]):
 
     def __call__(
         self,
-        obj: sapio.contract.bindable_contract.BindableContract[T],
+        obj: ContractBase.ContractType,
         kwargs: Dict[str, Any],
     ) -> None:
         self._setup_call(obj, kwargs)

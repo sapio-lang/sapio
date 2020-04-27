@@ -27,18 +27,15 @@ class PathFunction(Generic[ContractType]):
 
     def __call__(self, obj:ContractType) -> PathReturnType:
         return self.f(obj)
+    @staticmethod
+    def path_if(arg: Callable[[ContractType], Clause]) -> Callable[[PathFunctionType[ContractType]], PathFunction]:
+        return lambda x: PathFunction[ContractType](x, arg)
+    @staticmethod
+    def path( arg: PathFunctionType[ContractType]) -> PathFunction[ContractType]:
+        return PathFunction[ContractType](arg, lambda x: SatisfiedClause())
 
-
-def satisfied(arg:ContractType) -> Clause:
-    return SatisfiedClause()
-def path( arg: PathFunctionType[ContractType]) -> PathFunction[ContractType]:
-    return PathFunction(arg, satisfied)
-
-def path_if( arg: Callable[[ContractType], Clause]) -> Callable[[PathFunctionType[ContractType]], PathFunction[ContractType]]:
-    def wrapper(f: PathFunctionType[ContractType]) -> PathFunction[ContractType]:
-        return PathFunction(f, arg)
-    return wrapper
-
+path_if = PathFunction.path_if
+path = PathFunction.path
 
 class UnlockFunction(Generic[ContractType]):
     # TODO: Improve arg type, which we know is an AndClauseArugment Callable or None
