@@ -10,7 +10,7 @@ class WithinFee:
 
     def __init__(self, contract: bc.BindableContract, b: Amount) -> None:
         if contract.amount_range[0] + self.fee_modifier < b:
-            raise ValueError("Contract May Burn Funds!")
+            raise ValueError(f"Contract {bc.__name__} May Burn Funds! Spent {contract.amount_range[0]} to {contract.amount_range[1]}, not within {b+self.fee_modifier}")
 
     @classmethod
     def change_fee_modifier(cls, fee_modifier:Amount):
