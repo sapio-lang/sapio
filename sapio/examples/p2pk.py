@@ -11,7 +11,6 @@ class PayToPubKey(Contract):
     @unlock
     def with_key(self):
         return SignatureCheckClause(self.key)
-    def _(self): pass
 
 
 class PayToSegwitAddress(Contract):
