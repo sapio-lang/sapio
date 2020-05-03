@@ -7,7 +7,7 @@ import tornado.websocket
 
 import sapio
 from sapio.bitcoinlib import segwit_addr
-from sapio.bitcoinlib.messages import COutPoint
+from sapio.bitcoinlib.messages import COutPoint, CTransaction, CTxIn, CTxOut
 from sapio.bitcoinlib.static_types import Amount, PubKey, Sequence
 from sapio.contract.bindable_contract import BindableContract, ContractProtocol
 from sapio.contract.contract import Contract
@@ -17,6 +17,16 @@ from .api_serialization import conversion_functions, placeholder_hint
 DEBUG = True
 
 
+base_tx = CTransaction()
+base_tx.vin.append(CTxIn())
+base_tx.vout.append(CTxOut())
+base_tx.rehash()
+base_out = COutPoint(base_tx.sha256,0)
+base_meta = {
+                            "color": "white",
+                            "label": "Base Contract Unspecified",
+                            "utxo_metadata": [],
+                        }
 class CompilerWebSocket(tornado.websocket.WebSocketHandler):
     contracts: Dict[str, Union[BindableContract, ContractProtocol]] = {}
     menu: Dict[str, Dict[str, str]] = {}
@@ -27,7 +37,9 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
 
     @classmethod
     def set_example(cls, example: BindableContract):
-        txns, metadata = example.bind(COutPoint())
+        txns, metadata = example.bind(base_out)
+        txns.append(base_tx)
+        metadata.append(base_meta)
         addr = example.witness_manager.get_p2wsh_address()
         amount = example.amount_range[1]
         data = [{'hex': tx.serialize_with_witness().hex(), **meta} for (tx, meta) in zip(txns, metadata)]
@@ -117,7 +129,9 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
                 addr = contract.witness_manager.get_p2wsh_address()
                 amount = contract.amount_range[1]
                 self.compilation_cache[addr] = contract
-                txns, metadata = contract.bind(COutPoint())
+                txns, metadata = contract.bind(base_out)
+                txns.append(base_tx)
+                metadata.append(base_meta)
                 data = [{'hex': tx.serialize_with_witness().hex(), **meta} for (tx, meta) in zip(txns, metadata)]
                 self.write_message(
                     {"type": "created", 'content': [int(amount), addr, {'program': data}]}

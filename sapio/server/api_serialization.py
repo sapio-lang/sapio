@@ -60,7 +60,7 @@ def convert_p2swa(arg: str, ctx) -> Contract:
         return ctx.compilation_cache[arg]
     except KeyError:
         # default bind to 0
-        return sapio.examples.p2pk.PayToSegwitAddress(amount=0, address=arg)
+        return sapio.examples.p2pk.PayToSegwitAddress(amount=10000, address=arg)
 
 
 def convert_sequence(arg: Sequence, ctx) -> Sequence:
