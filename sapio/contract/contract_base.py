@@ -98,7 +98,7 @@ class ContractBase(Generic[FieldsType]):
         if self.pay_functions is not None:
             amt, addr = self.pay_functions(obj)
             # TODO: Something more robust here...
-            obj.amount_range = (amt, Amount(0))
+            #obj.amount_range = (amt, Amount(0))
             obj.witness_manager = WitnessManager()
             obj.witness_manager.override_program = addr
             return
