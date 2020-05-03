@@ -4,6 +4,7 @@ import copy
 import typing
 from abc import abstractmethod
 from typing import (
+    final,
     Any,
     Callable,
     Dict,
@@ -17,7 +18,6 @@ from typing import (
     runtime_checkable,
 )
 
-from typing_extensions import final
 
 from sapio.bitcoinlib.messages import COutPoint, CTransaction, CTxInWitness, CTxWitness
 from sapio.bitcoinlib.static_types import Amount

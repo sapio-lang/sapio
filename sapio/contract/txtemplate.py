@@ -7,7 +7,7 @@ from sapio.bitcoinlib.static_types import uint32
 import sapio.contract
 from sapio.bitcoinlib.messages import CTransaction, CTxIn, CTxOut, COutPoint, CScript
 from sapio.bitcoinlib.static_types import Sequence, Amount, Version, LockTime
-from sapio.contract.assertions import WithinFee, HasEnoughFunds
+from sapio.contract.analysis.funds import WithinFee, HasEnoughFunds
 
 import sapio.contract.bindable_contract
 
