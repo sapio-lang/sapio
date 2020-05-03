@@ -4,8 +4,8 @@ import inspect
 import typing
 from typing import Any, Dict
 
-from .bindable_contract import BindableContract
-from .contract_base import ContractBase
+from .core.bindable_contract import BindableContract
+from .core.contract_base import ContractBase
 from .decorators import PathFunction, UnlockFunction, PayAddress, CheckFunction
 
 

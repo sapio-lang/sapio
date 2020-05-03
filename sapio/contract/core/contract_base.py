@@ -15,10 +15,10 @@ from typing import (
     Union,
 )
 
-import sapio.contract.bindable_contract
+import sapio.contract.core.bindable_contract
 import sapio.contract.contract
 from sapio.bitcoinlib.static_types import Amount, Hash, Sats
-from sapio.contract.errors import ExtraArgumentError, MissingArgumentError
+from sapio.contract.core.errors import ExtraArgumentError, MissingArgumentError
 from sapio.script.clause import (
     CheckTemplateVerifyClause,
     Clause,
@@ -29,7 +29,7 @@ from sapio.script.compiler import ProgramBuilder
 from sapio.script.variable import AssignedVariable
 from sapio.script.witnessmanager import CTVHash, WitnessManager
 
-from .decorators import CheckFunction, PathFunction, PayAddress, UnlockFunction
+from ..decorators import CheckFunction, PathFunction, PayAddress, UnlockFunction
 from .txtemplate import TransactionTemplate
 
 T = TypeVar("T")

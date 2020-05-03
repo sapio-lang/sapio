@@ -2,5 +2,5 @@
 from .contract import Contract
 from .decorators import (check, guarantee, pay_address, require,
                                        unlock)
-from .txtemplate import TransactionTemplate
+from .core.txtemplate import TransactionTemplate
 

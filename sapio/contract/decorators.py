@@ -17,7 +17,7 @@ import sapio
 from sapio.bitcoinlib.static_types import Amount
 from sapio.script.clause import Clause, SatisfiedClause
 
-from .txtemplate import TransactionTemplate
+from .core.txtemplate import TransactionTemplate
 
 T = TypeVar("T")
 T2 = TypeVar("T2")

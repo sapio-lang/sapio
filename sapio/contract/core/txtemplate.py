@@ -7,9 +7,9 @@ from sapio.bitcoinlib.static_types import uint32
 import sapio.contract
 from sapio.bitcoinlib.messages import CTransaction, CTxIn, CTxOut, COutPoint, CScript
 from sapio.bitcoinlib.static_types import Sequence, Amount, Version, LockTime
-from sapio.contract.analysis.funds import WithinFee, HasEnoughFunds
+from sapio.contract.core.analysis.funds import WithinFee, HasEnoughFunds
 
-import sapio.contract.bindable_contract
+import sapio.contract.core.bindable_contract
 
 class MetaDataContainer:
     def __init__(self, color:str, label:str) -> None:
