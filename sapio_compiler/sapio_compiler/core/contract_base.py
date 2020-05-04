@@ -15,10 +15,10 @@ from typing import (
     Union,
 )
 
-import sapio_compiler.contract.core.bindable_contract
-import sapio_compiler.contract.contract
+import sapio_compiler.core.bindable_contract
+import sapio_compiler.contract
 from bitcoinlib.static_types import Amount, Hash, Sats
-from sapio_compiler.contract.core.errors import ExtraArgumentError, MissingArgumentError
+from sapio_compiler.core.errors import ExtraArgumentError, MissingArgumentError
 from bitcoin_script_compiler.clause import (
     CheckTemplateVerifyClause,
     Clause,

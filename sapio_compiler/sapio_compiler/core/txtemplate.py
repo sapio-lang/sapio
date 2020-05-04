@@ -7,9 +7,9 @@ from bitcoinlib.static_types import uint32
 import sapio_compiler.contract
 from bitcoinlib.messages import CTransaction, CTxIn, CTxOut, COutPoint, CScript
 from bitcoinlib.static_types import Sequence, Amount, Version, LockTime
-from sapio_compiler.contract.core.analysis.funds import WithinFee, HasEnoughFunds
+from sapio_compiler.core.analysis.funds import WithinFee, HasEnoughFunds
 
-import sapio_compiler.contract.core.bindable_contract
+import sapio_compiler.core.bindable_contract
 
 class MetaDataContainer:
     def __init__(self, color:str, label:str) -> None:
@@ -28,7 +28,7 @@ class TransactionTemplate:
     def __init__(self) -> None:
         self.n_inputs: int = 0
         self.sequences: List[Sequence] = [Sequence(uint32(0))]
-        self.outputs: List[Tuple[Amount, sapio_compiler.contract.bindable_contract.BindableContract[Any]]] = []
+        self.outputs: List[Tuple[Amount, sapio_compiler.bindable_contract.BindableContract[Any]]] = []
         self.outputs_metadata: List[MetaDataContainer] = []
         self.version: Version = Version(uint32(2))
         self.lock_time: LockTime = LockTime(uint32(0))
@@ -73,7 +73,7 @@ class TransactionTemplate:
     def get_standard_template_hash(self, nIn: int) -> bytes:
         return self.get_base_transaction().get_standard_template_hash(nIn)
 
-    def add_output(self, amount: Amount, contract: sapio_compiler.contract.bindable_contract.BindableContract[Any]) -> None:
+    def add_output(self, amount: Amount, contract: sapio_compiler.bindable_contract.BindableContract[Any]) -> None:
         WithinFee(contract, amount)
         HasEnoughFunds(contract, amount)
         self.outputs.append((amount, contract))

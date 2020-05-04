@@ -1,6 +1,6 @@
 from __future__ import annotations
 import sapio_compiler
-import sapio_compiler.contract.core.bindable_contract as bc
+import sapio_compiler.core.bindable_contract as bc
 from bitcoinlib.static_types import Amount, Sats
 
 
