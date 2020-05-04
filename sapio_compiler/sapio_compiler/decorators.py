@@ -2,20 +2,11 @@ from __future__ import annotations
 
 from functools import reduce
 from itertools import combinations
-from typing import (
-    Callable,
-    Generic,
-    Iterator,
-    List,
-    Optional,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from typing import Callable, Generic, Iterator, List, Optional, Tuple, TypeVar, Union
 
 import sapio_compiler
-from bitcoinlib.static_types import Amount
 from bitcoin_script_compiler.clause import Clause, SatisfiedClause
+from bitcoinlib.static_types import Amount
 
 from .core.txtemplate import TransactionTemplate
 
@@ -49,7 +40,9 @@ class PathFunction(Generic[ContractType]):
         return PathFunction[ContractType](arg, lambda x: SatisfiedClause(), True)
 
     @staticmethod
-    def unlock_but_suggest(arg: PathFunctionType[ContractType]) -> PathFunction[ContractType]:
+    def unlock_but_suggest(
+        arg: PathFunctionType[ContractType],
+    ) -> PathFunction[ContractType]:
         return PathFunction[ContractType](arg, lambda x: SatisfiedClause(), False)
 
 
@@ -127,7 +120,9 @@ class LayeredRequirement(Generic[ContractType]):
                 return pf.unlock_with(contract) & self.arg(contract)
                 return pf.unlock_with(contract) & self.arg(contract)
 
-            p: PathFunction[ContractType] = PathFunction[ContractType](pf.f, wrap_path, pf.is_guaranteed)
+            p: PathFunction[ContractType] = PathFunction[ContractType](
+                pf.f, wrap_path, pf.is_guaranteed
+            )
             return p
         elif isinstance(decorated, LayeredRequirement):
             l: LayeredRequirement[ContractType] = decorated
@@ -179,11 +174,14 @@ class LayeredRequirement(Generic[ContractType]):
 # for some known boolean conditional.
 # It should be used with a class factory
 R = TypeVar("R")
+
+
 def enable_if(b: bool) -> Union[Callable[[R], R], Callable[[R], None]]:
     if b:
         return lambda f: f
     else:
         return lambda f: None
+
 
 guarantee = PathFunction.guarantee
 require = LayeredRequirement.require

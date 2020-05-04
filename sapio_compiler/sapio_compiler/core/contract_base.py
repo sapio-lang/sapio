@@ -15,20 +15,20 @@ from typing import (
     Union,
 )
 
-import sapio_compiler.core.bindable_contract
 import sapio_compiler.contract
-from bitcoinlib.static_types import Amount, Hash, Sats
-from sapio_compiler.core.errors import ExtraArgumentError, MissingArgumentError
+import sapio_compiler.core.bindable_contract
 from bitcoin_script_compiler import (
+    AssignedVariable,
     CheckTemplateVerifyClause,
     Clause,
+    CTVHash,
+    ProgramBuilder,
     SatisfiedClause,
     UnsatisfiableClause,
-    ProgramBuilder,
-    AssignedVariable,
-    CTVHash,
-    WitnessManager
+    WitnessManager,
 )
+from bitcoinlib.static_types import Amount, Hash, Sats
+from sapio_compiler.core.errors import ExtraArgumentError, MissingArgumentError
 
 from ..decorators import CheckFunction, PathFunction, PayAddress, UnlockFunction
 from .txtemplate import TransactionTemplate
@@ -38,7 +38,10 @@ FieldsType = TypeVar("FieldsType")
 
 
 class ContractBase(Generic[FieldsType]):
-    ContractType = TypeVar("ContractType", bound="sapio.contract.bindable_contract.BindableContract[FieldsType]")
+    ContractType = TypeVar(
+        "ContractType",
+        bound="sapio.contract.bindable_contract.BindableContract[FieldsType]",
+    )
 
     def __init__(
         self,
@@ -54,11 +57,15 @@ class ContractBase(Generic[FieldsType]):
             assert len(unlock_functions) == 0
         self.fields_obj = fields
         self.all_fields: Dict[str, Type[Any]] = typing.get_type_hints(self.fields_obj)
-        self.path_functions: List[PathFunction[ContractBase.ContractType]] = path_functions
-        self.pay_functions: Optional[PayAddress[ContractBase.ContractType]] = pay_functions[0] if len(
-            pay_functions
-        ) else None
-        self.unlock_functions: List[UnlockFunction[ContractBase.ContractType]] = unlock_functions
+        self.path_functions: List[
+            PathFunction[ContractBase.ContractType]
+        ] = path_functions
+        self.pay_functions: Optional[
+            PayAddress[ContractBase.ContractType]
+        ] = pay_functions[0] if len(pay_functions) else None
+        self.unlock_functions: List[
+            UnlockFunction[ContractBase.ContractType]
+        ] = unlock_functions
         self.assertions: List[CheckFunction[ContractBase.ContractType]] = assertions
 
     def _setup_call(self, obj: ContractType, kwargs: Dict[str, Any]) -> None:
@@ -87,11 +94,7 @@ class ContractBase(Generic[FieldsType]):
     def make_new_fields(self) -> Any:
         return self.fields_obj()
 
-    def __call__(
-        self,
-        obj: ContractBase.ContractType,
-        kwargs: Dict[str, Any],
-    ) -> None:
+    def __call__(self, obj: ContractBase.ContractType, kwargs: Dict[str, Any],) -> None:
         self._setup_call(obj, kwargs)
         obj.amount_range = (Sats(21_000_000 * 100_000_000), Sats(0))
         obj.guaranteed_txns = []
@@ -99,7 +102,7 @@ class ContractBase(Generic[FieldsType]):
         if self.pay_functions is not None:
             amt, addr = self.pay_functions(obj)
             # TODO: Something more robust here...
-            #obj.amount_range = (amt, Amount(0))
+            # obj.amount_range = (amt, Amount(0))
             obj.witness_manager = WitnessManager()
             obj.witness_manager.override_program = addr
             return
@@ -139,7 +142,9 @@ class ContractBase(Generic[FieldsType]):
                     # TODO: If we OR all the CTV hashes together
                     # and then and at the top with the unlock clause,
                     # it could help with later code generation sharing the
-                    ctv = CheckTemplateVerifyClause( AssignedVariable(Hash(ctv_hash), ctv_hash))
+                    ctv = CheckTemplateVerifyClause(
+                        AssignedVariable(Hash(ctv_hash), ctv_hash)
+                    )
                     paths |= ctv & unlock_clause
                     obj.guaranteed_txns.append(template)
                 else:

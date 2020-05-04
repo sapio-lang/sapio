@@ -4,7 +4,6 @@ import copy
 import typing
 from abc import abstractmethod
 from typing import (
-    final,
     Any,
     Callable,
     Dict,
@@ -15,15 +14,13 @@ from typing import (
     Tuple,
     Type,
     TypeVar,
+    final,
     runtime_checkable,
 )
-
-
+from bitcoin_script_compiler import AssignedVariable, CTVHash, WitnessManager
 from bitcoinlib.messages import COutPoint, CTransaction, CTxInWitness, CTxWitness
 from bitcoinlib.static_types import Amount
 from sapio_compiler.core.contract_base import ContractBase
-from bitcoin_script_compiler import AssignedVariable
-from bitcoin_script_compiler import CTVHash, WitnessManager
 
 from .txtemplate import TransactionTemplate
 
@@ -89,7 +86,7 @@ class BindableContract(Generic[T]):
             "witness_manager": self.witness_manager.to_json(),
             "transactions": [
                 transaction.to_json()
-               for transaction in self.guaranteed_txns+self.suggested_txns
+                for transaction in self.guaranteed_txns + self.suggested_txns
             ],
             "min_amount_spent": self.amount_range[0],
             "max_amount_spent": self.amount_range[1],
