@@ -22,8 +22,8 @@ from typing import (
 from bitcoinlib.messages import COutPoint, CTransaction, CTxInWitness, CTxWitness
 from bitcoinlib.static_types import Amount
 from sapio_compiler.core.contract_base import ContractBase
-from bitcoin_script_compiler.variable import AssignedVariable
-from bitcoin_script_compiler.witnessmanager import CTVHash, WitnessManager
+from bitcoin_script_compiler import AssignedVariable
+from bitcoin_script_compiler import CTVHash, WitnessManager
 
 from .txtemplate import TransactionTemplate
 

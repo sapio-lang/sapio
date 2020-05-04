@@ -2,9 +2,9 @@ import functools
 from typing import Tuple, List
 
 from bitcoinlib.static_types import PubKey, Amount
-from sapio_compiler.contract import Contract, guarantee, TransactionTemplate, unlock
-from bitcoin_script_compiler.clause import AfterClause, Weeks, SignatureCheckClause
-from bitcoin_script_compiler.variable import AssignedVariable
+from sapio_compiler import Contract, guarantee, TransactionTemplate, unlock
+from bitcoin_script_compiler import AfterClause, Weeks, SignatureCheckClause
+from bitcoin_script_compiler import AssignedVariable
 
 
 def segment_by_radix(L, n):

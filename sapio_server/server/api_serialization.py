@@ -12,13 +12,13 @@ import sapio_zoo.subscription
 from bitcoinlib import segwit_addr
 from bitcoinlib.messages import COutPoint
 from bitcoinlib.static_types import Amount, Sequence, PubKey
-from sapio_compiler.contract.contract import Contract
+from sapio_compiler import Contract
 from sapio_zoo.tree_pay import TreePay
 from sapio_zoo.undo_send import UndoSend2
 from bitcoin_script_compiler.clause import TimeSpec, RelativeTimeSpec, AbsoluteTimeSpec, Days
 from bitcoinlib.static_types import int64
 
-from sapio_compiler.contract.core.bindable_contract import BindableContract
+from sapio_compiler import BindableContract
 placeholder_hint = {
     Amount: 0,
     Sequence: "int",

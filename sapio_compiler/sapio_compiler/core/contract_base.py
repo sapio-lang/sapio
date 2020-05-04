@@ -19,15 +19,16 @@ import sapio_compiler.core.bindable_contract
 import sapio_compiler.contract
 from bitcoinlib.static_types import Amount, Hash, Sats
 from sapio_compiler.core.errors import ExtraArgumentError, MissingArgumentError
-from bitcoin_script_compiler.clause import (
+from bitcoin_script_compiler import (
     CheckTemplateVerifyClause,
     Clause,
     SatisfiedClause,
     UnsatisfiableClause,
+    ProgramBuilder,
+    AssignedVariable,
+    CTVHash,
+    WitnessManager
 )
-from bitcoin_script_compiler.compiler import ProgramBuilder
-from bitcoin_script_compiler.variable import AssignedVariable
-from bitcoin_script_compiler.witnessmanager import CTVHash, WitnessManager
 
 from ..decorators import CheckFunction, PathFunction, PayAddress, UnlockFunction
 from .txtemplate import TransactionTemplate

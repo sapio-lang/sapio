@@ -8,8 +8,8 @@ import tornado.websocket
 from bitcoinlib import segwit_addr
 from bitcoinlib.messages import COutPoint, CTransaction, CTxIn, CTxOut
 from bitcoinlib.static_types import Amount, PubKey, Sequence
-from sapio_compiler.contract.core.bindable_contract import BindableContract, ContractProtocol
-from sapio_compiler.contract.contract import Contract
+from sapio_compiler import BindableContract, ContractProtocol
+from sapio_compiler import Contract
 
 from .api_serialization import conversion_functions, placeholder_hint
 

@@ -13,9 +13,9 @@ from typing import (
 )
 
 from bitcoinlib.static_types import Amount, Hash, PubKey
-from sapio_compiler.contract.core.bindable_contract import BindableContract
-from sapio_compiler.contract.contract import Contract
-from sapio_compiler.contract.decorators import (
+from sapio_compiler import BindableContract
+from sapio_compiler import Contract
+from sapio_compiler import (
     check,
     enable_if,
     guarantee,
@@ -23,16 +23,16 @@ from sapio_compiler.contract.decorators import (
     unlock,
     unlock_but_suggest,
 )
-from sapio_compiler.contract.core.txtemplate import TransactionTemplate
+from sapio_compiler import TransactionTemplate
 from sapio_zoo.p2pk import PayToPubKey, PayToSegwitAddress
-from bitcoin_script_compiler.clause import (
+from bitcoin_script_compiler import (
     Clause,
     PreImageCheckClause,
     RelativeTimeSpec,
     SatisfiedClause,
     SignatureCheckClause,
 )
-from bitcoin_script_compiler.variable import AssignedVariable
+from bitcoin_script_compiler import AssignedVariable
 
 
 T1 = TypeVar("T1")

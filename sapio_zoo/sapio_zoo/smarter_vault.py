@@ -1,9 +1,9 @@
 from typing import Callable
 
 from bitcoinlib.static_types import Amount
-from sapio_compiler.contract import Contract, guarantee, TransactionTemplate
+from sapio_compiler import Contract, guarantee, TransactionTemplate
 from sapio_zoo.undo_send import UndoSend, UndoSend2
-from bitcoin_script_compiler.clause import TimeSpec
+from bitcoin_script_compiler import TimeSpec
 
 
 class SmarterVault(Contract):

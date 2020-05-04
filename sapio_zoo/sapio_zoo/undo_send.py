@@ -1,7 +1,7 @@
 from bitcoinlib.static_types import Amount
-from sapio_compiler.contract import Contract, TransactionTemplate
-from sapio_compiler.contract.decorators import guarantee, require, unlock
-from bitcoin_script_compiler.clause import *
+from sapio_compiler import Contract, TransactionTemplate
+from sapio_compiler import guarantee, require, unlock
+from bitcoin_script_compiler import *
 
 
 class UndoSend(Contract):

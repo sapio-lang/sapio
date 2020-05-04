@@ -1,8 +1,8 @@
 from typing import Tuple
 
 from bitcoinlib.messages import COutPoint
-from sapio_compiler.contract import Contract, guarantee, TransactionTemplate, unlock
-from bitcoin_script_compiler.clause import SignatureCheckClause, Days
+from sapio_compiler import Contract, guarantee, TransactionTemplate, unlock
+from bitcoin_script_compiler import SignatureCheckClause, Days
 from bitcoinlib.static_types import PubKey, Amount, Bitcoin, Sats
 
 

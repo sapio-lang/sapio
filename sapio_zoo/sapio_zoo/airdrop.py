@@ -6,9 +6,9 @@ participants on a given schedule...
 from typing import Tuple, List
 
 from bitcoinlib.static_types import Amount, Sats
-from sapio_compiler.contract import Contract, guarantee, TransactionTemplate
+from sapio_compiler import Contract, guarantee, TransactionTemplate
 from sapio_zoo.tree_pay import TreePay
-from bitcoin_script_compiler.clause import TimeSpec, RelativeTimeSpec, AbsoluteTimeSpec
+from bitcoin_script_compiler import TimeSpec, RelativeTimeSpec, AbsoluteTimeSpec
 
 
 class AirDrop(Contract):

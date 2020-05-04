@@ -5,8 +5,8 @@ from itertools import combinations
 from typing import List, Tuple, Optional
 
 from bitcoinlib.static_types import Amount, PubKey
-from sapio_compiler.contract.contract import Contract
-from sapio_compiler.contract.decorators import (
+from sapio_compiler import Contract
+from sapio_compiler import (
     LayeredRequirement,
     guarantee,
     require,
@@ -14,15 +14,15 @@ from sapio_compiler.contract.decorators import (
     unlock,
     unlock_but_suggest,
 )
-from sapio_compiler.contract.core.txtemplate import TransactionTemplate
-from bitcoin_script_compiler.clause import (
+from sapio_compiler import TransactionTemplate
+from bitcoin_script_compiler import (
     AfterClause,
     Clause,
     SatisfiedClause,
     SignatureCheckClause,
     Weeks,
 )
-from bitcoin_script_compiler.variable import AssignedVariable
+from bitcoin_script_compiler import AssignedVariable
 from sapio_zoo.p2pk import PayToSegwitAddress
 from bitcoinlib.static_types import Hash
 

@@ -1,10 +1,10 @@
 from typing import Iterator, List, Tuple
 
 from bitcoinlib.static_types import Amount, PubKey, int64
-from sapio_compiler.contract import Contract, TransactionTemplate
-from sapio_compiler.contract.decorators import guarantee, require
+from sapio_compiler import Contract, TransactionTemplate
+from sapio_compiler import guarantee, require
 from sapio_zoo.p2pk import PayToSegwitAddress
-from bitcoin_script_compiler.clause import (AbsoluteTimeSpec, RelativeTimeSpec,
+from bitcoin_script_compiler import (AbsoluteTimeSpec, RelativeTimeSpec,
                                  SignatureCheckClause)
 
 
