@@ -1,7 +1,7 @@
-from sapio_zoo.undo_send import UndoSend, UndoSend2
-from bitcoinlib.static_types import Amount
 from bitcoin_script_compiler import TimeSpec
-from sapio_compiler import Contract, guarantee, TransactionTemplate
+from bitcoinlib.static_types import Amount
+from sapio_compiler import Contract, TransactionTemplate, guarantee
+from sapio_zoo.undo_send import UndoSend, UndoSend2
 
 
 class Vault(Contract):
@@ -17,29 +17,40 @@ class Vault(Contract):
     def step(self) -> TransactionTemplate:
         tx = TransactionTemplate()
         tx.set_sequence(self.timeout.assigned_value.time)
-        tx.add_output(self.amount_step.assigned_value,
-                      UndoSend(from_contract=self.cold_storage,
-                               to_key=self.hot_storage,
-                               timeout=self.mature,
-                               amount=self.amount_step))
+        tx.add_output(
+            self.amount_step.assigned_value,
+            UndoSend(
+                from_contract=self.cold_storage,
+                to_key=self.hot_storage,
+                timeout=self.mature,
+                amount=self.amount_step,
+            ),
+        )
         if self.n_steps.assigned_value > 1:
             steps_left = self.n_steps.assigned_value - 1
-            sub_amount = (self.n_steps.assigned_value - 1) * self.amount_step.assigned_value
-            sub_vault = Vault(cold_storage=self.cold_storage,
-                              hot_storage=self.hot_storage,
-                              n_steps=self.n_steps.assigned_value - 1,
-                              timeout=self.timeout,
-                              mature=self.mature,
-                              amount_step=self.amount_step)
+            sub_amount = (
+                self.n_steps.assigned_value - 1
+            ) * self.amount_step.assigned_value
+            sub_vault = Vault(
+                cold_storage=self.cold_storage,
+                hot_storage=self.hot_storage,
+                n_steps=self.n_steps.assigned_value - 1,
+                timeout=self.timeout,
+                mature=self.mature,
+                amount_step=self.amount_step,
+            )
             tx.add_output(sub_amount, sub_vault)
         return tx
 
     @guarantee
     def to_cold(self) -> TransactionTemplate:
         tx = TransactionTemplate()
-        tx.add_output(self.n_steps.assigned_value * self.amount_step.assigned_value,
-                      self.cold_storage.assigned_value)
+        tx.add_output(
+            self.n_steps.assigned_value * self.amount_step.assigned_value,
+            self.cold_storage.assigned_value,
+        )
         return tx
+
 
 class Vault2(Contract):
     class Fields:
@@ -50,7 +61,6 @@ class Vault2(Contract):
         timeout: TimeSpec
         mature: TimeSpec
 
-
     class MetaData:
         color = lambda self: "blue"
         label = lambda self: "Vault"
@@ -59,26 +69,36 @@ class Vault2(Contract):
     def step(self) -> TransactionTemplate:
         tx = TransactionTemplate()
         tx.set_sequence(self.timeout.assigned_value.time)
-        tx.add_output(self.amount_step.assigned_value,
-                      UndoSend2(from_contract=self.cold_storage,
-                               to_contract=self.hot_storage,
-                               timeout=self.mature,
-                               amount=self.amount_step))
+        tx.add_output(
+            self.amount_step.assigned_value,
+            UndoSend2(
+                from_contract=self.cold_storage,
+                to_contract=self.hot_storage,
+                timeout=self.mature,
+                amount=self.amount_step,
+            ),
+        )
         if self.n_steps.assigned_value > 1:
             steps_left = self.n_steps.assigned_value - 1
-            sub_amount = (self.n_steps.assigned_value - 1) * self.amount_step.assigned_value
-            sub_vault = Vault2(cold_storage=self.cold_storage,
-                              hot_storage=self.hot_storage,
-                              n_steps=self.n_steps.assigned_value - 1,
-                              timeout=self.timeout,
-                              mature=self.mature,
-                              amount_step=self.amount_step)
+            sub_amount = (
+                self.n_steps.assigned_value - 1
+            ) * self.amount_step.assigned_value
+            sub_vault = Vault2(
+                cold_storage=self.cold_storage,
+                hot_storage=self.hot_storage,
+                n_steps=self.n_steps.assigned_value - 1,
+                timeout=self.timeout,
+                mature=self.mature,
+                amount_step=self.amount_step,
+            )
             tx.add_output(sub_amount, sub_vault)
         return tx
 
     @guarantee
     def to_cold(self) -> TransactionTemplate:
         tx = TransactionTemplate()
-        tx.add_output(self.n_steps.assigned_value * self.amount_step.assigned_value,
-                      self.cold_storage.assigned_value)
+        tx.add_output(
+            self.n_steps.assigned_value * self.amount_step.assigned_value,
+            self.cold_storage.assigned_value,
+        )
         return tx

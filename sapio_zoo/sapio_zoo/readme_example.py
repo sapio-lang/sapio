@@ -1,9 +1,9 @@
 from typing import Tuple
 
+from bitcoin_script_compiler import Days, SignatureCheckClause
 from bitcoinlib.messages import COutPoint
-from sapio_compiler import Contract, guarantee, TransactionTemplate, unlock
-from bitcoin_script_compiler import SignatureCheckClause, Days
-from bitcoinlib.static_types import PubKey, Amount, Bitcoin, Sats
+from bitcoinlib.static_types import Amount, Bitcoin, PubKey, Sats
+from sapio_compiler import Contract, TransactionTemplate, guarantee, unlock
 
 
 class PayToPublicKey(Contract):
@@ -42,7 +42,8 @@ class BasicEscrow2(Contract):
 
     @unlock
     def cooperate(self):
-         return SignatureCheckClause(self.alice) & SignatureCheckClause(self.bob)
+        return SignatureCheckClause(self.alice) & SignatureCheckClause(self.bob)
+
 
 class TrustlessEscrow(Contract):
     class Fields:

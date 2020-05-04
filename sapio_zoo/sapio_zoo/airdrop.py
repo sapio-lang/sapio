@@ -3,12 +3,13 @@
 This shows a token airdrop contract that periodically issues coins to a set of
 participants on a given schedule...
 """
-from typing import Tuple, List
+from typing import List, Tuple
 
+from bitcoin_script_compiler import (AbsoluteTimeSpec, RelativeTimeSpec,
+                                     TimeSpec)
 from bitcoinlib.static_types import Amount, Sats
-from sapio_compiler import Contract, guarantee, TransactionTemplate
+from sapio_compiler import Contract, TransactionTemplate, guarantee
 from sapio_zoo.tree_pay import TreePay
-from bitcoin_script_compiler import TimeSpec, RelativeTimeSpec, AbsoluteTimeSpec
 
 
 class AirDrop(Contract):

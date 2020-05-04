@@ -1,33 +1,57 @@
-from typing import Generic, List, Literal, Optional, Protocol, Tuple, Type, TypeVar, Union, Dict
+from typing import (
+    Dict,
+    Generic,
+    List,
+    Literal,
+    Optional,
+    Protocol,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
-from bitcoinlib.static_types import Amount, Hash, PubKey
-from sapio_compiler import Contract
-from sapio_compiler import BindableContract
-from sapio_compiler import guarantee, require, unlock, unlock_but_suggest, enable_if
-from sapio_compiler import TransactionTemplate
-from sapio_zoo.p2pk import PayToPubKey, PayToSegwitAddress
 from bitcoin_script_compiler import (
+    AssignedVariable,
+    Clause,
     PreImageCheckClause,
     RelativeTimeSpec,
     SatisfiedClause,
     SignatureCheckClause,
-    Clause,
 )
-from bitcoin_script_compiler import AssignedVariable
+from bitcoinlib.static_types import Amount, Hash, PubKey
+from sapio_compiler import (
+    BindableContract,
+    Contract,
+    TransactionTemplate,
+    enable_if,
+    guarantee,
+    require,
+    unlock,
+    unlock_but_suggest,
+)
+from sapio_zoo.p2pk import PayToPubKey, PayToSegwitAddress
 
 
-class OPENING: pass
-class CLOSING: pass
+class OPENING:
+    pass
+
+
+class CLOSING:
+    pass
+
+
 T = Union[Type[OPENING], Type[CLOSING]]
 
 # memoize means only one instance of the type of class gets created
-memoize: Dict[T, Type[BindableContract]]= {}
+memoize: Dict[T, Type[BindableContract]] = {}
 
 # We use a class factory here because inehritence isn't really the right model
 # for logically different contracts & Mixins don't work presently.
 def ChannelClassFactory(stage: T):
     if stage in memoize:
         return memoize[stage]
+
     class Self(Contract):
         class Fields:
             initial: Contract
@@ -54,10 +78,14 @@ def ChannelClassFactory(stage: T):
         ) -> TransactionTemplate:
             next_tx = TransactionTemplate()
             if state is None:
-                next_tx.add_output(self.amount.assigned_value, self.initial.assigned_value)
+                next_tx.add_output(
+                    self.amount.assigned_value, self.initial.assigned_value
+                )
             else:
                 for (amt, addr) in state:
-                    next_tx.add_output(amt, PayToSegwitAddress(amount=amt, address=addr))
+                    next_tx.add_output(
+                        amt, PayToSegwitAddress(amount=amt, address=addr)
+                    )
             next_tx.set_sequence(self.timeout.assigned_value.time)
             tx = TransactionTemplate()
 
@@ -75,6 +103,7 @@ def ChannelClassFactory(stage: T):
         @unlock
         def coop_close(self) -> Clause:
             return SatisfiedClause()
+
         @enable_if(stage is OPENING)
         @guarantee
         def begin_contest(self) -> TransactionTemplate:
@@ -90,6 +119,7 @@ def ChannelClassFactory(stage: T):
                 ),
             )
             return tx
+
         @enable_if(stage is CLOSING)
         @guarantee
         def finish_contest(self) -> TransactionTemplate:
@@ -97,8 +127,10 @@ def ChannelClassFactory(stage: T):
             tx.set_sequence(self.timeout.assigned_value.time)
             tx.add_output(self.amount.assigned_value, self.initial.assigned_value)
             return tx
+
     memoize[stage] = Self
     return Self
+
 
 BasicContestedChannel = ChannelClassFactory(CLOSING)
 BasicChannel = ChannelClassFactory(OPENING)
@@ -110,6 +142,7 @@ class ContestedChannelAfterUpdate(Contract):
         state: TransactionTemplate
         revocation: Hash
         honest: PubKey
+
     class MetaData:
         label = lambda s: "revoke"
         color = lambda s: "yellow"

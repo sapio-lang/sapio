@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from typing import (
     Dict,
     Generic,
@@ -12,10 +13,19 @@ from typing import (
     Union,
 )
 
+from bitcoin_script_compiler import (
+    AssignedVariable,
+    Clause,
+    PreImageCheckClause,
+    RelativeTimeSpec,
+    SatisfiedClause,
+    SignatureCheckClause,
+)
 from bitcoinlib.static_types import Amount, Hash, PubKey
-from sapio_compiler import BindableContract
-from sapio_compiler import Contract
 from sapio_compiler import (
+    BindableContract,
+    Contract,
+    TransactionTemplate,
     check,
     enable_if,
     guarantee,
@@ -23,17 +33,7 @@ from sapio_compiler import (
     unlock,
     unlock_but_suggest,
 )
-from sapio_compiler import TransactionTemplate
 from sapio_zoo.p2pk import PayToPubKey, PayToSegwitAddress
-from bitcoin_script_compiler import (
-    Clause,
-    PreImageCheckClause,
-    RelativeTimeSpec,
-    SatisfiedClause,
-    SignatureCheckClause,
-)
-from bitcoin_script_compiler import AssignedVariable
-
 
 T1 = TypeVar("T1")
 T2 = TypeVar("T2")
@@ -115,7 +115,6 @@ class PriceOracle:
             cls, data: List[Tuple[int, Tuple[Hash, Hash], Tuple[Amount, str]]], ctx
         ):
             pass
-
 
     class Fields:
         price_array: PriceOracle.BetStructure

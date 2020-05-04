@@ -1,6 +1,6 @@
-from bitcoinlib.static_types import PubKey, Amount
-from sapio_compiler import Contract, unlock, pay_address
 from bitcoin_script_compiler import SignatureCheckClause
+from bitcoinlib.static_types import Amount, PubKey
+from sapio_compiler import Contract, pay_address, unlock
 
 
 class PayToPubKey(Contract):

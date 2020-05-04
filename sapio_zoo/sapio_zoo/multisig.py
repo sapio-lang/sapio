@@ -2,29 +2,28 @@ from __future__ import annotations
 
 from functools import reduce
 from itertools import combinations
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
-from bitcoinlib.static_types import Amount, PubKey
-from sapio_compiler import Contract
+from bitcoin_script_compiler import (
+    AfterClause,
+    AssignedVariable,
+    Clause,
+    SatisfiedClause,
+    SignatureCheckClause,
+    Weeks,
+)
+from bitcoinlib.static_types import Amount, Hash, PubKey
 from sapio_compiler import (
+    Contract,
     LayeredRequirement,
+    TransactionTemplate,
     guarantee,
     require,
     threshold,
     unlock,
     unlock_but_suggest,
 )
-from sapio_compiler import TransactionTemplate
-from bitcoin_script_compiler import (
-    AfterClause,
-    Clause,
-    SatisfiedClause,
-    SignatureCheckClause,
-    Weeks,
-)
-from bitcoin_script_compiler import AssignedVariable
 from sapio_zoo.p2pk import PayToSegwitAddress
-from bitcoinlib.static_types import Hash
 
 
 def multisig(l, n):
@@ -156,16 +155,22 @@ class DemoLayeredConditions(Contract):
             return self.setup.assigned_value
         else:
             tx = TransactionTemplate()
-            tx.add_output(self.amount.assigned_value, ContractClose(amount=self.amount, payments=state))
+            tx.add_output(
+                self.amount.assigned_value,
+                ContractClose(amount=self.amount, payments=state),
+            )
             return tx
+
 
 class ContractClose(Contract):
     class Fields:
         amount: Amount
         payments: List[Tuple[Amount, str]]
+
     @require
     def wait(self):
         return AfterClause(Weeks(2))
+
     @wait
     @guarantee
     def make_payments(self) -> TransactionTemplate:
@@ -173,5 +178,3 @@ class ContractClose(Contract):
         for (amt, to) in self.payments.assigned_value:
             tx.add_output(amt, PayToSegwitAddress(amount=amt, address=to))
         return tx
-
-
