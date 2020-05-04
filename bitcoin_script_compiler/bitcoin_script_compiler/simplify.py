@@ -1,23 +1,37 @@
 import logging
 from collections import defaultdict
-from typing import Union, Tuple, List, DefaultDict, Type, cast
+from typing import DefaultDict, List, Tuple, Type, Union, cast
 
-from .clause import UnsatisfiableClause, SatisfiedClause, AfterClause, TimeSpec, RelativeTimeSpec, \
-    AbsoluteTimeSpec, DNFClause, CheckTemplateVerifyClause
+from .clause import (
+    AbsoluteTimeSpec,
+    AfterClause,
+    CheckTemplateVerifyClause,
+    DNFClause,
+    RelativeTimeSpec,
+    SatisfiedClause,
+    TimeSpec,
+    UnsatisfiableClause,
+)
 from .variable import AssignedVariable
 
 
 class AfterClauseSimplification:
-    ReturnType = Union[UnsatisfiableClause, Tuple[
-        Union[SatisfiedClause, AfterClause],
-        Union[SatisfiedClause, AfterClause]]]
+    ReturnType = Union[
+        UnsatisfiableClause,
+        Tuple[Union[SatisfiedClause, AfterClause], Union[SatisfiedClause, AfterClause]],
+    ]
     PRUNE_MODE: bool = True
 
     def simplify(self, clauses: List[AfterClause]) -> ReturnType:
 
         log = logging.getLogger("compiler").getChild(self.__class__.__name__)
-        relative_or_absolute: DefaultDict[Type[TimeSpec], List[TimeSpec]] = defaultdict(list)
-        ret: List[Union[SatisfiedClause, AfterClause]] = [SatisfiedClause(), SatisfiedClause()]
+        relative_or_absolute: DefaultDict[Type[TimeSpec], List[TimeSpec]] = defaultdict(
+            list
+        )
+        ret: List[Union[SatisfiedClause, AfterClause]] = [
+            SatisfiedClause(),
+            SatisfiedClause(),
+        ]
         for cl in clauses:
             assert cl.a.assigned_value is not None
             relative_or_absolute[type(cl.a.assigned_value)].append(cl.a.assigned_value)
@@ -28,7 +42,10 @@ class AfterClauseSimplification:
             relative_blocks_or_time[cl2.get_type()].append(cl2)
         relative_blocks = relative_blocks_or_time[RelativeTimeSpec.Blocks]
         relative_time = relative_blocks_or_time[RelativeTimeSpec.Time]
-        if not ((len(relative_time) > 0) ^ (len(relative_blocks) > 0) or not (relative_blocks or relative_time)):
+        if not (
+            (len(relative_time) > 0) ^ (len(relative_blocks) > 0)
+            or not (relative_blocks or relative_time)
+        ):
             # Todo: Is this a true error? Or can we simply safely prune this branch...
             if self.PRUNE_MODE:
                 log.warning("Incompatible Relative Time Locks! Pruning Branch")
@@ -44,7 +61,10 @@ class AfterClauseSimplification:
             absolute_blocks_or_time[cl3.get_type()].append(cl3)
         absolute_blocks = absolute_blocks_or_time[AbsoluteTimeSpec.Blocks]
         absolute_time = absolute_blocks_or_time[AbsoluteTimeSpec.Time]
-        if not ((len(absolute_time) > 0) ^ (len(absolute_blocks) > 0) or not (absolute_time or absolute_blocks)):
+        if not (
+            (len(absolute_time) > 0) ^ (len(absolute_blocks) > 0)
+            or not (absolute_time or absolute_blocks)
+        ):
             # Todo: Is this a true error? Or can we simply safely prune this branch...
             if self.PRUNE_MODE:
                 log.warning("Incompatible Absolute Time Locks! Pruning Branch")
@@ -79,7 +99,10 @@ class DNFSimplification:
             else:
                 return [UnsatisfiableClause()]
         if CheckTemplateVerifyClause in clause_by_type:
-            ctv_clauses = cast(List[CheckTemplateVerifyClause], clause_by_type.pop(CheckTemplateVerifyClause))
+            ctv_clauses = cast(
+                List[CheckTemplateVerifyClause],
+                clause_by_type.pop(CheckTemplateVerifyClause),
+            )
             if len(ctv_clauses) <= 1:
                 clauses_to_return.extend(list(ctv_clauses))
             else:

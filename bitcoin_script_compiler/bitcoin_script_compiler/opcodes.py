@@ -1,9 +1,10 @@
 from __future__ import annotations
-from typing import Union, List, ClassVar
 
+from typing import ClassVar, List, Union
 
 from bitcoinlib.script import *
 from bitcoinlib.static_types import max_uint32
+
 
 class AllowedOp:
     # Control Flow
@@ -31,21 +32,26 @@ class AllowedOp:
     OP_VERIFY = OP_VERIFY
     OP_EQUALVERIFY = OP_EQUALVERIFY
 
-ONE : CScriptNum = CScriptNum(1)
+
+ONE: CScriptNum = CScriptNum(1)
 ZERO = CScriptNum(0)
 ONE_enc = CScriptNum.encode(ONE)
 ZERO_enc = CScriptNum.encode(ZERO)
-def bool_of_stack_item(v:bytes) -> bool:
+
+
+def bool_of_stack_item(v: bytes) -> bool:
     for idx, char in enumerate(v):
         if char != 0:
-            if idx == len(v) -1 and char == 0x80:
+            if idx == len(v) - 1 and char == 0x80:
                 return False
             return True
     return False
 
 
 # Interpreter Loosely Based on Bitcoin Core, MIT License
-def handle(op:Union[CScriptOp, int, bytes], stack: List[bytes], handle_branch: ConditionStack) -> bool:
+def handle(
+    op: Union[CScriptOp, int, bytes], stack: List[bytes], handle_branch: ConditionStack
+) -> bool:
     should_execute = handle_branch.all_true()
     if isinstance(op, bytes):
         if should_execute:
@@ -54,12 +60,14 @@ def handle(op:Union[CScriptOp, int, bytes], stack: List[bytes], handle_branch: C
         if should_execute:
             stack.append(CScriptNum.encode(CScriptNum(op)))
     if isinstance(op, CScriptOp):
-        if False: pass
+        if False:
+            pass
         # Control Flow
         elif op == OP_IF or op == OP_NOTIF:
             branch_value = False
             if should_execute:
-                if len(stack) < 1: return False
+                if len(stack) < 1:
+                    return False
                 cond = stack.pop()
                 # TODO: These Rules are only for Segwit + MinimalIF
                 if len(cond) > 1:
@@ -83,14 +91,17 @@ def handle(op:Union[CScriptOp, int, bytes], stack: List[bytes], handle_branch: C
             return True
         # Crypto
         elif op == OP_SHA256:
-            if len(stack) < 1: return False
+            if len(stack) < 1:
+                return False
         # Math
         elif op == OP_1SUB:
-            if len(stack) < 1: return False
+            if len(stack) < 1:
+                return False
             num = CScriptNum.decode(stack.pop()) - ONE
             stack.append(num)
         elif op == OP_WITHIN:
-            if len(stack) < 3: return False
+            if len(stack) < 3:
+                return False
             upper = CScriptNum.decode(stack.pop())
             lower = CScriptNum.decode(stack.pop())
             num = CScriptNum.decode(stack.pop())
@@ -103,10 +114,12 @@ def handle(op:Union[CScriptOp, int, bytes], stack: List[bytes], handle_branch: C
             stack.append(ONE_enc)
         # Stack
         elif op == OP_DROP:
-            if len(stack) < 1: return False
+            if len(stack) < 1:
+                return False
             stack.pop()
         elif op == OP_IFDUP:
-            if len(stack) < 1: return False
+            if len(stack) < 1:
+                return False
             v = stack[-1]
             b = bool_of_stack_item(v)
             if b:
@@ -114,29 +127,36 @@ def handle(op:Union[CScriptOp, int, bytes], stack: List[bytes], handle_branch: C
                 stack.append(v)
 
         elif op == OP_DUP:
-            if len(stack) < 1: return False
+            if len(stack) < 1:
+                return False
             stack.append(stack[-1])
         # Verification
         # TODO: Validation assumed true,
         # This just handles the stack operations
         elif op == OP_CHECKSIGVERIFY:
-            if len(stack) < 2: return False
+            if len(stack) < 2:
+                return False
             key = stack.pop()
             sig = stack.pop()
         elif op == OP_CHECKTEMPLATEVERIFY:
-            if len(stack) < 1: return False
+            if len(stack) < 1:
+                return False
         elif op == OP_CHECKLOCKTIMEVERIFY:
-            if len(stack) < 1: return False
+            if len(stack) < 1:
+                return False
         elif op == OP_CHECKSEQUENCEVERIFY:
-            if len(stack) < 1: return False
+            if len(stack) < 1:
+                return False
         elif op == OP_EQUALVERIFY:
-            if len(stack) < 2: return False
+            if len(stack) < 2:
+                return False
             ach = stack.pop()
             bch = stack.pop()
             if ach != bch:
                 return False
         elif op == OP_VERIFY:
-            if len(stack) < 1: return False
+            if len(stack) < 1:
+                return False
             bch = stack.pop()
             if not bool_of_stack_item(bch):
                 return False
@@ -144,39 +164,46 @@ def handle(op:Union[CScriptOp, int, bytes], stack: List[bytes], handle_branch: C
             raise ValueError("Scripts using ", op, " cannot be interpreted yet!")
     return True
 
+
 # Implementation Based on Bitcoin Core Condition Stack, MIT License
 class ConditionStack:
-    NO_FALSE : ClassVar[bool] = max_uint32
+    NO_FALSE: ClassVar[bool] = max_uint32
     stack_size: int
     first_false_position: int
+
     def __init__(self) -> None:
         self.stack_size = 0
         self.first_false_position = ConditionStack.NO_FALSE
+
     def empty(self) -> bool:
         return self.stack_size == 0
+
     def all_true(self) -> bool:
         return self.first_false_position == ConditionStack.NO_FALSE
-    def push_back(self, b:bool) -> None:
+
+    def push_back(self, b: bool) -> None:
         if self.first_false_position == ConditionStack.NO_FALSE and not b:
             self.first_false_position = self.stack_size
-        self.stack_size +=1
+        self.stack_size += 1
+
     def pop_back(self) -> None:
         assert self.stack_size > 0
         self.stack_size -= 1
         if self.first_false_position == self.stack_size:
             self.first_false_position = ConditionStack.NO_FALSE
+
     def toggle_top(self) -> None:
         assert self.stack_size > 0
         if self.first_false_position == ConditionStack.NO_FALSE:
             self.first_false_position = self.stack_size - 1
-        elif self.first_false_position == self.stack_size -1:
+        elif self.first_false_position == self.stack_size - 1:
             self.first_false_position = ConditionStack.NO_FALSE
         else:
             pass
 
 
-def interpret(s:CScript) -> bool:
-    stack : List[bytes] = []
+def interpret(s: CScript) -> bool:
+    stack: List[bytes] = []
     handle_branch = ConditionStack()
     for op in iter(s):
         if not handle(op, stack, handle_branch):

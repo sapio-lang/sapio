@@ -1,14 +1,14 @@
-from typing import List, TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 
 from bitcoinlib.script import CScript
-from .clause import Clause, UnsatisfiableClause, DNFClause, DNF
+
+from .clause import DNF, Clause, DNFClause, UnsatisfiableClause
 from .clause_to_fragment import FragmentCompiler
 from .flatten_and import FlattenPass
 from .normalize_or import NormalizationPass
 from .opcodes import AllowedOp
 from .simplify import DNFSimplification
-from .witnessmanager import WitnessTemplate, WitnessManager
-
+from .witnessmanager import WitnessManager, WitnessTemplate
 
 
 class ClauseToDNF:
@@ -27,13 +27,16 @@ class DNFClauseCompiler:
 
 
 class ProgramBuilder:
-
     def compile(self, clause: Clause) -> WitnessManager:
         dnf: DNF = ClauseToDNF().compile_cnf(clause)
         n_cases = len(dnf)
         witness_manager: WitnessManager = WitnessManager()
-        dnf = list(filter(lambda x: not any(isinstance(y, UnsatisfiableClause) for y in x),
-                          (DNFSimplification().simplify(x) for x in dnf)))
+        dnf = list(
+            filter(
+                lambda x: not any(isinstance(y, UnsatisfiableClause) for y in x),
+                (DNFSimplification().simplify(x) for x in dnf),
+            )
+        )
         # If we have one or two cases, special case the emitted scripts
         # 3 or more, use a generic wrapper
         if n_cases == 1:
@@ -49,12 +52,16 @@ class ProgramBuilder:
             # note order of side effects!
             branch_a = DNFClauseCompiler().compile(dnf[0], wit_0)
             branch_b = DNFClauseCompiler().compile(dnf[1], wit_1)
-            witness_manager.program = CScript([AllowedOp.OP_IF,
-                                               branch_a,
-                                               AllowedOp.OP_ELSE,
-                                               branch_b,
-                                               AllowedOp.OP_ENDIF,
-                                               AllowedOp.OP_1])
+            witness_manager.program = CScript(
+                [
+                    AllowedOp.OP_IF,
+                    branch_a,
+                    AllowedOp.OP_ELSE,
+                    branch_b,
+                    AllowedOp.OP_ENDIF,
+                    AllowedOp.OP_1,
+                ]
+            )
         else:
             # If we have more than 3 cases, we can use a nice gadget
             # to emulate a select/jump table in Bitcoin Script.
@@ -69,8 +76,8 @@ class ProgramBuilder:
                 wit.add(idx)
                 sub_script = DNFClauseCompiler().compile(cl, wit)
                 if idx == 0:
-                    witness_manager.program = \
-                        CScript([
+                    witness_manager.program = CScript(
+                        [
                             # Verify the top stack item (branch select)
                             # is in range. This is required or else a witness
                             # of e.g. n+1 could steal funds
@@ -90,24 +97,32 @@ class ProgramBuilder:
                             AllowedOp.OP_0,
                             AllowedOp.OP_ENDIF,
                             # set up for testing the next clause...
-                            AllowedOp.OP_1SUB])
+                            AllowedOp.OP_1SUB,
+                        ]
+                    )
                 elif idx + 1 < len(dnf):
-                    witness_manager.program += \
-                        CScript([AllowedOp.OP_IFDUP,
-                                 AllowedOp.OP_NOTIF,
-                                 sub_script,
-                                 AllowedOp.OP_0,
-                                 AllowedOp.OP_ENDIF,
-                                 AllowedOp.OP_1SUB])
+                    witness_manager.program += CScript(
+                        [
+                            AllowedOp.OP_IFDUP,
+                            AllowedOp.OP_NOTIF,
+                            sub_script,
+                            AllowedOp.OP_0,
+                            AllowedOp.OP_ENDIF,
+                            AllowedOp.OP_1SUB,
+                        ]
+                    )
                 # Last clause!
                 else:
                     # No ifdup required since we are last, no need for data on
                     # stack
                     # End with an OP_1 so that we succeed after all cases
-                    witness_manager.program += \
-                        CScript([AllowedOp.OP_NOTIF,
-                                 sub_script,
-                                 AllowedOp.OP_ENDIF,
-                                 AllowedOp.OP_1])
+                    witness_manager.program += CScript(
+                        [
+                            AllowedOp.OP_NOTIF,
+                            sub_script,
+                            AllowedOp.OP_ENDIF,
+                            AllowedOp.OP_1,
+                        ]
+                    )
 
         return witness_manager

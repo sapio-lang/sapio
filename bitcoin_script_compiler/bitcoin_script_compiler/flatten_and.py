@@ -1,25 +1,15 @@
-from typing import List, TYPE_CHECKING, Union
-
-from .clause import (
-    Clause,
-    AndClause,
-    OrClause,
-    SignatureCheckClause,
-    PreImageCheckClause,
-    CheckTemplateVerifyClause,
-    AfterClause,
-    SatisfiedClause,
-    DNFClause,
-    DNF,
-)
 from functools import singledispatchmethod
+from typing import TYPE_CHECKING, List, Union
 
+from .clause import (DNF, AfterClause, AndClause, CheckTemplateVerifyClause,
+                     Clause, DNFClause, OrClause, PreImageCheckClause,
+                     SatisfiedClause, SignatureCheckClause)
 
 # Assumes that there is no OR which comes after an AND
 
 
 class FlattenPass:
-    def __call__(self, arg:Clause, or_allowed: bool=True) -> DNF:
+    def __call__(self, arg: Clause, or_allowed: bool = True) -> DNF:
         if TYPE_CHECKING:
             assert callable(self.flatten)
         return self.flatten(arg, or_allowed)
@@ -48,10 +38,9 @@ class FlattenPass:
         if TYPE_CHECKING:
             assert callable(self.flatten)
         assert or_allowed
-        l : DNF =  self.flatten(arg.a, or_allowed)
-        l2: DNF =  self.flatten(arg.b, or_allowed)
-        return l+l2
-
+        l: DNF = self.flatten(arg.a, or_allowed)
+        l2: DNF = self.flatten(arg.b, or_allowed)
+        return l + l2
 
     @flatten.register(AfterClause)
     @flatten.register(CheckTemplateVerifyClause)
