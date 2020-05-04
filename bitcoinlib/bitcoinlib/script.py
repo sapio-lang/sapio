@@ -10,18 +10,18 @@ from __future__ import annotations
 
 import hashlib
 import struct
-from typing import Dict, List
+from typing import Dict, List, AnyStr, Union, Type, Iterator, Tuple, Any, Optional, Iterable
 
 from .static_types import min_int64, max_int64
 
-from .hash_functions import sha256
+from .hash_functions import sha256, AnyBytes
 from .bignum import bn2vch
 
 MAX_SCRIPT_ELEMENT_SIZE = 520
 
 OPCODE_NAMES: Dict[CScriptOp, str] = {}
 
-def hash160(s):
+def hash160(s: AnyBytes) -> bytes:
     return hashlib.new('ripemd160', sha256(s)).digest()
 
 
@@ -31,7 +31,7 @@ class CScriptOp(int):
     __slots__ = ()
 
     @staticmethod
-    def encode_op_pushdata(d):
+    def encode_op_pushdata(d:bytes) -> bytes:
         """Encode a PUSHDATA op, returning bytes"""
         if len(d) < 0x4c:
             return b'' + bytes([len(d)]) + d # OP_PUSHDATA
@@ -45,7 +45,7 @@ class CScriptOp(int):
             raise ValueError("Data too long to encode in a PUSHDATA op")
 
     @staticmethod
-    def encode_op_n(n):
+    def encode_op_n(n:int) -> CScriptOp:
         """Encode a small integer op, returning an opcode"""
         if not (0 <= n <= 16):
             raise ValueError('Integer must be in range 0 <= n <= 16, got %d' % n)
@@ -55,7 +55,7 @@ class CScriptOp(int):
         else:
             return CScriptOp(OP_1 + n-1)
 
-    def decode_op_n(self):
+    def decode_op_n(self) -> int:
         """Decode a small integer opcode, returning an integer"""
         if self == OP_0:
             return 0
@@ -65,23 +65,23 @@ class CScriptOp(int):
 
         return int(self - OP_1+1)
 
-    def is_small_int(self):
+    def is_small_int(self) -> bool:
         """Return true if the op pushes a small integer to the stack"""
         if 0x51 <= self <= 0x60 or self == 0:
             return True
         else:
             return False
 
-    def __str__(self):
+    def __str__(self) -> str:
         return repr(self)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         if self in OPCODE_NAMES:
             return OPCODE_NAMES[self]
         else:
             return 'CScriptOp(0x%x)' % self
 
-    def __new__(cls, n):
+    def __new__(cls, n:int) -> CScriptOp:
         try:
             return _opcode_instances[n]
         except IndexError:
@@ -359,7 +359,7 @@ class CScriptInvalidError(Exception):
 
 class CScriptTruncatedPushDataError(CScriptInvalidError):
     """Invalid pushdata due to truncation"""
-    def __init__(self, msg, data):
+    def __init__(self, msg: str, data: bytes) -> None:
         self.data = data
         super(CScriptTruncatedPushDataError, self).__init__(msg)
 
@@ -388,7 +388,7 @@ class CScriptNum:
         return bytes([len(r)]) + r
 
     @staticmethod
-    def decode(vch:bytes):
+    def decode(vch:bytes) -> int:
         result = 0
         # We assume valid push_size and minimal encoding
         value = vch[1:]
@@ -402,7 +402,7 @@ class CScriptNum:
             result &= num_mask
             result *= -1
         return result
-    def __sub__(self, other) -> CScriptNum:
+    def __sub__(self, other: CScriptNum) -> CScriptNum:
         rhs = other.value
         assert rhs == 0 or (rhs > 0 and self.value >= (min_int64+rhs)) or (rhs < 0 and self.value <= (max_int64+rhs))
         return CScriptNum(self.value-rhs)
@@ -419,9 +419,9 @@ class CScript(bytes):
     iter(script) however does iterate by opcode.
     """
     __slots__ = ()
-
+    Coercable = Union[CScriptOp, CScriptNum, int, CScript, bytes, bytearray]
     @classmethod
-    def __coerce_instance(cls, other):
+    def __coerce_instance(cls, other: Coercable) -> bytes:
         # Coerce other into bytes
         if isinstance(other, CScriptOp):
             other = bytes([other])
@@ -441,9 +441,11 @@ class CScript(bytes):
             pass
         elif isinstance(other, (bytes, bytearray)):
             other = CScriptOp.encode_op_pushdata(other)
+        else:
+            raise ValueError("Type cannot coerce")
         return other
 
-    def __add__(self, other):
+    def __add__(self, other: Coercable) -> CScript:
         # Do the coercion outside of the try block so that errors in it are
         # noticed.
         other = self.__coerce_instance(other)
@@ -454,22 +456,24 @@ class CScript(bytes):
         except TypeError:
             raise TypeError('Can not add a %r instance to a CScript' % other.__class__)
 
-    def join(self, iterable):
+    def join(self, iterable:Any) -> bytes:
         # join makes no sense for a CScript()
         raise NotImplementedError
 
-    def __new__(cls, value=b''):
+    def __new__(cls, value:Union[Iterable[Coercable], bytes, bytearray]=b'') -> CScript:
         if isinstance(value, bytes) or isinstance(value, bytearray):
-            return super(CScript, cls).__new__(cls, value)
+            c : CScript = super(CScript, cls).__new__(cls, value)
+            return c
         else:
-            def coerce_iterable(iterable):
+            def coerce_iterable(iterable: Iterable[CScript.Coercable]) -> Iterator[bytes]:
                 for instance in iterable:
                     yield cls.__coerce_instance(instance)
             # Annoyingly on both python2 and python3 bytes.join() always
             # returns a bytes instance even when subclassed.
-            return super(CScript, cls).__new__(cls, b''.join(coerce_iterable(value)))
+            c = super(CScript, cls).__new__(cls, b''.join(coerce_iterable(value)))
+            return c
 
-    def raw_iter(self):
+    def raw_iter(self) -> Iterator[Tuple[CScriptOp, Optional[bytes], int]]:
         """Raw iteration
 
         Yields tuples of (opcode, data, sop_idx) so that the different possible
@@ -483,7 +487,7 @@ class CScript(bytes):
             i += 1
 
             if opcode > OP_PUSHDATA4:
-                yield (opcode, None, sop_idx)
+                yield (CScriptOp(opcode), None, sop_idx)
             else:
                 datasize = None
                 pushdata_type = None
@@ -524,9 +528,10 @@ class CScript(bytes):
 
                 i += datasize
 
-                yield (opcode, data, sop_idx)
+                yield (CScriptOp(opcode), data, sop_idx)
 
-    def __iter__(self):
+    # TODO: Fix the typing here because this violates Liskov substitution
+    def __iter__(self) -> Iterator[Any]:
         """'Cooked' iteration
 
         Returns either a CScriptOP instance, an integer, or bytes, as
@@ -544,10 +549,10 @@ class CScript(bytes):
                 if opcode.is_small_int():
                     yield opcode.decode_op_n()
                 else:
-                    yield CScriptOp(opcode)
+                    yield opcode
 
-    def __repr__(self):
-        def _repr(o):
+    def __repr__(self) -> str:
+        def _repr(o:Any) -> str:
             if isinstance(o, bytes):
                 return "x('%s')" % o.hex()
             else:
@@ -573,7 +578,7 @@ class CScript(bytes):
 
         return "CScript([%s])" % ', '.join(ops)
 
-    def GetSigOpCount(self, fAccurate):
+    def GetSigOpCount(self, fAccurate: bool) -> int:
         """Get the SigOp count.
 
         fAccurate - Accurately count CHECKMULTISIG, see BIP16 for details.
@@ -599,7 +604,7 @@ SIGHASH_NONE = 2
 SIGHASH_SINGLE = 3
 SIGHASH_ANYONECANPAY = 0x80
 
-def FindAndDelete(script, sig):
+def FindAndDelete(script:CScript, sig:bytes) -> CScript:
     """Consensus critical, see FindAndDelete() in Satoshi codebase"""
     r = b''
     last_sop_idx = sop_idx = 0
