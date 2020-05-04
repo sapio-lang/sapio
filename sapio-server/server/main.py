@@ -2,7 +2,7 @@ import os
 
 import tornado
 
-import sapio
+import sapio as sapio
 import sapio.examples
 import sapio.examples.channel
 import sapio.examples.basic_vault

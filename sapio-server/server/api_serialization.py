@@ -19,7 +19,7 @@ from sapio.examples.undo_send import UndoSend2
 from sapio.script.clause import TimeSpec, RelativeTimeSpec, AbsoluteTimeSpec, Days
 from sapio.bitcoinlib.static_types import int64
 
-from sapio.contract.bindable_contract import BindableContract
+from sapio.contract.core.bindable_contract import BindableContract
 placeholder_hint = {
     Amount: 0,
     Sequence: "int",
