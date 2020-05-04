@@ -2,9 +2,9 @@ from typing import Generic, List, Literal, Optional, Protocol, Tuple, Type, Type
 
 from bitcoinlib.static_types import Amount, Hash, PubKey
 from sapio_compiler.contract.contract import Contract
-from sapio_compiler.contract.bindable_contract import BindableContract
+from sapio_compiler.contract.core.bindable_contract import BindableContract
 from sapio_compiler.contract.decorators import guarantee, require, unlock, unlock_but_suggest, enable_if
-from sapio_compiler.contract.txtemplate import TransactionTemplate
+from sapio_compiler.contract.core.txtemplate import TransactionTemplate
 from sapio_zoo.p2pk import PayToPubKey, PayToSegwitAddress
 from bitcoin_script_compiler.clause import (
     PreImageCheckClause,

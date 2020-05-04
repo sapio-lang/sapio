@@ -5,12 +5,11 @@ from typing import Any, Callable, Dict, Optional, Tuple, Type, Union
 import tornado
 import tornado.websocket
 
-import sapio
-from sapio.bitcoinlib import segwit_addr
-from sapio.bitcoinlib.messages import COutPoint, CTransaction, CTxIn, CTxOut
-from sapio.bitcoinlib.static_types import Amount, PubKey, Sequence
-from sapio.contract.bindable_contract import BindableContract, ContractProtocol
-from sapio.contract.contract import Contract
+from bitcoinlib import segwit_addr
+from bitcoinlib.messages import COutPoint, CTransaction, CTxIn, CTxOut
+from bitcoinlib.static_types import Amount, PubKey, Sequence
+from sapio_compiler.contract.core.bindable_contract import BindableContract, ContractProtocol
+from sapio_compiler.contract.contract import Contract
 
 from .api_serialization import conversion_functions, placeholder_hint
 
@@ -61,44 +60,44 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
         Server: {type: "session_id", content: [bool, String]}
         ...
         Client: {type: "close"}
-    
+
     Create Contract:
     # Attempt to create a Contract
     # Contract may access a compilation cache of both saved and not saved Contracts
-        Client: {type: "create", content: {type: contract_name, {arg_name:data, ...}...}} 
+        Client: {type: "create", content: {type: contract_name, {arg_name:data, ...}...}}
         Server: {type: "created", content: [Amount, Address]}
-        
+
     Save Contract:
     # Attempt to save Contract to durable storage for this session
     # If session id was [false, _] should not return true (but may!)
         Client: {type: "save", content: Address}
         Server: {type: "saved", content: Bool}
-        
+
     Export Session:
     # Provide a JSON of all saved data for this session
         Client: {type: "export"}
         Server: {type: "exported", content: ...}
-    
+
     Export Authenticated:
     # Provide a signed Pickle object which can be re-loaded
     # directly if the signature checks
         Client: {type: "export_auth"}
         Server: {type: "exported_auth", content: ...}
-    
+
     Load Authenticated:
     # Provide a signed Pickle object which can be re-loaded
     # directly if the signature checks to the current session
         Client: {type: "load_auth", content:...}
         Server: {type: "loaded_auth", content: bool}
-    
+
     Bind Contract:
     # Attach a Contract to a particular UTXO
     # Return all Transactions
         Client: {type: "bind", content: [COutPoint, Address]}
         Server: {type: "bound", content: [Transactions]}
-    
-        
-    
+
+
+
     """
 
     def on_message(self, message):

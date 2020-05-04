@@ -2,17 +2,16 @@ import os
 
 import tornado
 
-import sapio as sapio
-import sapio.examples
-import sapio.examples.channel
-import sapio.examples.basic_vault
-import sapio.examples.p2pk
-import sapio.examples.subscription
-from sapio.bitcoinlib import segwit_addr
-from sapio.examples.tree_pay import TreePay
-from sapio.examples.undo_send import UndoSend2
-from sapio.examples.pricebet import PriceOracle
-from sapio.script.clause import (
+import sapio_zoo
+import sapio_zoo.channel
+import sapio_zoo.basic_vault
+import sapio_zoo.p2pk
+import sapio_zoo.subscription
+from bitcoinlib import segwit_addr
+from sapio_zoo.tree_pay import TreePay
+from sapio_zoo.undo_send import UndoSend2
+from sapio_zoo.pricebet import PriceOracle
+from bitcoin_script_compiler.clause import (
     AbsoluteTimeSpec,
     Days,
     RelativeTimeSpec,
@@ -21,10 +20,10 @@ from sapio.script.clause import (
 )
 
 from .ws import CompilerWebSocket
-from sapio.bitcoinlib.static_types import Bitcoin, PubKey, Amount
-from sapio.examples.basic_vault import Vault
-from sapio.examples.p2pk import PayToPubKey
-from sapio.examples.smarter_vault import SmarterVault
+from bitcoinlib.static_types import Bitcoin, PubKey, Amount
+from sapio_zoo.basic_vault import Vault
+from sapio_zoo.p2pk import PayToPubKey
+from sapio_zoo.smarter_vault import SmarterVault
 
 
 def make_app():
@@ -36,22 +35,22 @@ example_to_make = "vault"
 example_to_make = "Price Contract"
 example_to_make = "tree"
 if __name__ == "__main__":
-    CompilerWebSocket.add_contract("Channel", sapio.examples.channel.BasicChannel)
-    CompilerWebSocket.add_contract("Pay to Public Key", sapio.examples.p2pk.PayToPubKey)
-    CompilerWebSocket.add_contract("Vault", sapio.examples.basic_vault.Vault2)
-    CompilerWebSocket.add_contract("Subscription", sapio.examples.subscription.auto_pay)
+    CompilerWebSocket.add_contract("Channel", sapio_zoo.channel.BasicChannel)
+    CompilerWebSocket.add_contract("Pay to Public Key", sapio_zoo.p2pk.PayToPubKey)
+    CompilerWebSocket.add_contract("Vault", sapio_zoo.basic_vault.Vault2)
+    CompilerWebSocket.add_contract("Subscription", sapio_zoo.subscription.auto_pay)
     CompilerWebSocket.add_contract("TreePay", TreePay)
     generate_n_address = [
         segwit_addr.encode("bcrt", 0, os.urandom(32)) for _ in range(64)
     ]
     def generate_address():
-        return sapio.examples.p2pk.PayToSegwitAddress(
+        return sapio_zoo.p2pk.PayToSegwitAddress(
             amount=0, address=segwit_addr.encode("bcrt", 0, os.urandom(32))
         )
 
     if example_to_make == "tree":
         payments = [
-            (5, sapio.examples.p2pk.PayToSegwitAddress(amount=0, address=address))
+            (5, sapio_zoo.p2pk.PayToSegwitAddress(amount=0, address=address))
             for address in generate_n_address
         ]
         example = TreePay(payments=payments, radix=4)
@@ -75,7 +74,7 @@ if __name__ == "__main__":
         employee_payments = [
             (
                 perdiem * DURATION,
-                sapio.examples.subscription.CancellableSubscription(
+                sapio_zoo.subscription.CancellableSubscription(
                     amount=perdiem * DURATION,
                     recipient=address,
                     schedule=[

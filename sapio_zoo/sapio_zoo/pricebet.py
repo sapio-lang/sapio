@@ -13,7 +13,7 @@ from typing import (
 )
 
 from bitcoinlib.static_types import Amount, Hash, PubKey
-from sapio_compiler.contract.bindable_contract import BindableContract
+from sapio_compiler.contract.core.bindable_contract import BindableContract
 from sapio_compiler.contract.contract import Contract
 from sapio_compiler.contract.decorators import (
     check,
@@ -23,7 +23,7 @@ from sapio_compiler.contract.decorators import (
     unlock,
     unlock_but_suggest,
 )
-from sapio_compiler.contract.txtemplate import TransactionTemplate
+from sapio_compiler.contract.core.txtemplate import TransactionTemplate
 from sapio_zoo.p2pk import PayToPubKey, PayToSegwitAddress
 from bitcoin_script_compiler.clause import (
     Clause,

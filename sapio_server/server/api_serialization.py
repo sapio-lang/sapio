@@ -6,20 +6,19 @@ from typing import Dict, Type, Callable, Any, Union, Tuple, Optional, List
 import tornado
 import tornado.websocket
 
-import sapio
-import sapio.examples.basic_vault
-import sapio.examples.p2pk
-import sapio.examples.subscription
-from sapio.bitcoinlib import segwit_addr
-from sapio.bitcoinlib.messages import COutPoint
-from sapio.bitcoinlib.static_types import Amount, Sequence, PubKey
-from sapio.contract.contract import Contract
-from sapio.examples.tree_pay import TreePay
-from sapio.examples.undo_send import UndoSend2
-from sapio.script.clause import TimeSpec, RelativeTimeSpec, AbsoluteTimeSpec, Days
-from sapio.bitcoinlib.static_types import int64
+import sapio_zoo.basic_vault
+import sapio_zoo.p2pk
+import sapio_zoo.subscription
+from bitcoinlib import segwit_addr
+from bitcoinlib.messages import COutPoint
+from bitcoinlib.static_types import Amount, Sequence, PubKey
+from sapio_compiler.contract.contract import Contract
+from sapio_zoo.tree_pay import TreePay
+from sapio_zoo.undo_send import UndoSend2
+from bitcoin_script_compiler.clause import TimeSpec, RelativeTimeSpec, AbsoluteTimeSpec, Days
+from bitcoinlib.static_types import int64
 
-from sapio.contract.core.bindable_contract import BindableContract
+from sapio_compiler.contract.core.bindable_contract import BindableContract
 placeholder_hint = {
     Amount: 0,
     Sequence: "int",
@@ -29,7 +28,7 @@ placeholder_hint = {
     typing.List[typing.Tuple[Amount, Contract]]: [[0, [0, "address"]]],
     PubKey: "String",
     Contract: [0, "String"],
-    sapio.examples.p2pk.PayToSegwitAddress: "Address",
+    sapio_zoo.p2pk.PayToSegwitAddress: "Address",
     int: 0,
 }
 id = lambda x: x
@@ -43,7 +42,7 @@ def convert_contract_object(arg: Tuple[Amount,str], ctx) -> Contract:
     try:
         return ctx.compilation_cache[arg[1]]
     except KeyError:
-        return sapio.examples.p2pk.PayToSegwitAddress(amount=arg[0], address=arg[1])
+        return sapio_zoo.p2pk.PayToSegwitAddress(amount=arg[0], address=arg[1])
         #raise AssertionError("No Known Contract by that name")
 def convert_dest(arg: List[Tuple[int, str]], ctx) -> List[Tuple[Amount, Contract]]:
     return list(map(lambda x: convert_contract(x, ctx), arg))
@@ -52,7 +51,7 @@ def convert_contract(arg: Tuple[int, str], ctx) -> Tuple[Amount, Contract]:
     try:
         return (Amount(arg[0]), ctx.compilation_cache[arg[1]])
     except KeyError:
-        return (Amount(arg[0]), sapio.examples.p2pk.PayToSegwitAddress(amount=Amount(arg[0]), address=arg[1]))
+        return (Amount(arg[0]), sapio_zoo.p2pk.PayToSegwitAddress(amount=Amount(arg[0]), address=arg[1]))
 
 # Don't convert to p2swa if we know what it is... TODO: maybe make this optional?
 def convert_p2swa(arg: str, ctx) -> Contract:
@@ -60,7 +59,7 @@ def convert_p2swa(arg: str, ctx) -> Contract:
         return ctx.compilation_cache[arg]
     except KeyError:
         # default bind to 0
-        return sapio.examples.p2pk.PayToSegwitAddress(amount=10000, address=arg)
+        return sapio_zoo.p2pk.PayToSegwitAddress(amount=10000, address=arg)
 
 
 def convert_sequence(arg: Sequence, ctx) -> Sequence:
@@ -83,7 +82,7 @@ conversion_functions : Dict[Type, Callable] = {
     int: lambda x, y: x,
     str: lambda x, y: x,
     Union[AbsoluteTimeSpec, RelativeTimeSpec]: lambda x: RelativeTimeSpec(Sequence(x)),
-    sapio.examples.p2pk.PayToSegwitAddress: convert_p2swa
+    sapio_zoo.p2pk.PayToSegwitAddress: convert_p2swa
 
 }
 
