@@ -3,8 +3,8 @@
 import unittest
 
 from bitcoinlib.static_types import Sats, Bitcoin
-from sapio_compiler.examples.p2pk import *
-from sapio_compiler.examples.tree_pay import *
+from sapio_zoo.p2pk import *
+from sapio_zoo.tree_pay import *
 from bitcoin_script_compiler.clause import Weeks
 
 import os

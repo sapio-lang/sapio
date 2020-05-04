@@ -1,7 +1,7 @@
 import unittest
 
 from bitcoinlib.static_types import Sats
-from sapio_compiler.examples.p2pk import *
+from sapio_zoo.p2pk import *
 
 
 class TestP2Pk(unittest.TestCase):

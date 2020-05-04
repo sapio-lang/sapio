@@ -5,8 +5,8 @@ from bitcoinlib import segwit_addr
 from bitcoinlib.address import script_to_p2wsh
 from bitcoinlib.script import CScript
 from bitcoinlib.static_types import Sats, Bitcoin
-from sapio_compiler.examples.p2pk import *
-from sapio_compiler.examples.subscription import *
+from sapio_zoo.p2pk import *
+from sapio_zoo.subscription import *
 from bitcoin_script_compiler.clause import Weeks
 from bitcoinlib.messages import COutPoint
 

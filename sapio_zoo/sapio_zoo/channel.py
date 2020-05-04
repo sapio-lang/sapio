@@ -5,7 +5,7 @@ from sapio_compiler.contract.contract import Contract
 from sapio_compiler.contract.bindable_contract import BindableContract
 from sapio_compiler.contract.decorators import guarantee, require, unlock, unlock_but_suggest, enable_if
 from sapio_compiler.contract.txtemplate import TransactionTemplate
-from sapio_compiler.examples.p2pk import PayToPubKey, PayToSegwitAddress
+from sapio_zoo.p2pk import PayToPubKey, PayToSegwitAddress
 from bitcoin_script_compiler.clause import (
     PreImageCheckClause,
     RelativeTimeSpec,

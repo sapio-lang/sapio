@@ -1,4 +1,4 @@
-from sapio_compiler.examples.undo_send import UndoSend, UndoSend2
+from sapio_zoo.undo_send import UndoSend, UndoSend2
 from bitcoinlib.static_types import Amount
 from bitcoin_script_compiler.clause import TimeSpec
 from sapio_compiler.contract import Contract, guarantee, TransactionTemplate

@@ -23,7 +23,7 @@ from bitcoin_script_compiler.clause import (
     Weeks,
 )
 from bitcoin_script_compiler.variable import AssignedVariable
-from sapio_compiler.examples.p2pk import PayToSegwitAddress
+from sapio_zoo.p2pk import PayToSegwitAddress
 from bitcoinlib.static_types import Hash
 
 

@@ -1,9 +1,9 @@
 
 import unittest
 
-from sapio_compiler.examples.p2pk import *
-from sapio_compiler.examples.undo_send import *
-from sapio_compiler.examples.basic_vault import *
+from sapio_zoo.p2pk import *
+from sapio_zoo.undo_send import *
+from sapio_zoo.basic_vault import *
 from bitcoin_script_compiler.clause import Weeks
 from sapio_compiler.contract.core.txtemplate import TransactionTemplate
 from bitcoinlib.static_types import Sats, Bitcoin

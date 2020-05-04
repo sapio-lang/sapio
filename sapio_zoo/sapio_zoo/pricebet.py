@@ -24,7 +24,7 @@ from sapio_compiler.contract.decorators import (
     unlock_but_suggest,
 )
 from sapio_compiler.contract.txtemplate import TransactionTemplate
-from sapio_compiler.examples.p2pk import PayToPubKey, PayToSegwitAddress
+from sapio_zoo.p2pk import PayToPubKey, PayToSegwitAddress
 from bitcoin_script_compiler.clause import (
     Clause,
     PreImageCheckClause,

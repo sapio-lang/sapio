@@ -1,7 +1,7 @@
 from functools import reduce
 
 from bitcoinlib.static_types import Bitcoin
-from sapio_compiler.examples.multisig import *
+from sapio_zoo.multisig import *
 import os
 import unittest
 class TestMultiSig(unittest.TestCase):
