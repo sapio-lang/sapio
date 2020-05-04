@@ -14,7 +14,7 @@ from sapio_compiler.contract.decorators import (
     unlock,
     unlock_but_suggest,
 )
-from sapio_compiler.contract.txtemplate import TransactionTemplate
+from sapio_compiler.contract.core.txtemplate import TransactionTemplate
 from bitcoin_script_compiler.clause import (
     AfterClause,
     Clause,
