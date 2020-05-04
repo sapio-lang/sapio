@@ -28,7 +28,7 @@ from codecs import encode
 from io import BytesIO
 from typing import List, Optional
 
-import sapio.bitcoinlib.hash_functions
+import bitcoinlib.hash_functions
 from .hash_functions import sha256, hash256
 from .script import CScript
 
@@ -556,7 +556,7 @@ class CBlockHeader:
             self.nTime = header.nTime
             self.nBits = header.nBits
             self.nNonce = header.nNonce
-            self.sha256 = sapio.bitcoinlib.hash_functions.sha256
+            self.sha256 = bitcoinlib.hash_functions.sha256
             self.hash = header.hash
             self.calc_sha256()
 
@@ -650,7 +650,7 @@ class CBlock(CBlockHeader):
         hashes = []
         for tx in self.vtx:
             tx.calc_sha256()
-            hashes.append(ser_uint256(sapio.bitcoinlib.hash_functions.sha256))
+            hashes.append(ser_uint256(bitcoinlib.hash_functions.sha256))
         return self.get_merkle_root(hashes)
 
     def calc_witness_merkle_root(self):
@@ -835,7 +835,7 @@ class HeaderAndShortIDs:
         [k0, k1] = self.get_siphash_keys()
         for i in range(len(block.vtx)):
             if i not in prefill_list:
-                tx_hash = sapio.bitcoinlib.hash_functions.sha256
+                tx_hash = bitcoinlib.hash_functions.sha256
                 if use_witness:
                     tx_hash = block.vtx[i].calc_sha256(with_witness=True)
                 self.shortids.append(calculate_shortid(k0, k1, tx_hash))

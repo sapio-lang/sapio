@@ -12,7 +12,7 @@ from typing import (
     Union,
 )
 
-from sapio.bitcoinlib.static_types import Amount, Hash, PubKey
+from bitcoinlib.static_types import Amount, Hash, PubKey
 from sapio.contract.bindable_contract import BindableContract
 from sapio.contract.contract import Contract
 from sapio.contract.decorators import (

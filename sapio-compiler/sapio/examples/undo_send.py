@@ -1,4 +1,4 @@
-from sapio.bitcoinlib.static_types import Amount
+from bitcoinlib.static_types import Amount
 from sapio.contract import Contract, TransactionTemplate
 from sapio.contract.decorators import guarantee, require, unlock
 from sapio.script.clause import *

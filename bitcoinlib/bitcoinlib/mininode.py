@@ -21,7 +21,7 @@ import struct
 import sys
 import threading
 
-import sapio.bitcoinlib.hash_functions
+import bitcoinlib.hash_functions
 from .messages import (
     CBlockHeader,
     MIN_VERSION_SUPPORTED,
@@ -553,8 +553,8 @@ class P2PDataStore(P2PInterface):
 
         with mininode_lock:
             for block in blocks:
-                self.block_store[sapio.bitcoinlib.hash_functions.sha256] = block
-                self.last_block_hash = sapio.bitcoinlib.hash_functions.sha256
+                self.block_store[bitcoinlib.hash_functions.sha256] = block
+                self.last_block_hash = bitcoinlib.hash_functions.sha256
 
         reject_reason = [reject_reason] if reject_reason else []
         with node.assert_debug_log(expected_msgs=reject_reason):
@@ -563,7 +563,7 @@ class P2PDataStore(P2PInterface):
                     self.send_message(msg_block(block=b))
             else:
                 self.send_message(msg_headers([CBlockHeader(block) for block in blocks]))
-                wait_until(lambda: sapio.bitcoinlib.hash_functions.sha256 in self.getdata_requests, timeout=timeout, lock=mininode_lock)
+                wait_until(lambda: bitcoinlib.hash_functions.sha256 in self.getdata_requests, timeout=timeout, lock=mininode_lock)
 
             if expect_disconnect:
                 self.wait_for_disconnect(timeout=timeout)
@@ -586,7 +586,7 @@ class P2PDataStore(P2PInterface):
 
         with mininode_lock:
             for tx in txs:
-                self.tx_store[sapio.bitcoinlib.hash_functions.sha256] = tx
+                self.tx_store[bitcoinlib.hash_functions.sha256] = tx
 
         reject_reason = [reject_reason] if reject_reason else []
         with node.assert_debug_log(expected_msgs=reject_reason):

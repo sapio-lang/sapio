@@ -6,7 +6,7 @@ from sapio.examples.undo_send import *
 from sapio.examples.basic_vault import *
 from sapio.script.clause import Weeks
 from sapio.contract.txtemplate import TransactionTemplate
-from sapio.bitcoinlib.static_types import Sats, Bitcoin
+from bitcoinlib.static_types import Sats, Bitcoin
 
 
 class TestBasicVault(unittest.TestCase):

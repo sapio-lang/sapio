@@ -2,7 +2,7 @@
 
 import unittest
 
-from sapio.bitcoinlib.static_types import Sats, Bitcoin
+from bitcoinlib.static_types import Sats, Bitcoin
 from sapio.examples.p2pk import *
 from sapio.examples.tree_pay import *
 from sapio.script.clause import Weeks

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import List, Tuple, Dict, Any
 
-from sapio.bitcoinlib.static_types import uint32
+from bitcoinlib.static_types import uint32
 
 import sapio.contract
-from sapio.bitcoinlib.messages import CTransaction, CTxIn, CTxOut, COutPoint, CScript
-from sapio.bitcoinlib.static_types import Sequence, Amount, Version, LockTime
+from bitcoinlib.messages import CTransaction, CTxIn, CTxOut, COutPoint, CScript
+from bitcoinlib.static_types import Sequence, Amount, Version, LockTime
 from sapio.contract.core.analysis.funds import WithinFee, HasEnoughFunds
 
 import sapio.contract.core.bindable_contract

@@ -1,14 +1,14 @@
 import unittest
 from datetime import datetime
 
-from sapio.bitcoinlib import segwit_addr
-from sapio.bitcoinlib.address import script_to_p2wsh
-from sapio.bitcoinlib.script import CScript
-from sapio.bitcoinlib.static_types import Sats, Bitcoin
+from bitcoinlib import segwit_addr
+from bitcoinlib.address import script_to_p2wsh
+from bitcoinlib.script import CScript
+from bitcoinlib.static_types import Sats, Bitcoin
 from sapio.examples.p2pk import *
 from sapio.examples.subscription import *
 from sapio.script.clause import Weeks
-from sapio.bitcoinlib.messages import COutPoint
+from bitcoinlib.messages import COutPoint
 
 
 class MyTestCase(unittest.TestCase):

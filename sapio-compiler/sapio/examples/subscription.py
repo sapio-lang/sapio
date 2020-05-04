@@ -1,6 +1,6 @@
 from typing import Iterator, List, Tuple
 
-from sapio.bitcoinlib.static_types import Amount, PubKey, int64
+from bitcoinlib.static_types import Amount, PubKey, int64
 from sapio.contract import Contract, TransactionTemplate
 from sapio.contract.decorators import guarantee, require
 from sapio.examples.p2pk import PayToSegwitAddress

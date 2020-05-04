@@ -4,7 +4,7 @@ from functools import reduce
 from itertools import combinations
 from typing import List, Tuple, Optional
 
-from sapio.bitcoinlib.static_types import Amount, PubKey
+from bitcoinlib.static_types import Amount, PubKey
 from sapio.contract.contract import Contract
 from sapio.contract.decorators import (
     LayeredRequirement,
@@ -24,7 +24,7 @@ from sapio.script.clause import (
 )
 from sapio.script.variable import AssignedVariable
 from sapio.examples.p2pk import PayToSegwitAddress
-from sapio.bitcoinlib.static_types import Hash
+from bitcoinlib.static_types import Hash
 
 
 def multisig(l, n):

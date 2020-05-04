@@ -1,6 +1,6 @@
 import unittest
 
-from sapio.bitcoinlib.static_types import Sats
+from bitcoinlib.static_types import Sats
 from sapio.examples.p2pk import *
 
 

@@ -1,6 +1,6 @@
 from typing import List, TYPE_CHECKING
 
-from sapio.bitcoinlib.script import CScript
+from bitcoinlib.script import CScript
 from sapio.script.clause import Clause, UnsatisfiableClause, DNFClause, DNF
 from sapio.script.clause_to_fragment import FragmentCompiler
 from sapio.script.flatten_and import FlattenPass

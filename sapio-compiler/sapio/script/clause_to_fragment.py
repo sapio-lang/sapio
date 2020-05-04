@@ -1,5 +1,5 @@
-from sapio.bitcoinlib.hash_functions import sha256
-from sapio.bitcoinlib.script import CScript
+from bitcoinlib.hash_functions import sha256
+from bitcoinlib.script import CScript
 from sapio.script.opcodes import AllowedOp
 from sapio.script.witnessmanager import CTVHash, WitnessTemplate
 from sapio.script.clause import Clause, SignatureCheckClause, PreImageCheckClause, \

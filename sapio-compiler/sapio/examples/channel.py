@@ -1,6 +1,6 @@
 from typing import Generic, List, Literal, Optional, Protocol, Tuple, Type, TypeVar, Union, Dict
 
-from sapio.bitcoinlib.static_types import Amount, Hash, PubKey
+from bitcoinlib.static_types import Amount, Hash, PubKey
 from sapio.contract.contract import Contract
 from sapio.contract.bindable_contract import BindableContract
 from sapio.contract.decorators import guarantee, require, unlock, unlock_but_suggest, enable_if

@@ -4,7 +4,7 @@ from datetime import datetime
 from functools import singledispatchmethod
 from typing import Any, List, Protocol, Type, Union, cast
 
-from sapio.bitcoinlib.static_types import (Hash, LockTime, PubKey, Sequence,
+from bitcoinlib.static_types import (Hash, LockTime, PubKey, Sequence,
                                            uint32)
 from sapio.script.variable import AssignedVariable, UnassignedVariable
 from sapio.util import methdispatch
@@ -144,7 +144,7 @@ class AbsoluteTimeSpec:
         return AbsoluteTimeSpec(LockTime(base+delta))
     @staticmethod
     def MonthsFromTime(t1: datetime, t2: float)-> AbsoluteTimeSpec:
-        base = AbsoluteTimeSpec.from_date(t1).time 
+        base = AbsoluteTimeSpec.from_date(t1).time
         delta = LockTime(uint32(t2*30*24*60*60))
         return AbsoluteTimeSpec(LockTime(base+delta))
     def __repr__(self)->str:

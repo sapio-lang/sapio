@@ -1,5 +1,5 @@
 from sapio.examples.undo_send import UndoSend, UndoSend2
-from sapio.bitcoinlib.static_types import Amount
+from bitcoinlib.static_types import Amount
 from sapio.script.clause import TimeSpec
 from sapio.contract import Contract, guarantee, TransactionTemplate
 

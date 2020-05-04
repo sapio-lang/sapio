@@ -1,9 +1,9 @@
 from typing import NewType, Dict, Any, List
 
-from sapio.bitcoinlib import segwit_addr
-from sapio.bitcoinlib.address import script_to_p2wsh
-from sapio.bitcoinlib.hash_functions import sha256
-from sapio.bitcoinlib.script import CScript
+from bitcoinlib import segwit_addr
+from bitcoinlib.address import script_to_p2wsh
+from bitcoinlib.hash_functions import sha256
+from bitcoinlib.script import CScript
 from sapio.script.opcodes import AllowedOp
 from sapio.util import methdispatch
 from typing import Optional, Union

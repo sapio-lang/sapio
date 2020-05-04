@@ -17,7 +17,7 @@ from typing import (
 
 import sapio.contract.core.bindable_contract
 import sapio.contract.contract
-from sapio.bitcoinlib.static_types import Amount, Hash, Sats
+from bitcoinlib.static_types import Amount, Hash, Sats
 from sapio.contract.core.errors import ExtraArgumentError, MissingArgumentError
 from sapio.script.clause import (
     CheckTemplateVerifyClause,

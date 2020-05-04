@@ -1,7 +1,7 @@
 from __future__ import annotations
 import sapio
 import sapio.contract.core.bindable_contract as bc
-from sapio.bitcoinlib.static_types import Amount, Sats
+from bitcoinlib.static_types import Amount, Sats
 
 
 class WithinFee:
