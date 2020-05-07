@@ -24,10 +24,7 @@ class AssignedVariable(Generic[V]):
             # suffix the unique name with our own name
             self.name += b"-" + bytes(name, "utf-8") if isinstance(name, str) else name
 
-    def __str__(self):
-        return "{}('{}', {})".format(
-            self.__class__.__name__, self.assigned_value, self.name
-        )
-
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__}({self.assigned_value!r}, {self.name!r})"
 
 Variable = Union[UnassignedVariable, AssignedVariable]
