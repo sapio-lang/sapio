@@ -97,8 +97,8 @@ def handle(
         elif op == OP_1SUB:
             if len(stack) < 1:
                 return False
-            num = CScriptNum.decode(stack.pop()) - ONE
-            stack.append(num)
+            num = CScriptNum.decode(stack.pop()) - 1
+            stack.append(CScriptNum.encode(CScriptNum(num)))
         elif op == OP_WITHIN:
             if len(stack) < 3:
                 return False

@@ -2,9 +2,10 @@ import unittest
 from functools import reduce
 from operator import and_, or_
 
-from sapio.script.clause import AfterClause, AbsoluteTimeSpec
-from sapio.script.variable import AssignedVariable
-from sapio.script.compiler import  ClauseToDNF
+import bitcoin_script_compiler
+from bitcoin_script_compiler.clause import AfterClause, AbsoluteTimeSpec
+from bitcoin_script_compiler.variable import AssignedVariable
+from bitcoin_script_compiler.compiler import  ClauseToDNF
 import random
 class TestCompiler(unittest.TestCase):
     def test_clause_to_cnf(self):
