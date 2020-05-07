@@ -23,7 +23,8 @@ class NormalizationPass:
         if TYPE_CHECKING:
             # TODO: Required for singledispatchmethod to typecheck...
             assert callable(self.normalize)
-        return self.normalize(arg)
+        r: Clause = self.normalize(arg)
+        return r
 
     # Normalize Bubbles up all the OR clauses into a CNF
     @singledispatchmethod

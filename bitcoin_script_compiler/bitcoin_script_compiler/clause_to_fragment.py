@@ -1,5 +1,5 @@
 from functools import singledispatchmethod
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Union, Any
 
 from bitcoinlib.hash_functions import sha256
 from bitcoinlib.script import CScript
@@ -22,7 +22,8 @@ class FragmentCompiler:
     def __call__(self, arg: Clause, witness: WitnessTemplate) -> CScript:
         if TYPE_CHECKING:
             assert callable(self._compile)
-        return self._compile(arg, witness)
+        r: CScript = self._compile(arg, witness)
+        return r
 
     @singledispatchmethod
     def _compile(self, arg: Clause, witness: WitnessTemplate) -> CScript:
@@ -97,13 +98,13 @@ class FragmentCompiler:
 
     @_compile.register
     def _compile_assigned_var(
-        self, arg: AssignedVariable, witness: WitnessTemplate
+        self, arg: AssignedVariable[Union[bytes, int, CScript]], witness: WitnessTemplate
     ) -> CScript:
         return CScript([arg.assigned_value])
 
     @_compile.register(UnassignedVariable)
     def _compile_unassigned_var(
-        self, arg: UnassignedVariable, witness: WitnessTemplate
+        self, arg: UnassignedVariable[Any], witness: WitnessTemplate
     ) -> CScript:
         witness.add(self.PREFIX + arg.name)
         return CScript()

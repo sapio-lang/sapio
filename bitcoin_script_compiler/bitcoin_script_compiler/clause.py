@@ -230,7 +230,7 @@ class AfterClause(LogicMixin, StringClauseMixin):
         raise ValueError("Unsupported Type")
 
     @initialize.register
-    def _with_assigned(self, a: AssignedVariable) -> None:
+    def _with_assigned(self, a: AssignedVariable[Union[RelativeTimeSpec, AbsoluteTimeSpec]]) -> None:
         # TODO: Remove when mypy updates...
         assert callable(self.initialize)
         self.initialize(a.assigned_value)

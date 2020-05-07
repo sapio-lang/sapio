@@ -12,7 +12,8 @@ class FlattenPass:
     def __call__(self, arg: Clause, or_allowed: bool = True) -> DNF:
         if TYPE_CHECKING:
             assert callable(self.flatten)
-        return self.flatten(arg, or_allowed)
+        r: DNF = self.flatten(arg, or_allowed)
+        return r
 
     @singledispatchmethod
     def flatten(self, arg: Clause, or_allowed: bool = True) -> DNF:
