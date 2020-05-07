@@ -3,7 +3,7 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Reference implementation for Bech32 and segwit addresses."""
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 
 CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
@@ -44,7 +44,7 @@ def bech32_encode(hrp, data):
     return hrp + '1' + ''.join([CHARSET[d] for d in combined])
 
 
-def bech32_decode(bech) -> Tuple[Optional[istr], Optional[bytes]]:
+def bech32_decode(bech) -> Tuple[Optional[str], Optional[bytes]]:
     """Validate a Bech32 string, and determine HRP and data."""
     if ((any(ord(x) < 33 or ord(x) > 126 for x in bech)) or
             (bech.lower() != bech and bech.upper() != bech)):

@@ -98,7 +98,7 @@ class FragmentCompiler:
 
     @_compile.register
     def _compile_assigned_var(
-        self, arg: AssignedVariable[Union[bytes, int, CScript]], witness: WitnessTemplate
+        self, arg: AssignedVariable, witness: WitnessTemplate
     ) -> CScript:
         return CScript([arg.assigned_value])
 
