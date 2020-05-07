@@ -77,7 +77,7 @@ def program_to_witness(version: int, program: Union[bytes, str, CScript], main: 
     assert version > 0 or len(program) in [20, 32]
     return segwit_addr.encode("bc" if main else "bcrt", version, program)
 
-def script_to_p2wsh(script : Union[CScript, str, bytes], main = False):
+def script_to_p2wsh(script : Union[CScript, str, bytes], main: bool = False) -> str:
     script_checked : Union[CScript, bytes] = check_script(script)
     return program_to_witness(0, sha256(script_checked), main)
 

@@ -419,7 +419,7 @@ class CScript(bytes):
     iter(script) however does iterate by opcode.
     """
     __slots__ = ()
-    Coercable = Union[CScriptOp, CScriptNum, int, CScript, bytes, bytearray]
+    Coercable = Union[CScriptOp, CScriptNum, int, 'CScript', bytes, bytearray]
     @classmethod
     def __coerce_instance(cls, other: Coercable) -> bytes:
         # Coerce other into bytes
