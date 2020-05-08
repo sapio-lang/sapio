@@ -12,7 +12,7 @@ import hashlib
 import struct
 from typing import Dict, List, AnyStr, Union, Type, Iterator, Tuple, Any, Optional, Iterable
 
-from .static_types import min_int64, max_int64
+from .static_types import min_int64, max_int64, uint32, int64
 
 from .hash_functions import sha256, AnyBytes
 from .bignum import bn2vch
@@ -430,7 +430,9 @@ class CScript(bytes):
                 other = bytes([CScriptOp(OP_0)])
             else:
                 other = CScriptNum.encode(other)
-        elif isinstance(other, int):
+        elif isinstance(other, (int, uint32, int64)):
+            # corerce to python int
+            other = int(other)
             if 0 <= other <= 16:
                 other = bytes([CScriptOp.encode_op_n(other)])
             elif other == -1:
@@ -442,7 +444,7 @@ class CScript(bytes):
         elif isinstance(other, (bytes, bytearray)):
             other = CScriptOp.encode_op_pushdata(other)
         else:
-            raise ValueError("Type cannot coerce")
+            raise ValueError("Type cannot coerce", other, type(other))
         return other
 
     def __add__(self, other: Coercable) -> CScript:

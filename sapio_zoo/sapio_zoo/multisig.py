@@ -4,25 +4,7 @@ from functools import reduce
 from itertools import combinations
 from typing import List, Optional, Tuple
 
-from bitcoin_script_compiler import (
-    AfterClause,
-    AssignedVariable,
-    Clause,
-    SatisfiedClause,
-    SignatureCheckClause,
-    Weeks,
-)
-from bitcoinlib.static_types import Amount, Hash, PubKey
-from sapio_compiler import (
-    Contract,
-    LayeredRequirement,
-    TransactionTemplate,
-    guarantee,
-    require,
-    threshold,
-    unlock,
-    unlock_but_suggest,
-)
+from sapio_compiler import *
 from sapio_zoo.p2pk import PayToSegwitAddress
 
 

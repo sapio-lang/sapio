@@ -11,7 +11,7 @@ import os
 from functools import lru_cache
 class TestSmarterVault(unittest.TestCase):
     def test_smarter_vault(self):
-        key2 = b"1"*32
+        key2 = PayToPubKey(key=b"1"*32, amount=Bitcoin(100))
 
         @lru_cache()
         def cold_storage(v : Amount):

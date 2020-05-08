@@ -5,10 +5,7 @@ participants on a given schedule...
 """
 from typing import List, Tuple
 
-from bitcoin_script_compiler import (AbsoluteTimeSpec, RelativeTimeSpec,
-                                     TimeSpec)
-from bitcoinlib.static_types import Amount, Sats
-from sapio_compiler import Contract, TransactionTemplate, guarantee
+from sapio_compiler import *
 from sapio_zoo.tree_pay import TreePay
 
 

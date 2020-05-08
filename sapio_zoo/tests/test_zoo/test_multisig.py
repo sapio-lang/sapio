@@ -1,6 +1,6 @@
 from functools import reduce
 
-from bitcoinlib.static_types import Bitcoin
+from sapio_compiler import *
 from sapio_zoo.multisig import *
 import os
 import unittest

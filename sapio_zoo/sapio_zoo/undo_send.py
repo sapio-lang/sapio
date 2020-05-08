@@ -10,15 +10,20 @@ class UndoSend(Contract):
         amount: Amount
         timeout: TimeSpec
 
-    @unlock
-    def finish(self):
-        return AfterClause(self.timeout) & SignatureCheckClause(self.to_key)
+    @require
+    def is_matured(self):
+        return AfterClause(self.timeout)
 
     @require
     def check_key(self):
         return SignatureCheckClause(self.to_key)
 
+    @is_matured
     @check_key
+    @unlock
+    def finish(self):
+        return SatisfiedClause()
+
     @guarantee
     def undo(self) -> TransactionTemplate:
         tx = TransactionTemplate()
