@@ -3,7 +3,7 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Reference implementation for Bech32 and segwit addresses."""
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, List
 
 
 CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
@@ -85,7 +85,7 @@ def convertbits(data, frombits, tobits, pad=True):
     return ret
 
 
-def decode(hrp, addr) -> Union[Tuple[None, None], Tuple[int, bytes]]:
+def decode(hrp, addr) -> Union[Tuple[None, None], Tuple[int, List[int]]]:
     """Decode a segwit address."""
     hrpgot, data = bech32_decode(addr)
     if hrpgot != hrp:

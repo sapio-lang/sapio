@@ -1,5 +1,5 @@
 from functools import singledispatchmethod
-from typing import TYPE_CHECKING, Any, ClassVar, Union, Any
+from typing import TYPE_CHECKING, Any, ClassVar, Union
 
 from bitcoinlib.hash_functions import sha256
 from bitcoinlib.script import CScript
@@ -14,7 +14,8 @@ from .clause import (
     SignatureCheckClause,
 )
 from .opcodes import AllowedOp
-from .variable import AssignedVariable, UnassignedVariable
+from .unassigned import PreImageVar, SignatureVar
+from .variable import AssignedVariable
 from .witnessmanager import CTVHash, WitnessTemplate
 
 
@@ -30,18 +31,15 @@ class FragmentCompiler:
         raise NotImplementedError("Cannot Compile Arg", arg)
 
     @_compile.register
-    def _compile_and(
+    def _compile_signature(
         self, arg: SignatureCheckClause, witness: WitnessTemplate
     ) -> CScript:
         if TYPE_CHECKING:
             assert callable(self._compile)
-        variable: CScript = self._compile(
-            UnassignedVariable(b"_signature_by_" + arg.a.name), witness
-        )
+        witness.add(SignatureVar(arg))
         script: CScript = self._compile(arg.a, witness) + CScript(
             [AllowedOp.OP_CHECKSIGVERIFY]
         )
-        assert len(variable) == 0
         return script
 
     @_compile.register
@@ -50,13 +48,10 @@ class FragmentCompiler:
     ) -> CScript:
         if TYPE_CHECKING:
             assert callable(self._compile)
-        variable: CScript = self._compile(
-            UnassignedVariable(b"_preimage_of_" + arg.a.name), witness
-        )
+        witness.add(PreImageVar(arg))
         script: CScript = CScript([AllowedOp.OP_SHA256]) + self._compile(
             arg.a, witness
         ) + CScript([AllowedOp.OP_EQUALVERIFY])
-        assert len(variable) == 0
         return script
 
     @_compile.register
@@ -94,17 +89,8 @@ class FragmentCompiler:
             )
         raise ValueError
 
-    PREFIX: ClassVar[bytes] = sha256(bytes(1000))
-
     @_compile.register
     def _compile_assigned_var(
         self, arg: AssignedVariable, witness: WitnessTemplate
     ) -> CScript:
         return CScript([arg.assigned_value])
-
-    @_compile.register(UnassignedVariable)
-    def _compile_unassigned_var(
-        self, arg: UnassignedVariable[Any], witness: WitnessTemplate
-    ) -> CScript:
-        witness.add(self.PREFIX + arg.name)
-        return CScript()

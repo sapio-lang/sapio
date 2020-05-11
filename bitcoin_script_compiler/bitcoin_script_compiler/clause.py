@@ -6,7 +6,7 @@ from typing import Any, List, Protocol, Type, Union, cast
 
 from bitcoinlib.static_types import Hash, LockTime, PubKey, Sequence, uint32
 
-from .variable import AssignedVariable, UnassignedVariable
+from .variable import AssignedVariable
 
 
 class ClauseProtocol(Protocol):

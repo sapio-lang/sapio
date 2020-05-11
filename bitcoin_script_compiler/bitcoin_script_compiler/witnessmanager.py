@@ -1,5 +1,5 @@
 from functools import singledispatchmethod
-from typing import Any, Dict, List, NewType, Optional, Union
+from typing import Any, ClassVar, Dict, List, NewType, Optional, Union
 
 from bitcoinlib import segwit_addr
 from bitcoinlib.address import script_to_p2wsh
@@ -7,16 +7,18 @@ from bitcoinlib.hash_functions import sha256
 from bitcoinlib.script import CScript
 
 from .opcodes import AllowedOp
+from .unassigned import PreImageVar, SignatureVar, Variable
 
 CTVHash = NewType("CTVHash", bytes)
 
 
 class WitnessTemplate:
     def __init__(self) -> None:
-        self.witness: List[Union[CScript, int, bytes]] = []
+        self.pending: Dict[int, Variable] = {}
+        self.witness: List[bytes] = []
         self.ctv_hash: Optional[CTVHash] = None
 
-    def add(self, it: Union[CScript, int, bytes]) -> None:
+    def add(self, it: Union[CScript, int, bytes, Variable]) -> None:
         assert callable(self.internal_add)
         self.internal_add(it)
 
@@ -24,8 +26,22 @@ class WitnessTemplate:
     def internal_add(self, it: Union[CScript, bytes]) -> None:
         self.witness.insert(0, it)
 
+    PREFIX: ClassVar[bytes] = sha256(bytes(1000))
+
     @internal_add.register
-    def _(self, it: int) -> None:
+    def _add_sig(self, it: SignatureVar) -> None:
+        idx = len(self.witness)
+        self.pending[idx] = it
+        self.add(self.PREFIX + b"_sig_by_" + it.pk)
+
+    @internal_add.register
+    def _add_preim(self, it: PreImageVar) -> None:
+        idx = len(self.witness)
+        self.pending[idx] = it
+        self.add(self.PREFIX + b"_preim_of_" + it.pk)
+
+    @internal_add.register
+    def _add_int(self, it: int) -> None:
         self.add(CScript([it]))
 
     def will_execute_ctv(self, ctv: CTVHash) -> None:
@@ -60,10 +76,14 @@ class WitnessManager:
         self.witnesses[key] = WitnessTemplate()
         return self.witnesses[key]
 
-    def get_p2wsh_script(self, main: bool=False) -> CScript:
+    def get_p2wsh_script(self, main: bool = False) -> CScript:
         if self.override_program is not None:
-            script = segwit_addr.decode("bc" if main else "bcrt", self.override_program)
-            return CScript([script[0], bytes(script[1])])
+            (version, program) = segwit_addr.decode(
+                "bc" if main else "bcrt", self.override_program
+            )
+            assert version is not None
+            assert program is not None
+            return CScript([version, bytes(program)])
         return CScript([AllowedOp.OP_0, sha256(self.program)])
 
     def get_p2wsh_address(self) -> str:

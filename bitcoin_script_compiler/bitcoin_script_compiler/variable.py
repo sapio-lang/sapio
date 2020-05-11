@@ -4,14 +4,10 @@ import os
 import struct
 from typing import Generic, Optional, TypeVar, Union
 
+from bitcoinlib.static_types import *
+
+
 V = TypeVar("V")
-
-
-class UnassignedVariable(Generic[V]):
-    def __init__(self, name: Union[bytes, str]):
-        self.name: bytes = bytes(name, "utf-8") if isinstance(name, str) else name
-
-
 # The type V must be something that can be put onto the stack...
 class AssignedVariable(Generic[V]):
     UNIQUE_NAME = 0
@@ -26,5 +22,3 @@ class AssignedVariable(Generic[V]):
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}({self.assigned_value!r}, {self.name!r})"
-
-Variable = Union[UnassignedVariable, AssignedVariable]
