@@ -104,64 +104,66 @@ class BindableContract(Generic[T]):
         }
 
     @final
-    def bind(self, out: COutPoint) -> Tuple[List[CTransaction], List[Dict[str, Any]]]:
+    def bind(self, out_in: COutPoint) -> Tuple[List[CTransaction], List[Dict[str, Any]]]:
         """
         Attaches a BindableContract to a specific COutPoint and generates all
         the child transactions along with metadata entries
         """
         # todo: Note that if a contract has any secret state, it may be a hack
         # attempt to bind it to an output with insufficient funds
-        color = self.MetaData.color(self)
-        output_label = self.MetaData.label(self)
 
         txns = []
         metadata = []
-        for (has_witness, templates) in [
-            (True, self.guaranteed_txns),
-            (False, self.suggested_txns),
-        ]:
-            for txn_template in templates:
-                # todo: find correct witness?
-                tx_label = output_label + ":" + txn_template.label
-                tx = txn_template.bind_tx(out)
-                txid = int(tx.hash, 16)
-                ctv_hash = txn_template.get_ctv_hash() if has_witness else None
+        queue = [(out_in, self)]
+        while queue:
+            out, this = queue.pop()
+            color = this.MetaData.color(this)
+            contract_name = this.MetaData.label(this)
+            program = this.witness_manager.program
+            for (is_ctv, templates) in [
+                (True, this.guaranteed_txns),
+                (False, this.suggested_txns),
+            ]:
+                for txn_template in templates:
+                    ctv_hash = txn_template.get_ctv_hash() if is_ctv else None
 
-                # This uniquely binds things with a CTV hash to the appropriate witnesses
-                # And binds things with None to all possible witnesses.
-                candidates = [
-                    wit
-                    for wit in self.witness_manager.witnesses.values()
-                    if wit.ctv_hash == ctv_hash
-                ]
-                # There should always be a candidate otherwise we shouldn't have a txn
-                assert candidates
-                # Create all possible candidates
-                for wit in candidates:
-                    t = copy.deepcopy(tx)
-                    witness = CTxWitness()
-                    in_witness = CTxInWitness()
-                    witness.vtxinwit.append(in_witness)
-                    in_witness.scriptWitness.stack.extend(wit.witness)
-                    in_witness.scriptWitness.stack.append(self.witness_manager.program)
-                    t.wit = witness
-                    txns.append(t)
-                    utxo_metadata = [
-                        {"color": md.color, "label": md.label}
-                        for md in txn_template.outputs_metadata
+                    # This uniquely binds things with a CTV hash to the
+                    # appropriate witnesses. Also binds things with None to all
+                    # possible witnesses that do not have a ctv
+                    candidates = [
+                        wit
+                        for wit in this.witness_manager.witnesses.values()
+                        if wit.ctv_hash == ctv_hash
                     ]
-                    metadata.append(
-                        {
-                            "color": color,
-                            "label": tx_label,
-                            "utxo_metadata": utxo_metadata,
-                        }
-                    )
-                for (idx, (_, contract)) in enumerate(txn_template.outputs):
-                    # TODO: CHeck this is correct type into COutpoint
-                    new_txns, new_metadata = contract.bind(COutPoint(txid, idx))
-                    txns.extend(new_txns)
-                    metadata.extend(new_metadata)
+                    # There should always be a candidate otherwise we shouldn't
+                    # have a txn
+                    if not candidates:
+                        raise AssertionError("There must always be a candidate")
+
+                    # todo: find correct witness?
+                    tx_label = contract_name + ":" + txn_template.label
+                    tx = txn_template.bind_tx(out)
+                    tx.wit = CTxWitness()
+                    tx.wit.vtxinwit.append(CTxInWitness())
+                    # Create all possible candidates
+                    for wit in candidates:
+                        t = copy.deepcopy(tx)
+                        t.wit.vtxinwit[0].scriptWitness.stack = wit.witness + [program]
+                        txns.append(t)
+                        utxo_metadata = [md.to_json()
+                            for md in txn_template.outputs_metadata
+                        ]
+                        metadata.append(
+                            {
+                                "color": color,
+                                "label": tx_label,
+                                "utxo_metadata": utxo_metadata,
+                            }
+                        )
+                    txid = int(tx.hash, 16)
+                    for (i, (_, contract)) in enumerate(txn_template.outputs):
+                        # TODO: CHeck this is correct type into COutpoint
+                        queue.append((COutPoint(txid, i), contract))
 
         return txns, metadata
 
