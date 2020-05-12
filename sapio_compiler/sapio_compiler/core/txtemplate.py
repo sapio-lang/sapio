@@ -11,9 +11,9 @@ import struct
 import hashlib
 
 
-class MetaDataContainer:
+class OutputMetaDataContainer:
     """
-    MetaDataContainer exists to hold content on a per-output basis
+    OutputMetaDataContainer exists to hold content on a per-output basis
     """
 
     def __init__(self, color: str, label: str) -> None:
@@ -51,9 +51,10 @@ class TransactionTemplate:
         self.n_inputs: int = 0
         self.sequences: List[Sequence] = [Sequence(uint32(0))]
         self.outputs: List[
-            Tuple[Amount, sapio_compiler.core.bindable_contract.BindableContract[Any]]
+            Tuple[Amount,
+                  sapio_compiler.core.bindable_contract.BindableContract[Any]]
         ] = []
-        self.outputs_metadata: List[MetaDataContainer] = []
+        self.outputs_metadata: List[OutputMetaDataContainer] = []
         self.version: Version = Version(uint32(2))
         self.lock_time: LockTime = LockTime(uint32(0))
         self.label: str = ""
@@ -210,7 +211,7 @@ class TransactionTemplate:
         HasEnoughFunds(contract, amount)
         self.outputs.append((amount, contract))
         self.outputs_metadata.append(
-            MetaDataContainer(
+            OutputMetaDataContainer(
                 contract.MetaData.color(contract), contract.MetaData.label(contract)
             )
         )
