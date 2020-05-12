@@ -28,6 +28,13 @@ T = TypeVar("T")
 
 
 class BindableContract(Generic[T]):
+    """
+    BindableContract is the base contract object that gets created by the Sapio
+    language frontend.
+
+    It should not be directly constructed, but indirectly by inheritence through
+    Contract.
+    """
     # These slots will be extended later on
     __slots__ = (
         "amount_range",
@@ -98,6 +105,10 @@ class BindableContract(Generic[T]):
 
     @final
     def bind(self, out: COutPoint) -> Tuple[List[CTransaction], List[Dict[str, Any]]]:
+        """
+        Attaches a BindableContract to a specific COutPoint and generates all
+        the child transactions along with metadata entries
+        """
         # todo: Note that if a contract has any secret state, it may be a hack
         # attempt to bind it to an output with insufficient funds
         color = self.MetaData.color(self)
@@ -113,6 +124,7 @@ class BindableContract(Generic[T]):
                 # todo: find correct witness?
                 tx_label = output_label + ":" + txn_template.label
                 tx = txn_template.bind_tx(out)
+                # TODO: use tx.hash for a 2x speedup here
                 txid = int(tx.rehash(), 16)
                 ctv_hash = txn_template.get_ctv_hash() if has_witness else None
 

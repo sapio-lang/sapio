@@ -38,6 +38,11 @@ FieldsType = TypeVar("FieldsType")
 
 
 class ContractBase(Generic[FieldsType]):
+    """
+    ContractBase handles the initialization logic of a a new instance of a contract.
+
+    For performance, as much pre-processing as possible is done in __init__ of the ContractBase.
+    """
     ContractType = TypeVar(
         "ContractType",
         bound="sapio.contract.bindable_contract.BindableContract[FieldsType]",

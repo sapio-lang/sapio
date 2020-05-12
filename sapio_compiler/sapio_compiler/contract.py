@@ -10,6 +10,14 @@ from .decorators import CheckFunction, PathFunction, PayAddress, UnlockFunction
 
 
 class MetaContract(type):
+    """
+    MetaContract is a base metaclass which handles the creation of a
+    new Contract instance and stitches the relevant parts together into a
+    class that can be initialized correctly.
+
+    It should not be inherited from directly, prefer to inherit from
+    Contract which inherits from BindableContract.
+    """
     def __new__(mcl, name, bases, nmspc):
         pay_funcs = [v for (k, v) in nmspc.items() if isinstance(v, PayAddress)]
         path_funcs = [v for (k, v) in nmspc.items() if isinstance(v, PathFunction)]
@@ -17,6 +25,7 @@ class MetaContract(type):
         assertions = [v for (k, v) in nmspc.items() if isinstance(v, CheckFunction)]
 
         class MetaBase(BindableContract[nmspc["Fields"]]):
+            """MetaBase is the actual class which gets constructed"""
             init_class = ContractBase(
                 nmspc["Fields"], path_funcs, pay_funcs, unlock_funcs, assertions
             )
