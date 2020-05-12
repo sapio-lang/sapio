@@ -13,10 +13,10 @@ help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
 docs:
-	sphinx-apidoc -o source ../sapio_compiler/sapio_compiler
-	sphinx-apidoc -o source ../sapio_zoo/sapio_zoo
-	sphinx-apidoc -o source ../bitcoinlib/bitcoinlib
-	sphinx-apidoc -o source ../bitcoin_script_compiler/bitcoin_script_compiler
+	sphinx-apidoc -o source/sapio_compiler/ ../sapio_compiler/sapio_compiler
+	sphinx-apidoc -o source/sapio_zoo ../sapio_zoo/sapio_zoo
+	sphinx-apidoc -o source/bitcoinlib ../bitcoinlib/bitcoinlib
+	sphinx-apidoc -o source/bitcoin_script_compiler ../bitcoin_script_compiler/bitcoin_script_compiler
 
 
 .PHONY: help Makefile
