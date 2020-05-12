@@ -1,3 +1,12 @@
+"""
+opcode.py
+=========================
+
+This module contains a subset of allowed script opcodes and a basic
+interpreter for the allowed subset of opcodes. This is not meant to be used
+for validation, but can be useful for future efforts to symbolically execute
+scripts to aid finalization.
+"""
 from __future__ import annotations
 
 from typing import ClassVar, List, Union
@@ -7,6 +16,7 @@ from bitcoinlib.static_types import max_uint32
 
 
 class AllowedOp:
+    """Subset of allowed opcodes"""
     # Control Flow
     OP_IF = OP_IF
     OP_NOTIF = OP_NOTIF

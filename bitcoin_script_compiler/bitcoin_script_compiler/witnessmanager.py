@@ -13,6 +13,21 @@ CTVHash = NewType("CTVHash", bytes)
 
 
 class WitnessTemplate:
+    """
+    A WitnessTemplate contains all the information needed to be able to sign/generate
+    a spend for a specific pathway through a script.
+    """
+
+    pending: Dict[int, Variable]
+    """Mapping from witness stack position to the data to fill"""
+    witness: List[bytes]
+    """The stack to pass to the witness for this input. If pending variables,
+    pending.keys() are dummy variables"""
+    ctv_hash: Optional[CTVHash]
+    """The ctv hash that will be required for the tx to be valid. Useful for
+    linking this to another transaction
+    """
+
     def __init__(self) -> None:
         self.pending: Dict[int, Variable] = {}
         self.witness: List[bytes] = []

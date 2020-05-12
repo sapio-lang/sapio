@@ -5,10 +5,14 @@ from .clause import (DNF, AfterClause, AndClause, CheckTemplateVerifyClause,
                      Clause, DNFClause, OrClause, PreImageCheckClause,
                      SatisfiedClause, SignatureCheckClause)
 
-# Assumes that there is no OR which comes after an AND
-
-
 class FlattenPass:
+    """
+    Flattenpass takes a tree of clauses which have already been "normalized" and
+    turns it into a DNF. E.g. OrClause(OrClause(a,b),AndClause(c,d)) ==> [[a],[b],[c,d]].
+
+    FlattenPass checks that there is no OrClause which follows and AndClause, otherwise
+    the flattening may only be shallow (and a true DNF would not be returned).
+    """
     def __call__(self, arg: Clause, or_allowed: bool = True) -> DNF:
         if TYPE_CHECKING:
             assert callable(self.flatten)

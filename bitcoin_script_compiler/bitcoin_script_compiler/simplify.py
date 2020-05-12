@@ -16,6 +16,18 @@ from .variable import AssignedVariable
 
 
 class AfterClauseSimplification:
+    """
+    AfterClauseSimplification goes through a list of AfterClauses and reduces any
+    CheckLockTimeVerify or CheckSequenceVerify lock times to at most two.
+    It also sanity checks that the timeouts requested should either be relative
+    or absolute but not both.
+
+    It does not check that CTV is not used, which may externally conflict
+
+    The ClassVar PRUNE_MODE can be configured to make incompatible timelocks an error,
+    but the default behavior is to return an UnsatisfiableClause which results in a pruned
+    DNF branch. 
+    """
     ReturnType = Union[
         UnsatisfiableClause,
         Tuple[Union[SatisfiedClause, AfterClause], Union[SatisfiedClause, AfterClause]],
@@ -78,6 +90,20 @@ class AfterClauseSimplification:
 
 
 class DNFSimplification:
+    """
+    DNFSimplification goes through a List[DNFClause] and performs simplifications
+    based on the type of a clause.
+
+    Currently this is limited to AfterClause reduction and common CTV elimination.
+
+    DNFSimplification can also detect and mark a List[DNFClause] as
+    unsatisfiable if certain conflicts show up
+
+    Future work can eliminate repeated public-keys, use MuSig keys, check for repeated
+    pre-images, and other simplifiers.
+
+    Cross-branch common clause aggregation must happen at a separate layer.
+    """
     PRUNE_MODE: bool = True
 
     def simplify(self, all_clauses: List[DNFClause]) -> List[DNFClause]:

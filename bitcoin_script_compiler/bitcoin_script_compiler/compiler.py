@@ -13,6 +13,16 @@ from .witnessmanager import WitnessManager, WitnessTemplate
 
 class ClauseToDNF:
     def compile_cnf(self, clause: Clause) -> DNF:
+        """Turns a Clause into a DNF (needs to be renamed).
+
+        Parameters
+        ----------
+        clause: Clause
+
+        Returns
+        -------
+        DNF
+            A DNF with logical equivalence to Clause"""
         while True:
             normalizer = NormalizationPass()
             clause = normalizer(clause)
@@ -23,17 +33,57 @@ class ClauseToDNF:
 
 class DNFClauseCompiler:
     def compile(self, cl: List[DNFClause], w: WitnessTemplate) -> CScript:
+        """
+        Turns a set of conditions into a CScript function.
+
+        Parameters
+        ----------
+        cl: List[DNFClause]
+            A list of base DNFClause which are to be treated as anded together
+        w: WitnessTemplate
+            The WitnessTemplate which will contain the ABI desciption for this function
+
+        Returns
+        -------
+        CScript
+            The computed function
+
+        """
         return CScript([FragmentCompiler()(frag, w) for frag in cl])
 
 
 class ProgramBuilder:
+    """
+    This class wraps the compile function to house future options/compilation
+    parameters that may be passed in.
+
+    After the first release, this class should honor a version flag so that deterministic
+    compilation can work retroactively for older versions.
+    """
+
     def compile(self, clause: Clause) -> WitnessManager:
+        """
+        compile turns a higher-order logical clause into a WitnessManager object
+        which can return an address and perform transaction finalization.
+
+        Parameters
+        ----------
+        clause: Clause
+            The logical clause to compile to Bitcoin script.
+
+        Returns
+        -------
+        WitnessManager
+            An object which can be used to get addresses and get spend paths
+
+        """
         dnf: DNF = ClauseToDNF().compile_cnf(clause)
         n_cases = len(dnf)
         witness_manager: WitnessManager = WitnessManager()
         dnf = list(
             filter(
-                lambda x: not any(isinstance(y, UnsatisfiableClause) for y in x),
+                lambda x: not any(isinstance(y, UnsatisfiableClause)
+                                  for y in x),
                 (DNFSimplification().simplify(x) for x in dnf),
             )
         )
@@ -41,7 +91,8 @@ class ProgramBuilder:
         # 3 or more, use a generic wrapper
         if n_cases == 1:
             witness = witness_manager.make_witness(0)
-            witness_manager.program += DNFClauseCompiler().compile(dnf[0], witness)
+            witness_manager.program += DNFClauseCompiler().compile(
+                dnf[0], witness)
             # Hack because the fragment compiler leaves stack empty
             witness_manager.program += CScript([AllowedOp.OP_1])
         elif n_cases == 2:

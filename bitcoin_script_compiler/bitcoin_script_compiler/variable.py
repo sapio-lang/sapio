@@ -10,6 +10,13 @@ from bitcoinlib.static_types import *
 V = TypeVar("V")
 # The type V must be something that can be put onto the stack...
 class AssignedVariable(Generic[V]):
+    """
+    The AssignedVariable is a container for a piece of data passed to a DNFClause
+    such as a public key or a hash.
+
+    It should *most likely* be refactored out, or the concept of an assigned/unassigned
+    variable should be made a bit richer.
+    """
     UNIQUE_NAME = 0
 
     def __init__(self, value: V, name: Optional[Union[bytes, str]] = None):

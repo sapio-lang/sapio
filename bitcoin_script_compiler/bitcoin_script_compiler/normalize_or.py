@@ -14,6 +14,18 @@ from .clause import (
 
 
 class NormalizationPass:
+    """
+    NormalizationPass takes an arbitrary clause and restructures it to bubble all of
+    the OrClauses to the top-level.
+
+    E.g., AndClause(OrClause(a,b), c) ==> OrClause(AndClause(a,c), AndClause(b,c))
+
+    NormalizationPass tracks if it made any change on the past iteration, so that it can be called
+    repeatedly until the algorithm has stabilized.
+
+    NormalizationPass should be used in a loop until took_action is False, then the expression
+    is fully normalized.
+    """
     took_action: bool
 
     def __init__(self) -> None:
@@ -26,7 +38,7 @@ class NormalizationPass:
         r: Clause = self.normalize(arg)
         return r
 
-    # Normalize Bubbles up all the OR clauses into a CNF
+    # Normalize Bubbles up all the OR clauses into a DNF
     @singledispatchmethod
     def normalize(self, arg: Clause) -> Clause:
         raise NotImplementedError("Cannot Compile Arg", arg)
