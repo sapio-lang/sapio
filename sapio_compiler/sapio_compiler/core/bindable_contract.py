@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import typing
 from abc import abstractmethod
 from typing import (
     Any,
@@ -9,7 +8,6 @@ from typing import (
     Dict,
     Generic,
     List,
-    Optional,
     Protocol,
     Tuple,
     Type,
@@ -17,23 +15,23 @@ from typing import (
     final,
     runtime_checkable,
 )
-from bitcoin_script_compiler import AssignedVariable, CTVHash, WitnessManager
+from bitcoin_script_compiler import AssignedVariable, WitnessManager
 from bitcoinlib.messages import COutPoint, CTransaction, CTxInWitness, CTxWitness
 from bitcoinlib.static_types import Amount
 from sapio_compiler.core.contract_base import ContractBase
 
 from .txtemplate import TransactionTemplate
 
-T = TypeVar("T")
+FieldsType = TypeVar("FieldsType")
 
 
-class BindableContract(Generic[T]):
+class BindableContract(Generic[FieldsType]):
     """
     BindableContract is the base contract object that gets created by the Sapio
     language frontend.
 
-    It should not be directly constructed, but indirectly by inheritence through
-    Contract.
+    It should not be directly constructed, but indirectly by inheritence
+    through Contract.
     """
     # These slots will be extended later on
     __slots__ = (
@@ -49,14 +47,21 @@ class BindableContract(Generic[T]):
     guaranteed_txns: List[TransactionTemplate]
     suggested_txns: List[TransactionTemplate]
     amount_range: Tuple[Amount, Amount]
-    fields: T
+    fields: FieldsType
     is_initialized: bool
-    init_class: ContractBase[T]
+    init_class: ContractBase[FieldsType]
 
     class Fields:
+        """
+        Fields should be overriden by base classes
+        """
         pass
 
     class MetaData:
+        """
+        MetaData may be overriden by base classes. It's only used for pretty
+        outputs generation so it's not critical that it be set.
+        """
         color: Callable[[Any], str] = lambda self: "brown"
         label: Callable[[Any], str] = lambda self: "generic"
 
@@ -68,7 +73,7 @@ class BindableContract(Generic[T]):
             super().__setattr__(attr, v)
         elif not self.is_initialized:
             if not hasattr(self, attr):
-                raise AssertionError("No Known field for " + attr + " = " + repr(v))
+                raise AssertionError(f"No Known field for {attr} = {v!r}")
             # TODO Type Check
             setattr(self.fields, attr, v)
         else:
@@ -78,13 +83,13 @@ class BindableContract(Generic[T]):
 
     def __init__(self, **kwargs: Any):
         self.is_initialized = False
-        self.fields: T = self.__class__.init_class.make_new_fields()
+        self.fields: FieldsType = self.__class__.init_class.make_new_fields()
         self.__class__.init_class(self, kwargs)
         self.is_initialized = True
 
     @final
     @classmethod
-    def create_instance(cls, **kwargs: Any) -> BindableContract[T]:
+    def create_instance(cls, **kwargs: Any) -> BindableContract[FieldsType]:
         return cls(**kwargs)
 
     @final
@@ -104,7 +109,8 @@ class BindableContract(Generic[T]):
         }
 
     @final
-    def bind(self, out_in: COutPoint) -> Tuple[List[CTransaction], List[Dict[str, Any]]]:
+    def bind(self, out_in: COutPoint) -> Tuple[List[CTransaction],
+                                               List[Dict[str, Any]]]:
         """
         Attaches a BindableContract to a specific COutPoint and generates all
         the child transactions along with metadata entries
@@ -169,9 +175,9 @@ class BindableContract(Generic[T]):
 
 
 @runtime_checkable
-class ContractProtocol(Protocol[T]):
+class ContractProtocol(Protocol[FieldsType]):
     Fields: Type[Any]
 
     @abstractmethod
-    def create_instance(self, **kwargs: Any) -> BindableContract[T]:
+    def create_instance(self, **kwargs: Any) -> BindableContract[FieldsType]:
         pass

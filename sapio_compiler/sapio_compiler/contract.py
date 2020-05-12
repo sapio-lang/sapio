@@ -34,5 +34,17 @@ class MetaContract(type):
 
 
 class Contract(BindableContract, metaclass=MetaContract):
+    """Base class to inherit from when making a new contract"""
     class Fields:
-        pass
+        """
+        Mock-value for subcontract to replace.
+
+        Fields should be just a type list with no values
+
+        Examples
+        --------
+        >>> class Fields:
+        ...     amount: Amount
+        ...     steps: int
+
+        """
