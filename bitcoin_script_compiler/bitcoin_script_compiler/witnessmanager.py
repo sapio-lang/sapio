@@ -53,7 +53,7 @@ class WitnessTemplate:
     def _add_preim(self, it: PreImageVar) -> None:
         idx = len(self.witness)
         self.pending[idx] = it
-        self.add(self.PREFIX + b"_preim_of_" + it.pk)
+        self.add(self.PREFIX + b"_preim_of_" + it.image)
 
     @internal_add.register
     def _add_int(self, it: int) -> None:
