@@ -124,8 +124,7 @@ class BindableContract(Generic[T]):
                 # todo: find correct witness?
                 tx_label = output_label + ":" + txn_template.label
                 tx = txn_template.bind_tx(out)
-                # TODO: use tx.hash for a 2x speedup here
-                txid = int(tx.rehash(), 16)
+                txid = int(tx.hash, 16)
                 ctv_hash = txn_template.get_ctv_hash() if has_witness else None
 
                 # This uniquely binds things with a CTV hash to the appropriate witnesses

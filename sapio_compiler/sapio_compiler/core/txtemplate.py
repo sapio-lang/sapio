@@ -7,6 +7,8 @@ import sapio_compiler.core.bindable_contract
 from bitcoinlib.messages import COutPoint, CScript, CTransaction, CTxIn, CTxOut
 from bitcoinlib.static_types import Amount, LockTime, Sequence, Version, uint32
 from sapio_compiler.core.analysis.funds import HasEnoughFunds, WithinFee
+import struct
+import hashlib
 
 
 class MetaDataContainer:
@@ -103,7 +105,10 @@ class TransactionTemplate:
     def bind_tx(self, point: COutPoint) -> CTransaction:
         """
         Binds a tx template (with a single input) to a specific
-        COutPoint and returns a CTransaction
+        COutPoint and returns a CTransaction.
+
+        Rehash is called before the CTransaction is returned
+
         """
         tx = self.get_base_transaction()
         tx.vin[0].prevout = point
@@ -113,9 +118,29 @@ class TransactionTemplate:
     def get_standard_template_hash(self, nIn: int) -> bytes:
         """
         computes the standard template hash for a given input index
+
+        is computed equivalently to bitcoinlib.messages version, but is "inlined" to avoid
+        performance issueS
         """
-        # TODO: Do this without having to make a CTransaction Object
-        return self.get_base_transaction().get_standard_template_hash(nIn)
+        ret = hashlib.sha256()
+        ret.update(struct.pack("<i", self.version))
+        ret.update(struct.pack("<I", self.lock_time))
+        # TODO: Reinstate if adding non-segwit input support
+        # if any(inp.scriptSig for inp in self.vin):
+        #    r += sha256(b"".join(ser_string(inp.scriptSig) for inp in self.vin))
+        ret.update(struct.pack("<I", self.n_inputs))
+        seqs_h = hashlib.sha256()
+        for seq in self.sequences:
+            seqs_h.update(struct.pack("<I", seq))
+        ret.update(seqs_h.digest())
+        ret.update(struct.pack("<I", len(self.outputs)))
+
+        outs_h = hashlib.sha256()
+        for (amt, contract) in self.outputs:
+            outs_h.update(CTxOut(amt, contract.witness_manager.get_p2wsh_script()).serialize())
+        ret.update(outs_h.digest())
+        ret.update(struct.pack("<I", nIn))
+        return ret.digest()
 
     def add_output(
         self,
