@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from functools import singledispatchmethod
-from typing import Any, List, Protocol, Type, Union, cast
+from typing import Any, List, Protocol, Type, Union, cast, Literal
 
 from bitcoinlib.static_types import Hash, LockTime, PubKey, Sequence, uint32
 
@@ -136,22 +136,13 @@ class CheckTemplateVerifyClause(LogicMixin, StringClauseMixin):
         self.a = a
 
 
+TimeTypes = Union[Literal["time"], Literal["blocks"]]
 class AbsoluteTimeSpec:
     """An nLockTime specification, either in Blocks or MTP Time"""
-    # TODO: Replace with Literal?
-    class Blocks:
-        """Type Tag for Blocks"""
-        pass
 
-    class Time:
-        """Type Tag for Time"""
-        pass
-
-    Types = Union[Type[Blocks], Type[Time]]
-
-    def get_type(self) -> AbsoluteTimeSpec.Types:
+    def get_type(self) -> TimeTypes:
         """Return if the AbsoluteTimeSpec is a block or MTP time"""
-        return self.Blocks if self.time < self.MIN_DATE else self.Time
+        return "blocks" if self.time < self.MIN_DATE else "time"
 
     MIN_DATE = 500_000_000
     """The Threshold at which an int should be read as a date"""
@@ -204,17 +195,6 @@ class AbsoluteTimeSpec:
 
 
 class RelativeTimeSpec:
-    # TODO: Replace with Literal?
-    class Blocks:
-        """Type Tag for Blocks"""
-        pass
-
-    class Time:
-        """Type Tag for Time"""
-        pass
-
-    Types = Union[Type[Blocks], Type[Time]]
-
     def __init__(self, t: Sequence):
         self.time: Sequence = t
 
@@ -228,8 +208,8 @@ class RelativeTimeSpec:
         l = uint32(1 << 22) | t
         return RelativeTimeSpec(Sequence(uint32(l)))
 
-    def get_type(self) -> RelativeTimeSpec.Types:
-        return self.Time if (self.time & uint32(1 << 22)) else self.Blocks
+    def get_type(self) -> TimeTypes:
+        return "time" if (self.time & uint32(1 << 22)) else "blocks"
 
 
 TimeSpec = Union[AbsoluteTimeSpec, RelativeTimeSpec]

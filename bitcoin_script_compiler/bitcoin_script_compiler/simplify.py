@@ -1,6 +1,6 @@
 import logging
 from collections import defaultdict
-from typing import DefaultDict, List, Tuple, Type, Union, cast
+from typing import DefaultDict, List, Tuple, Type, Union, cast, Literal
 
 from .clause import (
     AbsoluteTimeSpec,
@@ -26,7 +26,7 @@ class AfterClauseSimplification:
 
     The ClassVar PRUNE_MODE can be configured to make incompatible timelocks an error,
     but the default behavior is to return an UnsatisfiableClause which results in a pruned
-    DNF branch. 
+    DNF branch.
     """
     ReturnType = Union[
         UnsatisfiableClause,
@@ -49,7 +49,9 @@ class AfterClauseSimplification:
             relative_or_absolute[type(cl.a.assigned_value)].append(cl.a.assigned_value)
         relative = relative_or_absolute[RelativeTimeSpec]
         absolute = relative_or_absolute[AbsoluteTimeSpec]
-        relative_blocks_or_time = defaultdict(list)
+        relative_blocks_or_time: DefaultDict[Union[Literal["time"],
+                                                   Literal["blocks"]],
+                                             RelativeTimeSpec]= defaultdict(list)
         for cl2 in relative:
             relative_blocks_or_time[cl2.get_type()].append(cl2)
         relative_blocks = relative_blocks_or_time[RelativeTimeSpec.Blocks]
@@ -68,7 +70,9 @@ class AfterClauseSimplification:
             (_, tl) = max((tl.time, tl) for tl in relative_blocks + relative_time)
             ret[0] = AfterClause(AssignedVariable(tl, "relative_time_lock"))
 
-        absolute_blocks_or_time = defaultdict(list)
+        absolute_blocks_or_time: DefaultDict[Union[Literal["time"],
+                                                   Literal["blocks"]],
+                                             AbsoluteTimeSpec]= defaultdict(list)
         for cl3 in absolute:
             absolute_blocks_or_time[cl3.get_type()].append(cl3)
         absolute_blocks = absolute_blocks_or_time[AbsoluteTimeSpec.Blocks]
