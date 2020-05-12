@@ -134,6 +134,7 @@ class ContractBase(Generic[FieldsType]):
             if path_func.unlock_with is not None:
                 unlock_clause = path_func.unlock_with(obj)
             for template in transaction_templates:
+                template.finalize()
                 template.label = path_func.__name__
                 amount = template.total_amount()
                 obj.amount_range = (

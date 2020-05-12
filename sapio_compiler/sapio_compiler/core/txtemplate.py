@@ -43,6 +43,8 @@ class TransactionTemplate:
         "lock_time",
         "outputs_metadata",
         "label",
+        "is_final",
+        "cached_ctv",
     ]
 
     def __init__(self) -> None:
@@ -55,6 +57,19 @@ class TransactionTemplate:
         self.version: Version = Version(uint32(2))
         self.lock_time: LockTime = LockTime(uint32(0))
         self.label: str = ""
+        self.is_final: bool = False
+        self.cached_ctv: bytes = b""
+
+    def finalize(self) -> None:
+        """
+        Marks and object as 'immutable'
+
+        Repeated calls are idempotent.
+        """
+        if self.is_final:
+            return
+        self.cached_ctv = self.get_ctv_hash()
+        self.is_final = True
 
     def to_json(self) -> Dict[str, Any]:
         return {
@@ -71,28 +86,54 @@ class TransactionTemplate:
         """
         returns the standard template hash for this txtemplate assuming that the input will be spent
         at index 0.
+
+        Returns
+        -------
+        bytes
+            The CTV Standard Template Hash. Cached if the template has been finalized.
         """
         # Implicitly always at index 0!
-        return self.get_standard_template_hash(0)
+        if self.is_final:
+            return self.cached_ctv
+        else:
+            return self.get_standard_template_hash(0)
 
     # TODO: Add safety mechanisms here
     def set_sequence(self, sequence: Sequence, idx: int = 0) -> None:
         """
         sets a sequence for the first input, or another if specified.
         Not bounds checked. Most of the time a txtemplate will have just 1 input.
+
+        Raises
+        ------
+        AssertionError
+            Template must not be finalized if called
         """
+        assert not self.is_final
         self.sequences[idx] = sequence
 
     def set_locktime(self, sequence: LockTime) -> None:
         """
         sets the locktime for the entire transaction
+
+        Raises
+        ------
+        AssertionError
+            Template must not be finalized if called
         """
+        assert not self.is_final
         self.lock_time = sequence
 
     def get_base_transaction(self) -> CTransaction:
         """
         casts the transaction template to a CTransaction for general use
+
+        Raises
+        ------
+        AssertionError
+            Template must be finalized if called
         """
+        assert self.is_final
         tx = CTransaction()
         tx.nVersion = self.version
         tx.nLockTime = self.lock_time
@@ -109,7 +150,13 @@ class TransactionTemplate:
 
         Rehash is called before the CTransaction is returned
 
+        Raises
+        ------
+        AssertionError
+            Template must be finalized if called
+
         """
+        assert self.is_final
         tx = self.get_base_transaction()
         tx.vin[0].prevout = point
         tx.rehash()
@@ -137,7 +184,9 @@ class TransactionTemplate:
 
         outs_h = hashlib.sha256()
         for (amt, contract) in self.outputs:
-            outs_h.update(CTxOut(amt, contract.witness_manager.get_p2wsh_script()).serialize())
+            outs_h.update(
+                CTxOut(amt, contract.witness_manager.get_p2wsh_script()).serialize()
+            )
         ret.update(outs_h.digest())
         ret.update(struct.pack("<I", nIn))
         return ret.digest()
@@ -150,7 +199,13 @@ class TransactionTemplate:
         """
         Adds an output to a tx template. Checks that the amount is sufficient and that fees won't be
         burned by this output.
+
+        Raises
+        ------
+        AssertionError
+            Template must not be finalized if called
         """
+        assert not self.is_final
         WithinFee(contract, amount)
         HasEnoughFunds(contract, amount)
         self.outputs.append((amount, contract))
@@ -161,4 +216,5 @@ class TransactionTemplate:
         )
 
     def total_amount(self) -> Amount:
+        """Sum up the amount spent by the outputs"""
         return Amount(sum(a for (a, _) in self.outputs))
