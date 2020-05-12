@@ -37,25 +37,29 @@ class AfterClauseSimplification:
     def simplify(self, clauses: List[AfterClause]) -> ReturnType:
 
         log = logging.getLogger("compiler").getChild(self.__class__.__name__)
-        relative_or_absolute: DefaultDict[Type[TimeSpec], List[TimeSpec]] = defaultdict(
-            list
-        )
         ret: List[Union[SatisfiedClause, AfterClause]] = [
             SatisfiedClause(),
             SatisfiedClause(),
         ]
+        relative: List[RelativeTimeSpec] = []
+        absolute: List[AbsoluteTimeSpec] = []
         for cl in clauses:
             assert cl.a.assigned_value is not None
-            relative_or_absolute[type(cl.a.assigned_value)].append(cl.a.assigned_value)
-        relative = relative_or_absolute[RelativeTimeSpec]
-        absolute = relative_or_absolute[AbsoluteTimeSpec]
-        relative_blocks_or_time: DefaultDict[Union[Literal["time"],
-                                                   Literal["blocks"]],
-                                             RelativeTimeSpec]= defaultdict(list)
-        for cl2 in relative:
-            relative_blocks_or_time[cl2.get_type()].append(cl2)
-        relative_blocks = relative_blocks_or_time[RelativeTimeSpec.Blocks]
-        relative_time = relative_blocks_or_time[RelativeTimeSpec.Time]
+            if isinstance(cl.a.assigned_value, RelativeTimeSpec):
+                relative.append(cl.a.assigned_value)
+            elif isinstance(cl.a.assigned_value, AbsoluteTimeSpec):
+                absolute.append(cl.a.assigned_value)
+            else:
+                raise ValueError("Unkown Type")
+        relative_blocks: List[RelativeTimeSpec] = []
+        relative_time: List[RelativeTimeSpec] = []
+        for rel_ts in relative:
+            if rel_ts.get_type() == "blocks":
+                relative_blocks.append(rel_ts)
+            elif rel_ts.get_type() == "time":
+                relative_time.append(rel_ts)
+            else:
+                raise ValueError("Bad Literal")
         if not (
             (len(relative_time) > 0) ^ (len(relative_blocks) > 0)
             or not (relative_blocks or relative_time)
@@ -67,16 +71,18 @@ class AfterClauseSimplification:
             else:
                 raise AssertionError("Incompatible Relative Time Locks in Branch")
         elif relative_blocks or relative_time:
-            (_, tl) = max((tl.time, tl) for tl in relative_blocks + relative_time)
-            ret[0] = AfterClause(AssignedVariable(tl, "relative_time_lock"))
+            (_, rel_tl) = max((rel_tl.time, rel_tl) for rel_tl in relative_blocks + relative_time)
+            ret[0] = AfterClause(AssignedVariable(rel_tl, "relative_time_lock"))
 
-        absolute_blocks_or_time: DefaultDict[Union[Literal["time"],
-                                                   Literal["blocks"]],
-                                             AbsoluteTimeSpec]= defaultdict(list)
-        for cl3 in absolute:
-            absolute_blocks_or_time[cl3.get_type()].append(cl3)
-        absolute_blocks = absolute_blocks_or_time[AbsoluteTimeSpec.Blocks]
-        absolute_time = absolute_blocks_or_time[AbsoluteTimeSpec.Time]
+        absolute_blocks: List[AbsoluteTimeSpec] = []
+        absolute_time: List[AbsoluteTimeSpec] = []
+        for abs_ts in absolute:
+            if abs_ts.get_type() == "blocks":
+                absolute_blocks.append(abs_ts)
+            elif abs_ts.get_type() == "time":
+                absolute_time.append(abs_ts)
+            else:
+                raise ValueError("Bad Literal")
         if not (
             (len(absolute_time) > 0) ^ (len(absolute_blocks) > 0)
             or not (absolute_time or absolute_blocks)
@@ -88,8 +94,8 @@ class AfterClauseSimplification:
             else:
                 raise AssertionError("Incompatible Absolute Time Locks in Branch")
         elif absolute_time or absolute_blocks:
-            (_, tl) = max((tl.time, tl) for tl in absolute_blocks + absolute_time)
-            ret[1] = AfterClause(AssignedVariable(tl, "absolute_time_lock"))
+            (_, abs_tl) = max((abs_tl.time, abs_tl) for abs_tl in absolute_blocks + absolute_time)
+            ret[1] = AfterClause(AssignedVariable(abs_tl, "absolute_time_lock"))
         return (ret[0], ret[1])
 
 
