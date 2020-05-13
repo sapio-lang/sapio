@@ -20,9 +20,11 @@ from .witnessmanager import CTVHash, WitnessTemplate
 
 
 class FragmentCompiler:
-    """FragmentCompiler emits CScript fragments for DNFClauses. Fragments always
+    """
+    FragmentCompiler emits CScript fragments for DNFClauses. Fragments always
     leave the stack clean.  FragmentCompiler also populates data into the
-r   WitnessTemplate."""
+    WitnessTemplate.
+    """
     def __call__(self, arg: Clause, witness: WitnessTemplate) -> CScript:
         """Convert a clause to CScript Fragment"""
         if TYPE_CHECKING:
