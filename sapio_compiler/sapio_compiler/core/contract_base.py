@@ -104,6 +104,10 @@ class ContractBase(Generic[FieldsType]):
         obj.amount_range = (Sats(21_000_000 * 100_000_000), Sats(0))
         obj.guaranteed_txns = []
         obj.suggested_txns = []
+        # Check all assertions. Assertions should not return anything.
+        for assert_func in self.assertions:
+            if not assert_func(obj):
+                raise AssertionError("Assertion function did not return True")
         if self.pay_functions is not None:
             amt, addr = self.pay_functions(obj)
             # TODO: Something more robust here...
@@ -112,9 +116,6 @@ class ContractBase(Generic[FieldsType]):
             obj.witness_manager.override_program = addr
             return
 
-        # Check all assertions. Assertions should not return anything.
-        for assert_func in self.assertions:
-            assert_func(obj)
 
         # Get the value from all paths.
         # Paths return a TransactionTemplate object, or list, or iterable.
