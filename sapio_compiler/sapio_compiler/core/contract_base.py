@@ -1,3 +1,10 @@
+"""
+contract_base.py
+-----------------
+
+Initialization routine for a new contract instance.
+
+"""
 from __future__ import annotations
 
 import typing
@@ -9,7 +16,6 @@ from typing import (
     Iterable,
     List,
     Optional,
-    Tuple,
     Type,
     TypeVar,
     Union,
