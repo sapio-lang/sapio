@@ -1,6 +1,6 @@
 import logging
 from collections import defaultdict
-from typing import DefaultDict, List, Tuple, Type, Union, cast, Literal
+from typing import List, Tuple, Union, cast
 
 from .clause import (
     AbsoluteTimeSpec,
@@ -9,7 +9,6 @@ from .clause import (
     DNFClause,
     RelativeTimeSpec,
     SatisfiedClause,
-    TimeSpec,
     UnsatisfiableClause,
 )
 from .variable import AssignedVariable
@@ -17,30 +16,40 @@ from .variable import AssignedVariable
 
 class AfterClauseSimplification:
     """
-    AfterClauseSimplification goes through a list of AfterClauses and reduces any
-    CheckLockTimeVerify or CheckSequenceVerify lock times to at most two.
+    AfterClauseSimplification goes through a list of AfterClauses and reduces
+    any CheckLockTimeVerify or CheckSequenceVerify lock times to at most two.
     It also sanity checks that the timeouts requested should either be relative
     or absolute but not both.
 
     It does not check that CTV is not used, which may externally conflict
-
-    The ClassVar PRUNE_MODE can be configured to make incompatible timelocks an error,
-    but the default behavior is to return an UnsatisfiableClause which results in a pruned
-    DNF branch.
     """
-    ReturnType = Union[
-        UnsatisfiableClause,
-        Tuple[Union[SatisfiedClause, AfterClause], Union[SatisfiedClause, AfterClause]],
-    ]
+
     PRUNE_MODE: bool = True
+    """
+    PRUNE_MODE can be configured to make incompatible timelocks an error, but
+    the default behavior is to return an UnsatisfiableClause which results in a
+    pruned DNF branch.
+    """
 
-    def simplify(self, clauses: List[AfterClause]) -> ReturnType:
+    def simplify(
+        self, clauses: List[AfterClause]
+    ) -> Union[
+        UnsatisfiableClause,
+        Tuple[Union[SatisfiedClause, AfterClause],
+              Union[SatisfiedClause, AfterClause]],
+    ]:
+        """
+        Parameters
+        ----------
+        clauses
+            list of all timing constraints in a DNF clause
 
+        Returns
+        -------
+        Either UnsatisfiableClause or a pair of AfterClauses
+        """
         log = logging.getLogger("compiler").getChild(self.__class__.__name__)
-        ret: List[Union[SatisfiedClause, AfterClause]] = [
-            SatisfiedClause(),
-            SatisfiedClause(),
-        ]
+        # Filter out the relative and absolute clauses
         relative: List[RelativeTimeSpec] = []
         absolute: List[AbsoluteTimeSpec] = []
         for cl in clauses:
@@ -51,6 +60,8 @@ class AfterClauseSimplification:
                 absolute.append(cl.a.assigned_value)
             else:
                 raise ValueError("Unkown Type")
+
+        # Filter the relative clauses into blocks and time
         relative_blocks: List[RelativeTimeSpec] = []
         relative_time: List[RelativeTimeSpec] = []
         for rel_ts in relative:
@@ -60,20 +71,27 @@ class AfterClauseSimplification:
                 relative_time.append(rel_ts)
             else:
                 raise ValueError("Bad Literal")
-        if not (
-            (len(relative_time) > 0) ^ (len(relative_blocks) > 0)
-            or not (relative_blocks or relative_time)
-        ):
+
+        # Checks that there is only one type of time lock (otherwise
+        # incompatible)
+        if relative_time and relative_blocks:
             # Todo: Is this a true error? Or can we simply safely prune this branch...
             if self.PRUNE_MODE:
                 log.warning("Incompatible Relative Time Locks! Pruning Branch")
                 return UnsatisfiableClause()
             else:
-                raise AssertionError("Incompatible Relative Time Locks in Branch")
+                raise AssertionError(
+                    "Incompatible Relative Time Locks in Branch")
         elif relative_blocks or relative_time:
-            (_, rel_tl) = max((rel_tl.time, rel_tl) for rel_tl in relative_blocks + relative_time)
-            ret[0] = AfterClause(AssignedVariable(rel_tl, "relative_time_lock"))
+            (_, rel_tl) = max(
+                (rel_tl.time, rel_tl) for rel_tl in relative_blocks + relative_time
+            )
+            relative_return: Union[AfterClause, SatisfiedClause] = AfterClause(AssignedVariable(
+                rel_tl, "relative_time_lock"))
+        else:
+            relative_return = SatisfiedClause()
 
+        # filter the absolute clauses into blocks and time
         absolute_blocks: List[AbsoluteTimeSpec] = []
         absolute_time: List[AbsoluteTimeSpec] = []
         for abs_ts in absolute:
@@ -83,20 +101,26 @@ class AfterClauseSimplification:
                 absolute_time.append(abs_ts)
             else:
                 raise ValueError("Bad Literal")
-        if not (
-            (len(absolute_time) > 0) ^ (len(absolute_blocks) > 0)
-            or not (absolute_time or absolute_blocks)
-        ):
+
+        # Check that there is only one type of time lock (otherwise
+        # incompatible)
+        if absolute_time and absolute_blocks:
             # Todo: Is this a true error? Or can we simply safely prune this branch...
             if self.PRUNE_MODE:
                 log.warning("Incompatible Absolute Time Locks! Pruning Branch")
                 return UnsatisfiableClause()
             else:
-                raise AssertionError("Incompatible Absolute Time Locks in Branch")
+                raise AssertionError(
+                    "Incompatible Absolute Time Locks in Branch")
         elif absolute_time or absolute_blocks:
-            (_, abs_tl) = max((abs_tl.time, abs_tl) for abs_tl in absolute_blocks + absolute_time)
-            ret[1] = AfterClause(AssignedVariable(abs_tl, "absolute_time_lock"))
-        return (ret[0], ret[1])
+            (_, abs_tl) = max(
+                (abs_tl.time, abs_tl) for abs_tl in absolute_blocks + absolute_time
+            )
+            absolute_return: Union[AfterClause, SatisfiedClause] = AfterClause(AssignedVariable(
+                abs_tl, "absolute_time_lock"))
+        else:
+            absolute_return = SatisfiedClause()
+        return (relative_return, absolute_return)
 
 
 class DNFSimplification:
@@ -114,7 +138,11 @@ class DNFSimplification:
 
     Cross-branch common clause aggregation must happen at a separate layer.
     """
+
     PRUNE_MODE: bool = True
+    """
+    If detected conflicts should be ignored or raise an error
+    """
 
     def simplify(self, all_clauses: List[DNFClause]) -> List[DNFClause]:
         clauses_to_return: List[DNFClause] = []
@@ -124,7 +152,8 @@ class DNFSimplification:
             clause_by_type[type(cl)].append(cl)
 
         if AfterClause in clause_by_type:
-            after_clauses = cast(List[AfterClause], clause_by_type.pop(AfterClause))
+            after_clauses = cast(
+                List[AfterClause], clause_by_type.pop(AfterClause))
             val = AfterClauseSimplification().simplify(after_clauses)
             if isinstance(val, tuple):
                 (a, b) = val
@@ -143,12 +172,13 @@ class DNFSimplification:
                 clauses_to_return.extend(list(ctv_clauses))
             else:
                 first = ctv_clauses[0].a.assigned_value
-                if not all(clause.a.assigned_value == first for clause in ctv_clauses):
+                if any(ctv.a.assigned_value != first for ctv in ctv_clauses):
                     if self.PRUNE_MODE:
                         log.warning("Pruning Incompatible CheckTemplateVerify")
                         return [UnsatisfiableClause()]
                     else:
-                        raise AssertionError("Incompatible CheckTemplateVerify Clause")
+                        raise AssertionError(
+                            "Incompatible CheckTemplateVerify Clause")
                 else:
                     clauses_to_return.append(ctv_clauses[0])
 

@@ -1,15 +1,31 @@
 """
 clause.py
 ===============================
-Types of logical clause allowed
+Types of logical clauses allowed within a transaction.
 
-Both conjunctive & base types defined here
+Both conjunctive & base types defined here.
+
+
+Every clause should represent an operation that can be represented as a script
+operation that reads some data from the stack and self-verifies correctness.
+
+Each operation should consume its arguments and not leave anything new on the
+stack.
+
+The actual logic for these clauses is contained in other files, these are just
+data containers located here. This modular design is a bit easier to work with
+as it helps keep similar logic passes local.
+
+Data arguments should be passed in as AssignedVariables. Eventually this class
+may be refactored out, but for now it fills the role of differentiating passed
+in user data v.s. compiler data.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
 from functools import singledispatchmethod
-from typing import Any, List, Protocol, Type, Union, cast, Literal
+from typing import Any, List, Protocol, Union, cast, Literal
 
 from bitcoinlib.static_types import Hash, LockTime, PubKey, Sequence, uint32
 
@@ -30,27 +46,37 @@ class ClauseProtocol(Protocol):
 
 
 class StringClauseMixin:
+    """Mixin to add str printing"""
     MODE = "+"  # "str"
 
     def __str__(self: ClauseProtocol) -> str:
         if StringClauseMixin.MODE == "+":
             if self.__class__.n_args == 1:
-                return "{}({})".format(self.__class__.__name__, self.a)
+                return f"{self.__class__.__name__}({self.a})"
             elif self.__class__.n_args == 2:
-                return "{}{}{}".format(self.a, self.symbol, self.b)
+                return f"{self.a}{self.symbol}{self.b}"
             else:
-                return "{}()".format(self.__class__.__name__)
+                return f"{self.__class__.__name__}()"
         else:
             if self.__class__.n_args == 1:
-                return "{}({})".format(self.__class__.__name__, self.a)
+                return f"{self.__class__.__name__}({self.a})"
             elif self.__class__.n_args == 2:
-                return "{}({}, {})".format(self.__class__.__name__, self.a, self.b)
+                return f"{self.__class__.__name__}({self.a}, {self.b})"
             else:
-                return "{}()".format(self.__class__.__name__)
+                return f"{self.__class__.__name__}()"
+
+class LogicMixin:
+    """Mixin to add logic syntax to a class"""
+    def __or__(self, other: Clause) -> OrClause:
+        return OrClause(cast(Clause, self), other)
+
+    def __and__(self, other: Clause) -> AndClause:
+        return AndClause(cast(Clause, self), other)
 
 
 class SatisfiedClause(StringClauseMixin):
     """A Base type clause which is always true. Useful in compiler logic."""
+    n_args = 0
     # When or'd to another clause, the other clause disappears
     # because A + True --> True
     def __or__(self, other: Clause) -> SatisfiedClause:
@@ -61,11 +87,11 @@ class SatisfiedClause(StringClauseMixin):
     def __and__(self, other: Clause) -> Clause:
         return other
 
-    n_args = 0
 
 
 class UnsatisfiableClause(StringClauseMixin):
     """A Base type clause which is always false. Useful in compiler logic."""
+    n_args = 0
     # When or'd to another clause, this clause disappears
     # because A + False --> A
 
@@ -79,21 +105,14 @@ class UnsatisfiableClause(StringClauseMixin):
     def __and__(self, other: Clause) -> UnsatisfiableClause:
         return self
 
-    n_args = 0
 
 
-class LogicMixin:
-    def __or__(self, other: Clause) -> OrClause:
-        return OrClause(cast(Clause, self), other)
-
-    def __and__(self, other: Clause) -> AndClause:
-        return AndClause(cast(Clause, self), other)
 
 
 class AndClause(LogicMixin, StringClauseMixin):
     """Expresses that both the left hand and right hand arguments must be satisfied."""
     n_args = 2
-    symbol = "*"
+    symbol = "&"
 
     def __init__(self, a: Clause, b: Clause):
         self.a = a
@@ -103,7 +122,7 @@ class AndClause(LogicMixin, StringClauseMixin):
 class OrClause(LogicMixin, StringClauseMixin):
     """Expresses that either the left hand or right hand arguments must be satisfied."""
     n_args = 2
-    symbol = "+"
+    symbol = "|"
 
     def __init__(self, a: Clause, b: Clause):
         self.a: Clause = a
@@ -122,7 +141,6 @@ class PreImageCheckClause(LogicMixin, StringClauseMixin):
     """Requires a preimage of the passed in hash to be revealed to be satisfied"""
     n_args = 1
     a: AssignedVariable[Hash]
-    b: AssignedVariable[Hash]
 
     def __init__(self, a: AssignedVariable[Hash]):
         self.a = a
@@ -273,6 +291,8 @@ DNFClause = Union[
 """DNF Clauses are basic types of clauses that can't be reduced further."""
 
 DNF = List[List[DNFClause]]
+"""Every element in the base list is AND'd together, every list in the outer
+list is OR'd"""
 
 Clause = Union[OrClause, AndClause, DNFClause]
 """Clause includes AndClause and OrClause in addition to DNFClause"""
