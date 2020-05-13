@@ -83,11 +83,11 @@ class WitnessManager:
         self.witnesses: Dict[int, WitnessTemplate] = {}
         self.is_final = False
 
-    def assert_final(self):
+    def assert_final(self) -> None:
         if not self.is_final:
             raise FinalizationNotComplete()
 
-    def assert_not_final(self):
+    def assert_not_final(self) -> None:
         if self.is_final:
             raise FinalizationComplete()
 

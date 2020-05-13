@@ -176,7 +176,7 @@ def handle(
 
 
 # Implementation Based on Bitcoin Core Condition Stack, MIT License
-class ConditionStackError:
+class ConditionStackError(Exception):
     pass
 
 
