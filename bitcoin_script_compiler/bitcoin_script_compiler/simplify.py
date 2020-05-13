@@ -53,7 +53,6 @@ class AfterClauseSimplification:
         relative: List[RelativeTimeSpec] = []
         absolute: List[AbsoluteTimeSpec] = []
         for cl in clauses:
-            assert cl.a.assigned_value is not None
             if isinstance(cl.a.assigned_value, RelativeTimeSpec):
                 relative.append(cl.a.assigned_value)
             elif isinstance(cl.a.assigned_value, AbsoluteTimeSpec):

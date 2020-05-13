@@ -62,9 +62,6 @@ r   WitnessTemplate."""
     def _compile_ctv(
         self, arg: CheckTemplateVerifyClause, witness: WitnessTemplate
     ) -> CScript:
-        # While valid to make this a witness variable, this is likely an error
-        assert arg.a.assigned_value is not None
-        assert isinstance(arg.a.assigned_value, bytes)
         witness.will_execute_ctv(CTVHash(arg.a.assigned_value))
         s = CScript(
             [arg.a.assigned_value, AllowedOp.OP_CHECKTEMPLATEVERIFY, AllowedOp.OP_DROP]
@@ -74,7 +71,6 @@ r   WitnessTemplate."""
     @_compile.register
     def _compile_after(self, arg: AfterClause, witness: WitnessTemplate) -> CScript:
         # While valid to make this a witness variable, this is likely an error
-        assert arg.a.assigned_value is not None
         if isinstance(arg.a.assigned_value, AbsoluteTimeSpec):
             return CScript(
                 [

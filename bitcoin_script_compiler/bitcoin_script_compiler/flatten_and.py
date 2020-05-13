@@ -42,7 +42,8 @@ class FlattenPass:
     def flatten_or(self, arg: OrClause, or_allowed: bool = True) -> DNF:
         if TYPE_CHECKING:
             assert callable(self.flatten)
-        assert or_allowed
+        if not or_allowed:
+            raise ValueError("""OrClause found at an unexpected location, normalization was not completed before call""")
         l: DNF = self.flatten(arg.a, or_allowed)
         l2: DNF = self.flatten(arg.b, or_allowed)
         return l + l2
@@ -67,7 +68,8 @@ class FlattenPass:
 # TODO: Move to a test...
 try:
     f = FlattenPass()
-    assert callable(f.flatten)
+    if TYPE_CHECKING:
+        assert callable(f.flatten)
     f.flatten(
         AndClause(
             OrClause(SatisfiedClause(), SatisfiedClause()),
@@ -75,5 +77,5 @@ try:
         )
     )
     raise AssertionError("this sanity check should fail")
-except AssertionError:
+except ValueError:
     pass

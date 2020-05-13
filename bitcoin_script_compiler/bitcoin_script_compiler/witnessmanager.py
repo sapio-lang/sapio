@@ -1,5 +1,5 @@
 from functools import singledispatchmethod
-from typing import Any, ClassVar, Dict, List, NewType, Optional, Union
+from typing import Any, ClassVar, Dict, List, NewType, Optional, Union, TYPE_CHECKING
 
 from bitcoinlib import segwit_addr
 from bitcoinlib.address import script_to_p2wsh
@@ -11,6 +11,9 @@ from .unassigned import PreImageVar, SignatureVar, Variable
 
 CTVHash = NewType("CTVHash", bytes)
 
+
+class MultipleCTVError(Exception):
+    pass
 
 class WitnessTemplate:
     """
@@ -34,7 +37,8 @@ class WitnessTemplate:
         self.ctv_hash: Optional[CTVHash] = None
 
     def add(self, it: Union[CScript, int, bytes, Variable]) -> None:
-        assert callable(self.internal_add)
+        if TYPE_CHECKING:
+            assert callable(self.internal_add)
         self.internal_add(it)
 
     @singledispatchmethod
@@ -61,8 +65,15 @@ class WitnessTemplate:
 
     def will_execute_ctv(self, ctv: CTVHash) -> None:
         if self.ctv_hash is not None and ctv != self.ctv_hash:
-            raise AssertionError("Two CTV Hashes cannot be in the same witness")
+            raise MultipleCTVError("Two CTV Hashes cannot be in the same witness")
         self.ctv_hash = ctv
+
+class FinalizationNotComplete(Exception):
+    pass
+
+
+class FinalizationComplete(Exception):
+    pass
 
 
 class WitnessManager:
@@ -72,22 +83,31 @@ class WitnessManager:
         self.witnesses: Dict[int, WitnessTemplate] = {}
         self.is_final = False
 
+    def assert_final(self):
+        if not self.is_final:
+            raise FinalizationNotComplete()
+
+    def assert_not_final(self):
+        if self.is_final:
+            raise FinalizationComplete()
+
     def to_json(self) -> Dict[str, Any]:
-        assert self.is_final
+        self.assert_final()
         return {}
 
     def finalize(self) -> None:
         self.is_final = True
 
     def get_witness(self, key: int) -> List[Any]:
-        assert self.is_final
+        self.assert_final()
         item = self.witnesses[key].witness.copy()
         item.append(self.program)
         return item
 
     def make_witness(self, key: int) -> WitnessTemplate:
-        assert not self.is_final
-        assert key not in self.witnesses
+        self.assert_not_final()
+        if key in self.witnesses:
+            raise KeyError("Key Already Set")
         self.witnesses[key] = WitnessTemplate()
         return self.witnesses[key]
 
@@ -96,8 +116,8 @@ class WitnessManager:
             (version, program) = segwit_addr.decode(
                 "bc" if main else "bcrt", self.override_program
             )
-            assert version is not None
-            assert program is not None
+            if version is None or program is None:
+                raise ValueError("Corrupt override program")
             return CScript([version, bytes(program)])
         return CScript([AllowedOp.OP_0, sha256(self.program)])
 

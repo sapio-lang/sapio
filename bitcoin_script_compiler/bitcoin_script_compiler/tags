@@ -1,0 +1,160 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+AbsoluteTimeSpec	clause.py	/^class AbsoluteTimeSpec:$/;"	c
+AfterClause	clause.py	/^class AfterClause(LogicMixin, StringClauseMixin):$/;"	c
+AfterClauseSimplification	simplify.py	/^class AfterClauseSimplification:$/;"	c
+AllowedOp	opcodes.py	/^class AllowedOp:$/;"	c
+AndClause	clause.py	/^class AndClause(LogicMixin, StringClauseMixin):$/;"	c
+AssignedVariable	variable.py	/^class AssignedVariable(Generic[V]):$/;"	c
+CTVHash	witnessmanager.py	/^CTVHash = NewType("CTVHash", bytes)$/;"	v
+CheckTemplateVerifyClause	clause.py	/^class CheckTemplateVerifyClause(LogicMixin, StringClauseMixin):$/;"	c
+Clause	clause.py	/^Clause = Union[OrClause, AndClause, DNFClause]$/;"	v
+ClauseProtocol	clause.py	/^class ClauseProtocol(Protocol):$/;"	c
+ClauseToDNF	compiler.py	/^class ClauseToDNF:$/;"	c
+ConditionStack	opcodes.py	/^class ConditionStack:$/;"	c
+DNF	clause.py	/^DNF = List[List[DNFClause]]$/;"	v
+DNFClause	clause.py	/^DNFClause = Union[$/;"	v
+DNFClauseCompiler	compiler.py	/^class DNFClauseCompiler:$/;"	c
+DNFSimplification	simplify.py	/^class DNFSimplification:$/;"	c
+Days	clause.py	/^def Days(n: float) -> RelativeTimeSpec:$/;"	f
+DaysFromTime	clause.py	/^    def DaysFromTime(t1: datetime, t2: float) -> AbsoluteTimeSpec:$/;"	m	class:AbsoluteTimeSpec
+FlattenPass	flatten_and.py	/^class FlattenPass:$/;"	c
+FragmentCompiler	clause_to_fragment.py	/^class FragmentCompiler:$/;"	c
+LogicMixin	clause.py	/^class LogicMixin:$/;"	c
+MIN_DATE	clause.py	/^    MIN_DATE = 500_000_000$/;"	v	class:AbsoluteTimeSpec
+MODE	clause.py	/^    MODE = "+"  # "str"$/;"	v	class:StringClauseMixin
+MonthsFromTime	clause.py	/^    def MonthsFromTime(t1: datetime, t2: float) -> AbsoluteTimeSpec:$/;"	m	class:AbsoluteTimeSpec
+NormalizationPass	normalize_or.py	/^class NormalizationPass:$/;"	c
+ONE_enc	opcodes.py	/^ONE_enc = CScriptNum.encode(ONE)$/;"	v
+OP_0	opcodes.py	/^    OP_0 = OP_0$/;"	v	class:AllowedOp
+OP_1	opcodes.py	/^    OP_1 = OP_1$/;"	v	class:AllowedOp
+OP_1SUB	opcodes.py	/^    OP_1SUB = OP_1SUB$/;"	v	class:AllowedOp
+OP_CHECKLOCKTIMEVERIFY	opcodes.py	/^    OP_CHECKLOCKTIMEVERIFY = OP_CHECKLOCKTIMEVERIFY$/;"	v	class:AllowedOp
+OP_CHECKSEQUENCEVERIFY	opcodes.py	/^    OP_CHECKSEQUENCEVERIFY = OP_CHECKSEQUENCEVERIFY$/;"	v	class:AllowedOp
+OP_CHECKSIGVERIFY	opcodes.py	/^    OP_CHECKSIGVERIFY = OP_CHECKSIGVERIFY$/;"	v	class:AllowedOp
+OP_CHECKTEMPLATEVERIFY	opcodes.py	/^    OP_CHECKTEMPLATEVERIFY = OP_CHECKTEMPLATEVERIFY$/;"	v	class:AllowedOp
+OP_DROP	opcodes.py	/^    OP_DROP = OP_DROP$/;"	v	class:AllowedOp
+OP_DUP	opcodes.py	/^    OP_DUP = OP_DUP$/;"	v	class:AllowedOp
+OP_ELSE	opcodes.py	/^    OP_ELSE = OP_ELSE$/;"	v	class:AllowedOp
+OP_ENDIF	opcodes.py	/^    OP_ENDIF = OP_ENDIF$/;"	v	class:AllowedOp
+OP_EQUALVERIFY	opcodes.py	/^    OP_EQUALVERIFY = OP_EQUALVERIFY$/;"	v	class:AllowedOp
+OP_IF	opcodes.py	/^    OP_IF = OP_IF$/;"	v	class:AllowedOp
+OP_IFDUP	opcodes.py	/^    OP_IFDUP = OP_IFDUP$/;"	v	class:AllowedOp
+OP_NOTIF	opcodes.py	/^    OP_NOTIF = OP_NOTIF$/;"	v	class:AllowedOp
+OP_SHA256	opcodes.py	/^    OP_SHA256 = OP_SHA256$/;"	v	class:AllowedOp
+OP_VERIFY	opcodes.py	/^    OP_VERIFY = OP_VERIFY$/;"	v	class:AllowedOp
+OP_WITHIN	opcodes.py	/^    OP_WITHIN = OP_WITHIN$/;"	v	class:AllowedOp
+OrClause	clause.py	/^class OrClause(LogicMixin, StringClauseMixin):$/;"	c
+PreImageCheckClause	clause.py	/^class PreImageCheckClause(LogicMixin, StringClauseMixin):$/;"	c
+PreImageVar	unassigned.py	/^class PreImageVar(Variable):$/;"	c
+ProgramBuilder	compiler.py	/^class ProgramBuilder:$/;"	c
+RelativeTimeSpec	clause.py	/^class RelativeTimeSpec:$/;"	c
+SatisfiedClause	clause.py	/^class SatisfiedClause(StringClauseMixin):$/;"	c
+SignatureCheckClause	clause.py	/^class SignatureCheckClause(LogicMixin, StringClauseMixin):$/;"	c
+SignatureVar	unassigned.py	/^class SignatureVar(Variable):$/;"	c
+StringClauseMixin	clause.py	/^class StringClauseMixin:$/;"	c
+TimeSpec	clause.py	/^TimeSpec = Union[AbsoluteTimeSpec, RelativeTimeSpec]$/;"	v
+TimeTypes	clause.py	/^TimeTypes = Union[Literal["time"], Literal["blocks"]]$/;"	v
+UNIQUE_NAME	variable.py	/^    UNIQUE_NAME = 0$/;"	v	class:AssignedVariable
+UnsatisfiableClause	clause.py	/^class UnsatisfiableClause(StringClauseMixin):$/;"	c
+V	variable.py	/^V = TypeVar("V")$/;"	v
+Variable	unassigned.py	/^class Variable:$/;"	c
+Weeks	clause.py	/^def Weeks(n: float) -> RelativeTimeSpec:$/;"	f
+WeeksFromTime	clause.py	/^    def WeeksFromTime(t1: datetime, t2: float) -> AbsoluteTimeSpec:$/;"	m	class:AbsoluteTimeSpec
+WitnessManager	witnessmanager.py	/^class WitnessManager:$/;"	c
+WitnessTemplate	witnessmanager.py	/^class WitnessTemplate:$/;"	c
+ZERO	opcodes.py	/^ZERO = CScriptNum(0)$/;"	v
+ZERO_enc	opcodes.py	/^ZERO_enc = CScriptNum.encode(ZERO)$/;"	v
+__and__	clause.py	/^    def __and__(self, other: Clause) -> AndClause:$/;"	m	class:LogicMixin	file:
+__and__	clause.py	/^    def __and__(self, other: Clause) -> Clause:$/;"	m	class:SatisfiedClause	file:
+__and__	clause.py	/^    def __and__(self, other: Clause) -> UnsatisfiableClause:$/;"	m	class:UnsatisfiableClause	file:
+__call__	clause_to_fragment.py	/^    def __call__(self, arg: Clause, witness: WitnessTemplate) -> CScript:$/;"	m	class:FragmentCompiler	file:
+__call__	flatten_and.py	/^    def __call__(self, arg: Clause, or_allowed: bool = True) -> DNF:$/;"	m	class:FlattenPass	file:
+__call__	normalize_or.py	/^    def __call__(self, arg: Clause) -> Clause:$/;"	m	class:NormalizationPass	file:
+__init__	clause.py	/^    def __init__(self, a: AssignedVariable[Hash]):$/;"	m	class:CheckTemplateVerifyClause
+__init__	clause.py	/^    def __init__(self, a: AssignedVariable[Hash]):$/;"	m	class:PreImageCheckClause
+__init__	clause.py	/^    def __init__(self, a: AssignedVariable[PubKey]):$/;"	m	class:SignatureCheckClause
+__init__	clause.py	/^    def __init__(self, a: Clause, b: Clause):$/;"	m	class:AndClause
+__init__	clause.py	/^    def __init__(self, a: Clause, b: Clause):$/;"	m	class:OrClause
+__init__	clause.py	/^    def __init__(self, a: Union[AssignedVariable[TimeSpec], TimeSpec]):$/;"	m	class:AfterClause
+__init__	clause.py	/^    def __init__(self, t: LockTime):$/;"	m	class:AbsoluteTimeSpec
+__init__	clause.py	/^    def __init__(self, t: Sequence):$/;"	m	class:RelativeTimeSpec
+__init__	normalize_or.py	/^    def __init__(self) -> None:$/;"	m	class:NormalizationPass
+__init__	opcodes.py	/^    def __init__(self) -> None:$/;"	m	class:ConditionStack
+__init__	unassigned.py	/^    def __init__(self, image: PreImageCheckClause) -> None:$/;"	m	class:PreImageVar
+__init__	unassigned.py	/^    def __init__(self, pk: SignatureCheckClause) -> None:$/;"	m	class:SignatureVar
+__init__	variable.py	/^    def __init__(self, value: V, name: Optional[Union[bytes, str]] = None):$/;"	m	class:AssignedVariable
+__init__	witnessmanager.py	/^    def __init__(self) -> None:$/;"	m	class:WitnessManager
+__init__	witnessmanager.py	/^    def __init__(self) -> None:$/;"	m	class:WitnessTemplate
+__or__	clause.py	/^    def __or__(self, other: Clause) -> Clause:$/;"	m	class:UnsatisfiableClause	file:
+__or__	clause.py	/^    def __or__(self, other: Clause) -> OrClause:$/;"	m	class:LogicMixin	file:
+__or__	clause.py	/^    def __or__(self, other: Clause) -> SatisfiedClause:$/;"	m	class:SatisfiedClause	file:
+__repr__	clause.py	/^    def __repr__(self) -> str:$/;"	m	class:AbsoluteTimeSpec	file:
+__str__	clause.py	/^    def __str__(self: ClauseProtocol) -> str:$/;"	m	class:StringClauseMixin	file:
+__str__	variable.py	/^    def __str__(self) -> str:$/;"	m	class:AssignedVariable	file:
+_add_int	witnessmanager.py	/^    def _add_int(self, it: int) -> None:$/;"	m	class:WitnessTemplate
+_add_preim	witnessmanager.py	/^    def _add_preim(self, it: PreImageVar) -> None:$/;"	m	class:WitnessTemplate
+_add_sig	witnessmanager.py	/^    def _add_sig(self, it: SignatureVar) -> None:$/;"	m	class:WitnessTemplate
+_compile	clause_to_fragment.py	/^    def _compile(self, arg: Clause, witness: WitnessTemplate) -> CScript:$/;"	m	class:FragmentCompiler
+_compile_after	clause_to_fragment.py	/^    def _compile_after(self, arg: AfterClause, witness: WitnessTemplate) -> CScript:$/;"	m	class:FragmentCompiler
+_compile_assigned_var	clause_to_fragment.py	/^    def _compile_assigned_var($/;"	m	class:FragmentCompiler
+_compile_ctv	clause_to_fragment.py	/^    def _compile_ctv($/;"	m	class:FragmentCompiler
+_compile_preimage	clause_to_fragment.py	/^    def _compile_preimage($/;"	m	class:FragmentCompiler
+_compile_signature	clause_to_fragment.py	/^    def _compile_signature($/;"	m	class:FragmentCompiler
+_with_absolute	clause.py	/^    def _with_absolute(self, a: AbsoluteTimeSpec) -> None:$/;"	m	class:AfterClause
+_with_assigned	clause.py	/^    def _with_assigned(self, a: AssignedVariable) -> None:$/;"	m	class:AfterClause
+_with_relative	clause.py	/^    def _with_relative(self, a: RelativeTimeSpec) -> None:$/;"	m	class:AfterClause
+a	clause.py	/^    def a(self) -> Any:$/;"	m	class:ClauseProtocol
+add	witnessmanager.py	/^    def add(self, it: Union[CScript, int, bytes, Variable]) -> None:$/;"	m	class:WitnessTemplate
+all_true	opcodes.py	/^    def all_true(self) -> bool:$/;"	m	class:ConditionStack
+at_height	clause.py	/^    def at_height(d: int) -> AbsoluteTimeSpec:$/;"	m	class:AbsoluteTimeSpec
+b	clause.py	/^    def b(self) -> Any:$/;"	m	class:ClauseProtocol
+bool_of_stack_item	opcodes.py	/^def bool_of_stack_item(v: bytes) -> bool:$/;"	f
+compile	compiler.py	/^    def compile(self, cl: List[DNFClause], w: WitnessTemplate) -> CScript:$/;"	m	class:DNFClauseCompiler
+compile	compiler.py	/^    def compile(self, clause: Clause) -> WitnessManager:$/;"	m	class:ProgramBuilder
+compile_cnf	compiler.py	/^    def compile_cnf(self, clause: Clause) -> DNF:$/;"	m	class:ClauseToDNF
+empty	opcodes.py	/^    def empty(self) -> bool:$/;"	m	class:ConditionStack
+f	flatten_and.py	/^    f = FlattenPass()$/;"	v
+finalize	witnessmanager.py	/^    def finalize(self) -> None:$/;"	m	class:WitnessManager
+flatten	flatten_and.py	/^    def flatten(self, arg: Clause, or_allowed: bool = True) -> DNF:$/;"	m	class:FlattenPass
+flatten_after	flatten_and.py	/^    def flatten_after($/;"	m	class:FlattenPass
+flatten_and	flatten_and.py	/^    def flatten_and(self, arg: AndClause, or_allowed: bool = False) -> DNF:$/;"	m	class:FlattenPass
+flatten_or	flatten_and.py	/^    def flatten_or(self, arg: OrClause, or_allowed: bool = True) -> DNF:$/;"	m	class:FlattenPass
+flatten_sat	flatten_and.py	/^    def flatten_sat(self, arg: SatisfiedClause, or_allowed: bool = False) -> DNF:$/;"	m	class:FlattenPass
+from_date	clause.py	/^    def from_date(d: datetime) -> AbsoluteTimeSpec:$/;"	m	class:AbsoluteTimeSpec
+from_seconds	clause.py	/^    def from_seconds(seconds: float) -> RelativeTimeSpec:$/;"	m	class:RelativeTimeSpec
+get_p2wsh_address	witnessmanager.py	/^    def get_p2wsh_address(self) -> str:$/;"	m	class:WitnessManager
+get_p2wsh_script	witnessmanager.py	/^    def get_p2wsh_script(self, main: bool = False) -> CScript:$/;"	m	class:WitnessManager
+get_type	clause.py	/^    def get_type(self) -> TimeTypes:$/;"	m	class:AbsoluteTimeSpec
+get_type	clause.py	/^    def get_type(self) -> TimeTypes:$/;"	m	class:RelativeTimeSpec
+get_witness	witnessmanager.py	/^    def get_witness(self, key: int) -> List[Any]:$/;"	m	class:WitnessManager
+handle	opcodes.py	/^def handle($/;"	f
+initialize	clause.py	/^    def initialize(self, a: Any) -> None:$/;"	m	class:AfterClause
+internal_add	witnessmanager.py	/^    def internal_add(self, it: Union[CScript, bytes]) -> None:$/;"	m	class:WitnessTemplate
+interpret	opcodes.py	/^def interpret(s: CScript) -> bool:$/;"	f
+make_witness	witnessmanager.py	/^    def make_witness(self, key: int) -> WitnessTemplate:$/;"	m	class:WitnessManager
+n_args	clause.py	/^    n_args = 0$/;"	v	class:SatisfiedClause
+n_args	clause.py	/^    n_args = 0$/;"	v	class:UnsatisfiableClause
+n_args	clause.py	/^    n_args = 1$/;"	v	class:AfterClause
+n_args	clause.py	/^    n_args = 1$/;"	v	class:CheckTemplateVerifyClause
+n_args	clause.py	/^    n_args = 1$/;"	v	class:PreImageCheckClause
+n_args	clause.py	/^    n_args = 1$/;"	v	class:SignatureCheckClause
+n_args	clause.py	/^    n_args = 2$/;"	v	class:AndClause
+n_args	clause.py	/^    n_args = 2$/;"	v	class:OrClause
+normalize	normalize_or.py	/^    def normalize(self, arg: Clause) -> Clause:$/;"	m	class:NormalizationPass
+normalize_and	normalize_or.py	/^    def normalize_and(self, arg: AndClause) -> Clause:$/;"	m	class:NormalizationPass
+normalize_or	normalize_or.py	/^    def normalize_or(self, arg: OrClause) -> Clause:$/;"	m	class:NormalizationPass
+normalize_unsat	normalize_or.py	/^    def normalize_unsat($/;"	m	class:NormalizationPass
+pop_back	opcodes.py	/^    def pop_back(self) -> None:$/;"	m	class:ConditionStack
+push_back	opcodes.py	/^    def push_back(self, b: bool) -> None:$/;"	m	class:ConditionStack
+simplify	simplify.py	/^    def simplify($/;"	m	class:AfterClauseSimplification
+simplify	simplify.py	/^    def simplify(self, all_clauses: List[DNFClause]) -> List[DNFClause]:$/;"	m	class:DNFSimplification
+symbol	clause.py	/^    symbol = "&"$/;"	v	class:AndClause
+symbol	clause.py	/^    symbol = "|"$/;"	v	class:OrClause
+to_json	witnessmanager.py	/^    def to_json(self) -> Dict[str, Any]:$/;"	m	class:WitnessManager
+toggle_top	opcodes.py	/^    def toggle_top(self) -> None:$/;"	m	class:ConditionStack
+will_execute_ctv	witnessmanager.py	/^    def will_execute_ctv(self, ctv: CTVHash) -> None:$/;"	m	class:WitnessTemplate

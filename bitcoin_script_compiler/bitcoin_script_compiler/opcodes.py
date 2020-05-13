@@ -176,6 +176,10 @@ def handle(
 
 
 # Implementation Based on Bitcoin Core Condition Stack, MIT License
+class ConditionStackError:
+    pass
+
+
 class ConditionStack:
     NO_FALSE: ClassVar[bool] = max_uint32
     stack_size: int
@@ -197,13 +201,15 @@ class ConditionStack:
         self.stack_size += 1
 
     def pop_back(self) -> None:
-        assert self.stack_size > 0
+        if not self.stack_size > 0:
+            raise ConditionStackError()
         self.stack_size -= 1
         if self.first_false_position == self.stack_size:
             self.first_false_position = ConditionStack.NO_FALSE
 
     def toggle_top(self) -> None:
-        assert self.stack_size > 0
+        if not self.stack_size > 0:
+            raise ConditionStackError()
         if self.first_false_position == ConditionStack.NO_FALSE:
             self.first_false_position = self.stack_size - 1
         elif self.first_false_position == self.stack_size - 1:
@@ -216,6 +222,9 @@ def interpret(s: CScript) -> bool:
     stack: List[bytes] = []
     handle_branch = ConditionStack()
     for op in iter(s):
-        if not handle(op, stack, handle_branch):
+        try:
+            if not handle(op, stack, handle_branch):
+                return False
+        except ConditionStackError:
             return False
     return True

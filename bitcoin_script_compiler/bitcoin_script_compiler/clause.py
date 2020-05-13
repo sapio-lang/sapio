@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from functools import singledispatchmethod
-from typing import Any, List, Protocol, Union, cast, Literal
+from typing import Any, List, Protocol, Union, cast, Literal, TYPE_CHECKING
 
 from bitcoinlib.static_types import Hash, LockTime, PubKey, Sequence, uint32
 
@@ -263,7 +263,8 @@ class AfterClause(LogicMixin, StringClauseMixin):
     @initialize.register
     def _with_assigned(self, a: AssignedVariable) -> None:
         # TODO: Remove when mypy updates...
-        assert callable(self.initialize)
+        if TYPE_CHECKING:
+            assert callable(self.initialize)
         self.initialize(a.assigned_value)
 
     @initialize.register
@@ -276,7 +277,8 @@ class AfterClause(LogicMixin, StringClauseMixin):
 
     def __init__(self, a: Union[AssignedVariable[TimeSpec], TimeSpec]):
         # TODO: Remove when mypy updates...
-        assert callable(self.initialize)
+        if TYPE_CHECKING:
+            assert callable(self.initialize)
         self.initialize(a)
 
 
