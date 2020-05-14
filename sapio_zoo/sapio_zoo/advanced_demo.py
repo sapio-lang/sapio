@@ -1,6 +1,16 @@
+"""
+advanced_demo.py
+--------------------
+
+This is an advanced contract which uses many features in Sapio.
+"""
+from typing import Optional, List, Tuple
 from sapio_compiler import *
-# Demonstrates multisig with a default path accessible at a lower threshold
 class DemoLayeredConditions(Contract):
+    """
+    DemoLayeredConditions is a example contract which demonstrates various
+    features available in Sapio.
+    """
     class Fields:
         key_a: PubKey
         key_b: PubKey
@@ -11,6 +21,9 @@ class DemoLayeredConditions(Contract):
 
     @require
     def a_signed(self) -> Clause:
+        """
+        Checks that a signature was attached from key_a
+        """
         return SignatureCheckClause(self.key_a)
 
     @require
@@ -18,7 +31,7 @@ class DemoLayeredConditions(Contract):
         return AfterClause(Weeks(2))
 
     @require
-    def one_month(self: DemoLayeredConditions) -> Clause:
+    def one_month(self) -> Clause:
         return AfterClause(Weeks(4))
 
     @require
@@ -47,17 +60,7 @@ class DemoLayeredConditions(Contract):
     def time_release(self) -> Clause:
         return SatisfiedClause()
 
-    # This is an issue with MyPy, this composition works fine in practice, but
-    # the type checker can't understand for whatever reason see:
-    # https://github.com/python/peps/pull/242#issuecomment-619788961 When this
-    # is fixed, or we have a workaround, this will type check.
-    #
-    # Until then, when stacking on top of an @require, .stack must be used in
-    # order for it to compose and pass type checks... it's not needed for the
-    # program to be correct though.
-    #
-    # @one_month # broken!
-    @one_month.stack
+    @one_month
     @require
     def d_signed_and_one_month(self) -> Clause:
         return SignatureCheckClause(self.key_d)
@@ -81,12 +84,12 @@ class DemoLayeredConditions(Contract):
             tx = TransactionTemplate()
             tx.add_output(
                 self.amount.assigned_value,
-                ContractClose(amount=self.amount, payments=state),
+                DemoContractClose(amount=self.amount, payments=state),
             )
             return tx
 
 
-class ContractClose(Contract):
+class DemoContractClose(Contract):
     class Fields:
         amount: Amount
         payments: List[Tuple[Amount, str]]
