@@ -6,9 +6,7 @@ from typing import Dict, Type, Callable, Any, Union, Tuple, Optional, List
 import tornado
 import tornado.websocket
 
-import sapio_zoo.basic_vault
 import sapio_zoo.p2pk
-import sapio_zoo.subscription
 from bitcoinlib import segwit_addr
 from bitcoinlib.messages import COutPoint
 from bitcoinlib.static_types import Amount, Sequence, PubKey

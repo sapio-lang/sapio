@@ -4,7 +4,6 @@ import tornado
 
 import sapio_zoo
 import sapio_zoo.channel
-import sapio_zoo.basic_vault
 import sapio_zoo.p2pk
 import sapio_zoo.subscription
 from bitcoinlib import segwit_addr
@@ -21,7 +20,6 @@ from bitcoin_script_compiler.clause import (
 
 from .ws import CompilerWebSocket
 from bitcoinlib.static_types import Bitcoin, PubKey, Amount
-from sapio_zoo.basic_vault import Vault
 from sapio_zoo.p2pk import PayToPubKey
 from sapio_zoo.smarter_vault import SmarterVault
 
@@ -30,14 +28,13 @@ def make_app():
     return tornado.web.Application([(r"/", CompilerWebSocket),], autoreload=True)
 
 
-# example_to_make = "payroll"
-example_to_make = "vault"
 example_to_make = "Price Contract"
 example_to_make = "tree"
+example_to_make = "vault"
+example_to_make = "payroll"
 if __name__ == "__main__":
     CompilerWebSocket.add_contract("Channel", sapio_zoo.channel.BasicChannel)
     CompilerWebSocket.add_contract("Pay to Public Key", sapio_zoo.p2pk.PayToPubKey)
-    CompilerWebSocket.add_contract("Vault", sapio_zoo.basic_vault.Vault2)
     CompilerWebSocket.add_contract("Subscription", sapio_zoo.subscription.auto_pay)
     CompilerWebSocket.add_contract("TreePay", TreePay)
     generate_n_address = [
@@ -63,14 +60,14 @@ if __name__ == "__main__":
     # return_timeout: RelativeTimeSpec
 
     if example_to_make == "payroll":
-        N_EMPLOYEES = 4
+        N_EMPLOYEES = 5
         employee_addresses = [(1, generate_address()) for _ in range(N_EMPLOYEES)]
 
         import datetime
 
         now = datetime.datetime.now()
         day = datetime.timedelta(1)
-        DURATION = 3
+        DURATION = 5
         employee_payments = [
             (
                 perdiem * DURATION,
@@ -82,7 +79,7 @@ if __name__ == "__main__":
                         for x in range(DURATION)
                     ],
                     return_address=generate_address(),
-                    watchtower_key=b"",
+                    watchtower_key=b"12345678"*4,
                     return_timeout=Days(1),
                 ),
             )
@@ -127,25 +124,52 @@ if __name__ == "__main__":
         @lru_cache()
         def cold_storage(v: Amount):
             # TODO: Use a real PubKey Generator
+            divisor = 5
             payments = [
-                (v // 10, PayToPubKey(key=os.urandom(32), amount=v // 10))
-                for _ in range(10)
+                (v // divisor, PayToPubKey(key=os.urandom(32), amount=v // divisor))
+                for _ in range(divisor)
             ]
+            #return PayToPubKey(key=os.urandom(32), amount=v)
             return TreePay(payments=payments, radix=4)
 
         s = SmarterVault(
             cold_storage=cold_storage,
             hot_storage=key2,
             n_steps=5,
-            timeout=Weeks(1),
-            mature=Weeks(2),
+            timeout=Weeks(2),
+            mature=Weeks(1),
             amount_step=Bitcoin(100),
         )
 
         CompilerWebSocket.set_example(s)
 
-    print(CompilerWebSocket.example_message)
+    print("Server Starting")
 
     app = make_app()
     app.listen(8888)
     tornado.ioloop.IOLoop.current().start()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
