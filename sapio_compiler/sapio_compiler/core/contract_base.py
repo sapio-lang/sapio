@@ -10,6 +10,7 @@ from __future__ import annotations
 import typing
 from typing import (
     Any,
+    Callable,
     Dict,
     Generator,
     Generic,
@@ -18,6 +19,7 @@ from typing import (
     Optional,
     Type,
     TypeVar,
+    Tuple,
     Union,
 )
 
@@ -36,8 +38,8 @@ from bitcoin_script_compiler import (
 from bitcoinlib.static_types import Amount, Hash, Sats
 from sapio_compiler.core.errors import ExtraArgumentError, MissingArgumentError
 
-from ..decorators import CheckFunction, PathFunction, PayAddress, UnlockFunction
 from .txtemplate import TransactionTemplate
+from sapio_compiler.decorators import PayFunction, CheckFunction, UnlockFunction, PathFunction
 
 T = TypeVar("T")
 FieldsType = TypeVar("FieldsType")
@@ -51,14 +53,14 @@ class ContractBase(Generic[FieldsType]):
     """
     ContractType = TypeVar(
         "ContractType",
-        bound="sapio.contract.bindable_contract.BindableContract[FieldsType]",
+        bound="sapio_compiler.core.bindable_contract.BindableContract[FieldsType]",
     )
 
     def __init__(
         self,
         fields: Type[FieldsType],
         path_functions: List[PathFunction[ContractType]],
-        pay_functions: List[PayAddress[ContractType]],
+        pay_functions: List[PayFunction[ContractType]],
         unlock_functions: List[UnlockFunction[ContractType]],
         assertions: List[CheckFunction[ContractType]],
     ):
@@ -68,15 +70,9 @@ class ContractBase(Generic[FieldsType]):
             assert len(unlock_functions) == 0
         self.fields_obj = fields
         self.all_fields: Dict[str, Type[Any]] = typing.get_type_hints(self.fields_obj)
-        self.path_functions: List[
-            PathFunction[ContractBase.ContractType]
-        ] = path_functions
-        self.pay_functions: Optional[
-            PayAddress[ContractBase.ContractType]
-        ] = pay_functions[0] if len(pay_functions) else None
-        self.unlock_functions: List[
-            UnlockFunction[ContractBase.ContractType]
-        ] = unlock_functions
+        self.path_functions = path_functions
+        self.pay_functions: Optional[PayFunction[ContractBase.ContractType]] = pay_functions[0] if len(pay_functions) else None
+        self.unlock_functions = unlock_functions
         self.assertions: List[CheckFunction[ContractBase.ContractType]] = assertions
 
     def _setup_call(self, obj: ContractType, kwargs: Dict[str, Any]) -> None:

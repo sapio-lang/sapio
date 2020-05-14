@@ -10,9 +10,21 @@ and the functional modules that handle the combinators of the decorators.
 
 from __future__ import annotations
 
-from functools import reduce
+from functools import reduce, wraps
 from itertools import combinations
-from typing import Callable, Generic, Iterator, List, Optional, Tuple, TypeVar, Union
+from typing import (
+    Callable,
+    Generic,
+    Iterator,
+    List,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+    Literal,
+    Any,
+    Type,
+)
 
 import sapio_compiler
 from bitcoin_script_compiler.clause import Clause, SatisfiedClause
@@ -20,16 +32,149 @@ from bitcoinlib.static_types import Amount
 
 from .core.txtemplate import TransactionTemplate
 
-T = TypeVar("T")
-T2 = TypeVar("T2")
+import sapio_compiler.core.bindable_contract
 
-ContractType = TypeVar("ContractType")
+ContractType = TypeVar(
+    "ContractType", bound="sapio_compiler.core.bindable_contract.BindableContract[Any]"
+)
+
+
+from typing import Protocol, cast
+
+
+# Protocols for Function Types
+FuncTypes = Union[
+    Literal["path"],
+    Literal["unlock"],
+    Literal["check"],
+    Literal["pay_address"],
+    Literal["require"],
+]
+
 
 PathReturnType = Union[TransactionTemplate, Iterator[TransactionTemplate]]
-PathFunctionType = Callable[[ContractType], PathReturnType]
+class PathFunction(Protocol[ContractType]):
+    unlock_with: Optional[Callable[[ContractType], Clause]]
+    is_guaranteed: bool
+    __sapio_func_type__: FuncTypes = "path"
+
+    @staticmethod
+    def __call__(self: ContractType) -> PathReturnType:
+        pass
+    __name__: str
 
 
-class PathFunction(Generic[ContractType]):
+class PayFunction(Protocol[ContractType]):
+    # this silences issues around the type needing to be contravariant
+    __silence_error : Type[ContractType]
+    __sapio_func_type__: FuncTypes = "pay_address"
+
+    @staticmethod
+    def __call__(self: ContractType) -> Tuple[Amount, str]:
+        pass
+
+
+class UnlockFunction(Protocol[ContractType]):
+    # this silences issues around the type needing to be contravariant
+    __silence_error : Type[ContractType]
+    __sapio_func_type__: FuncTypes = "unlock"
+
+    @staticmethod
+    def __call__(self: ContractType) -> Clause:
+        pass
+
+
+class CheckFunction(Protocol[ContractType]):
+    # this silences issues around the type needing to be contravariant
+    __silence_error : Type[ContractType]
+    __sapio_func_type__: FuncTypes = "check"
+
+    @staticmethod
+    def __call__(self: ContractType) -> bool:
+        pass
+
+
+class RequireFunction(Protocol[ContractType]):
+    __sapio_func_type__: FuncTypes = "require"
+
+    @staticmethod
+    def __call__(
+        self: Union[
+            RequireFunction[ContractType],
+            PathFunction[ContractType],
+            UnlockFunction[ContractType],
+        ]
+    ) -> RequireFunction[ContractType]:
+        pass
+
+    original_func: Optional[Callable[[ContractType], Clause]]
+
+
+RequireWrappable = Union[
+    RequireFunction[ContractType],
+    PathFunction[ContractType],
+    UnlockFunction[ContractType],
+]
+
+AllFuncs = Union[
+    RequireWrappable[ContractType],
+    CheckFunction[ContractType],
+    PayFunction[ContractType],
+]
+
+FUNC_TYPE_TAG = "__sapio_func_type__"
+
+
+def tag(a: AllFuncs[ContractType], b: FuncTypes) -> None:
+    if hasattr(a, FUNC_TYPE_TAG):
+        raise AlreadyDecorated()
+    setattr(a, FUNC_TYPE_TAG, b)
+
+
+def get_type_tag(a: Any) -> Optional[FuncTypes]:
+    if not hasattr(a, FUNC_TYPE_TAG):
+        return None
+    else:
+        s = getattr(a, FUNC_TYPE_TAG)
+        if s == "require": return "require"
+        if s == "path": return "path"
+        if s == "check": return "check"
+        if s == "unlock": return "unlock"
+        if s == "pay_address": return "pay_address"
+        raise ValueError("Unknown type")
+
+
+class AlreadyDecorated(Exception):
+    pass
+
+
+def satisfied(x: ContractType) -> SatisfiedClause:
+    return SatisfiedClause()
+
+
+def guarantee(
+    arg: Callable[[ContractType], PathReturnType]
+) -> PathFunction[ContractType]:
+    """
+    A path function is a type of function which must return either a
+    TransactionTemplate or an Iterator[TransactionTemplate].
+
+    There are two fundamental ways of constructing a PathFunction, either for a
+    guarantee-d path (using PathFunction.guarantee) or a unlock_but_suggeste-d
+    path (using PathFunction.unlock_but_suggest). The difference is that
+    guarantee instructs the compiler to use CheckTemplateVerify to ensure the
+    outcomes whereas unlock_but_suggest does not.
+    """
+    cast_arg = cast(PathFunction[ContractType], arg)
+    tag(cast_arg, "path")
+    cast_arg.unlock_with = satisfied
+    cast_arg.is_guaranteed = True
+    return cast_arg
+
+
+def unlock_but_suggest(
+    arg: Callable[[ContractType], PathReturnType]
+) -> PathFunction[ContractType]:
     """
     A path function is a type of function which must return either a
     TransactionTemplate or an Iterator[TransactionTemplate].
@@ -40,64 +185,26 @@ class PathFunction(Generic[ContractType]):
     guarantee instructs the compiler to use CheckTemplateVerify to ensure the
     outcomes whereas unlock_but_suggest does not.
 
+    This is useful for HTLC based protocols.
     """
-    # TODO: Improve arg type, which we know is an AndClauseArugment Callable or None
-    def __init__(
-        self,
-        f: PathFunctionType[ContractType],
-        unlocker: Callable[[ContractType], Clause],
-        is_guaranteed,
-    ) -> None:
-        self.f: PathFunctionType[ContractType] = f
-        self.unlock_with: Callable[[ContractType], Clause] = unlocker
-        self.is_guaranteed: bool = is_guaranteed
-        self.__name__ = f.__name__
-
-    def __call__(self, obj: ContractType) -> PathReturnType:
-        return self.f(obj)
-
-    @staticmethod
-    def guarantee(arg: PathFunctionType[ContractType]) -> PathFunction[ContractType]:
-        """
-        Create a guaranteed spending path, using CheckTemplateVerify
-        """
-        return PathFunction[ContractType](arg, lambda x: SatisfiedClause(), True)
-
-    @staticmethod
-    def unlock_but_suggest(
-        arg: PathFunctionType[ContractType],
-    ) -> PathFunction[ContractType]:
-        """
-        Create a unlocked spending path, but return what the next step should
-        be.
-
-        This is useful for HTLC based protocols.
-        """
-        return PathFunction[ContractType](arg, lambda x: SatisfiedClause(), False)
+    cast_arg = cast(PathFunction[ContractType], arg)
+    tag(cast_arg, "path")
+    cast_arg.unlock_with = satisfied
+    cast_arg.is_guaranteed = False
+    return cast_arg
 
 
-class UnlockFunction(Generic[ContractType]):
+def unlock(s: Callable[[ContractType], Clause]) -> UnlockFunction[ContractType]:
     """
     An UnlockFunction expresses a keypath spending. There are no further
     restrictions on how a coin may be spent.
     """
-    # TODO: Improve arg type, which we know is an AndClauseArugment Callable or None
-    def __init__(self, condition: Callable[[ContractType], Clause], name: str) -> None:
-        self.unlock_with = condition
-        self.__name__ = name
-
-    def __call__(self, obj: ContractType) -> Clause:
-        return self.unlock_with(obj)
-
-    @staticmethod
-    def unlock(s: Callable[[ContractType], Clause]) -> UnlockFunction[ContractType]:
-        """
-        Create a unlocked spending path.
-        """
-        return UnlockFunction[ContractType](s, s.__name__)
+    cast_s = cast(UnlockFunction[ContractType], s)
+    tag(cast_s, "unlock")
+    return cast_s
 
 
-class PayAddress(Generic[ContractType]):
+def pay_address(f: Callable[[ContractType], Tuple[Amount, str]]) -> PayFunction[ContractType]:
     """
     A PayAddress function is a special type which stubs out
     the contract as being just the amount/address combo returned
@@ -111,21 +218,12 @@ class PayAddress(Generic[ContractType]):
     wants to add validation logic for passed in addresses (e.g., consulting
     a local node/wallet to check if the key is known).
     """
-    def __init__(self, address: Callable[[ContractType], Tuple[Amount, str]]) -> None:
-        self.address: Callable[[ContractType], Tuple[Amount, str]] = address
-
-    def __call__(self, obj: ContractType) -> Tuple[Amount, str]:
-        return self.address(obj)
-
-    @staticmethod
-    def pay_address(
-        f: Callable[[ContractType], Tuple[Amount, str]]
-    ) -> PayAddress[ContractType]:
-        """Create a pay_address function"""
-        return PayAddress(f)
+    cast_f = cast(PayFunction[ContractType], f)
+    tag(cast_f, "pay_address")
+    return cast_f
 
 
-class CheckFunction(Generic[ContractType]):
+def check(s: Callable[[ContractType], bool]) -> CheckFunction[ContractType]:
     """
     A CheckFunction decorator should return a function that either raises its
     own exception or returns True/False.
@@ -133,21 +231,16 @@ class CheckFunction(Generic[ContractType]):
     Raising your own exception is preferable because it can help users
     debug their own contracts more readily.
     """
-    def __init__(self, func: Callable[[ContractType], bool]) -> None:
-        self.func: Callable[[ContractType], bool] = func
-        self.__name__ = func.__name__
-
-    def __call__(self, obj: ContractType) -> bool:
-        return self.func(obj)
-
-    @staticmethod
-    def check(s: Callable[[ContractType], bool]) -> CheckFunction[ContractType]:
-        """create a check"""
-        return CheckFunction(s)
+    cast_s = cast(CheckFunction[ContractType], s)
+    tag(cast_s, "check")
+    return cast_s
 
 
-class LayeredRequirement(Generic[ContractType]):
+def require(arg: Callable[[ContractType], Clause]) -> RequireFunction[ContractType]:
     """
+    require declares a requirement variable, but does not
+    enforce it.
+
     Layered requirement allows one to create custom requirement decorators
     which can wrap UnlockFunctions or PathFunctions.
 
@@ -166,108 +259,94 @@ class LayeredRequirement(Generic[ContractType]):
     ...     @unlock
     ...     def spend(self):
     ...         return SatisfiedClause()
-
-    note that if mypy complains you may modify the `@signed` decorator
-    to `@signed.stack` if you wish to wrap a require with more conditions.
     """
-    def __init__(self, arg: Callable[[ContractType], Clause]) -> None:
-        self.arg: Callable[[ContractType], Clause] = arg
 
-    def __call__(
-        self,
-        decorated: Union[
-            UnlockFunction[ContractType],
-            PathFunction[ContractType],
-            LayeredRequirement[ContractType],
-        ],
-    ) -> Union[
-        UnlockFunction[ContractType],
-        PathFunction[ContractType],
-        LayeredRequirement[ContractType],
-    ]:
-        if isinstance(decorated, UnlockFunction):
-            uf: UnlockFunction[ContractType] = decorated
-
-            def wrap_unlock(contract: ContractType) -> Clause:
-                return uf(contract) & self.arg(contract)
-
-            u: UnlockFunction[ContractType] = UnlockFunction[ContractType](
-                wrap_unlock, uf.__name__
+    @wraps(arg)
+    def inner(decorated: RequireWrappable[ContractType]) -> RequireWrappable[ContractType]:
+        if get_type_tag(decorated) == "unlock":
+            uf: UnlockFunction[ContractType] = cast(
+                UnlockFunction[ContractType], decorated
             )
-            return u
-        elif isinstance(decorated, PathFunction):
-            pf: PathFunction[ContractType] = decorated
+
+            @wraps(decorated)
+            def wrap_unlock(contract: ContractType) -> Clause:
+                # TODO: Is this correct? mypy fails...
+                d: Clause = uf(contract)
+                cl: Clause = arg(contract)
+                return d & cl
+
+            c = cast(UnlockFunction[ContractType], wrap_unlock)
+            assert get_type_tag(c) == "unlock"
+            return c
+        elif get_type_tag(decorated) == "path":
+            pf: PathFunction[ContractType] = cast(PathFunction[ContractType], decorated)
+            former = pf.unlock_with or satisfied
 
             def wrap_path(contract: ContractType) -> Clause:
-                return pf.unlock_with(contract) & self.arg(contract)
-                return pf.unlock_with(contract) & self.arg(contract)
+                return former(contract) & arg(contract)
 
-            p: PathFunction[ContractType] = PathFunction[ContractType](
-                pf.f, wrap_path, pf.is_guaranteed
-            )
-            return p
-        elif isinstance(decorated, LayeredRequirement):
-            l: LayeredRequirement[ContractType] = decorated
-            return self.stack(l)
+            pf.unlock_with = wrap_path
+            return pf
+        elif get_type_tag(decorated) == "require":
+            # re-wrap this in require to keep the decorator chain going
+            rf = cast(RequireFunction[ContractType], decorated)
+
+            @require
+            def wrap_layer(contract: ContractType) -> Clause:
+                # We still know arg for the current req, but
+                # decorated is now an opaque decorator.
+                # So we have to get access to the original_func
+                assert rf.original_func is not None
+                return rf.original_func(contract) & arg(contract)
+
+            return wrap_layer
         else:
             raise ValueError(
                 "Applied to wrong type! Maybe you're missing a decorator in the stack..."
             )
+    # cast it to a RequireFunction to return it
+    rf = cast(RequireFunction[ContractType], inner)
+    tag(rf, "require")
+    rf.original_func = arg
+    return rf
 
-    def stack(
-        self, decorated: LayeredRequirement[ContractType]
-    ) -> LayeredRequirement[ContractType]:
-        """
-        stack is required for mypy only, as the type of __call__ cannot be
-        properly deduced.
-        """
-        def wrap_layer(contract: ContractType) -> Clause:
-            return decorated.arg(contract) & self.arg(contract)
 
-        f: LayeredRequirement[ContractType] = LayeredRequirement[ContractType](
-            wrap_layer
-        )
-        return f
+def threshold(n: int, l: List[RequireFunction[ContractType]]) -> RequireFunction[ContractType]:
+    """
+    threshold takes combinations of length N of conditions from the provided
+    list and allows any such group to satisfy.
+    """
+    if not len(l) >= n:
+        raise ValueError("Expected to get more conditions in threshold")
+    if not n > 0:
+        raise ValueError("Threshold int must be positive")
+    if any(get_type_tag(i) != "require" for i in l):
+        raise ValueError("All conditions must be require declarations")
 
-    @staticmethod
-    def require(
-        arg: Callable[[ContractType], Clause]
-    ) -> LayeredRequirement[ContractType]:
-        """
-        require declares a requirement variable, but does not
-        enforce it.
-        """
-        return LayeredRequirement[ContractType](arg)
-
-    @staticmethod
-    def threshold(
-        n: int, l: List[LayeredRequirement[ContractType]]
-    ) -> LayeredRequirement[ContractType]:
-        """
-        """
-        if not len(l) >= n:
-            raise ValueError("Expected to get more conditions in threshold")
-        if not n > 0:
-            raise ValueError("Threshold int must be positive")
-
-        def wrapper(self: ContractType) -> Clause:
-            conds = []
-            for arg in l:
-                # take inner requirement
-                conds.append(arg.arg(self))
-            l3 = [
+    def wrapper(x: RequireWrappable[ContractType]) -> RequireFunction[ContractType]:
+        # evaluate each clause 1x
+        @require
+        def inner(y: ContractType) -> Clause:
+            clauses: List[Clause] = [(req.original_func or satisfied)(y) for req in l]
+            # higher-order combo
+            combos: List[Clause] = [
                 reduce(lambda a, b: a & b, combo[1:], combo[0])
-                for combo in combinations(conds, n)
+                for combo in combinations(clauses, n)
             ]
-            return reduce(lambda a, b: a | b, l3[1:], l3[0])
+            return reduce(lambda a, b: a | b, combos[1:], combos[0])
 
-        return LayeredRequirement[ContractType](wrapper)
+        return inner
+
+    c = cast(RequireFunction[ContractType], wrapper)
+    tag(c, "require")
+
+    return c
 
 
 R = TypeVar("R")
 
 
-#TODO: remove enable_if
+# TODO: remove enable_if
 def enable_if(b: bool) -> Union[Callable[[R], R], Callable[[R], None]]:
     """
     enable_if is useful to decorate classes that we only want to have a feature
@@ -283,13 +362,3 @@ def enable_if(b: bool) -> Union[Callable[[R], R], Callable[[R], None]]:
         return lambda f: f
     else:
         return lambda f: None
-
-
-guarantee = PathFunction.guarantee
-require = LayeredRequirement.require
-# TODO: Unify these two and make guarantee a modifier of the above?
-unlock = UnlockFunction.unlock
-unlock_but_suggest = PathFunction.unlock_but_suggest
-pay_address = PayAddress.pay_address
-check = CheckFunction.check
-threshold = LayeredRequirement.threshold

@@ -166,7 +166,7 @@ class BindableContract(Generic[FieldsType]):
                                 "utxo_metadata": utxo_metadata,
                             }
                         )
-                    txid = int(tx.hash, 16)
+                    txid = int(tx.hash or tx.rehash(), 16)
                     for (i, (_, contract)) in enumerate(txn_template.outputs):
                         # TODO: CHeck this is correct type into COutpoint
                         queue.append((COutPoint(txid, i), contract))
