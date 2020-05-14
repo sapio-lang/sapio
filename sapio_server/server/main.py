@@ -40,6 +40,7 @@ if __name__ == "__main__":
     generate_n_address = [
         segwit_addr.encode("bcrt", 0, os.urandom(32)) for _ in range(64)
     ]
+
     def generate_address():
         return sapio_zoo.p2pk.PayToSegwitAddress(
             amount=0, address=segwit_addr.encode("bcrt", 0, os.urandom(32))
@@ -79,7 +80,7 @@ if __name__ == "__main__":
                         for x in range(DURATION)
                     ],
                     return_address=generate_address(),
-                    watchtower_key=b"12345678"*4,
+                    watchtower_key=b"12345678" * 4,
                     return_timeout=Days(1),
                 ),
             )
@@ -129,7 +130,7 @@ if __name__ == "__main__":
                 (v // divisor, PayToPubKey(key=os.urandom(32), amount=v // divisor))
                 for _ in range(divisor)
             ]
-            #return PayToPubKey(key=os.urandom(32), amount=v)
+            # return PayToPubKey(key=os.urandom(32), amount=v)
             return TreePay(payments=payments, radix=4)
 
         s = SmarterVault(
@@ -148,28 +149,3 @@ if __name__ == "__main__":
     app = make_app()
     app.listen(8888)
     tornado.ioloop.IOLoop.current().start()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -1,4 +1,3 @@
-
 import json
 import typing
 from typing import Dict, Type, Callable, Any, Union, Tuple, Optional, List
@@ -13,10 +12,16 @@ from bitcoinlib.static_types import Amount, Sequence, PubKey
 from sapio_compiler import Contract
 from sapio_zoo.tree_pay import TreePay
 from sapio_zoo.undo_send import UndoSend2
-from bitcoin_script_compiler.clause import TimeSpec, RelativeTimeSpec, AbsoluteTimeSpec, Days
+from bitcoin_script_compiler.clause import (
+    TimeSpec,
+    RelativeTimeSpec,
+    AbsoluteTimeSpec,
+    Days,
+)
 from bitcoinlib.static_types import int64
 
 from sapio_compiler import BindableContract
+
 placeholder_hint = {
     Amount: 0,
     Sequence: "int",
@@ -31,25 +36,32 @@ placeholder_hint = {
 }
 id = lambda x: x
 
-def convert_pubkey(arg: str, ctx)-> PubKey:
-    return PubKey(bytes(arg, 'utf-8'))
+
+def convert_pubkey(arg: str, ctx) -> PubKey:
+    return PubKey(bytes(arg, "utf-8"))
 
 
-
-def convert_contract_object(arg: Tuple[Amount,str], ctx) -> Contract:
+def convert_contract_object(arg: Tuple[Amount, str], ctx) -> Contract:
     try:
         return ctx.compilation_cache[arg[1]]
     except KeyError:
         return sapio_zoo.p2pk.PayToSegwitAddress(amount=arg[0], address=arg[1])
-        #raise AssertionError("No Known Contract by that name")
+        # raise AssertionError("No Known Contract by that name")
+
+
 def convert_dest(arg: List[Tuple[int, str]], ctx) -> List[Tuple[Amount, Contract]]:
     return list(map(lambda x: convert_contract(x, ctx), arg))
+
 
 def convert_contract(arg: Tuple[int, str], ctx) -> Tuple[Amount, Contract]:
     try:
         return (Amount(arg[0]), ctx.compilation_cache[arg[1]])
     except KeyError:
-        return (Amount(arg[0]), sapio_zoo.p2pk.PayToSegwitAddress(amount=Amount(arg[0]), address=arg[1]))
+        return (
+            Amount(arg[0]),
+            sapio_zoo.p2pk.PayToSegwitAddress(amount=Amount(arg[0]), address=arg[1]),
+        )
+
 
 # Don't convert to p2swa if we know what it is... TODO: maybe make this optional?
 def convert_p2swa(arg: str, ctx) -> Contract:
@@ -62,14 +74,18 @@ def convert_p2swa(arg: str, ctx) -> Contract:
 
 def convert_sequence(arg: Sequence, ctx) -> Sequence:
     return Sequence(arg)
+
+
 def convert_relative_time_spec(arg: Any, ctx) -> RelativeTimeSpec:
-    return (RelativeTimeSpec(Sequence(arg)))
+    return RelativeTimeSpec(Sequence(arg))
+
 
 def convert_amount(arg: int, ctx) -> Amount:
     # TODO Assert ranges....
     return Amount(int64(arg))
 
-conversion_functions : Dict[Type, Callable] = {
+
+conversion_functions: Dict[Type, Callable] = {
     PubKey: convert_pubkey,
     Contract: convert_contract_object,
     List[Tuple[Amount, Contract]]: convert_dest,
@@ -80,8 +96,5 @@ conversion_functions : Dict[Type, Callable] = {
     int: lambda x, y: x,
     str: lambda x, y: x,
     Union[AbsoluteTimeSpec, RelativeTimeSpec]: lambda x: RelativeTimeSpec(Sequence(x)),
-    sapio_zoo.p2pk.PayToSegwitAddress: convert_p2swa
-
+    sapio_zoo.p2pk.PayToSegwitAddress: convert_p2swa,
 }
-
-

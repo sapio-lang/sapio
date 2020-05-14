@@ -20,12 +20,14 @@ base_tx = CTransaction()
 base_tx.vin.append(CTxIn())
 base_tx.vout.append(CTxOut())
 base_tx.rehash()
-base_out = COutPoint(base_tx.sha256,0)
+base_out = COutPoint(base_tx.sha256, 0)
 base_meta = {
-                            "color": "white",
-                            "label": "Base Contract Unspecified",
-                            "utxo_metadata": [],
-                        }
+    "color": "white",
+    "label": "Base Contract Unspecified",
+    "utxo_metadata": [],
+}
+
+
 class CompilerWebSocket(tornado.websocket.WebSocketHandler):
     contracts: Dict[str, Union[BindableContract, ContractProtocol]] = {}
     menu: Dict[str, Dict[str, str]] = {}
@@ -41,8 +43,14 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
         metadata.append(base_meta)
         addr = example.witness_manager.get_p2wsh_address()
         amount = example.amount_range[1]
-        data = [{'hex': tx.serialize_with_witness().hex(), **meta} for (tx, meta) in zip(txns, metadata)]
-        cls.example_message = {"type": "created", 'content': [int(amount), addr, {'program': data}]}
+        data = [
+            {"hex": tx.serialize_with_witness().hex(), **meta}
+            for (tx, meta) in zip(txns, metadata)
+        ]
+        cls.example_message = {
+            "type": "created",
+            "content": [int(amount), addr, {"program": data}],
+        }
 
     def open(self):
         if self.cached is None:
@@ -107,12 +115,12 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
         print(message)
         request = json.loads(message)
         print(request)
-        request_type = request['type']
+        request_type = request["type"]
         if request_type == "create":
-            create_req = request['content']
-            create_type = create_req['type']
+            create_req = request["content"]
+            create_type = create_req["type"]
             if create_type in self.menu:
-                args = create_req['args']
+                args = create_req["args"]
                 args_t = self.menu[create_type]
                 conv_args = self.conv[create_type]
                 if args.keys() != args_t.keys():
@@ -131,20 +139,26 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
                 txns, metadata = contract.bind(base_out)
                 txns.append(base_tx)
                 metadata.append(base_meta)
-                data = [{'hex': tx.serialize_with_witness().hex(), **meta} for (tx, meta) in zip(txns, metadata)]
+                data = [
+                    {"hex": tx.serialize_with_witness().hex(), **meta}
+                    for (tx, meta) in zip(txns, metadata)
+                ]
                 self.write_message(
-                    {"type": "created", 'content': [int(amount), addr, {'program': data}]}
+                    {
+                        "type": "created",
+                        "content": [int(amount), addr, {"program": data}],
+                    }
                 )
         elif request_type == "bind":
-            raise NotImplementedError('Pending!')
+            raise NotImplementedError("Pending!")
         elif request_type == "load_auth":
-            raise NotImplementedError('Pending!')
+            raise NotImplementedError("Pending!")
         elif request_type == "export_auth":
-            raise NotImplementedError('Pending!')
+            raise NotImplementedError("Pending!")
         elif request_type == "export":
-            raise NotImplementedError('Pending!')
+            raise NotImplementedError("Pending!")
         elif request_type == "save":
-            raise NotImplementedError('Pending!')
+            raise NotImplementedError("Pending!")
         elif request_type == "close":
             self.close()
         else:
@@ -161,7 +175,7 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
         assert isinstance(contract, (BindableContract, ContractProtocol))
         assert name not in cls.menu
         hints = typing.get_type_hints(contract.Fields)
-        menu: Dict[str, Any]= {}
+        menu: Dict[str, Any] = {}
         conv: Dict[str, Callable] = {}
         for key, hint in hints.items():
             if hint in placeholder_hint:
