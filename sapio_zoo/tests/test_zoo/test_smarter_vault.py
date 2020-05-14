@@ -9,24 +9,53 @@ from bitcoinlib.messages import COutPoint
 
 import os
 from functools import lru_cache
+
+
 class TestSmarterVault(unittest.TestCase):
     def test_smarter_vault(self):
-        key2 = PayToPubKey(key=b"1"*32, amount=Bitcoin(100))
+        key2 = PayToPubKey(key=b"1" * 32, amount=Bitcoin(100))
 
         @lru_cache()
-        def cold_storage(v : Amount):
-            #TODO: Use a real PubKey Generator
-            payments = [(v // 10, PayToPubKey(key=os.urandom(32), amount=v // 10)) for _ in range(10)]
+        def cold_storage(v: Amount):
+            # TODO: Use a real PubKey Generator
+            payments = [
+                (v // 10, PayToPubKey(key=os.urandom(32), amount=v // 10))
+                for _ in range(10)
+            ]
             return TreePay(payments=payments, radix=4)
-        SmarterVault(cold_storage=cold_storage, hot_storage=key2, n_steps=10, timeout=Weeks(1), mature=Weeks(2), amount_step=Bitcoin(100))
+
+        SmarterVault(
+            cold_storage=cold_storage,
+            hot_storage=key2,
+            n_steps=10,
+            timeout=Weeks(1),
+            mature=Weeks(2),
+            amount_step=Bitcoin(100),
+        )
 
         @lru_cache()
         def cold_storage2(v: Amount):
-            #TODO: Use a real PubKey Generator
-            return SmarterVault(cold_storage=cold_storage, hot_storage=key2, n_steps=10, timeout=Weeks(1), mature=Weeks(2), amount_step= (v // 10))
-        s = SmarterVault(cold_storage=cold_storage2, hot_storage=key2, n_steps=10, timeout=Weeks(1), mature=Weeks(2), amount_step=100)
+            # TODO: Use a real PubKey Generator
+            return SmarterVault(
+                cold_storage=cold_storage,
+                hot_storage=key2,
+                n_steps=10,
+                timeout=Weeks(1),
+                mature=Weeks(2),
+                amount_step=(v // 10),
+            )
+
+        s = SmarterVault(
+            cold_storage=cold_storage2,
+            hot_storage=key2,
+            n_steps=10,
+            timeout=Weeks(1),
+            mature=Weeks(2),
+            amount_step=100,
+        )
 
         s.bind(COutPoint())
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

@@ -13,7 +13,10 @@ class TestUndoSend(unittest.TestCase):
         key3 = b"2" * 32
         pk2 = PayToPubKey(key=key2, amount=Sats(10))
         u = UndoSend(to_key=key1, from_contract=pk2, amount=Sats(10), timeout=Weeks(6))
-        u2 = UndoSend2(to_contract=u, from_contract=pk2, amount=Sats(10), timeout=Weeks(6))
+        u2 = UndoSend2(
+            to_contract=u, from_contract=pk2, amount=Sats(10), timeout=Weeks(6)
+        )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

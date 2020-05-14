@@ -25,16 +25,20 @@ class MyTestCase(unittest.TestCase):
         Bob = PayToSegwitAddress(amount=Bitcoin(5), address=bob_script)
         watchtower_key = b"......"
         now = datetime.now()
-        c = CancellableSubscription(amount=Bitcoin(5),
-                                recipient=Bob,
-                                schedule = [(AbsoluteTimeSpec.DaysFromTime(now, 5), Bitcoin(0.5)),
-                                            (AbsoluteTimeSpec.WeeksFromTime(now, 4), Bitcoin(3)),
-                                            (AbsoluteTimeSpec.MonthsFromTime(now, 5), Bitcoin(1.5))],
-                                return_address=Alice,
-                                watchtower_key=watchtower_key,
-                                return_timeout=Weeks(1))
+        c = CancellableSubscription(
+            amount=Bitcoin(5),
+            recipient=Bob,
+            schedule=[
+                (AbsoluteTimeSpec.DaysFromTime(now, 5), Bitcoin(0.5)),
+                (AbsoluteTimeSpec.WeeksFromTime(now, 4), Bitcoin(3)),
+                (AbsoluteTimeSpec.MonthsFromTime(now, 5), Bitcoin(1.5)),
+            ],
+            return_address=Alice,
+            watchtower_key=watchtower_key,
+            return_timeout=Weeks(1),
+        )
         c.bind(COutPoint())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

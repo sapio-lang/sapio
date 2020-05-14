@@ -55,4 +55,3 @@ class RawMultiSigWithPath(Contract):
         tx = TransactionTemplate()
         tx.add_output(self.amount.assigned_value, self.path.assigned_value)
         return tx
-

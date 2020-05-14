@@ -6,11 +6,14 @@ This is an advanced contract which uses many features in Sapio.
 """
 from typing import Optional, List, Tuple
 from sapio_compiler import *
+
+
 class DemoLayeredConditions(Contract):
     """
     DemoLayeredConditions is a example contract which demonstrates various
     features available in Sapio.
     """
+
     class Fields:
         key_a: PubKey
         key_b: PubKey

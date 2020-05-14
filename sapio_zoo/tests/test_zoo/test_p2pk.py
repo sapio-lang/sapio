@@ -11,5 +11,6 @@ class TestP2Pk(unittest.TestCase):
         key3 = b"2" * 32
         PayToPubKey(key=key2, amount=Sats(10))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
