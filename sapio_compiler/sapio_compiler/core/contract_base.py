@@ -117,7 +117,9 @@ class ContractBase(Generic[FieldsType]):
         # Check all assertions. Assertions should not return anything.
         for assert_func in self.assertions:
             if not assert_func(obj):
-                raise AssertionError("Assertion function did not return True")
+                raise AssertionError(
+                    f"CheckFunction for {obj.__name__} did not throw any error, but returned False"
+                )
         if self.pay_functions is not None:
             amt_rng, addr = self.pay_functions(obj)
             obj.amount_range = amt_rng
