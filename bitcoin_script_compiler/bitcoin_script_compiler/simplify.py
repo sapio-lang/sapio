@@ -35,8 +35,7 @@ class AfterClauseSimplification:
         self, clauses: List[AfterClause]
     ) -> Union[
         UnsatisfiableClause,
-        Tuple[Union[SatisfiedClause, AfterClause],
-              Union[SatisfiedClause, AfterClause]],
+        Tuple[Union[SatisfiedClause, AfterClause], Union[SatisfiedClause, AfterClause]],
     ]:
         """
         Parameters
@@ -79,14 +78,14 @@ class AfterClauseSimplification:
                 log.warning("Incompatible Relative Time Locks! Pruning Branch")
                 return UnsatisfiableClause()
             else:
-                raise AssertionError(
-                    "Incompatible Relative Time Locks in Branch")
+                raise AssertionError("Incompatible Relative Time Locks in Branch")
         elif relative_blocks or relative_time:
             (_, rel_tl) = max(
                 (rel_tl.time, rel_tl) for rel_tl in relative_blocks + relative_time
             )
-            relative_return: Union[AfterClause, SatisfiedClause] = AfterClause(AssignedVariable(
-                rel_tl, "relative_time_lock"))
+            relative_return: Union[AfterClause, SatisfiedClause] = AfterClause(
+                AssignedVariable(rel_tl, "relative_time_lock")
+            )
         else:
             relative_return = SatisfiedClause()
 
@@ -109,14 +108,14 @@ class AfterClauseSimplification:
                 log.warning("Incompatible Absolute Time Locks! Pruning Branch")
                 return UnsatisfiableClause()
             else:
-                raise AssertionError(
-                    "Incompatible Absolute Time Locks in Branch")
+                raise AssertionError("Incompatible Absolute Time Locks in Branch")
         elif absolute_time or absolute_blocks:
             (_, abs_tl) = max(
                 (abs_tl.time, abs_tl) for abs_tl in absolute_blocks + absolute_time
             )
-            absolute_return: Union[AfterClause, SatisfiedClause] = AfterClause(AssignedVariable(
-                abs_tl, "absolute_time_lock"))
+            absolute_return: Union[AfterClause, SatisfiedClause] = AfterClause(
+                AssignedVariable(abs_tl, "absolute_time_lock")
+            )
         else:
             absolute_return = SatisfiedClause()
         return (relative_return, absolute_return)
@@ -151,8 +150,7 @@ class DNFSimplification:
             clause_by_type[type(cl)].append(cl)
 
         if AfterClause in clause_by_type:
-            after_clauses = cast(
-                List[AfterClause], clause_by_type.pop(AfterClause))
+            after_clauses = cast(List[AfterClause], clause_by_type.pop(AfterClause))
             val = AfterClauseSimplification().simplify(after_clauses)
             if isinstance(val, tuple):
                 (a, b) = val
@@ -176,8 +174,7 @@ class DNFSimplification:
                         log.warning("Pruning Incompatible CheckTemplateVerify")
                         return [UnsatisfiableClause()]
                     else:
-                        raise AssertionError(
-                            "Incompatible CheckTemplateVerify Clause")
+                        raise AssertionError("Incompatible CheckTemplateVerify Clause")
                 else:
                     clauses_to_return.append(ctv_clauses[0])
 

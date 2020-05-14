@@ -1,6 +1,4 @@
-
 from .clause import SignatureCheckClause, PreImageCheckClause
-
 
 
 class Variable:
@@ -14,10 +12,12 @@ class Variable:
     signature or pre-image), which aids in transaction finalization.
     """
 
+
 class SignatureVar(Variable):
     """
     A missing Signature
     """
+
     def __init__(self, pk: SignatureCheckClause) -> None:
         self.pk = pk.a.assigned_value
 
@@ -26,5 +26,6 @@ class PreImageVar(Variable):
     """
     A missing PreImage
     """
+
     def __init__(self, image: PreImageCheckClause) -> None:
         self.image = image.a.assigned_value

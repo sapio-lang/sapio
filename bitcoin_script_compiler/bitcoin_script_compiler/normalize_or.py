@@ -26,6 +26,7 @@ class NormalizationPass:
     NormalizationPass should be used in a loop until took_action is False, then the expression
     is fully normalized.
     """
+
     took_action: bool
 
     def __init__(self) -> None:

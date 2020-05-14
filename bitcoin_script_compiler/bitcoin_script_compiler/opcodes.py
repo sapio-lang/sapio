@@ -17,6 +17,7 @@ from bitcoinlib.static_types import max_uint32
 
 class AllowedOp:
     """Subset of allowed opcodes"""
+
     # Control Flow
     OP_IF = OP_IF
     OP_NOTIF = OP_NOTIF

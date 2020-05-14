@@ -1,9 +1,19 @@
 from functools import singledispatchmethod
 from typing import TYPE_CHECKING, List, Union
 
-from .clause import (DNF, AfterClause, AndClause, CheckTemplateVerifyClause,
-                     Clause, DNFClause, OrClause, PreImageCheckClause,
-                     SatisfiedClause, SignatureCheckClause)
+from .clause import (
+    DNF,
+    AfterClause,
+    AndClause,
+    CheckTemplateVerifyClause,
+    Clause,
+    DNFClause,
+    OrClause,
+    PreImageCheckClause,
+    SatisfiedClause,
+    SignatureCheckClause,
+)
+
 
 class FlattenPass:
     """
@@ -13,6 +23,7 @@ class FlattenPass:
     FlattenPass checks that there is no OrClause which follows and AndClause, otherwise
     the flattening may only be shallow (and a true DNF would not be returned).
     """
+
     def __call__(self, arg: Clause, or_allowed: bool = True) -> DNF:
         if TYPE_CHECKING:
             assert callable(self.flatten)
@@ -43,7 +54,9 @@ class FlattenPass:
         if TYPE_CHECKING:
             assert callable(self.flatten)
         if not or_allowed:
-            raise ValueError("""OrClause found at an unexpected location, normalization was not completed before call""")
+            raise ValueError(
+                """OrClause found at an unexpected location, normalization was not completed before call"""
+            )
         l: DNF = self.flatten(arg.a, or_allowed)
         l2: DNF = self.flatten(arg.b, or_allowed)
         return l + l2

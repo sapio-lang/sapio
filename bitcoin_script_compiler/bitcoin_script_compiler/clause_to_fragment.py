@@ -25,6 +25,7 @@ class FragmentCompiler:
     leave the stack clean.  FragmentCompiler also populates data into the
     WitnessTemplate.
     """
+
     def __call__(self, arg: Clause, witness: WitnessTemplate) -> CScript:
         """Convert a clause to CScript Fragment"""
         if TYPE_CHECKING:

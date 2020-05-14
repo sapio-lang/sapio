@@ -15,6 +15,7 @@ CTVHash = NewType("CTVHash", bytes)
 class MultipleCTVError(Exception):
     pass
 
+
 class WitnessTemplate:
     """
     A WitnessTemplate contains all the information needed to be able to sign/generate
@@ -67,6 +68,7 @@ class WitnessTemplate:
         if self.ctv_hash is not None and ctv != self.ctv_hash:
             raise MultipleCTVError("Two CTV Hashes cannot be in the same witness")
         self.ctv_hash = ctv
+
 
 class FinalizationNotComplete(Exception):
     pass

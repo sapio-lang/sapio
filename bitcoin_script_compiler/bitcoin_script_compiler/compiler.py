@@ -82,8 +82,7 @@ class ProgramBuilder:
         witness_manager: WitnessManager = WitnessManager()
         dnf = list(
             filter(
-                lambda x: not any(isinstance(y, UnsatisfiableClause)
-                                  for y in x),
+                lambda x: not any(isinstance(y, UnsatisfiableClause) for y in x),
                 (DNFSimplification().simplify(x) for x in dnf),
             )
         )
@@ -91,8 +90,7 @@ class ProgramBuilder:
         # 3 or more, use a generic wrapper
         if n_cases == 1:
             witness = witness_manager.make_witness(0)
-            witness_manager.program += DNFClauseCompiler().compile(
-                dnf[0], witness)
+            witness_manager.program += DNFClauseCompiler().compile(dnf[0], witness)
             # Hack because the fragment compiler leaves stack empty
             witness_manager.program += CScript([AllowedOp.OP_1])
         elif n_cases == 2:

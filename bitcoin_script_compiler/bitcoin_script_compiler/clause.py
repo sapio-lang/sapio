@@ -47,6 +47,7 @@ class ClauseProtocol(Protocol):
 
 class StringClauseMixin:
     """Mixin to add str printing"""
+
     MODE = "+"  # "str"
 
     def __str__(self: ClauseProtocol) -> str:
@@ -65,8 +66,10 @@ class StringClauseMixin:
             else:
                 return f"{self.__class__.__name__}()"
 
+
 class LogicMixin:
     """Mixin to add logic syntax to a class"""
+
     def __or__(self, other: Clause) -> OrClause:
         return OrClause(cast(Clause, self), other)
 
@@ -76,6 +79,7 @@ class LogicMixin:
 
 class SatisfiedClause(StringClauseMixin):
     """A Base type clause which is always true. Useful in compiler logic."""
+
     n_args = 0
     # When or'd to another clause, the other clause disappears
     # because A + True --> True
@@ -88,9 +92,9 @@ class SatisfiedClause(StringClauseMixin):
         return other
 
 
-
 class UnsatisfiableClause(StringClauseMixin):
     """A Base type clause which is always false. Useful in compiler logic."""
+
     n_args = 0
     # When or'd to another clause, this clause disappears
     # because A + False --> A
@@ -106,11 +110,9 @@ class UnsatisfiableClause(StringClauseMixin):
         return self
 
 
-
-
-
 class AndClause(LogicMixin, StringClauseMixin):
     """Expresses that both the left hand and right hand arguments must be satisfied."""
+
     n_args = 2
     symbol = "&"
 
@@ -121,6 +123,7 @@ class AndClause(LogicMixin, StringClauseMixin):
 
 class OrClause(LogicMixin, StringClauseMixin):
     """Expresses that either the left hand or right hand arguments must be satisfied."""
+
     n_args = 2
     symbol = "|"
 
@@ -131,6 +134,7 @@ class OrClause(LogicMixin, StringClauseMixin):
 
 class SignatureCheckClause(LogicMixin, StringClauseMixin):
     """Requires a signature from the passed in key to be satisfied"""
+
     n_args = 1
 
     def __init__(self, a: AssignedVariable[PubKey]):
@@ -139,6 +143,7 @@ class SignatureCheckClause(LogicMixin, StringClauseMixin):
 
 class PreImageCheckClause(LogicMixin, StringClauseMixin):
     """Requires a preimage of the passed in hash to be revealed to be satisfied"""
+
     n_args = 1
     a: AssignedVariable[Hash]
 
@@ -148,6 +153,7 @@ class PreImageCheckClause(LogicMixin, StringClauseMixin):
 
 class CheckTemplateVerifyClause(LogicMixin, StringClauseMixin):
     """The transaction must match the passed in StandardTemplateHash exactly for this clause to be satisfied"""
+
     n_args = 1
 
     def __init__(self, a: AssignedVariable[Hash]):
@@ -155,6 +161,8 @@ class CheckTemplateVerifyClause(LogicMixin, StringClauseMixin):
 
 
 TimeTypes = Union[Literal["time"], Literal["blocks"]]
+
+
 class AbsoluteTimeSpec:
     """An nLockTime specification, either in Blocks or MTP Time"""
 
@@ -253,6 +261,7 @@ def Days(n: float) -> RelativeTimeSpec:
 
 class AfterClause(LogicMixin, StringClauseMixin):
     """Takes either a RelativeTimeSpec or an AbsoluteTimeSpec and enforces the condition"""
+
     n_args = 1
     a: AssignedVariable[TimeSpec]
 

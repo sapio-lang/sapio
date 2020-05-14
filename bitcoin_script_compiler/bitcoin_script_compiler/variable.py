@@ -17,6 +17,7 @@ class AssignedVariable(Generic[V]):
     It should *most likely* be refactored out, or the concept of an assigned/unassigned
     variable should be made a bit richer.
     """
+
     UNIQUE_NAME = 0
 
     def __init__(self, value: V, name: Optional[Union[bytes, str]] = None):
