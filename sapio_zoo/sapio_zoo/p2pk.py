@@ -20,6 +20,7 @@ class PayToSegwitAddress(Contract):
     The amount argument should be by default set to the amount being sent to
     that address. This sets the min/max values on the amount range.
     """
+
     class Fields:
         amount: AmountRange
         address: str

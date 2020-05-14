@@ -40,6 +40,7 @@ class TestStatus(Enum):
     FAILED = 2
     SKIPPED = 3
 
+
 TEST_EXIT_PASSED = 0
 TEST_EXIT_FAILED = 1
 TEST_EXIT_SKIPPED = 77
@@ -63,13 +64,17 @@ class BitcoinTestMetaClass(type):
     those standards are violated, a ``TypeError`` is raised."""
 
     def __new__(cls, clsname, bases, dct):
-        if not clsname == 'BitcoinTestFramework':
-            if not ('run_test' in dct and 'set_test_params' in dct):
-                raise TypeError("BitcoinTestFramework subclasses must override "
-                                "'run_test' and 'set_test_params'")
-            if '__init__' in dct or 'main' in dct:
-                raise TypeError("BitcoinTestFramework subclasses may not override "
-                                "'__init__' or 'main'")
+        if not clsname == "BitcoinTestFramework":
+            if not ("run_test" in dct and "set_test_params" in dct):
+                raise TypeError(
+                    "BitcoinTestFramework subclasses must override "
+                    "'run_test' and 'set_test_params'"
+                )
+            if "__init__" in dct or "main" in dct:
+                raise TypeError(
+                    "BitcoinTestFramework subclasses may not override "
+                    "'__init__' or 'main'"
+                )
 
         return super().__new__(cls, clsname, bases, dct)
 
@@ -92,7 +97,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
 
     def __init__(self):
         """Sets test framework defaults. Do not override this method. Instead, override the set_test_params() method"""
-        self.chain = 'regtest'
+        self.chain = "regtest"
         self.setup_clean_chain = False
         self.nodes = []
         self.network_thread = None
@@ -105,7 +110,9 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
     def main(self):
         """Main function. This should not be overridden by the subclass test scripts."""
 
-        assert hasattr(self, "num_nodes"), "Test must set self.num_nodes in set_test_params()"
+        assert hasattr(
+            self, "num_nodes"
+        ), "Test must set self.num_nodes in set_test_params()"
 
         try:
             self.setup()
@@ -137,34 +144,98 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
 
     def parse_args(self):
         parser = argparse.ArgumentParser(usage="%(prog)s [options]")
-        parser.add_argument("--nocleanup", dest="nocleanup", default=False, action="store_true",
-                            help="Leave bitcoinds and test.* datadir on exit or error")
-        parser.add_argument("--noshutdown", dest="noshutdown", default=False, action="store_true",
-                            help="Don't stop bitcoinds after the test execution")
-        parser.add_argument("--cachedir", dest="cachedir", default=os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + "/../../cache"),
-                            help="Directory for caching pregenerated datadirs (default: %(default)s)")
-        parser.add_argument("--tmpdir", dest="tmpdir", help="Root directory for datadirs")
-        parser.add_argument("-l", "--loglevel", dest="loglevel", default="INFO",
-                            help="log events at this level and higher to the console. Can be set to DEBUG, INFO, WARNING, ERROR or CRITICAL. Passing --loglevel DEBUG will output all logs to console. Note that logs at all levels are always written to the test_framework.log file in the temporary test directory.")
-        parser.add_argument("--tracerpc", dest="trace_rpc", default=False, action="store_true",
-                            help="Print out all RPC calls as they are made")
-        parser.add_argument("--portseed", dest="port_seed", default=os.getpid(), type=int,
-                            help="The seed to use for assigning port numbers (default: current process id)")
-        parser.add_argument("--coveragedir", dest="coveragedir",
-                            help="Write tested RPC commands into this directory")
-        parser.add_argument("--configfile", dest="configfile",
-                            default=os.path.abspath(os.path.dirname(os.path.realpath(__file__)) + "/../../config.ini"),
-                            help="Location of the test framework config file (default: %(default)s)")
-        parser.add_argument("--pdbonfailure", dest="pdbonfailure", default=False, action="store_true",
-                            help="Attach a python debugger if test fails")
-        parser.add_argument("--usecli", dest="usecli", default=False, action="store_true",
-                            help="use bitcoin-cli instead of RPC for all commands")
-        parser.add_argument("--perf", dest="perf", default=False, action="store_true",
-                            help="profile running nodes with perf for the duration of the test")
-        parser.add_argument("--valgrind", dest="valgrind", default=False, action="store_true",
-                            help="run nodes under the valgrind memory error detector: expect at least a ~10x slowdown, valgrind 3.14 or later required")
-        parser.add_argument("--randomseed", type=int,
-                            help="set a random seed for deterministically reproducing a previous test run")
+        parser.add_argument(
+            "--nocleanup",
+            dest="nocleanup",
+            default=False,
+            action="store_true",
+            help="Leave bitcoinds and test.* datadir on exit or error",
+        )
+        parser.add_argument(
+            "--noshutdown",
+            dest="noshutdown",
+            default=False,
+            action="store_true",
+            help="Don't stop bitcoinds after the test execution",
+        )
+        parser.add_argument(
+            "--cachedir",
+            dest="cachedir",
+            default=os.path.abspath(
+                os.path.dirname(os.path.realpath(__file__)) + "/../../cache"
+            ),
+            help="Directory for caching pregenerated datadirs (default: %(default)s)",
+        )
+        parser.add_argument(
+            "--tmpdir", dest="tmpdir", help="Root directory for datadirs"
+        )
+        parser.add_argument(
+            "-l",
+            "--loglevel",
+            dest="loglevel",
+            default="INFO",
+            help="log events at this level and higher to the console. Can be set to DEBUG, INFO, WARNING, ERROR or CRITICAL. Passing --loglevel DEBUG will output all logs to console. Note that logs at all levels are always written to the test_framework.log file in the temporary test directory.",
+        )
+        parser.add_argument(
+            "--tracerpc",
+            dest="trace_rpc",
+            default=False,
+            action="store_true",
+            help="Print out all RPC calls as they are made",
+        )
+        parser.add_argument(
+            "--portseed",
+            dest="port_seed",
+            default=os.getpid(),
+            type=int,
+            help="The seed to use for assigning port numbers (default: current process id)",
+        )
+        parser.add_argument(
+            "--coveragedir",
+            dest="coveragedir",
+            help="Write tested RPC commands into this directory",
+        )
+        parser.add_argument(
+            "--configfile",
+            dest="configfile",
+            default=os.path.abspath(
+                os.path.dirname(os.path.realpath(__file__)) + "/../../config.ini"
+            ),
+            help="Location of the test framework config file (default: %(default)s)",
+        )
+        parser.add_argument(
+            "--pdbonfailure",
+            dest="pdbonfailure",
+            default=False,
+            action="store_true",
+            help="Attach a python debugger if test fails",
+        )
+        parser.add_argument(
+            "--usecli",
+            dest="usecli",
+            default=False,
+            action="store_true",
+            help="use bitcoin-cli instead of RPC for all commands",
+        )
+        parser.add_argument(
+            "--perf",
+            dest="perf",
+            default=False,
+            action="store_true",
+            help="profile running nodes with perf for the duration of the test",
+        )
+        parser.add_argument(
+            "--valgrind",
+            dest="valgrind",
+            default=False,
+            action="store_true",
+            help="run nodes under the valgrind memory error detector: expect at least a ~10x slowdown, valgrind 3.14 or later required",
+        )
+        parser.add_argument(
+            "--randomseed",
+            type=int,
+            help="set a random seed for deterministically reproducing a previous test run",
+        )
         self.add_options(parser)
         self.options = parser.parse_args()
 
@@ -180,14 +251,26 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
         config = configparser.ConfigParser()
         config.read_file(open(self.options.configfile))
         self.config = config
-        self.options.bitcoind = os.getenv("BITCOIND", default=config["environment"]["BUILDDIR"] + '/src/bitcoind' + config["environment"]["EXEEXT"])
-        self.options.bitcoincli = os.getenv("BITCOINCLI", default=config["environment"]["BUILDDIR"] + '/src/bitcoin-cli' + config["environment"]["EXEEXT"])
+        self.options.bitcoind = os.getenv(
+            "BITCOIND",
+            default=config["environment"]["BUILDDIR"]
+            + "/src/bitcoind"
+            + config["environment"]["EXEEXT"],
+        )
+        self.options.bitcoincli = os.getenv(
+            "BITCOINCLI",
+            default=config["environment"]["BUILDDIR"]
+            + "/src/bitcoin-cli"
+            + config["environment"]["EXEEXT"],
+        )
 
-        os.environ['PATH'] = os.pathsep.join([
-            os.path.join(config['environment']['BUILDDIR'], 'src'),
-            os.path.join(config['environment']['BUILDDIR'], 'src', 'qt'),
-            os.environ['PATH']
-        ])
+        os.environ["PATH"] = os.pathsep.join(
+            [
+                os.path.join(config["environment"]["BUILDDIR"], "src"),
+                os.path.join(config["environment"]["BUILDDIR"], "src", "qt"),
+                os.environ["PATH"],
+            ]
+        )
 
         # Set up temp directory and start logging
         if self.options.tmpdir:
@@ -213,7 +296,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
         random.seed(seed)
         self.log.debug("PRNG seed is: {}".format(seed))
 
-        self.log.debug('Setting up network thread')
+        self.log.debug("Setting up network thread")
         self.network_thread = NetworkThread()
         self.network_thread.start()
 
@@ -234,7 +317,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             print("Testcase failed. Attaching python debugger. Enter ? for help")
             pdb.set_trace()
 
-        self.log.debug('Closing down network thread')
+        self.log.debug("Closing down network thread")
         self.network_thread.close()
         if not self.options.noshutdown:
             self.log.info("Stopping nodes")
@@ -246,16 +329,18 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             self.log.info("Note: bitcoinds were not stopped and may still be running")
 
         should_clean_up = (
-            not self.options.nocleanup and
-            not self.options.noshutdown and
-            self.success != TestStatus.FAILED and
-            not self.options.perf
+            not self.options.nocleanup
+            and not self.options.noshutdown
+            and self.success != TestStatus.FAILED
+            and not self.options.perf
         )
         if should_clean_up:
             self.log.info("Cleaning up {} on exit".format(self.options.tmpdir))
             cleanup_tree_on_exit = True
         elif self.options.perf:
-            self.log.warning("Not cleaning up dir {} due to perf data".format(self.options.tmpdir))
+            self.log.warning(
+                "Not cleaning up dir {} due to perf data".format(self.options.tmpdir)
+            )
             cleanup_tree_on_exit = False
         else:
             self.log.warning("Not cleaning up dir {}".format(self.options.tmpdir))
@@ -268,8 +353,19 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             self.log.info("Test skipped")
             exit_code = TEST_EXIT_SKIPPED
         else:
-            self.log.error("Test failed. Test logging available at %s/test_framework.log", self.options.tmpdir)
-            self.log.error("Hint: Call {} '{}' to consolidate all logs".format(os.path.normpath(os.path.dirname(os.path.realpath(__file__)) + "/../combine_logs.py"), self.options.tmpdir))
+            self.log.error(
+                "Test failed. Test logging available at %s/test_framework.log",
+                self.options.tmpdir,
+            )
+            self.log.error(
+                "Hint: Call {} '{}' to consolidate all logs".format(
+                    os.path.normpath(
+                        os.path.dirname(os.path.realpath(__file__))
+                        + "/../combine_logs.py"
+                    ),
+                    self.options.tmpdir,
+                )
+            )
             exit_code = TEST_EXIT_FAILED
         # Logging.shutdown will not remove stream- and filehandlers, so we must
         # do it explicitly. Handlers are removed so the next test run can apply
@@ -344,7 +440,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
                 assert_equal(n.getblockchaininfo()["blocks"], 199)
             # To ensure that all nodes are out of IBD, the most recent block
             # must have a timestamp not too old (see IsInitialBlockDownload()).
-            self.log.debug('Generate a block with current time')
+            self.log.debug("Generate a block with current time")
             block_hash = self.nodes[0].generate(1)[0]
             block = self.nodes[0].getblock(blockhash=block_hash, verbosity=0)
             for n in self.nodes:
@@ -358,10 +454,12 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             try:
                 n.getwalletinfo()
             except JSONRPCException as e:
-                assert str(e).startswith('Method not found')
+                assert str(e).startswith("Method not found")
                 continue
 
-            n.importprivkey(privkey=n.get_deterministic_priv_key().key, label='coinbase')
+            n.importprivkey(
+                privkey=n.get_deterministic_priv_key().key, label="coinbase"
+            )
 
     def run_test(self):
         """Tests must override this method to define test logic"""
@@ -386,22 +484,24 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
         assert_equal(len(extra_args), num_nodes)
         assert_equal(len(binary), num_nodes)
         for i in range(num_nodes):
-            self.nodes.append(TestNode(
-                i,
-                get_datadir_path(self.options.tmpdir, i),
-                chain=self.chain,
-                rpchost=rpchost,
-                timewait=self.rpc_timeout,
-                bitcoind=binary[i],
-                bitcoin_cli=self.options.bitcoincli,
-                coverage_dir=self.options.coveragedir,
-                cwd=self.options.tmpdir,
-                extra_conf=extra_confs[i],
-                extra_args=extra_args[i],
-                use_cli=self.options.usecli,
-                start_perf=self.options.perf,
-                use_valgrind=self.options.valgrind,
-            ))
+            self.nodes.append(
+                TestNode(
+                    i,
+                    get_datadir_path(self.options.tmpdir, i),
+                    chain=self.chain,
+                    rpchost=rpchost,
+                    timewait=self.rpc_timeout,
+                    bitcoind=binary[i],
+                    bitcoin_cli=self.options.bitcoincli,
+                    coverage_dir=self.options.coveragedir,
+                    cwd=self.options.tmpdir,
+                    extra_conf=extra_confs[i],
+                    extra_args=extra_args[i],
+                    use_cli=self.options.usecli,
+                    start_perf=self.options.perf,
+                    use_valgrind=self.options.valgrind,
+                )
+            )
 
     def start_node(self, i, *args, **kwargs):
         """Start a bitcoind"""
@@ -434,7 +534,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             for node in self.nodes:
                 coverage.write_all_rpc_commands(self.options.coveragedir, node.rpc)
 
-    def stop_node(self, i, expected_stderr='', wait=0):
+    def stop_node(self, i, expected_stderr="", wait=0):
         """Stop a bitcoind test node"""
         self.nodes[i].stop_node(expected_stderr, wait=wait)
         self.nodes[i].wait_until_stopped()
@@ -487,18 +587,27 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
 
     def _start_logging(self):
         # Add logger and logging handlers
-        self.log = logging.getLogger('TestFramework')
+        self.log = logging.getLogger("TestFramework")
         self.log.setLevel(logging.DEBUG)
         # Create file handler to log all messages
-        fh = logging.FileHandler(self.options.tmpdir + '/test_framework.log', encoding='utf-8')
+        fh = logging.FileHandler(
+            self.options.tmpdir + "/test_framework.log", encoding="utf-8"
+        )
         fh.setLevel(logging.DEBUG)
         # Create console handler to log messages to stderr. By default this logs only error messages, but can be configured with --loglevel.
         ch = logging.StreamHandler(sys.stdout)
         # User can provide log level as a number or string (eg DEBUG). loglevel was caught as a string, so try to convert it to an int
-        ll = int(self.options.loglevel) if self.options.loglevel.isdigit() else self.options.loglevel.upper()
+        ll = (
+            int(self.options.loglevel)
+            if self.options.loglevel.isdigit()
+            else self.options.loglevel.upper()
+        )
         ch.setLevel(ll)
         # Format logs the same as bitcoind's debug.log with microprecision (so log files can be concatenated and sorted)
-        formatter = logging.Formatter(fmt='%(asctime)s.%(msecs)03d000Z %(name)s (%(levelname)s): %(message)s', datefmt='%Y-%m-%dT%H:%M:%S')
+        formatter = logging.Formatter(
+            fmt="%(asctime)s.%(msecs)03d000Z %(name)s (%(levelname)s): %(message)s",
+            datefmt="%Y-%m-%dT%H:%M:%S",
+        )
         formatter.converter = time.gmtime
         fh.setFormatter(formatter)
         ch.setFormatter(formatter)
@@ -533,14 +642,15 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
                     cache_node_dir,
                     chain=self.chain,
                     extra_conf=["bind=127.0.0.1"],
-                    extra_args=['-disablewallet'],
+                    extra_args=["-disablewallet"],
                     rpchost=None,
                     timewait=self.rpc_timeout,
                     bitcoind=self.options.bitcoind,
                     bitcoin_cli=self.options.bitcoincli,
                     coverage_dir=None,
                     cwd=self.options.tmpdir,
-                ))
+                )
+            )
             self.start_node(CACHE_NODE_ID)
 
             # Wait for RPC connections to be ready
@@ -567,16 +677,23 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             def cache_path(*paths):
                 return os.path.join(cache_node_dir, self.chain, *paths)
 
-            os.rmdir(cache_path('wallets'))  # Remove empty wallets dir
+            os.rmdir(cache_path("wallets"))  # Remove empty wallets dir
             for entry in os.listdir(cache_path()):
-                if entry not in ['chainstate', 'blocks']:  # Only keep chainstate and blocks folder
+                if entry not in [
+                    "chainstate",
+                    "blocks",
+                ]:  # Only keep chainstate and blocks folder
                     os.remove(cache_path(entry))
 
         for i in range(self.num_nodes):
-            self.log.debug("Copy cache directory {} to node {}".format(cache_node_dir, i))
+            self.log.debug(
+                "Copy cache directory {} to node {}".format(cache_node_dir, i)
+            )
             to_dir = get_datadir_path(self.options.tmpdir, i)
             shutil.copytree(cache_node_dir, to_dir)
-            initialize_datadir(self.options.tmpdir, i, self.chain)  # Overwrite port/rpcport in bitcoin.conf
+            initialize_datadir(
+                self.options.tmpdir, i, self.chain
+            )  # Overwrite port/rpcport in bitcoin.conf
 
     def _initialize_chain_clean(self):
         """Initialize empty blockchain for use by the test.

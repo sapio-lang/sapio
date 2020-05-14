@@ -5,6 +5,7 @@
 
 from .test_framework import BitcoinTestFramework
 
+
 class TestShell:
     """Wrapper Class for BitcoinTestFramework.
 

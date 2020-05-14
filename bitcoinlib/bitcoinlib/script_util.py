@@ -7,7 +7,14 @@ import struct
 
 from .messages import CTransaction, CTxOut, uint256_from_str, ser_uint256, ser_string
 from .hash_functions import hash256
-from .script import CScript, FindAndDelete, OP_CODESEPARATOR, SIGHASH_NONE, SIGHASH_SINGLE, SIGHASH_ANYONECANPAY
+from .script import (
+    CScript,
+    FindAndDelete,
+    OP_CODESEPARATOR,
+    SIGHASH_NONE,
+    SIGHASH_SINGLE,
+    SIGHASH_ANYONECANPAY,
+)
 
 # To prevent a "tx-size-small" policy rule error, a transaction has to have a
 # non-witness size of at least 82 bytes (MIN_STANDARD_TX_NONWITNESS_SIZE in
@@ -26,7 +33,7 @@ from .script import CScript, FindAndDelete, OP_CODESEPARATOR, SIGHASH_NONE, SIGH
 # resulting in a 22-byte size. It should be used whenever (small) fake
 # scriptPubKeys are needed, to guarantee that the minimum transaction size is
 # met.
-DUMMY_P2WPKH_SCRIPT = CScript([b'a' * 21])
+DUMMY_P2WPKH_SCRIPT = CScript([b"a" * 21])
 
 
 # TODO: Allow cached hashPrevouts/hashSequence/hashOutputs to be provided.
@@ -39,24 +46,24 @@ def LegacySignatureHash(script, txTo, inIdx, hashtype):
     Returns (hash, err) to precisely match the consensus-critical behavior of
     the SIGHASH_SINGLE bug. (inIdx is *not* checked for validity)
     """
-    HASH_ONE = b'\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+    HASH_ONE = b"\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 
     if inIdx >= len(txTo.vin):
         return (HASH_ONE, "inIdx %d out of range (%d)" % (inIdx, len(txTo.vin)))
     txtmp = CTransaction(txTo)
 
     for txin in txtmp.vin:
-        txin.scriptSig = b''
+        txin.scriptSig = b""
     txtmp.vin[inIdx].scriptSig = FindAndDelete(script, CScript([OP_CODESEPARATOR]))
 
-    if (hashtype & 0x1f) == SIGHASH_NONE:
+    if (hashtype & 0x1F) == SIGHASH_NONE:
         txtmp.vout = []
 
         for i in range(len(txtmp.vin)):
             if i != inIdx:
                 txtmp.vin[i].nSequence = 0
 
-    elif (hashtype & 0x1f) == SIGHASH_SINGLE:
+    elif (hashtype & 0x1F) == SIGHASH_SINGLE:
         outIdx = inIdx
         if outIdx >= len(txtmp.vout):
             return (HASH_ONE, "outIdx %d out of range (%d)" % (outIdx, len(txtmp.vout)))
@@ -96,18 +103,22 @@ def SegwitV0SignatureHash(script, txTo, inIdx, hashtype, amount):
             serialize_prevouts += i.prevout.serialize()
         hashPrevouts = uint256_from_str(hash256(serialize_prevouts))
 
-    if (not (hashtype & SIGHASH_ANYONECANPAY) and (hashtype & 0x1f) != SIGHASH_SINGLE and (hashtype & 0x1f) != SIGHASH_NONE):
+    if (
+        not (hashtype & SIGHASH_ANYONECANPAY)
+        and (hashtype & 0x1F) != SIGHASH_SINGLE
+        and (hashtype & 0x1F) != SIGHASH_NONE
+    ):
         serialize_sequence = bytes()
         for i in txTo.vin:
             serialize_sequence += struct.pack("<I", i.nSequence)
         hashSequence = uint256_from_str(hash256(serialize_sequence))
 
-    if ((hashtype & 0x1f) != SIGHASH_SINGLE and (hashtype & 0x1f) != SIGHASH_NONE):
+    if (hashtype & 0x1F) != SIGHASH_SINGLE and (hashtype & 0x1F) != SIGHASH_NONE:
         serialize_outputs = bytes()
         for o in txTo.vout:
             serialize_outputs += o.serialize()
         hashOutputs = uint256_from_str(hash256(serialize_outputs))
-    elif ((hashtype & 0x1f) == SIGHASH_SINGLE and inIdx < len(txTo.vout)):
+    elif (hashtype & 0x1F) == SIGHASH_SINGLE and inIdx < len(txTo.vout):
         serialize_outputs = txTo.vout[inIdx].serialize()
         hashOutputs = uint256_from_str(hash256(serialize_outputs))
 

@@ -12,21 +12,24 @@ import struct
 
 # generic big endian MPI format
 
-def bn_bytes(v:int, have_ext:bool=False) -> int:
+
+def bn_bytes(v: int, have_ext: bool = False) -> int:
     ext = 0
     if have_ext:
         ext = 1
-    return ((v.bit_length()+7)//8) + ext
+    return ((v.bit_length() + 7) // 8) + ext
 
-def bn2bin(v:int) -> bytearray:
+
+def bn2bin(v: int) -> bytearray:
     s = bytearray()
     i = bn_bytes(v)
     while i > 0:
-        s.append((v >> ((i-1) * 8)) & 0xff)
+        s.append((v >> ((i - 1) * 8)) & 0xFF)
         i -= 1
     return s
 
-def bn2mpi(v:int) -> bytes:
+
+def bn2mpi(v: int) -> bytes:
     have_ext = False
     if v.bit_length() > 0:
         have_ext = (v.bit_length() & 0x07) == 0
@@ -48,11 +51,13 @@ def bn2mpi(v:int) -> bytes:
             v_bin[0] |= 0x80
     return s + ext + v_bin
 
+
 # bitcoin-specific little endian format, with implicit size
-def mpi2vch(s:bytes)->bytes:
-    r = s[4:]           # strip size
-    r = r[::-1]         # reverse string, converting BE->LE
+def mpi2vch(s: bytes) -> bytes:
+    r = s[4:]  # strip size
+    r = r[::-1]  # reverse string, converting BE->LE
     return r
 
-def bn2vch(v:int) -> bytes:
+
+def bn2vch(v: int) -> bytes:
     return bytes(mpi2vch(bn2mpi(v)))
