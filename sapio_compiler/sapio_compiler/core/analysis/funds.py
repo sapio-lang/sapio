@@ -8,10 +8,11 @@ from bitcoinlib.static_types import Amount, Sats
 class WithinFee:
     fee_modifier: Amount = Sats(100)
 
-    def __init__(self, contract: bc.BindableContract, b: Amount) -> None:
-        if contract.amount_range[0] + self.fee_modifier < b:
+    def __init__(self, contract: bc.BindableContract, amount_sent: Amount) -> None:
+        if contract.amount_range.min + self.fee_modifier < amount_sent:
             raise ValueError(
-                f"Contract {bc.__name__} May Burn Funds! Spent {contract.amount_range[0]} to {contract.amount_range[1]}, not within {b+self.fee_modifier}"
+                f"Contract {bc.__name__} May Burn Funds!",
+                f"Spent {contract.amount_range.min} to {contract.amount_range.max}, not within {amount_sent+self.fee_modifier}"
             )
 
     @classmethod
@@ -23,13 +24,10 @@ class HasEnoughFunds:
     def __init__(
         self,
         contract: sapio_compiler.core.bindable_contract.BindableContract,
-        b: Amount,
+        amount_sent: Amount,
     ) -> None:
-        if contract.amount_range[1] > b:
+        if contract.amount_range.max > amount_sent:
             raise ValueError(
-                "Insufficient Funds",
-                "Contract May Burn Funds!",
-                contract,
-                contract.amount_range,
-                b,
+                f"Contract {contract.__name__} May Burn Funds!",
+                f"Insufficient Funds sent, {contract.amount_range.max} more than {amount_sent}",
             )

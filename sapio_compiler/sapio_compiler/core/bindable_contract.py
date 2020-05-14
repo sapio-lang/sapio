@@ -6,6 +6,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Final,
     Generic,
     List,
     Protocol,
@@ -24,6 +25,31 @@ from .txtemplate import TransactionTemplate
 
 FieldsType = TypeVar("FieldsType")
 
+class AmountRange:
+    """
+    Utility class which tracks the amount of funds that a contract has a
+    guaranteed path to spend minimally and maximally.
+    """
+    MIN: Final[Amount] = Amount(0)
+    """Minimum amount of BTC to send"""
+    MAX: Final[Amount] = Amount(21_000_000*100_000_000)
+    """Maximum amount of BTC to send"""
+    def __init__(self):
+        """
+        By default we construct it with the max value for min, and the min
+        value for max. This means that any subsequent update will be correct.
+        """
+        self.min = AmountRange.MAX
+        self.max = AmountRange.MIN
+    def get_min(self) -> Amount:
+        return self.min
+    def get_max(self) -> Amount:
+        return self.max
+    def update_range(self, amount) -> None:
+        if not AmountRange.MIN <= amount <= AmountRange.MAX:
+            raise ValueError("Invalid Amount of Bitcoin", amount)
+        self.min = min(self.min, amount)
+        self.max = max(self.max, amount)
 
 class BindableContract(Generic[FieldsType]):
     """
@@ -47,7 +73,7 @@ class BindableContract(Generic[FieldsType]):
     witness_manager: WitnessManager
     guaranteed_txns: List[TransactionTemplate]
     suggested_txns: List[TransactionTemplate]
-    amount_range: Tuple[Amount, Amount]
+    amount_range: AmountRange
     fields: FieldsType
     is_initialized: bool
     init_class: ContractBase[FieldsType]
@@ -103,8 +129,8 @@ class BindableContract(Generic[FieldsType]):
                 transaction.to_json()
                 for transaction in self.guaranteed_txns + self.suggested_txns
             ],
-            "min_amount_spent": self.amount_range[0],
-            "max_amount_spent": self.amount_range[1],
+            "min_amount_spent": self.amount_range.get_min(),
+            "max_amount_spent": self.amount_range.get_max(),
             "metadata": {
                 "color": self.MetaData.color(self),
                 "label": self.MetaData.label(self),

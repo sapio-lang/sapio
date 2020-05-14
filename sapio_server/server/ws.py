@@ -42,7 +42,7 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
         txns.append(base_tx)
         metadata.append(base_meta)
         addr = example.witness_manager.get_p2wsh_address()
-        amount = example.amount_range[1]
+        amount = example.amount_range.max
         data = [
             {"hex": tx.serialize_with_witness().hex(), **meta}
             for (tx, meta) in zip(txns, metadata)
@@ -134,7 +134,7 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
                 print("ARGS", args)
                 contract = self.contracts[create_type].create_instance(**args)
                 addr = contract.witness_manager.get_p2wsh_address()
-                amount = contract.amount_range[1]
+                amount = contract.amount_range.max
                 self.compilation_cache[addr] = contract
                 txns, metadata = contract.bind(base_out)
                 txns.append(base_tx)

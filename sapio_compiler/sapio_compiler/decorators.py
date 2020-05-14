@@ -73,7 +73,7 @@ class PayFunction(Protocol[ContractType]):
     __sapio_func_type__: FuncTypes = "pay_address"
 
     @staticmethod
-    def __call__(self: ContractType) -> Tuple[Amount, str]:
+    def __call__(self: ContractType) -> Tuple[AmountRange, str]:
         pass
 
 
@@ -213,7 +213,7 @@ def unlock(s: Callable[[ContractType], Clause]) -> UnlockFunction[ContractType]:
 
 
 def pay_address(
-    f: Callable[[ContractType], Tuple[Amount, str]]
+    f: Callable[[ContractType], Tuple[AmountRange, str]]
 ) -> PayFunction[ContractType]:
     """
     A PayAddress function is a special type which stubs out

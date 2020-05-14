@@ -1,6 +1,6 @@
 from bitcoin_script_compiler import SignatureCheckClause
 from bitcoinlib.static_types import Amount, PubKey
-from sapio_compiler import Contract, pay_address, unlock
+from sapio_compiler import Contract, pay_address, unlock, AmountRange
 
 
 class PayToPubKey(Contract):
@@ -14,8 +14,14 @@ class PayToPubKey(Contract):
 
 
 class PayToSegwitAddress(Contract):
+    """
+    Allows inputting an external opaque segwit address.
+
+    The amount argument should be by default set to the amount being sent to
+    that address. This sets the min/max values on the amount range.
+    """
     class Fields:
-        amount: Amount
+        amount: AmountRange
         address: str
 
     class MetaData:

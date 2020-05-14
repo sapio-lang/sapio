@@ -111,7 +111,7 @@ class ContractBase(Generic[FieldsType]):
 
     def __call__(self, obj: ContractBase.ContractType, kwargs: Dict[str, Any],) -> None:
         self._setup_call(obj, kwargs)
-        obj.amount_range = (Sats(21_000_000 * 100_000_000), Sats(0))
+        obj.amount_range = sapio_compiler.core.bindable_contract.AmountRange()
         obj.guaranteed_txns = []
         obj.suggested_txns = []
         # Check all assertions. Assertions should not return anything.
@@ -119,9 +119,8 @@ class ContractBase(Generic[FieldsType]):
             if not assert_func(obj):
                 raise AssertionError("Assertion function did not return True")
         if self.pay_functions is not None:
-            amt, addr = self.pay_functions(obj)
-            # TODO: Something more robust here...
-            # obj.amount_range = (amt, Amount(0))
+            amt_rng, addr = self.pay_functions(obj)
+            obj.amount_range = amt_rng
             obj.witness_manager = WitnessManager()
             obj.witness_manager.override_program = addr
             return
@@ -147,10 +146,7 @@ class ContractBase(Generic[FieldsType]):
                 template.finalize()
                 template.label = path_func.__name__
                 amount = template.total_amount()
-                obj.amount_range = (
-                    min(obj.amount_range[0], amount),
-                    max(obj.amount_range[1], amount),
-                )
+                obj.amount_range.update_range(amount)
                 # not all transactions are guaranteed
                 if path_func.is_guaranteed:
                     # ctv_hash is an identifier and a txid equivalent
