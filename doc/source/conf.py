@@ -58,3 +58,4 @@ html_static_path = ['_static']
 
 
 # -- Extension configuration -------------------------------------------------
+napoleon_use_param = True
