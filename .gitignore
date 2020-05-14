@@ -6,3 +6,4 @@ dist/
 venv/
 *.pyc
 **/*.egg-info
+tags
