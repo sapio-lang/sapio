@@ -51,8 +51,7 @@ class TransactionTemplate:
         self.n_inputs: int = 0
         self.sequences: List[Sequence] = [Sequence(uint32(0))]
         self.outputs: List[
-            Tuple[Amount,
-                  sapio_compiler.core.bindable_contract.BindableContract[Any]]
+            Tuple[Amount, sapio_compiler.core.bindable_contract.BindableContract[Any]]
         ] = []
         self.outputs_metadata: List[OutputMetaDataContainer] = []
         self.version: Version = Version(uint32(2))

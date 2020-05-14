@@ -21,7 +21,9 @@ class WithinFee:
 
 class HasEnoughFunds:
     def __init__(
-        self, contract: sapio_compiler.core.bindable_contract.BindableContract, b: Amount
+        self,
+        contract: sapio_compiler.core.bindable_contract.BindableContract,
+        b: Amount,
     ) -> None:
         if contract.amount_range[1] > b:
             raise ValueError(

@@ -33,6 +33,7 @@ class BindableContract(Generic[FieldsType]):
     It should not be directly constructed, but indirectly by inheritence
     through Contract.
     """
+
     # These slots will be extended later on
     __slots__ = (
         "amount_range",
@@ -55,6 +56,7 @@ class BindableContract(Generic[FieldsType]):
         """
         Fields should be overriden by base classes
         """
+
         pass
 
     class MetaData:
@@ -62,6 +64,7 @@ class BindableContract(Generic[FieldsType]):
         MetaData may be overriden by base classes. It's only used for pretty
         outputs generation so it's not critical that it be set.
         """
+
         color: Callable[[Any], str] = lambda self: "brown"
         label: Callable[[Any], str] = lambda self: "generic"
 
@@ -109,8 +112,9 @@ class BindableContract(Generic[FieldsType]):
         }
 
     @final
-    def bind(self, out_in: COutPoint) -> Tuple[List[CTransaction],
-                                               List[Dict[str, Any]]]:
+    def bind(
+        self, out_in: COutPoint
+    ) -> Tuple[List[CTransaction], List[Dict[str, Any]]]:
         """
         Attaches a BindableContract to a specific COutPoint and generates all
         the child transactions along with metadata entries
@@ -156,8 +160,8 @@ class BindableContract(Generic[FieldsType]):
                         t = copy.deepcopy(tx)
                         t.wit.vtxinwit[0].scriptWitness.stack = wit.witness + [program]
                         txns.append(t)
-                        utxo_metadata = [md.to_json()
-                            for md in txn_template.outputs_metadata
+                        utxo_metadata = [
+                            md.to_json() for md in txn_template.outputs_metadata
                         ]
                         metadata.append(
                             {

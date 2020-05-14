@@ -39,7 +39,12 @@ from bitcoinlib.static_types import Amount, Hash, Sats
 from sapio_compiler.core.errors import ExtraArgumentError, MissingArgumentError
 
 from .txtemplate import TransactionTemplate
-from sapio_compiler.decorators import PayFunction, CheckFunction, UnlockFunction, PathFunction
+from sapio_compiler.decorators import (
+    PayFunction,
+    CheckFunction,
+    UnlockFunction,
+    PathFunction,
+)
 
 T = TypeVar("T")
 FieldsType = TypeVar("FieldsType")
@@ -51,6 +56,7 @@ class ContractBase(Generic[FieldsType]):
 
     For performance, as much pre-processing as possible is done in __init__ of the ContractBase.
     """
+
     ContractType = TypeVar(
         "ContractType",
         bound="sapio_compiler.core.bindable_contract.BindableContract[FieldsType]",
@@ -71,7 +77,9 @@ class ContractBase(Generic[FieldsType]):
         self.fields_obj = fields
         self.all_fields: Dict[str, Type[Any]] = typing.get_type_hints(self.fields_obj)
         self.path_functions = path_functions
-        self.pay_functions: Optional[PayFunction[ContractBase.ContractType]] = pay_functions[0] if len(pay_functions) else None
+        self.pay_functions: Optional[
+            PayFunction[ContractBase.ContractType]
+        ] = pay_functions[0] if len(pay_functions) else None
         self.unlock_functions = unlock_functions
         self.assertions: List[CheckFunction[ContractBase.ContractType]] = assertions
 
@@ -117,7 +125,6 @@ class ContractBase(Generic[FieldsType]):
             obj.witness_manager = WitnessManager()
             obj.witness_manager.override_program = addr
             return
-
 
         # Get the value from all paths.
         # Paths return a TransactionTemplate object, or list, or iterable.

@@ -53,6 +53,8 @@ FuncTypes = Union[
 
 
 PathReturnType = Union[TransactionTemplate, Iterator[TransactionTemplate]]
+
+
 class PathFunction(Protocol[ContractType]):
     unlock_with: Optional[Callable[[ContractType], Clause]]
     is_guaranteed: bool
@@ -61,12 +63,13 @@ class PathFunction(Protocol[ContractType]):
     @staticmethod
     def __call__(self: ContractType) -> PathReturnType:
         pass
+
     __name__: str
 
 
 class PayFunction(Protocol[ContractType]):
     # this silences issues around the type needing to be contravariant
-    __silence_error : Type[ContractType]
+    __silence_error: Type[ContractType]
     __sapio_func_type__: FuncTypes = "pay_address"
 
     @staticmethod
@@ -76,7 +79,7 @@ class PayFunction(Protocol[ContractType]):
 
 class UnlockFunction(Protocol[ContractType]):
     # this silences issues around the type needing to be contravariant
-    __silence_error : Type[ContractType]
+    __silence_error: Type[ContractType]
     __sapio_func_type__: FuncTypes = "unlock"
 
     @staticmethod
@@ -86,7 +89,7 @@ class UnlockFunction(Protocol[ContractType]):
 
 class CheckFunction(Protocol[ContractType]):
     # this silences issues around the type needing to be contravariant
-    __silence_error : Type[ContractType]
+    __silence_error: Type[ContractType]
     __sapio_func_type__: FuncTypes = "check"
 
     @staticmethod
@@ -136,11 +139,16 @@ def get_type_tag(a: Any) -> Optional[FuncTypes]:
         return None
     else:
         s = getattr(a, FUNC_TYPE_TAG)
-        if s == "require": return "require"
-        if s == "path": return "path"
-        if s == "check": return "check"
-        if s == "unlock": return "unlock"
-        if s == "pay_address": return "pay_address"
+        if s == "require":
+            return "require"
+        if s == "path":
+            return "path"
+        if s == "check":
+            return "check"
+        if s == "unlock":
+            return "unlock"
+        if s == "pay_address":
+            return "pay_address"
         raise ValueError("Unknown type")
 
 
@@ -204,7 +212,9 @@ def unlock(s: Callable[[ContractType], Clause]) -> UnlockFunction[ContractType]:
     return cast_s
 
 
-def pay_address(f: Callable[[ContractType], Tuple[Amount, str]]) -> PayFunction[ContractType]:
+def pay_address(
+    f: Callable[[ContractType], Tuple[Amount, str]]
+) -> PayFunction[ContractType]:
     """
     A PayAddress function is a special type which stubs out
     the contract as being just the amount/address combo returned
@@ -262,7 +272,9 @@ def require(arg: Callable[[ContractType], Clause]) -> RequireFunction[ContractTy
     """
 
     @wraps(arg)
-    def inner(decorated: RequireWrappable[ContractType]) -> RequireWrappable[ContractType]:
+    def inner(
+        decorated: RequireWrappable[ContractType],
+    ) -> RequireWrappable[ContractType]:
         if get_type_tag(decorated) == "unlock":
             uf: UnlockFunction[ContractType] = cast(
                 UnlockFunction[ContractType], decorated
@@ -304,6 +316,7 @@ def require(arg: Callable[[ContractType], Clause]) -> RequireFunction[ContractTy
             raise ValueError(
                 "Applied to wrong type! Maybe you're missing a decorator in the stack..."
             )
+
     # cast it to a RequireFunction to return it
     rf = cast(RequireFunction[ContractType], inner)
     tag(rf, "require")
@@ -311,7 +324,9 @@ def require(arg: Callable[[ContractType], Clause]) -> RequireFunction[ContractTy
     return rf
 
 
-def threshold(n: int, l: List[RequireFunction[ContractType]]) -> RequireFunction[ContractType]:
+def threshold(
+    n: int, l: List[RequireFunction[ContractType]]
+) -> RequireFunction[ContractType]:
     """
     threshold takes combinations of length N of conditions from the provided
     list and allows any such group to satisfy.
