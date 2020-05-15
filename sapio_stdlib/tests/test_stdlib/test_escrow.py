@@ -1,10 +1,28 @@
 from sapio_stdlib.escrow import *
+from sapio_stdlib.p2pk import P2PK
 import unittest
+from bitcoinlib.test_framework import BitcoinTestFramework
+from bitcoinlib.util import assert_equal, wait_until
 
 
 class TestEscrow(unittest.TestCase):
     def test_multisig(self):
-        pass
+        alice = P2PK(key=PubKey(b"a"))
+        bob = P2PK(key=PubKey(b"b"))
+
+        t = TransactionTemplate()
+        t.add_output(Bitcoin(1), alice)
+        t.add_output(Bitcoin(2), bob)
+        t.set_sequence(Weeks(2).time)
+        escrow = TrustlessEscrow(
+            parties=[SignatureCheckClause(alice.key), SignatureCheckClause(bob.key)],
+            default_escrow=t,
+        )
+        assert escrow.txn_abi[escrow.uncooperative_close.__func__][0] is t
+        assert_equal(escrow.conditions_abi[escrow.uncooperative_close.__func__], SatisfiedClause())
+        coop_close = escrow.conditions_abi[escrow.cooperative_close.__func__]
+        assert_equal(coop_close.a.a.assigned_value, alice.key.assigned_value)
+        assert_equal(coop_close.b.a.assigned_value, bob.key.assigned_value)
 
 
 if __name__ == "__main__":

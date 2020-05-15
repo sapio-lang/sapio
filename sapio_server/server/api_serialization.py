@@ -1,26 +1,18 @@
-import json
 import typing
 from typing import Dict, Type, Callable, Any, Union, Tuple, Optional, List
 
-import tornado
-import tornado.websocket
 
 import sapio_zoo.p2pk
-from bitcoinlib import segwit_addr
-from bitcoinlib.messages import COutPoint
 from bitcoinlib.static_types import Amount, Sequence, PubKey
-from sapio_compiler import Contract
-from sapio_zoo.tree_pay import TreePay
-from sapio_zoo.undo_send import UndoSend2
-from bitcoin_script_compiler.clause import (
-    TimeSpec,
+from sapio_compiler import (
+    Contract,
     RelativeTimeSpec,
     AbsoluteTimeSpec,
-    Days,
+    AmountRange
 )
 from bitcoinlib.static_types import int64
 
-from sapio_compiler import BindableContract
+from sapio_compiler import *
 
 placeholder_hint = {
     Amount: 0,
@@ -45,7 +37,9 @@ def convert_contract_object(arg: Tuple[Amount, str], ctx) -> Contract:
     try:
         return ctx.compilation_cache[arg[1]]
     except KeyError:
-        return sapio_zoo.p2pk.PayToSegwitAddress(amount=arg[0], address=arg[1])
+        a = AmountRange()
+        a.update_range(arg[0])
+        return sapio_zoo.p2pk.PayToSegwitAddress(amount=a, address=arg[1])
         # raise AssertionError("No Known Contract by that name")
 
 
@@ -57,9 +51,11 @@ def convert_contract(arg: Tuple[int, str], ctx) -> Tuple[Amount, Contract]:
     try:
         return (Amount(arg[0]), ctx.compilation_cache[arg[1]])
     except KeyError:
+        a = AmountRange()
+        a.update_range(arg[0])
         return (
             Amount(arg[0]),
-            sapio_zoo.p2pk.PayToSegwitAddress(amount=Amount(arg[0]), address=arg[1]),
+            sapio_zoo.p2pk.PayToSegwitAddress(amount=a, address=arg[1]),
         )
 
 
@@ -68,8 +64,10 @@ def convert_p2swa(arg: str, ctx) -> Contract:
     try:
         return ctx.compilation_cache[arg]
     except KeyError:
+        a = AmountRange()
+        a.update_range(10000)
         # default bind to 0
-        return sapio_zoo.p2pk.PayToSegwitAddress(amount=10000, address=arg)
+        return sapio_zoo.p2pk.PayToSegwitAddress(amount=a, address=arg)
 
 
 def convert_sequence(arg: Sequence, ctx) -> Sequence:

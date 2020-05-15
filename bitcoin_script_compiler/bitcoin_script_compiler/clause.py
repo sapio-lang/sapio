@@ -91,6 +91,9 @@ class SatisfiedClause(StringClauseMixin):
     def __and__(self, other: Clause) -> Clause:
         return other
 
+    def __eq__(self, other: Clause) -> bool:
+        return isinstance(other, SatisfiedClause)
+
 
 class UnsatisfiableClause(StringClauseMixin):
     """A Base type clause which is always false. Useful in compiler logic."""

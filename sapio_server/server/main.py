@@ -10,12 +10,13 @@ from bitcoinlib import segwit_addr
 from sapio_zoo.tree_pay import TreePay
 from sapio_zoo.undo_send import UndoSend2
 from sapio_zoo.pricebet import PriceOracle
-from bitcoin_script_compiler.clause import (
+from sapio_compiler import (
     AbsoluteTimeSpec,
     Days,
     RelativeTimeSpec,
     TimeSpec,
     Weeks,
+    AmountRange
 )
 
 from .ws import CompilerWebSocket
@@ -43,12 +44,12 @@ if __name__ == "__main__":
 
     def generate_address():
         return sapio_zoo.p2pk.PayToSegwitAddress(
-            amount=0, address=segwit_addr.encode("bcrt", 0, os.urandom(32))
+            amount=AmountRange.of(0), address=segwit_addr.encode("bcrt", 0, os.urandom(32))
         )
 
     if example_to_make == "tree":
         payments = [
-            (5, sapio_zoo.p2pk.PayToSegwitAddress(amount=0, address=address))
+            (5, sapio_zoo.p2pk.PayToSegwitAddress(amount=AmountRange.of(0), address=address))
             for address in generate_n_address
         ]
         example = TreePay(payments=payments, radix=4)

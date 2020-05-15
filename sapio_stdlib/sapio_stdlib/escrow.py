@@ -109,7 +109,7 @@ class TrustlessEscrow(Contract):
         return self.default_escrow.assigned_value
 
     @unlock
-    def cooperattive_close(self) -> Clause:
+    def cooperative_close(self) -> Clause:
         ret = SatisfiedClause()
         for cl in self.parties.assigned_value:
             ret &= cl

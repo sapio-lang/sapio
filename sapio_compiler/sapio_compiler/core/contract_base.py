@@ -131,8 +131,15 @@ class ContractBase(Generic[FieldsType]):
         # Paths return a TransactionTemplate object, or list, or iterable.
         paths: Clause = UnsatisfiableClause()
         for path_func in self.path_functions:
+            # set up abi documentation
+            txn_abi = []
+            obj.txn_abi[path_func] = txn_abi
+            obj.conditions_abi[path_func] = SatisfiedClause()
+
+            # Run the path function
             Ret = Union[typing.Iterator[TransactionTemplate], TransactionTemplate]
             ret: Ret = path_func(obj)
+            # Coerce to an iterator
             transaction_templates: typing.Iterator[TransactionTemplate]
             if isinstance(ret, TransactionTemplate):
                 # Wrap value for uniform handling below
@@ -141,9 +148,11 @@ class ContractBase(Generic[FieldsType]):
                 transaction_templates = ret
             else:
                 raise ValueError("Invalid Return Type", ret)
+
             unlock_clause: Clause = SatisfiedClause()
             if path_func.unlock_with is not None:
                 unlock_clause = path_func.unlock_with(obj)
+                obj.conditions_abi[path_func] = unlock_clause
             for template in transaction_templates:
                 template.finalize()
                 template.label = path_func.__name__
@@ -164,8 +173,10 @@ class ContractBase(Generic[FieldsType]):
                 else:
                     paths |= unlock_clause
                     obj.suggested_txns.append(template)
+                txn_abi.append(template)
         for unlock_func in self.unlock_functions:
-            paths |= unlock_func(obj)
+            obj.conditions_abi[unlock_func] = unlock_func(obj)
+            paths |= obj.conditions_abi[unlock_func]
 
         if isinstance(paths, UnsatisfiableClause):
             raise AssertionError("Must Have at least one spending condition")

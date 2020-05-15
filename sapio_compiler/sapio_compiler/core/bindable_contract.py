@@ -16,7 +16,7 @@ from typing import (
     final,
     runtime_checkable,
 )
-from bitcoin_script_compiler import AssignedVariable, WitnessManager
+from bitcoin_script_compiler import AssignedVariable, WitnessManager, Clause
 from bitcoinlib.messages import COutPoint, CTransaction, CTxInWitness, CTxWitness
 from bitcoinlib.static_types import Amount
 from sapio_compiler.core.contract_base import ContractBase
@@ -44,6 +44,12 @@ class AmountRange:
         """
         self.min = AmountRange.MAX
         self.max = AmountRange.MIN
+    @staticmethod
+    def of(a: Amount) -> AmountRange:
+        ar = AmountRange()
+        ar.update_range(a)
+        return ar
+
 
     def get_min(self) -> Amount:
         return self.min
@@ -72,6 +78,8 @@ class BindableContract(Generic[FieldsType]):
         "amount_range",
         "guaranteed_txns",
         "suggested_txns",
+        "txn_abi",
+        "conditions_abi",
         "witness_manager",
         "fields",
         "is_initialized",
@@ -80,6 +88,8 @@ class BindableContract(Generic[FieldsType]):
     witness_manager: WitnessManager
     guaranteed_txns: List[TransactionTemplate]
     suggested_txns: List[TransactionTemplate]
+    txn_abi: Dict[Callable, List[TransactionTemplate]]
+    conditions_abi: Dict[Callable, Clause]
     amount_range: AmountRange
     fields: FieldsType
     is_initialized: bool
@@ -119,6 +129,8 @@ class BindableContract(Generic[FieldsType]):
 
     def __init__(self, **kwargs: Any):
         self.is_initialized = False
+        self.txn_abi = {}
+        self.conditions_abi = {}
         self.fields: FieldsType = self.__class__.init_class.make_new_fields()
         self.__class__.init_class(self, kwargs)
         self.is_initialized = True
