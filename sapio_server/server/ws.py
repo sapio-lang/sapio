@@ -11,7 +11,7 @@ from bitcoinlib.static_types import Amount, PubKey, Sequence
 from sapio_compiler import BindableContract, ContractProtocol
 from sapio_compiler import Contract
 
-from .api_serialization import conversion_functions, placeholder_hint
+from .api_serialization import conversion_functions, Context, create_jsonschema
 
 DEBUG = True
 
@@ -33,8 +33,8 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
     menu: Dict[str, Dict[str, str]] = {}
     conv: Dict[str, Dict[str, Callable[[Any], Any]]] = {}
     cached: Optional[str] = None
-    compilation_cache: Dict[str, BindableContract]
     example_message: Any = None
+    context: Context
 
     @classmethod
     def set_example(cls, example: BindableContract):
@@ -59,7 +59,7 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
         self.write_message(cached)
         if self.example_message is not None:
             self.write_message(self.example_message)
-        self.compilation_cache = {}
+        self.context = Context()
 
     """
     Start/End Protocol:
@@ -135,7 +135,7 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
                 contract = self.contracts[create_type].create_instance(**args)
                 addr = contract.witness_manager.get_p2wsh_address()
                 amount = contract.amount_range.max
-                self.compilation_cache[addr] = contract
+                self.context(addr, contract)
                 txns, metadata = contract.bind(base_out)
                 txns.append(base_tx)
                 metadata.append(base_meta)
@@ -175,15 +175,13 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
         assert isinstance(contract, (BindableContract, ContractProtocol))
         assert name not in cls.menu
         hints = typing.get_type_hints(contract.Fields)
-        menu: Dict[str, Any] = {}
+        menu: Dict[str, Any] = create_jsonschema(hints.items())
+        print(name)
+        print(menu)
+        print()
         conv: Dict[str, Callable] = {}
         for key, hint in hints.items():
-            if hint in placeholder_hint:
-                menu[key] = placeholder_hint[hint]
-                conv[key] = conversion_functions[hint]
-            else:
-                print(key, str(hint))
-                assert False
+            conv[key] = conversion_functions[hint]
         cls.menu[name] = menu
         cls.conv[name] = conv
         cls.contracts[name] = contract
