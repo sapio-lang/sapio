@@ -11,10 +11,7 @@ from sapio_zoo.p2pk import PayToSegwitAddress
 def multisig(l, n):
     assert len(l) > n
     assert n > 0
-    l2 = [
-        SignedBy(v)
-        for i, v in enumerate(l)
-    ]
+    l2 = [SignedBy(v) for i, v in enumerate(l)]
     l3 = [
         reduce(lambda a, b: a & b, combo[1:], combo[0]) for combo in combinations(l2, n)
     ]

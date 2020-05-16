@@ -77,9 +77,7 @@ def ChannelClassFactory(stage: T):
         ) -> TransactionTemplate:
             next_tx = TransactionTemplate()
             if state is None:
-                next_tx.add_output(
-                    self.amount, self.initial
-                )
+                next_tx.add_output(self.amount, self.initial)
             else:
                 for (amt, addr) in state:
                     next_tx.add_output(
@@ -163,7 +161,5 @@ class ContestedChannelAfterUpdate(Contract):
         if tx_override is not None:
             return tx_override
         tx = TransactionTemplate()
-        tx.add_output(
-            self.amount, PayToPubKey(key=self.honest, amount=self.amount)
-        )
+        tx.add_output(self.amount, PayToPubKey(key=self.honest, amount=self.amount))
         return tx

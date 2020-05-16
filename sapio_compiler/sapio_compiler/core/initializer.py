@@ -105,7 +105,7 @@ class Initializer(Generic[FieldsType]):
     def make_new_fields(self) -> Any:
         return self.fields_obj()
 
-    def __call__(self, obj: Initializer.ContractType, kwargs: Dict[str, Any], ) -> None:
+    def __call__(self, obj: Initializer.ContractType, kwargs: Dict[str, Any],) -> None:
         self._setup_call(obj, kwargs)
         obj.amount_range = sapio_compiler.core.bindable_contract.AmountRange()
         obj.guaranteed_txns = []

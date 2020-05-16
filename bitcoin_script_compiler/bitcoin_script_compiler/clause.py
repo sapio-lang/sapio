@@ -292,12 +292,7 @@ class Wait(LogicMixin):
 
 
 DNFClause = Union[
-    Satisfied,
-    Unsatisfiable,
-    SignedBy,
-    RevealPreImage,
-    CheckTemplateVerify,
-    Wait,
+    Satisfied, Unsatisfiable, SignedBy, RevealPreImage, CheckTemplateVerify, Wait,
 ]
 """DNF Clauses are basic types of clauses that can't be reduced further."""
 

@@ -73,9 +73,7 @@ def BinaryBetFactory(t1: Type[T1], t2: Type[T2]):
             @guarantee
             def pay_hi(self):
                 tx = TransactionTemplate()
-                tx.add_output(
-                    self.amount, self.hi_outcome
-                )
+                tx.add_output(self.amount, self.hi_outcome)
                 return tx
 
         if t2 is PubKey:
@@ -91,9 +89,7 @@ def BinaryBetFactory(t1: Type[T1], t2: Type[T2]):
             @guarantee
             def pay_lo(self):
                 tx = TransactionTemplate()
-                tx.add_output(
-                    self.amount, self.lo_outcome
-                )
+                tx.add_output(self.amount, self.lo_outcome)
                 return tx
 
     return BinaryBet

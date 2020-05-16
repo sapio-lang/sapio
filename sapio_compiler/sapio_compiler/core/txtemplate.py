@@ -100,7 +100,9 @@ class TransactionTemplate:
             return self.get_standard_template_hash(0)
 
     # TODO: Add safety mechanisms here
-    def set_sequence(self, sequence: Union[Sequence, RelativeTimeSpec], idx: int = 0) -> None:
+    def set_sequence(
+        self, sequence: Union[Sequence, RelativeTimeSpec], idx: int = 0
+    ) -> None:
         """
         sets a sequence for the first input, or another if specified.
         Not bounds checked. Most of the time a txtemplate will have just 1 input.

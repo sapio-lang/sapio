@@ -33,8 +33,7 @@ class AfterClauseSimplification:
     def simplify(
         self, clauses: List[Wait]
     ) -> Union[
-        Unsatisfiable,
-        Tuple[Union[Satisfied, Wait], Union[Satisfied, Wait]],
+        Unsatisfiable, Tuple[Union[Satisfied, Wait], Union[Satisfied, Wait]],
     ]:
         """
         Parameters
@@ -157,8 +156,7 @@ class DNFSimplification:
                 return [Unsatisfiable()]
         if CheckTemplateVerify in clause_by_type:
             ctv_clauses = cast(
-                List[CheckTemplateVerify],
-                clause_by_type.pop(CheckTemplateVerify),
+                List[CheckTemplateVerify], clause_by_type.pop(CheckTemplateVerify),
             )
             if len(ctv_clauses) <= 1:
                 clauses_to_return.extend(list(ctv_clauses))

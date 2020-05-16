@@ -11,10 +11,7 @@ import random
 class TestCompiler(unittest.TestCase):
     def test_clause_to_cnf(self):
         clauses = [
-            [
-                Wait(AbsoluteTimeSpec.at_height(n))
-                for n in range(m * 100, (m + 1) * 100)
-            ]
+            [Wait(AbsoluteTimeSpec.at_height(n)) for n in range(m * 100, (m + 1) * 100)]
             for m in range(100)
         ]
         # shuffle the clauses
@@ -37,8 +34,7 @@ class TestCompiler(unittest.TestCase):
 
     def test_clause_to_cnf_random(self):
         A, B, C, D, E, F, G, H, I, J = [
-            Wait(AbsoluteTimeSpec.at_height(n))
-            for n in range(10)
+            Wait(AbsoluteTimeSpec.at_height(n)) for n in range(10)
         ]
         inputs = ((((A | B) & C) | D | E | F) & G & H | I) | J
         # Checked by Wolfram Alpha...
@@ -53,9 +49,7 @@ class TestCompiler(unittest.TestCase):
             [I],
         ]
         output = ClauseToDNF().compile_cnf(inputs)
-        to_set = lambda s: frozenset(
-            frozenset(y.time.locktime for y in x) for x in s
-        )
+        to_set = lambda s: frozenset(frozenset(y.time.locktime for y in x) for x in s)
         self.assertSetEqual(to_set(output), to_set(expected), "Computes Correctly")
 
 

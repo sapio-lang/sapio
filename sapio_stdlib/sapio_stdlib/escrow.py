@@ -39,9 +39,7 @@ class SignedEscrow(Contract):
         """
         Pathway to be taken if cooperation cannot be reached between alice and bob
         """
-        return (
-                       SignedBy(self.alice) | SignedBy(self.bob)
-        ) & SignedBy(self.escrow)
+        return (SignedBy(self.alice) | SignedBy(self.bob)) & SignedBy(self.escrow)
 
     @unlock
     def cooperatative_close(self):

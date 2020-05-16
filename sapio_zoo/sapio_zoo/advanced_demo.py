@@ -86,8 +86,7 @@ class DemoLayeredConditions(Contract):
         else:
             tx = TransactionTemplate()
             tx.add_output(
-                self.amount,
-                DemoContractClose(amount=self.amount, payments=state),
+                self.amount, DemoContractClose(amount=self.amount, payments=state),
             )
             return tx
 

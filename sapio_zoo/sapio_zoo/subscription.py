@@ -93,7 +93,7 @@ class CancelContest(Contract):
         amount_earned = Amount(int64(0))
         for (timeout, amount) in self.schedule:
             amount_earned += amount
-            amount_refundable = self.amount- amount_earned
+            amount_refundable = self.amount - amount_earned
             tx = TransactionTemplate()
             add_timeout(tx, timeout)
             tx.add_output(amount_earned, self.recipient)

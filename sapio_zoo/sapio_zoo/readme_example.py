@@ -23,9 +23,9 @@ class BasicEscrow(Contract):
 
     @unlock
     def redeem(self):
-        return SignedBy(self.escrow) & (
-                SignedBy(self.alice) | SignedBy(self.bob)
-        ) | (SignedBy(self.alice) & SignedBy(self.bob))
+        return SignedBy(self.escrow) & (SignedBy(self.alice) | SignedBy(self.bob)) | (
+            SignedBy(self.alice) & SignedBy(self.bob)
+        )
 
 
 class BasicEscrow2(Contract):
@@ -36,9 +36,7 @@ class BasicEscrow2(Contract):
 
     @unlock
     def use_escrow(self):
-        return SignedBy(self.escrow) & (
-                SignedBy(self.alice) | SignedBy(self.bob)
-        )
+        return SignedBy(self.escrow) & (SignedBy(self.alice) | SignedBy(self.bob))
 
     @unlock
     def cooperate(self):

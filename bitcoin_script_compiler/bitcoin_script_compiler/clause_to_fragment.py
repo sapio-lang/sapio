@@ -37,9 +37,7 @@ class FragmentCompiler:
         raise NotImplementedError("Cannot Compile Arg", arg)
 
     @_compile.register
-    def _compile_signature(
-        self, arg: SignedBy, witness: WitnessTemplate
-    ) -> CScript:
+    def _compile_signature(self, arg: SignedBy, witness: WitnessTemplate) -> CScript:
         if TYPE_CHECKING:
             assert callable(self._compile)
         witness.add(SignatureVar(arg))

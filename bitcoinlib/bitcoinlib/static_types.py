@@ -1,5 +1,6 @@
-from typing import NewType, Union, TYPE_CHECKING
+from typing import NewType, TYPE_CHECKING
 from numpy import uint32, int64, iinfo
+import bitcoinlib
 
 if TYPE_CHECKING:
     Sequence = NewType("Sequence", int)
@@ -14,6 +15,18 @@ else:
 
 
 PubKey = NewType("PubKey", bytes)
+
+
+class PubKey(bytes):
+    def __new__(self, b):
+        import bitcoinlib.address
+
+        try:
+            return PubKey(bitcoinlib.address.check_key(b))
+        except:
+            raise ValueError("Not a Valid key", b)
+
+
 Hash = NewType("Hash", bytes)
 
 

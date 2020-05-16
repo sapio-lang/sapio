@@ -67,12 +67,7 @@ class FlattenPass:
     @flatten.register(SignedBy)
     def flatten_after(
         self,
-        arg: Union[
-            Wait,
-            CheckTemplateVerify,
-            RevealPreImage,
-            SignedBy,
-        ],
+        arg: Union[Wait, CheckTemplateVerify, RevealPreImage, SignedBy,],
         or_allowed: bool = False,
     ) -> DNF:
         return [[arg]]
@@ -83,12 +78,7 @@ try:
     f = FlattenPass()
     if TYPE_CHECKING:
         assert callable(f.flatten)
-    f.flatten(
-        And(
-            Or(Satisfied(), Satisfied()),
-            Or(Satisfied(), Satisfied()),
-        )
-    )
+    f.flatten(And(Or(Satisfied(), Satisfied()), Or(Satisfied(), Satisfied()),))
     raise AssertionError("this sanity check should fail")
 except ValueError:
     pass

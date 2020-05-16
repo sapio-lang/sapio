@@ -28,9 +28,7 @@ class TreePay(Contract):
     @guarantee
     def expand(self) -> TransactionTemplate:
         tx = TransactionTemplate()
-        segments = list(
-            segment_by_radix(self.payments, self.radix)
-        )
+        segments = list(segment_by_radix(self.payments, self.radix))
         if len(segments) == 1:
             for payment in self.payments:
                 tx.add_output(payment[0], payment[1])
@@ -39,9 +37,7 @@ class TreePay(Contract):
                 amount = functools.reduce(
                     lambda x, y: x + y, [a for (a, _) in segment], Amount(0)
                 )
-                tx.add_output(
-                    amount, TreePay(payments=segment, radix=self.radix)
-                )
+                tx.add_output(amount, TreePay(payments=segment, radix=self.radix))
         return tx
 
 
@@ -57,9 +53,7 @@ class CollapsibleTree(Contract):
     @guarantee
     def expand(self) -> TransactionTemplate:
         tx = TransactionTemplate()
-        segments = list(
-            segment_by_radix(self.payments, self.radix)
-        )
+        segments = list(segment_by_radix(self.payments, self.radix))
         if len(segments) == 1:
             for payment in self.payments:
                 tx.add_output(payment[0], payment[1])
@@ -68,9 +62,7 @@ class CollapsibleTree(Contract):
                 amount = functools.reduce(
                     lambda x, y: x + y, [a for (a, _) in segment], Amount(0)
                 )
-                tx.add_output(
-                    amount, TreePay(payments=segment, radix=self.radix)
-                )
+                tx.add_output(amount, TreePay(payments=segment, radix=self.radix))
         return tx
 
     def get_musig(self) -> PubKey:
