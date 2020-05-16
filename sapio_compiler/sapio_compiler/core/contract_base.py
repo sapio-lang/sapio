@@ -26,7 +26,6 @@ from typing import (
 import sapio_compiler.contract
 import sapio_compiler.core.bindable_contract
 from bitcoin_script_compiler import (
-    AssignedVariable,
     CheckTemplateVerifyClause,
     Clause,
     CTVHash,
@@ -101,10 +100,7 @@ class ContractBase(Generic[FieldsType]):
                     )
         for key in kwargs:
             # todo: type check here?
-            if isinstance(kwargs[key], AssignedVariable):
-                setattr(obj.fields, key, kwargs[key])
-            else:
-                setattr(obj.fields, key, AssignedVariable(kwargs[key], key))
+            setattr(obj.fields, key, kwargs[key])
 
     def make_new_fields(self) -> Any:
         return self.fields_obj()
@@ -165,9 +161,7 @@ class ContractBase(Generic[FieldsType]):
                     # TODO: If we OR all the CTV hashes together
                     # and then and at the top with the unlock clause,
                     # it could help with later code generation sharing the
-                    ctv = CheckTemplateVerifyClause(
-                        AssignedVariable(Hash(ctv_hash), ctv_hash)
-                    )
+                    ctv = CheckTemplateVerifyClause(Hash(ctv_hash))
                     paths |= ctv & unlock_clause
                     obj.guaranteed_txns.append(template)
                 else:

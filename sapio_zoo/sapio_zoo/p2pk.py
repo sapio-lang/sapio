@@ -31,4 +31,4 @@ class PayToSegwitAddress(Contract):
 
     @pay_address
     def _(self):
-        return (self.amount.assigned_value, self.address.assigned_value)
+        return (self.amount, self.address)

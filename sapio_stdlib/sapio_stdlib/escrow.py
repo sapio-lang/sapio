@@ -82,7 +82,7 @@ class TrustlessEscrow(Contract):
     >>> t = TransactionTemplate()
     >>> t.add_output(Bitcoin(1), P2PK(key=alice))
     >>> t.add_output(Bitcoin(2), P2PK(key=bob))
-    >>> t.set_sequence(Days(10).time)
+    >>> t.set_sequence(Days(10))
     >>> TrustlessEscrow(parties=[alice, bob], default_escrow=t)
 
     Recursive Escrow, allows sub-parties to attempt cooperation.
@@ -100,22 +100,18 @@ class TrustlessEscrow(Contract):
     >>> t_abcd.add_output(Bitcoin(7), t_cd)
     >>> TrustlessEscrow(parties=[alice, bob, carol, dave], default_escrow=t_abcd)
     """
+
     class Fields:
         parties: List[Clause]
         default_escrow: TransactionTemplate
 
     @guarantee
     def uncooperative_close(self) -> TransactionTemplate:
-        return self.default_escrow.assigned_value
+        return self.default_escrow
 
     @unlock
     def cooperative_close(self) -> Clause:
         ret = SatisfiedClause()
-        for cl in self.parties.assigned_value:
+        for cl in self.parties:
             ret &= cl
         return ret
-
-
-
-
-

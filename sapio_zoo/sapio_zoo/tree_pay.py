@@ -3,7 +3,6 @@ from typing import List, Tuple
 
 from bitcoin_script_compiler import (
     AfterClause,
-    AssignedVariable,
     SignatureCheckClause,
     Weeks,
 )
@@ -30,10 +29,10 @@ class TreePay(Contract):
     def expand(self) -> TransactionTemplate:
         tx = TransactionTemplate()
         segments = list(
-            segment_by_radix(self.payments.assigned_value, self.radix.assigned_value)
+            segment_by_radix(self.payments, self.radix)
         )
         if len(segments) == 1:
-            for payment in self.payments.assigned_value:
+            for payment in self.payments:
                 tx.add_output(payment[0], payment[1])
         else:
             for segment in segments:
@@ -41,7 +40,7 @@ class TreePay(Contract):
                     lambda x, y: x + y, [a for (a, _) in segment], Amount(0)
                 )
                 tx.add_output(
-                    amount, TreePay(payments=segment, radix=self.radix.assigned_value)
+                    amount, TreePay(payments=segment, radix=self.radix)
                 )
         return tx
 
@@ -59,10 +58,10 @@ class CollapsibleTree(Contract):
     def expand(self) -> TransactionTemplate:
         tx = TransactionTemplate()
         segments = list(
-            segment_by_radix(self.payments.assigned_value, self.radix.assigned_value)
+            segment_by_radix(self.payments, self.radix)
         )
         if len(segments) == 1:
-            for payment in self.payments.assigned_value:
+            for payment in self.payments:
                 tx.add_output(payment[0], payment[1])
         else:
             for segment in segments:
@@ -70,12 +69,12 @@ class CollapsibleTree(Contract):
                     lambda x, y: x + y, [a for (a, _) in segment], Amount(0)
                 )
                 tx.add_output(
-                    amount, TreePay(payments=segment, radix=self.radix.assigned_value)
+                    amount, TreePay(payments=segment, radix=self.radix)
                 )
         return tx
 
-    def get_musig(self) -> AssignedVariable[PubKey]:
-        return AssignedVariable(PubKey(b"0" * 32), "musig")
+    def get_musig(self) -> PubKey:
+        return PubKey(b"0" * 32)
 
     @unlock
     def cooperate_out(self):

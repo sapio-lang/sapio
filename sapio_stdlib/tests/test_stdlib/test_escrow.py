@@ -13,16 +13,19 @@ class TestEscrow(unittest.TestCase):
         t = TransactionTemplate()
         t.add_output(Bitcoin(1), alice)
         t.add_output(Bitcoin(2), bob)
-        t.set_sequence(Weeks(2).time)
+        t.set_sequence(Weeks(2))
         escrow = TrustlessEscrow(
             parties=[SignatureCheckClause(alice.key), SignatureCheckClause(bob.key)],
             default_escrow=t,
         )
         assert escrow.txn_abi[escrow.uncooperative_close.__func__][0] is t
-        assert_equal(escrow.conditions_abi[escrow.uncooperative_close.__func__], SatisfiedClause())
+        assert_equal(
+            escrow.conditions_abi[escrow.uncooperative_close.__func__],
+            SatisfiedClause(),
+        )
         coop_close = escrow.conditions_abi[escrow.cooperative_close.__func__]
-        assert_equal(coop_close.a.a.assigned_value, alice.key.assigned_value)
-        assert_equal(coop_close.b.a.assigned_value, bob.key.assigned_value)
+        assert_equal(coop_close.left.pk, alice.key)
+        assert_equal(coop_close.right.pk, bob.key)
 
 
 if __name__ == "__main__":

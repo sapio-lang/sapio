@@ -27,7 +27,7 @@ class UndoSend(Contract):
     @guarantee
     def undo(self) -> TransactionTemplate:
         tx = TransactionTemplate()
-        tx.add_output(self.amount.assigned_value, self.from_contract.assigned_value)
+        tx.add_output(self.amount, self.from_contract)
         return tx
 
 
@@ -45,12 +45,12 @@ class UndoSend2(Contract):
     @guarantee
     def complete(self) -> TransactionTemplate:
         tx = TransactionTemplate()
-        tx.set_sequence(self.timeout.assigned_value.time)
-        tx.add_output(self.amount.assigned_value, self.to_contract.assigned_value)
+        tx.set_sequence(self.timeout)
+        tx.add_output(self.amount, self.to_contract)
         return tx
 
     @guarantee
     def undo(self) -> TransactionTemplate:
         tx = TransactionTemplate()
-        tx.add_output(self.amount.assigned_value, self.from_contract.assigned_value)
+        tx.add_output(self.amount, self.from_contract)
         return tx

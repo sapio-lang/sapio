@@ -15,10 +15,6 @@ stack.
 The actual logic for these clauses is contained in other files, these are just
 data containers located here. This modular design is a bit easier to work with
 as it helps keep similar logic passes local.
-
-Data arguments should be passed in as AssignedVariables. Eventually this class
-may be refactored out, but for now it fills the role of differentiating passed
-in user data v.s. compiler data.
 """
 
 from __future__ import annotations
@@ -28,8 +24,6 @@ from functools import singledispatchmethod
 from typing import Any, List, Protocol, Union, cast, Literal, TYPE_CHECKING
 
 from bitcoinlib.static_types import Hash, LockTime, PubKey, Sequence, uint32
-
-from .variable import AssignedVariable
 
 
 class ClauseProtocol(Protocol):
@@ -41,14 +35,9 @@ class ClauseProtocol(Protocol):
     def b(self) -> Any:
         pass
 
-    n_args: int
-    symbol: str
-
 
 class StringClauseMixin:
     """Mixin to add str printing"""
-
-    MODE = "+"  # "str"
 
     def __str__(self: ClauseProtocol) -> str:
         if StringClauseMixin.MODE == "+":
@@ -56,13 +45,6 @@ class StringClauseMixin:
                 return f"{self.__class__.__name__}({self.a})"
             elif self.__class__.n_args == 2:
                 return f"{self.a}{self.symbol}{self.b}"
-            else:
-                return f"{self.__class__.__name__}()"
-        else:
-            if self.__class__.n_args == 1:
-                return f"{self.__class__.__name__}({self.a})"
-            elif self.__class__.n_args == 2:
-                return f"{self.__class__.__name__}({self.a}, {self.b})"
             else:
                 return f"{self.__class__.__name__}()"
 
@@ -77,10 +59,9 @@ class LogicMixin:
         return AndClause(cast(Clause, self), other)
 
 
-class SatisfiedClause(StringClauseMixin):
+class SatisfiedClause:
     """A Base type clause which is always true. Useful in compiler logic."""
 
-    n_args = 0
     # When or'd to another clause, the other clause disappears
     # because A + True --> True
     def __or__(self, other: Clause) -> SatisfiedClause:
@@ -94,11 +75,13 @@ class SatisfiedClause(StringClauseMixin):
     def __eq__(self, other: Clause) -> bool:
         return isinstance(other, SatisfiedClause)
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}()"
 
-class UnsatisfiableClause(StringClauseMixin):
+
+class UnsatisfiableClause:
     """A Base type clause which is always false. Useful in compiler logic."""
 
-    n_args = 0
     # When or'd to another clause, this clause disappears
     # because A + False --> A
 
@@ -112,55 +95,61 @@ class UnsatisfiableClause(StringClauseMixin):
     def __and__(self, other: Clause) -> UnsatisfiableClause:
         return self
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}()"
 
-class AndClause(LogicMixin, StringClauseMixin):
+
+class BinaryLogicClause:
+    def __init__(self, a: Clause, b: Clause):
+        self.left = a
+        self.right = b
+
+    def __repr__(self) -> str:
+        return f"({self.left!r} {self.symbol} {self.right!r})"
+
+
+class AndClause(BinaryLogicClause, LogicMixin):
     """Expresses that both the left hand and right hand arguments must be satisfied."""
 
-    n_args = 2
     symbol = "&"
 
-    def __init__(self, a: Clause, b: Clause):
-        self.a = a
-        self.b = b
 
-
-class OrClause(LogicMixin, StringClauseMixin):
+class OrClause(BinaryLogicClause, LogicMixin):
     """Expresses that either the left hand or right hand arguments must be satisfied."""
 
-    n_args = 2
     symbol = "|"
 
-    def __init__(self, a: Clause, b: Clause):
-        self.a: Clause = a
-        self.b: Clause = b
 
-
-class SignatureCheckClause(LogicMixin, StringClauseMixin):
+class SignatureCheckClause(LogicMixin):
     """Requires a signature from the passed in key to be satisfied"""
 
-    n_args = 1
+    def __init__(self, a: PubKey):
+        self.pubkey = a
 
-    def __init__(self, a: AssignedVariable[PubKey]):
-        self.a = a
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.pubkey!r})"
 
 
-class PreImageCheckClause(LogicMixin, StringClauseMixin):
+class PreImageCheckClause(LogicMixin):
     """Requires a preimage of the passed in hash to be revealed to be satisfied"""
 
-    n_args = 1
-    a: AssignedVariable[Hash]
+    preimage: Hash
 
-    def __init__(self, a: AssignedVariable[Hash]):
-        self.a = a
+    def __init__(self, a: Hash):
+        self.image = a
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.preimage!r})"
 
 
-class CheckTemplateVerifyClause(LogicMixin, StringClauseMixin):
+class CheckTemplateVerifyClause(LogicMixin):
     """The transaction must match the passed in StandardTemplateHash exactly for this clause to be satisfied"""
 
-    n_args = 1
+    def __init__(self, a: Hash):
+        self.hash = a
 
-    def __init__(self, a: AssignedVariable[Hash]):
-        self.a = a
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.hash!r})"
 
 
 TimeTypes = Union[Literal["time"], Literal["blocks"]]
@@ -171,14 +160,14 @@ class AbsoluteTimeSpec:
 
     def get_type(self) -> TimeTypes:
         """Return if the AbsoluteTimeSpec is a block or MTP time"""
-        return "blocks" if self.time < self.MIN_DATE else "time"
+        return "blocks" if self.locktime < self.MIN_DATE else "time"
 
     MIN_DATE = 500_000_000
     """The Threshold at which an int should be read as a date"""
 
     def __init__(self, t: LockTime):
         """Create a Spec from a LockTime"""
-        self.time: LockTime = t
+        self.locktime: LockTime = t
 
     @staticmethod
     def from_date(d: datetime) -> AbsoluteTimeSpec:
@@ -198,34 +187,34 @@ class AbsoluteTimeSpec:
     @staticmethod
     def WeeksFromTime(t1: datetime, t2: float) -> AbsoluteTimeSpec:
         """Create an AbsoluteTimeSpec t2 weeks from the given datetime"""
-        base = AbsoluteTimeSpec.from_date(t1).time
+        base = AbsoluteTimeSpec.from_date(t1).locktime
         delta = LockTime(uint32(t2 * 7 * 24 * 60 * 60))
         return AbsoluteTimeSpec(LockTime(base + delta))
 
     @staticmethod
     def DaysFromTime(t1: datetime, t2: float) -> AbsoluteTimeSpec:
         """Create an AbsoluteTimeSpec t2 days from the given datetime"""
-        base = AbsoluteTimeSpec.from_date(t1).time
+        base = AbsoluteTimeSpec.from_date(t1).locktime
         delta = LockTime(uint32(t2 * 24 * 60 * 60))
         return AbsoluteTimeSpec(LockTime(base + delta))
 
     @staticmethod
     def MonthsFromTime(t1: datetime, t2: float) -> AbsoluteTimeSpec:
         """Create an AbsoluteTimeSpec t2 months from the given datetime"""
-        base = AbsoluteTimeSpec.from_date(t1).time
+        base = AbsoluteTimeSpec.from_date(t1).locktime
         delta = LockTime(uint32(t2 * 30 * 24 * 60 * 60))
         return AbsoluteTimeSpec(LockTime(base + delta))
 
     def __repr__(self) -> str:
-        if self.time < AbsoluteTimeSpec.MIN_DATE:
-            return "{}.at_height({})".format(self.__class__.__name__, self.time)
+        if self.locktime < AbsoluteTimeSpec.MIN_DATE:
+            return f"{self.__class__.__name__}.at_height({self.locktime})"
         else:
-            return "{}({})".format(self.__class__.__name__, self.time)
+            return f"{self.__class__.__name__}({self.locktime})"
 
 
 class RelativeTimeSpec:
     def __init__(self, t: Sequence):
-        self.time: Sequence = t
+        self.sequence: Sequence = t
 
     @staticmethod
     def from_seconds(seconds: float) -> RelativeTimeSpec:
@@ -237,8 +226,21 @@ class RelativeTimeSpec:
         l = uint32(1 << 22) | t
         return RelativeTimeSpec(Sequence(uint32(l)))
 
+    @staticmethod
+    def blocks_later(t: int) -> RelativeTimeSpec:
+        if t & 0x00FFFF != t:
+            raise ValueError("Time Span {t} blocks is too large!")
+        return RelativeTimeSpec(Sequence(t))
+
     def get_type(self) -> TimeTypes:
-        return "time" if (self.time & uint32(1 << 22)) else "blocks"
+        return "time" if (self.sequence & uint32(1 << 22)) else "blocks"
+
+    def __repr__(self) -> str:
+        t = self.get_type()
+        if t == "time":
+            return f"{self.__class__.__name__}.from_seconds({self.locktime&0x00FFFF})"
+        elif t == "blocks":
+            return f"{self.__class__.__name__}.blocks_later({self.locktime & 0x00FFFF})"
 
 
 TimeSpec = Union[AbsoluteTimeSpec, RelativeTimeSpec]
@@ -262,36 +264,31 @@ def Days(n: float) -> RelativeTimeSpec:
     return RelativeTimeSpec.from_seconds(seconds)
 
 
-class AfterClause(LogicMixin, StringClauseMixin):
+class AfterClause(LogicMixin):
     """Takes either a RelativeTimeSpec or an AbsoluteTimeSpec and enforces the condition"""
 
-    n_args = 1
-    a: AssignedVariable[TimeSpec]
+    time: TimeSpec
 
     @singledispatchmethod
     def initialize(self, a: Any) -> None:
         raise ValueError("Unsupported Type")
 
     @initialize.register
-    def _with_assigned(self, a: AssignedVariable) -> None:
-        # TODO: Remove when mypy updates...
-        if TYPE_CHECKING:
-            assert callable(self.initialize)
-        self.initialize(a.assigned_value)
-
-    @initialize.register
     def _with_relative(self, a: RelativeTimeSpec) -> None:
-        self.a = AssignedVariable(a, "")
+        self.time = a
 
     @initialize.register
     def _with_absolute(self, a: AbsoluteTimeSpec) -> None:
-        self.a = AssignedVariable(a, "")
+        self.time = a
 
-    def __init__(self, a: Union[AssignedVariable[TimeSpec], TimeSpec]):
+    def __init__(self, a: TimeSpec):
         # TODO: Remove when mypy updates...
         if TYPE_CHECKING:
             assert callable(self.initialize)
         self.initialize(a)
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.time!r})"
 
 
 DNFClause = Union[

@@ -12,7 +12,7 @@ def multisig(l, n):
     assert len(l) > n
     assert n > 0
     l2 = [
-        SignatureCheckClause(AssignedVariable(v, "key_" + str(i)))
+        SignatureCheckClause(v)
         for i, v in enumerate(l)
     ]
     l3 = [
@@ -29,7 +29,7 @@ class RawMultiSig(Contract):
 
     @unlock
     def _(self):
-        return multisig(self.keys.assigned_value, self.thresh.assigned_value)
+        return multisig(self.keys, self.thresh)
 
 
 # Demonstrates multisig with a default path accessible at a lower threshold
@@ -43,15 +43,15 @@ class RawMultiSigWithPath(Contract):
 
     @unlock
     def _(self):
-        return multisig(self.keys.assigned_value, self.thresh_all.assigned_value)
+        return multisig(self.keys, self.thresh_all)
 
     @require
     def lower_threshold(self):
-        return multisig(self.keys.assigned_value, self.thresh_path.assigned_value)
+        return multisig(self.keys, self.thresh_path)
 
     @lower_threshold
     @guarantee
     def redeem(self) -> TransactionTemplate:
         tx = TransactionTemplate()
-        tx.add_output(self.amount.assigned_value, self.path.assigned_value)
+        tx.add_output(self.amount, self.path)
         return tx

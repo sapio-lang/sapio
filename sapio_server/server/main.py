@@ -16,7 +16,7 @@ from sapio_compiler import (
     RelativeTimeSpec,
     TimeSpec,
     Weeks,
-    AmountRange
+    AmountRange,
 )
 
 from .ws import CompilerWebSocket
@@ -44,12 +44,18 @@ if __name__ == "__main__":
 
     def generate_address():
         return sapio_zoo.p2pk.PayToSegwitAddress(
-            amount=AmountRange.of(0), address=segwit_addr.encode("bcrt", 0, os.urandom(32))
+            amount=AmountRange.of(0),
+            address=segwit_addr.encode("bcrt", 0, os.urandom(32)),
         )
 
     if example_to_make == "tree":
         payments = [
-            (5, sapio_zoo.p2pk.PayToSegwitAddress(amount=AmountRange.of(0), address=address))
+            (
+                5,
+                sapio_zoo.p2pk.PayToSegwitAddress(
+                    amount=AmountRange.of(0), address=address
+                ),
+            )
             for address in generate_n_address
         ]
         example = TreePay(payments=payments, radix=4)

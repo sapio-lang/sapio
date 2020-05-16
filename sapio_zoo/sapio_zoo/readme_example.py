@@ -55,9 +55,9 @@ class TrustlessEscrow(Contract):
     @guarantee
     def use_escrow(self) -> TransactionTemplate:
         tx = TransactionTemplate()
-        tx.add_output(*self.alice_escrow.assigned_value)
-        tx.add_output(*self.bob_escrow.assigned_value)
-        tx.set_sequence(Days(10).time)
+        tx.add_output(*self.alice_escrow)
+        tx.add_output(*self.bob_escrow)
+        tx.set_sequence(Days(10))
         return tx
 
     @unlock

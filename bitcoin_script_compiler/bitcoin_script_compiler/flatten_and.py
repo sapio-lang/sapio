@@ -38,8 +38,8 @@ class FlattenPass:
     def flatten_and(self, arg: AndClause, or_allowed: bool = False) -> DNF:
         if TYPE_CHECKING:
             assert callable(self.flatten)
-        l: DNF = self.flatten(arg.a, or_allowed)
-        l2: DNF = self.flatten(arg.b, or_allowed)
+        l: DNF = self.flatten(arg.left, or_allowed)
+        l2: DNF = self.flatten(arg.right, or_allowed)
         assert len(l) == 1
         assert len(l2) == 1
         l[0].extend(l2[0])
@@ -57,8 +57,8 @@ class FlattenPass:
             raise ValueError(
                 """OrClause found at an unexpected location, normalization was not completed before call"""
             )
-        l: DNF = self.flatten(arg.a, or_allowed)
-        l2: DNF = self.flatten(arg.b, or_allowed)
+        l: DNF = self.flatten(arg.left, or_allowed)
+        l2: DNF = self.flatten(arg.right, or_allowed)
         return l + l2
 
     @flatten.register(AfterClause)

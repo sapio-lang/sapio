@@ -20,9 +20,9 @@ class AirDrop(Contract):
         total_amt: Amount = sum([amt for (amt, to) in current_batch])
         tx.add_output(total_amt, TreePay(payments=current_batch, radix=self.radix))
         if isinstance(delay, RelativeTimeSpec):
-            tx.set_sequence(delay.time)
+            tx.set_sequence(delay)
         elif isinstance(delay, AbsoluteTimeSpec):
-            tx.lock_time = delay.time
+            tx.set_lock_time(delay)
         if len(self.batches.value) > 1:
             remaining: Amount = Sats(0)
             for batch in self.batches.value[1:]:

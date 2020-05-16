@@ -4,12 +4,7 @@ from typing import Dict, Type, Callable, Any, Union, Tuple, Optional, List
 
 import sapio_zoo.p2pk
 from bitcoinlib.static_types import Amount, Sequence, PubKey
-from sapio_compiler import (
-    Contract,
-    RelativeTimeSpec,
-    AbsoluteTimeSpec,
-    AmountRange
-)
+from sapio_compiler import Contract, RelativeTimeSpec, AbsoluteTimeSpec, AmountRange
 from bitcoinlib.static_types import int64
 
 from sapio_compiler import *

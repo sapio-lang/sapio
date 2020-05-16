@@ -14,7 +14,6 @@ from typing import (
 )
 
 from bitcoin_script_compiler import (
-    AssignedVariable,
     Clause,
     PreImageCheckClause,
     RelativeTimeSpec,
@@ -50,7 +49,7 @@ def BinaryBetFactory(t1: Type[T1], t2: Type[T2]):
             lo_outcome: T2
 
         class MetaData:
-            label = lambda self: f"BinaryOption[price > ${self.price.assigned_value}]"
+            label = lambda self: f"BinaryOption[price > ${self.price}]"
             color = lambda self: "turquoise"
 
         @require
@@ -75,7 +74,7 @@ def BinaryBetFactory(t1: Type[T1], t2: Type[T2]):
             def pay_hi(self):
                 tx = TransactionTemplate()
                 tx.add_output(
-                    self.amount.assigned_value, self.hi_outcome.assigned_value
+                    self.amount, self.hi_outcome
                 )
                 return tx
 
@@ -93,7 +92,7 @@ def BinaryBetFactory(t1: Type[T1], t2: Type[T2]):
             def pay_lo(self):
                 tx = TransactionTemplate()
                 tx.add_output(
-                    self.amount.assigned_value, self.lo_outcome.assigned_value
+                    self.amount, self.lo_outcome
                 )
                 return tx
 

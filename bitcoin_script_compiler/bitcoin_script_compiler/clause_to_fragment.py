@@ -15,7 +15,6 @@ from .clause import (
 )
 from .opcodes import AllowedOp
 from .unassigned import PreImageVar, SignatureVar
-from .variable import AssignedVariable
 from .witnessmanager import CTVHash, WitnessTemplate
 
 
@@ -44,10 +43,7 @@ class FragmentCompiler:
         if TYPE_CHECKING:
             assert callable(self._compile)
         witness.add(SignatureVar(arg))
-        script: CScript = self._compile(arg.a, witness) + CScript(
-            [AllowedOp.OP_CHECKSIGVERIFY]
-        )
-        return script
+        return CScript([arg.pubkey, AllowedOp.OP_CHECKSIGVERIFY])
 
     @_compile.register
     def _compile_preimage(
@@ -56,44 +52,32 @@ class FragmentCompiler:
         if TYPE_CHECKING:
             assert callable(self._compile)
         witness.add(PreImageVar(arg))
-        script: CScript = CScript([AllowedOp.OP_SHA256]) + self._compile(
-            arg.a, witness
-        ) + CScript([AllowedOp.OP_EQUALVERIFY])
-        return script
+        return CScript([AllowedOp.OP_SHA256, arg.image, AllowedOp.OP_EQUALVERIFY])
 
     @_compile.register
     def _compile_ctv(
         self, arg: CheckTemplateVerifyClause, witness: WitnessTemplate
     ) -> CScript:
-        witness.will_execute_ctv(CTVHash(arg.a.assigned_value))
-        s = CScript(
-            [arg.a.assigned_value, AllowedOp.OP_CHECKTEMPLATEVERIFY, AllowedOp.OP_DROP]
-        )
-        return s
+        witness.will_execute_ctv(CTVHash(arg.hash))
+        return CScript([arg.hash, AllowedOp.OP_CHECKTEMPLATEVERIFY, AllowedOp.OP_DROP])
 
     @_compile.register
     def _compile_after(self, arg: AfterClause, witness: WitnessTemplate) -> CScript:
         # While valid to make this a witness variable, this is likely an error
-        if isinstance(arg.a.assigned_value, AbsoluteTimeSpec):
+        if isinstance(arg.time, AbsoluteTimeSpec):
             return CScript(
                 [
-                    arg.a.assigned_value.time,
+                    arg.time.locktime,
                     AllowedOp.OP_CHECKLOCKTIMEVERIFY,
                     AllowedOp.OP_DROP,
                 ]
             )
-        if isinstance(arg.a.assigned_value, RelativeTimeSpec):
+        if isinstance(arg.time, RelativeTimeSpec):
             return CScript(
                 [
-                    arg.a.assigned_value.time,
+                    arg.time.sequence,
                     AllowedOp.OP_CHECKSEQUENCEVERIFY,
                     AllowedOp.OP_DROP,
                 ]
             )
-        raise ValueError
-
-    @_compile.register
-    def _compile_assigned_var(
-        self, arg: AssignedVariable, witness: WitnessTemplate
-    ) -> CScript:
-        return CScript([arg.assigned_value])
+        raise ValueError(f"Unknown time type {arg.time!r}")

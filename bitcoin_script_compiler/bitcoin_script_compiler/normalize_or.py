@@ -49,37 +49,37 @@ class NormalizationPass:
         if TYPE_CHECKING:
             # TODO: Required for singledispatchmethod to typecheck...
             assert callable(self.normalize)
-        a: Clause = arg.a
-        b: Clause = arg.b
+        left: Clause = arg.left
+        right: Clause = arg.right
         ret: Clause = arg
-        if isinstance(a, OrClause) and isinstance(b, OrClause):
+        if isinstance(left, OrClause) and isinstance(right, OrClause):
             self.took_action = True
-            a0: Clause = self.normalize(a.a)
-            a1: Clause = self.normalize(a.b)
-            b0: Clause = self.normalize(b.a)
-            b1: Clause = self.normalize(b.b)
+            a0: Clause = self.normalize(left.left)
+            a1: Clause = self.normalize(left.right)
+            b0: Clause = self.normalize(right.left)
+            b1: Clause = self.normalize(right.right)
             ret = (a0 & b0) | (a0 & b1) | (a1 & b0) | (a1 & b1)
-        elif isinstance(b, AndClause) and isinstance(a, OrClause):
+        elif isinstance(right, AndClause) and isinstance(left, OrClause):
             self.took_action = True
-            _or, _and = self.normalize(a), self.normalize(b)
-            ret = (_and & _or.a) | (_and & _or.b)
-        elif isinstance(a, AndClause) and isinstance(b, OrClause):
+            _or, _and = self.normalize(left), self.normalize(right)
+            ret = (_and & _or.left) | (_and & _or.right)
+        elif isinstance(right, AndClause) and isinstance(left, OrClause):
             self.took_action = True
-            _or, _and = self.normalize(b), self.normalize(a)
-            ret = (_and & _or.a) | (_and & _or.b)
+            _or, _and = self.normalize(left), self.normalize(right)
+            ret = (_and & _or.left) | (_and & _or.right)
         # Other Clause can be ignored...
-        elif isinstance(a, AndClause):
-            ret = self.normalize(a) & b
-        elif isinstance(a, OrClause):
+        elif isinstance(left, AndClause):
+            ret = self.normalize(left) & right
+        elif isinstance(left, OrClause):
             self.took_action = True
-            a0, a1 = self.normalize(a.a), self.normalize(a.b)
-            ret = (a0 & b) | (a1 & b)
-        elif isinstance(b, AndClause):
-            ret = self.normalize(b) & a
-        elif isinstance(b, OrClause):
+            a0, a1 = self.normalize(left.left), self.normalize(left.right)
+            ret = (a0 & right) | (a1 & right)
+        elif isinstance(right, AndClause):
+            ret = self.normalize(right) & left
+        elif isinstance(right, OrClause):
             self.took_action = True
-            b0, b1 = self.normalize(b.a), self.normalize(b.b)
-            ret = (b0 & a) | (b1 & a)
+            b0, b1 = self.normalize(right.left), self.normalize(right.right)
+            ret = (b0 & left) | (b1 & left)
         return ret
 
     @normalize.register
@@ -87,11 +87,9 @@ class NormalizationPass:
         if TYPE_CHECKING:
             # TODO: Required for singledispatchmethod to typecheck...
             assert callable(self.normalize)
-        a: Clause = arg.a
-        b: Clause = arg.b
         # switching order guarantees that successive passes will
         # have a chance to unwind unsatisfiable clauses
-        ret: Clause = self.normalize(b) | self.normalize(a)
+        ret: Clause = self.normalize(arg.right) | self.normalize(arg.left)
         return ret
 
     @normalize.register(UnsatisfiableClause)

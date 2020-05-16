@@ -15,5 +15,4 @@ from .clause import (
     Weeks,
 )
 from .compiler import ProgramBuilder
-from .variable import AssignedVariable
 from .witnessmanager import CTVHash, WitnessManager

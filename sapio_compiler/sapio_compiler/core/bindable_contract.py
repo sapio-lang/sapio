@@ -16,7 +16,7 @@ from typing import (
     final,
     runtime_checkable,
 )
-from bitcoin_script_compiler import AssignedVariable, WitnessManager, Clause
+from bitcoin_script_compiler import WitnessManager, Clause
 from bitcoinlib.messages import COutPoint, CTransaction, CTxInWitness, CTxWitness
 from bitcoinlib.static_types import Amount
 from sapio_compiler.core.contract_base import ContractBase
@@ -44,12 +44,12 @@ class AmountRange:
         """
         self.min = AmountRange.MAX
         self.max = AmountRange.MIN
+
     @staticmethod
     def of(a: Amount) -> AmountRange:
         ar = AmountRange()
         ar.update_range(a)
         return ar
-
 
     def get_min(self) -> Amount:
         return self.min
@@ -111,7 +111,7 @@ class BindableContract(Generic[FieldsType]):
         color: Callable[[Any], str] = lambda self: "brown"
         label: Callable[[Any], str] = lambda self: "generic"
 
-    def __getattr__(self, attr: str) -> AssignedVariable[Any]:
+    def __getattr__(self, attr: str) -> Any:
         return self.fields.__getattribute__(attr)
 
     def __setattr__(self, attr: str, v: Any) -> None:

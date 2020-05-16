@@ -54,7 +54,7 @@ class DemoLayeredConditions(Contract):
     @guarantee
     def setup_tx(self) -> TransactionTemplate:
         # maybe make some assertions about timing...
-        t: TransactionTemplate = self.setup.assigned_value
+        t: TransactionTemplate = self.setup
         return t
 
     @a_signed
@@ -72,7 +72,7 @@ class DemoLayeredConditions(Contract):
     @guarantee
     def setup_tx2(self) -> TransactionTemplate:
         # maybe make some assertions about timing...
-        t: TransactionTemplate = self.setup.assigned_value
+        t: TransactionTemplate = self.setup
         return t
 
     @threshold(3, [a_signed, b_signed, c_signed])
@@ -82,11 +82,11 @@ class DemoLayeredConditions(Contract):
     ) -> TransactionTemplate:
         if state is None:
             # Default example:
-            return self.setup.assigned_value
+            return self.setup
         else:
             tx = TransactionTemplate()
             tx.add_output(
-                self.amount.assigned_value,
+                self.amount,
                 DemoContractClose(amount=self.amount, payments=state),
             )
             return tx
@@ -105,6 +105,6 @@ class DemoContractClose(Contract):
     @guarantee
     def make_payments(self) -> TransactionTemplate:
         tx = TransactionTemplate()
-        for (amt, to) in self.payments.assigned_value:
+        for (amt, to) in self.payments:
             tx.add_output(amt, PayToSegwitAddress(amount=amt, address=to))
         return tx

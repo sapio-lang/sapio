@@ -12,7 +12,6 @@ from typing import (
 )
 
 from bitcoin_script_compiler import (
-    AssignedVariable,
     Clause,
     PreImageCheckClause,
     RelativeTimeSpec,
@@ -79,14 +78,14 @@ def ChannelClassFactory(stage: T):
             next_tx = TransactionTemplate()
             if state is None:
                 next_tx.add_output(
-                    self.amount.assigned_value, self.initial.assigned_value
+                    self.amount, self.initial
                 )
             else:
                 for (amt, addr) in state:
                     next_tx.add_output(
                         amt, PayToSegwitAddress(amount=amt, address=addr)
                     )
-            next_tx.set_sequence(self.timeout.assigned_value.time)
+            next_tx.set_sequence(self.timeout)
             tx = TransactionTemplate()
 
             contest = ContestedChannelAfterUpdate(
@@ -96,7 +95,7 @@ def ChannelClassFactory(stage: T):
                 honest=self.alice if proposer_id == "alice" else self.bob,
             )
             print(contest.amount_range)
-            tx.add_output(self.amount.assigned_value, contest)
+            tx.add_output(self.amount.contest)
             return tx
 
         @cooperate
@@ -109,7 +108,7 @@ def ChannelClassFactory(stage: T):
         def begin_contest(self) -> TransactionTemplate:
             tx = TransactionTemplate()
             tx.add_output(
-                self.amount.assigned_value,
+                self.amount,
                 ChannelClassFactory(CLOSING)(
                     amount=self.amount,
                     initial=self.initial,
@@ -124,8 +123,8 @@ def ChannelClassFactory(stage: T):
         @guarantee
         def finish_contest(self) -> TransactionTemplate:
             tx = TransactionTemplate()
-            tx.set_sequence(self.timeout.assigned_value.time)
-            tx.add_output(self.amount.assigned_value, self.initial.assigned_value)
+            tx.set_sequence(self.timeout)
+            tx.add_output(self.amount, self.initial)
             return tx
 
     memoize[stage] = Self
@@ -149,7 +148,7 @@ class ContestedChannelAfterUpdate(Contract):
 
     @guarantee
     def close(self) -> TransactionTemplate:
-        t: TransactionTemplate = self.state.assigned_value
+        t: TransactionTemplate = self.state
         return t
 
     @require
@@ -165,6 +164,6 @@ class ContestedChannelAfterUpdate(Contract):
             return tx_override
         tx = TransactionTemplate()
         tx.add_output(
-            self.amount.assigned_value, PayToPubKey(key=self.honest, amount=self.amount)
+            self.amount, PayToPubKey(key=self.honest, amount=self.amount)
         )
         return tx

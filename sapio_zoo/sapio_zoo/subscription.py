@@ -12,9 +12,9 @@ from sapio_zoo.p2pk import PayToSegwitAddress
 
 def add_timeout(tx, delay):
     if isinstance(delay, RelativeTimeSpec):
-        tx.set_sequence(delay.time)
+        tx.set_sequence(delay)
     elif isinstance(delay, AbsoluteTimeSpec):
-        tx.set_locktime(delay.time)
+        tx.set_lock_time(delay)
 
 
 class CancellableSubscription(Contract):
@@ -33,7 +33,7 @@ class CancellableSubscription(Contract):
     @guarantee
     def cancel(self):
         tx = TransactionTemplate()
-        amount = self.amount.assigned_value
+        amount = self.amount
         cc = CancelContest(
             amount=amount,
             recipient=self.recipient,
@@ -48,20 +48,20 @@ class CancellableSubscription(Contract):
     @guarantee
     def claim(self):
         tx = TransactionTemplate()
-        (delay, amount) = self.schedule.assigned_value[0]
+        (delay, amount) = self.schedule[0]
         add_timeout(tx, delay)
 
-        total_amount = self.amount.assigned_value
-        tx.add_output(amount, self.recipient.assigned_value)
+        total_amount = self.amount
+        tx.add_output(amount, self.recipient)
 
-        if len(self.schedule.assigned_value) > 1:
+        if len(self.schedule) > 1:
             new_amount = total_amount - amount
             tx.add_output(
                 new_amount,
                 CancellableSubscription(
                     amount=new_amount,
                     recipient=self.recipient,
-                    schedule=self.schedule.assigned_value[1:],
+                    schedule=self.schedule[1:],
                     watchtower_key=self.watchtower_key,
                     return_timeout=self.return_timeout,
                     return_address=self.return_address,
@@ -91,22 +91,22 @@ class CancelContest(Contract):
     @guarantee
     def counterclaim(self) -> Iterator[TransactionTemplate]:
         amount_earned = Amount(int64(0))
-        for (timeout, amount) in self.schedule.assigned_value:
+        for (timeout, amount) in self.schedule:
             amount_earned += amount
-            amount_refundable = self.amount.assigned_value - amount_earned
+            amount_refundable = self.amount- amount_earned
             tx = TransactionTemplate()
             add_timeout(tx, timeout)
-            tx.add_output(amount_earned, self.recipient.assigned_value)
+            tx.add_output(amount_earned, self.recipient)
             if amount_refundable:
-                tx.add_output(amount_refundable, self.return_address.assigned_value)
+                tx.add_output(amount_refundable, self.return_address)
             yield tx
 
     @guarantee
     def finish_cancel(self):
         tx = TransactionTemplate()
-        tx.set_sequence(self.return_timeout.assigned_value.time)
-        amount = self.amount.assigned_value
-        return_address = self.return_address.assigned_value
+        tx.set_sequence(self.return_timeout)
+        amount = self.amount
+        return_address = self.return_address
         tx.add_output(amount, return_address)
         return tx
 

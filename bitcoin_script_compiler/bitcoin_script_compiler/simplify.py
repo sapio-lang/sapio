@@ -11,7 +11,6 @@ from .clause import (
     SatisfiedClause,
     UnsatisfiableClause,
 )
-from .variable import AssignedVariable
 
 
 class AfterClauseSimplification:
@@ -52,10 +51,10 @@ class AfterClauseSimplification:
         relative: List[RelativeTimeSpec] = []
         absolute: List[AbsoluteTimeSpec] = []
         for cl in clauses:
-            if isinstance(cl.a.assigned_value, RelativeTimeSpec):
-                relative.append(cl.a.assigned_value)
-            elif isinstance(cl.a.assigned_value, AbsoluteTimeSpec):
-                absolute.append(cl.a.assigned_value)
+            if isinstance(cl.time, RelativeTimeSpec):
+                relative.append(cl.time)
+            elif isinstance(cl.time, AbsoluteTimeSpec):
+                absolute.append(cl.time)
             else:
                 raise ValueError("Unkown Type")
 
@@ -83,9 +82,7 @@ class AfterClauseSimplification:
             (_, rel_tl) = max(
                 (rel_tl.time, rel_tl) for rel_tl in relative_blocks + relative_time
             )
-            relative_return: Union[AfterClause, SatisfiedClause] = AfterClause(
-                AssignedVariable(rel_tl, "relative_time_lock")
-            )
+            relative_return: Union[AfterClause, SatisfiedClause] = AfterClause(rel_tl)
         else:
             relative_return = SatisfiedClause()
 
@@ -113,9 +110,7 @@ class AfterClauseSimplification:
             (_, abs_tl) = max(
                 (abs_tl.time, abs_tl) for abs_tl in absolute_blocks + absolute_time
             )
-            absolute_return: Union[AfterClause, SatisfiedClause] = AfterClause(
-                AssignedVariable(abs_tl, "absolute_time_lock")
-            )
+            absolute_return: Union[AfterClause, SatisfiedClause] = AfterClause(abs_tl)
         else:
             absolute_return = SatisfiedClause()
         return (relative_return, absolute_return)
@@ -168,8 +163,8 @@ class DNFSimplification:
             if len(ctv_clauses) <= 1:
                 clauses_to_return.extend(list(ctv_clauses))
             else:
-                first = ctv_clauses[0].a.assigned_value
-                if any(ctv.a.assigned_value != first for ctv in ctv_clauses):
+                first = ctv_clauses[0].hash
+                if any(ctv.hash != first for ctv in ctv_clauses):
                     if self.PRUNE_MODE:
                         log.warning("Pruning Incompatible CheckTemplateVerify")
                         return [UnsatisfiableClause()]

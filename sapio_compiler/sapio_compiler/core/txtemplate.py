@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Union
 
+from bitcoin_script_compiler import RelativeTimeSpec, AbsoluteTimeSpec
 import sapio_compiler.contract
 import sapio_compiler.core.bindable_contract
 from bitcoinlib.messages import COutPoint, CScript, CTransaction, CTxIn, CTxOut
@@ -99,7 +100,7 @@ class TransactionTemplate:
             return self.get_standard_template_hash(0)
 
     # TODO: Add safety mechanisms here
-    def set_sequence(self, sequence: Sequence, idx: int = 0) -> None:
+    def set_sequence(self, sequence: Union[Sequence, RelativeTimeSpec], idx: int = 0) -> None:
         """
         sets a sequence for the first input, or another if specified.
         Not bounds checked. Most of the time a txtemplate will have just 1 input.
@@ -110,9 +111,12 @@ class TransactionTemplate:
             Template must not be finalized if called
         """
         assert not self.is_final
-        self.sequences[idx] = sequence
+        if isinstance(sequence, RelativeTimeSpec):
+            self.sequences[idx] = sequence.sequence
+        else:
+            self.sequences[idx] = sequence
 
-    def set_locktime(self, sequence: LockTime) -> None:
+    def set_lock_time(self, locktime: Union[LockTime, AbsoluteTimeSpec]) -> None:
         """
         sets the locktime for the entire transaction
 
@@ -122,7 +126,10 @@ class TransactionTemplate:
             Template must not be finalized if called
         """
         assert not self.is_final
-        self.lock_time = sequence
+        if isinstance(locktime, AbsoluteTimeSpec):
+            self.lock_time = locktime.locktime
+        else:
+            self.lock_time = locktime
 
     def get_base_transaction(self) -> CTransaction:
         """
