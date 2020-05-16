@@ -6,12 +6,12 @@ from bitcoinlib.script import CScript
 
 from .clause import (
     AbsoluteTimeSpec,
-    AfterClause,
-    CheckTemplateVerifyClause,
+    Wait,
+    CheckTemplateVerify,
     Clause,
-    PreImageCheckClause,
+    RevealPreImage,
     RelativeTimeSpec,
-    SignatureCheckClause,
+    SignedBy,
 )
 from .opcodes import AllowedOp
 from .unassigned import PreImageVar, SignatureVar
@@ -38,7 +38,7 @@ class FragmentCompiler:
 
     @_compile.register
     def _compile_signature(
-        self, arg: SignatureCheckClause, witness: WitnessTemplate
+        self, arg: SignedBy, witness: WitnessTemplate
     ) -> CScript:
         if TYPE_CHECKING:
             assert callable(self._compile)
@@ -47,7 +47,7 @@ class FragmentCompiler:
 
     @_compile.register
     def _compile_preimage(
-        self, arg: PreImageCheckClause, witness: WitnessTemplate
+        self, arg: RevealPreImage, witness: WitnessTemplate
     ) -> CScript:
         if TYPE_CHECKING:
             assert callable(self._compile)
@@ -56,13 +56,13 @@ class FragmentCompiler:
 
     @_compile.register
     def _compile_ctv(
-        self, arg: CheckTemplateVerifyClause, witness: WitnessTemplate
+        self, arg: CheckTemplateVerify, witness: WitnessTemplate
     ) -> CScript:
         witness.will_execute_ctv(CTVHash(arg.hash))
         return CScript([arg.hash, AllowedOp.OP_CHECKTEMPLATEVERIFY, AllowedOp.OP_DROP])
 
     @_compile.register
-    def _compile_after(self, arg: AfterClause, witness: WitnessTemplate) -> CScript:
+    def _compile_after(self, arg: Wait, witness: WitnessTemplate) -> CScript:
         # While valid to make this a witness variable, this is likely an error
         if isinstance(arg.time, AbsoluteTimeSpec):
             return CScript(

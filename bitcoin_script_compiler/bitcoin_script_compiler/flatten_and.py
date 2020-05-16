@@ -3,15 +3,15 @@ from typing import TYPE_CHECKING, List, Union
 
 from .clause import (
     DNF,
-    AfterClause,
-    AndClause,
-    CheckTemplateVerifyClause,
+    Wait,
+    And,
+    CheckTemplateVerify,
     Clause,
     DNFClause,
-    OrClause,
-    PreImageCheckClause,
-    SatisfiedClause,
-    SignatureCheckClause,
+    Or,
+    RevealPreImage,
+    Satisfied,
+    SignedBy,
 )
 
 
@@ -35,7 +35,7 @@ class FlattenPass:
         raise NotImplementedError("Cannot Compile Arg", arg)
 
     @flatten.register
-    def flatten_and(self, arg: AndClause, or_allowed: bool = False) -> DNF:
+    def flatten_and(self, arg: And, or_allowed: bool = False) -> DNF:
         if TYPE_CHECKING:
             assert callable(self.flatten)
         l: DNF = self.flatten(arg.left, or_allowed)
@@ -46,11 +46,11 @@ class FlattenPass:
         return l
 
     @flatten.register
-    def flatten_sat(self, arg: SatisfiedClause, or_allowed: bool = False) -> DNF:
+    def flatten_sat(self, arg: Satisfied, or_allowed: bool = False) -> DNF:
         return [[]]
 
     @flatten.register
-    def flatten_or(self, arg: OrClause, or_allowed: bool = True) -> DNF:
+    def flatten_or(self, arg: Or, or_allowed: bool = True) -> DNF:
         if TYPE_CHECKING:
             assert callable(self.flatten)
         if not or_allowed:
@@ -61,17 +61,17 @@ class FlattenPass:
         l2: DNF = self.flatten(arg.right, or_allowed)
         return l + l2
 
-    @flatten.register(AfterClause)
-    @flatten.register(CheckTemplateVerifyClause)
-    @flatten.register(PreImageCheckClause)
-    @flatten.register(SignatureCheckClause)
+    @flatten.register(Wait)
+    @flatten.register(CheckTemplateVerify)
+    @flatten.register(RevealPreImage)
+    @flatten.register(SignedBy)
     def flatten_after(
         self,
         arg: Union[
-            AfterClause,
-            CheckTemplateVerifyClause,
-            PreImageCheckClause,
-            SignatureCheckClause,
+            Wait,
+            CheckTemplateVerify,
+            RevealPreImage,
+            SignedBy,
         ],
         or_allowed: bool = False,
     ) -> DNF:
@@ -84,9 +84,9 @@ try:
     if TYPE_CHECKING:
         assert callable(f.flatten)
     f.flatten(
-        AndClause(
-            OrClause(SatisfiedClause(), SatisfiedClause()),
-            OrClause(SatisfiedClause(), SatisfiedClause()),
+        And(
+            Or(Satisfied(), Satisfied()),
+            Or(Satisfied(), Satisfied()),
         )
     )
     raise AssertionError("this sanity check should fail")

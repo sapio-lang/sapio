@@ -1,4 +1,4 @@
-from bitcoin_script_compiler import SignatureCheckClause
+from bitcoin_script_compiler import SignedBy
 from bitcoinlib.static_types import Amount, PubKey
 from sapio_compiler import Contract, pay_address, unlock, AmountRange
 
@@ -10,7 +10,7 @@ class PayToPubKey(Contract):
 
     @unlock
     def with_key(self):
-        return SignatureCheckClause(self.key)
+        return SignedBy(self.key)
 
 
 class PayToSegwitAddress(Contract):

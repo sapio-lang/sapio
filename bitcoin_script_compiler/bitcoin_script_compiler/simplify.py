@@ -4,12 +4,12 @@ from typing import List, Tuple, Union, cast
 
 from .clause import (
     AbsoluteTimeSpec,
-    AfterClause,
-    CheckTemplateVerifyClause,
+    Wait,
+    CheckTemplateVerify,
     DNFClause,
     RelativeTimeSpec,
-    SatisfiedClause,
-    UnsatisfiableClause,
+    Satisfied,
+    Unsatisfiable,
 )
 
 
@@ -31,10 +31,10 @@ class AfterClauseSimplification:
     """
 
     def simplify(
-        self, clauses: List[AfterClause]
+        self, clauses: List[Wait]
     ) -> Union[
-        UnsatisfiableClause,
-        Tuple[Union[SatisfiedClause, AfterClause], Union[SatisfiedClause, AfterClause]],
+        Unsatisfiable,
+        Tuple[Union[Satisfied, Wait], Union[Satisfied, Wait]],
     ]:
         """
         Parameters
@@ -75,16 +75,16 @@ class AfterClauseSimplification:
             # Todo: Is this a true error? Or can we simply safely prune this branch...
             if self.PRUNE_MODE:
                 log.warning("Incompatible Relative Time Locks! Pruning Branch")
-                return UnsatisfiableClause()
+                return Unsatisfiable()
             else:
                 raise AssertionError("Incompatible Relative Time Locks in Branch")
         elif relative_blocks or relative_time:
             (_, rel_tl) = max(
                 (rel_tl.time, rel_tl) for rel_tl in relative_blocks + relative_time
             )
-            relative_return: Union[AfterClause, SatisfiedClause] = AfterClause(rel_tl)
+            relative_return: Union[Wait, Satisfied] = Wait(rel_tl)
         else:
-            relative_return = SatisfiedClause()
+            relative_return = Satisfied()
 
         # filter the absolute clauses into blocks and time
         absolute_blocks: List[AbsoluteTimeSpec] = []
@@ -103,16 +103,16 @@ class AfterClauseSimplification:
             # Todo: Is this a true error? Or can we simply safely prune this branch...
             if self.PRUNE_MODE:
                 log.warning("Incompatible Absolute Time Locks! Pruning Branch")
-                return UnsatisfiableClause()
+                return Unsatisfiable()
             else:
                 raise AssertionError("Incompatible Absolute Time Locks in Branch")
         elif absolute_time or absolute_blocks:
             (_, abs_tl) = max(
                 (abs_tl.time, abs_tl) for abs_tl in absolute_blocks + absolute_time
             )
-            absolute_return: Union[AfterClause, SatisfiedClause] = AfterClause(abs_tl)
+            absolute_return: Union[Wait, Satisfied] = Wait(abs_tl)
         else:
-            absolute_return = SatisfiedClause()
+            absolute_return = Satisfied()
         return (relative_return, absolute_return)
 
 
@@ -144,21 +144,21 @@ class DNFSimplification:
         for cl in all_clauses:
             clause_by_type[type(cl)].append(cl)
 
-        if AfterClause in clause_by_type:
-            after_clauses = cast(List[AfterClause], clause_by_type.pop(AfterClause))
+        if Wait in clause_by_type:
+            after_clauses = cast(List[Wait], clause_by_type.pop(Wait))
             val = AfterClauseSimplification().simplify(after_clauses)
             if isinstance(val, tuple):
                 (a, b) = val
-                if not isinstance(a, SatisfiedClause):
+                if not isinstance(a, Satisfied):
                     clauses_to_return.append(a)
-                if not isinstance(b, SatisfiedClause):
+                if not isinstance(b, Satisfied):
                     clauses_to_return.append(b)
             else:
-                return [UnsatisfiableClause()]
-        if CheckTemplateVerifyClause in clause_by_type:
+                return [Unsatisfiable()]
+        if CheckTemplateVerify in clause_by_type:
             ctv_clauses = cast(
-                List[CheckTemplateVerifyClause],
-                clause_by_type.pop(CheckTemplateVerifyClause),
+                List[CheckTemplateVerify],
+                clause_by_type.pop(CheckTemplateVerify),
             )
             if len(ctv_clauses) <= 1:
                 clauses_to_return.extend(list(ctv_clauses))
@@ -167,7 +167,7 @@ class DNFSimplification:
                 if any(ctv.hash != first for ctv in ctv_clauses):
                     if self.PRUNE_MODE:
                         log.warning("Pruning Incompatible CheckTemplateVerify")
-                        return [UnsatisfiableClause()]
+                        return [Unsatisfiable()]
                     else:
                         raise AssertionError("Incompatible CheckTemplateVerify Clause")
                 else:

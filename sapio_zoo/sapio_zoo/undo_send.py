@@ -12,17 +12,17 @@ class UndoSend(Contract):
 
     @require
     def is_matured(self):
-        return AfterClause(self.timeout)
+        return Wait(self.timeout)
 
     @require
     def check_key(self):
-        return SignatureCheckClause(self.to_key)
+        return SignedBy(self.to_key)
 
     @is_matured
     @check_key
     @unlock
     def finish(self):
-        return SatisfiedClause()
+        return Satisfied()
 
     @guarantee
     def undo(self) -> TransactionTemplate:

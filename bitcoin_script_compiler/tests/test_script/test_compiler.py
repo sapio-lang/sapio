@@ -3,7 +3,7 @@ from functools import reduce
 from operator import and_, or_
 
 import bitcoin_script_compiler
-from bitcoin_script_compiler.clause import AfterClause, AbsoluteTimeSpec
+from bitcoin_script_compiler.clause import Wait, AbsoluteTimeSpec
 from bitcoin_script_compiler.compiler import ClauseToDNF
 import random
 
@@ -12,7 +12,7 @@ class TestCompiler(unittest.TestCase):
     def test_clause_to_cnf(self):
         clauses = [
             [
-                AfterClause(AbsoluteTimeSpec.at_height(n))
+                Wait(AbsoluteTimeSpec.at_height(n))
                 for n in range(m * 100, (m + 1) * 100)
             ]
             for m in range(100)
@@ -37,7 +37,7 @@ class TestCompiler(unittest.TestCase):
 
     def test_clause_to_cnf_random(self):
         A, B, C, D, E, F, G, H, I, J = [
-            AfterClause(AbsoluteTimeSpec.at_height(n))
+            Wait(AbsoluteTimeSpec.at_height(n))
             for n in range(10)
         ]
         inputs = ((((A | B) & C) | D | E | F) & G & H | I) | J

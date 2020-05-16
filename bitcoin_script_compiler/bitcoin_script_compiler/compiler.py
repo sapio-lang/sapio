@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, List
 
 from bitcoinlib.script import CScript
 
-from .clause import DNF, Clause, DNFClause, UnsatisfiableClause
+from .clause import DNF, Clause, DNFClause, Unsatisfiable
 from .clause_to_fragment import FragmentCompiler
 from .flatten_and import FlattenPass
 from .normalize_or import NormalizationPass
@@ -82,7 +82,7 @@ class ProgramBuilder:
         witness_manager: WitnessManager = WitnessManager()
         dnf = list(
             filter(
-                lambda x: not any(isinstance(y, UnsatisfiableClause) for y in x),
+                lambda x: not any(isinstance(y, Unsatisfiable) for y in x),
                 (DNFSimplification().simplify(x) for x in dnf),
             )
         )

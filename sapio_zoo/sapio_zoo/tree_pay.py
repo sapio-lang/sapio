@@ -2,8 +2,8 @@ import functools
 from typing import List, Tuple
 
 from bitcoin_script_compiler import (
-    AfterClause,
-    SignatureCheckClause,
+    Wait,
+    SignedBy,
     Weeks,
 )
 from bitcoinlib.static_types import Amount, PubKey
@@ -78,4 +78,4 @@ class CollapsibleTree(Contract):
 
     @unlock
     def cooperate_out(self):
-        return SignatureCheckClause(self.get_musig())
+        return SignedBy(self.get_musig())

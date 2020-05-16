@@ -2,16 +2,16 @@ from bitcoinlib.static_types import *
 
 from .clause import (
     AbsoluteTimeSpec,
-    AfterClause,
-    CheckTemplateVerifyClause,
+    Wait,
+    CheckTemplateVerify,
     Clause,
     Days,
-    PreImageCheckClause,
+    RevealPreImage,
     RelativeTimeSpec,
-    SatisfiedClause,
-    SignatureCheckClause,
+    Satisfied,
+    SignedBy,
     TimeSpec,
-    UnsatisfiableClause,
+    Unsatisfiable,
     Weeks,
 )
 from .compiler import ProgramBuilder

@@ -3,7 +3,7 @@ from typing import Iterator, List, Tuple
 from bitcoin_script_compiler import (
     AbsoluteTimeSpec,
     RelativeTimeSpec,
-    SignatureCheckClause,
+    SignedBy,
 )
 from bitcoinlib.static_types import Amount, PubKey, int64
 from sapio_compiler import Contract, TransactionTemplate, guarantee, require
@@ -85,7 +85,7 @@ class CancelContest(Contract):
 
     @require
     def watchtower_selects_best(self):
-        return SignatureCheckClause(self.watchtower_key)
+        return SignedBy(self.watchtower_key)
 
     @watchtower_selects_best
     @guarantee

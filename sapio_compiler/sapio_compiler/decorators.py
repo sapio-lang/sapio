@@ -27,7 +27,7 @@ from typing import (
 )
 
 import sapio_compiler
-from bitcoin_script_compiler.clause import Clause, SatisfiedClause
+from bitcoin_script_compiler.clause import Clause, Satisfied
 from bitcoinlib.static_types import Amount
 
 from .core.txtemplate import TransactionTemplate
@@ -156,8 +156,8 @@ class AlreadyDecorated(Exception):
     pass
 
 
-def satisfied(x: ContractType) -> SatisfiedClause:
-    return SatisfiedClause()
+def satisfied(x: ContractType) -> Satisfied:
+    return Satisfied()
 
 
 def guarantee(
@@ -268,7 +268,7 @@ def require(arg: Callable[[ContractType], Clause]) -> RequireFunction[ContractTy
     ...     @signed
     ...     @unlock
     ...     def spend(self):
-    ...         return SatisfiedClause()
+    ...         return Satisfied()
     """
 
     @wraps(arg)

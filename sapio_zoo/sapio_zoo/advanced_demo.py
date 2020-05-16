@@ -27,28 +27,28 @@ class DemoLayeredConditions(Contract):
         """
         Checks that a signature was attached from key_a
         """
-        return SignatureCheckClause(self.key_a)
+        return SignedBy(self.key_a)
 
     @require
     def two_weeks(self) -> Clause:
-        return AfterClause(Weeks(2))
+        return Wait(Weeks(2))
 
     @require
     def one_month(self) -> Clause:
-        return AfterClause(Weeks(4))
+        return Wait(Weeks(4))
 
     @require
     def b_signed(self) -> Clause:
-        return SignatureCheckClause(self.key_b)
+        return SignedBy(self.key_b)
 
     @require
     def c_signed(self) -> Clause:
-        return SignatureCheckClause(self.key_c)
+        return SignedBy(self.key_c)
 
     @threshold(3, [a_signed, b_signed, c_signed])
     @unlock
     def all_signed(self) -> Clause:
-        return SatisfiedClause()
+        return Satisfied()
 
     @threshold(2, [a_signed, b_signed, c_signed])
     @guarantee
@@ -61,12 +61,12 @@ class DemoLayeredConditions(Contract):
     @two_weeks
     @unlock
     def time_release(self) -> Clause:
-        return SatisfiedClause()
+        return Satisfied()
 
     @one_month
     @require
     def d_signed_and_one_month(self) -> Clause:
-        return SignatureCheckClause(self.key_d)
+        return SignedBy(self.key_d)
 
     @d_signed_and_one_month
     @guarantee
@@ -99,7 +99,7 @@ class DemoContractClose(Contract):
 
     @require
     def wait(self):
-        return AfterClause(Weeks(2))
+        return Wait(Weeks(2))
 
     @wait
     @guarantee

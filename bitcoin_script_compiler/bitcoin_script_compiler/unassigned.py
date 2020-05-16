@@ -1,4 +1,4 @@
-from .clause import SignatureCheckClause, PreImageCheckClause
+from .clause import SignedBy, RevealPreImage
 
 
 class Variable:
@@ -18,7 +18,7 @@ class SignatureVar(Variable):
     A missing Signature
     """
 
-    def __init__(self, pk: SignatureCheckClause) -> None:
+    def __init__(self, pk: SignedBy) -> None:
         self.pk = pk.pubkey
 
 
@@ -27,5 +27,5 @@ class PreImageVar(Variable):
     A missing PreImage
     """
 
-    def __init__(self, image: PreImageCheckClause) -> None:
+    def __init__(self, image: RevealPreImage) -> None:
         self.image = image.image

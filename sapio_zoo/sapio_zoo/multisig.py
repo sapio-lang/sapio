@@ -12,7 +12,7 @@ def multisig(l, n):
     assert len(l) > n
     assert n > 0
     l2 = [
-        SignatureCheckClause(v)
+        SignedBy(v)
         for i, v in enumerate(l)
     ]
     l3 = [

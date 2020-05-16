@@ -26,12 +26,12 @@ from typing import (
 import sapio_compiler.contract
 import sapio_compiler.core.bindable_contract
 from bitcoin_script_compiler import (
-    CheckTemplateVerifyClause,
+    CheckTemplateVerify,
     Clause,
     CTVHash,
     ProgramBuilder,
-    SatisfiedClause,
-    UnsatisfiableClause,
+    Satisfied,
+    Unsatisfiable,
     WitnessManager,
 )
 from bitcoinlib.static_types import Amount, Hash, Sats
@@ -125,12 +125,12 @@ class ContractBase(Generic[FieldsType]):
 
         # Get the value from all paths.
         # Paths return a TransactionTemplate object, or list, or iterable.
-        paths: Clause = UnsatisfiableClause()
+        paths: Clause = Unsatisfiable()
         for path_func in self.path_functions:
             # set up abi documentation
             txn_abi = []
             obj.txn_abi[path_func] = txn_abi
-            obj.conditions_abi[path_func] = SatisfiedClause()
+            obj.conditions_abi[path_func] = Satisfied()
 
             # Run the path function
             Ret = Union[typing.Iterator[TransactionTemplate], TransactionTemplate]
@@ -145,7 +145,7 @@ class ContractBase(Generic[FieldsType]):
             else:
                 raise ValueError("Invalid Return Type", ret)
 
-            unlock_clause: Clause = SatisfiedClause()
+            unlock_clause: Clause = Satisfied()
             if path_func.unlock_with is not None:
                 unlock_clause = path_func.unlock_with(obj)
                 obj.conditions_abi[path_func] = unlock_clause
@@ -161,7 +161,7 @@ class ContractBase(Generic[FieldsType]):
                     # TODO: If we OR all the CTV hashes together
                     # and then and at the top with the unlock clause,
                     # it could help with later code generation sharing the
-                    ctv = CheckTemplateVerifyClause(Hash(ctv_hash))
+                    ctv = CheckTemplateVerify(Hash(ctv_hash))
                     paths |= ctv & unlock_clause
                     obj.guaranteed_txns.append(template)
                 else:
@@ -172,6 +172,6 @@ class ContractBase(Generic[FieldsType]):
             obj.conditions_abi[unlock_func] = unlock_func(obj)
             paths |= obj.conditions_abi[unlock_func]
 
-        if isinstance(paths, UnsatisfiableClause):
+        if isinstance(paths, Unsatisfiable):
             raise AssertionError("Must Have at least one spending condition")
         obj.witness_manager = ProgramBuilder().compile(paths)

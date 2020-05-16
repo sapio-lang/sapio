@@ -15,13 +15,13 @@ class TestEscrow(unittest.TestCase):
         t.add_output(Bitcoin(2), bob)
         t.set_sequence(Weeks(2))
         escrow = TrustlessEscrow(
-            parties=[SignatureCheckClause(alice.key), SignatureCheckClause(bob.key)],
+            parties=[SignedBy(alice.key), SignedBy(bob.key)],
             default_escrow=t,
         )
         assert escrow.txn_abi[escrow.uncooperative_close.__func__][0] is t
         assert_equal(
             escrow.conditions_abi[escrow.uncooperative_close.__func__],
-            SatisfiedClause(),
+            Satisfied(),
         )
         coop_close = escrow.conditions_abi[escrow.cooperative_close.__func__]
         assert_equal(coop_close.left.pk, alice.key)

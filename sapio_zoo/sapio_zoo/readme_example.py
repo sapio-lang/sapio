@@ -1,6 +1,6 @@
 from typing import Tuple
 
-from bitcoin_script_compiler import Days, SignatureCheckClause
+from bitcoin_script_compiler import Days, SignedBy
 from bitcoinlib.messages import COutPoint
 from bitcoinlib.static_types import Amount, Bitcoin, PubKey, Sats
 from sapio_compiler import Contract, TransactionTemplate, guarantee, unlock
@@ -12,7 +12,7 @@ class PayToPublicKey(Contract):
 
     @unlock
     def with_key(self):
-        return SignatureCheckClause(self.key)
+        return SignedBy(self.key)
 
 
 class BasicEscrow(Contract):
@@ -23,9 +23,9 @@ class BasicEscrow(Contract):
 
     @unlock
     def redeem(self):
-        return SignatureCheckClause(self.escrow) & (
-            SignatureCheckClause(self.alice) | SignatureCheckClause(self.bob)
-        ) | (SignatureCheckClause(self.alice) & SignatureCheckClause(self.bob))
+        return SignedBy(self.escrow) & (
+                SignedBy(self.alice) | SignedBy(self.bob)
+        ) | (SignedBy(self.alice) & SignedBy(self.bob))
 
 
 class BasicEscrow2(Contract):
@@ -36,13 +36,13 @@ class BasicEscrow2(Contract):
 
     @unlock
     def use_escrow(self):
-        return SignatureCheckClause(self.escrow) & (
-            SignatureCheckClause(self.alice) | SignatureCheckClause(self.bob)
+        return SignedBy(self.escrow) & (
+                SignedBy(self.alice) | SignedBy(self.bob)
         )
 
     @unlock
     def cooperate(self):
-        return SignatureCheckClause(self.alice) & SignatureCheckClause(self.bob)
+        return SignedBy(self.alice) & SignedBy(self.bob)
 
 
 class TrustlessEscrow(Contract):
@@ -62,7 +62,7 @@ class TrustlessEscrow(Contract):
 
     @unlock
     def cooperate(self):
-        return SignatureCheckClause(self.alice) & SignatureCheckClause(self.bob)
+        return SignedBy(self.alice) & SignedBy(self.bob)
 
 
 if __name__ == "__main__":

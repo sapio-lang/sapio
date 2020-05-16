@@ -13,10 +13,10 @@ from typing import (
 
 from bitcoin_script_compiler import (
     Clause,
-    PreImageCheckClause,
+    RevealPreImage,
     RelativeTimeSpec,
-    SatisfiedClause,
-    SignatureCheckClause,
+    Satisfied,
+    SignedBy,
 )
 from bitcoinlib.static_types import Amount, Hash, PubKey
 from sapio_compiler import (
@@ -65,7 +65,7 @@ def ChannelClassFactory(stage: T):
 
         @require
         def cooperate(self) -> Clause:
-            return SignatureCheckClause(self.alice) & SignatureCheckClause(self.bob)
+            return SignedBy(self.alice) & SignedBy(self.bob)
 
         @cooperate
         @unlock_but_suggest
@@ -101,7 +101,7 @@ def ChannelClassFactory(stage: T):
         @cooperate
         @unlock
         def coop_close(self) -> Clause:
-            return SatisfiedClause()
+            return Satisfied()
 
         @enable_if(stage is OPENING)
         @guarantee
@@ -153,7 +153,7 @@ class ContestedChannelAfterUpdate(Contract):
 
     @require
     def cheating_caught(self) -> Clause:
-        return PreImageCheckClause(self.revocation) & SignatureCheckClause(self.honest)
+        return RevealPreImage(self.revocation) & SignedBy(self.honest)
 
     @cheating_caught
     @unlock_but_suggest

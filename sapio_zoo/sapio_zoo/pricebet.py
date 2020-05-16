@@ -15,10 +15,10 @@ from typing import (
 
 from bitcoin_script_compiler import (
     Clause,
-    PreImageCheckClause,
+    RevealPreImage,
     RelativeTimeSpec,
-    SatisfiedClause,
-    SignatureCheckClause,
+    Satisfied,
+    SignedBy,
 )
 from bitcoinlib.static_types import Amount, Hash, PubKey
 from sapio_compiler import (
@@ -54,18 +54,18 @@ def BinaryBetFactory(t1: Type[T1], t2: Type[T2]):
 
         @require
         def price_hi(self):
-            return PreImageCheckClause(self.h_price_hi)
+            return RevealPreImage(self.h_price_hi)
 
         @require
         def price_lo(self):
-            return PreImageCheckClause(self.h_price_lo)
+            return RevealPreImage(self.h_price_lo)
 
         if t1 is PubKey:
 
             @price_hi
             @unlock
             def pay_hi(self):
-                return SignatureCheckClause(self.hi_outcome)
+                return SignedBy(self.hi_outcome)
 
         elif t1 is Contract:
 
@@ -83,7 +83,7 @@ def BinaryBetFactory(t1: Type[T1], t2: Type[T2]):
             @price_lo
             @unlock
             def pay_lo(self):
-                return SignatureCheckClause(self.lo_outcome)
+                return SignedBy(self.lo_outcome)
 
         elif t2 is Contract:
 

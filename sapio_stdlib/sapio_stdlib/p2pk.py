@@ -7,4 +7,4 @@ class P2PK(Contract):
 
     @unlock
     def spend(self) -> Clause:
-        return SignatureCheckClause(self.key)
+        return SignedBy(self.key)

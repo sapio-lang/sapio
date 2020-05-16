@@ -13,7 +13,7 @@ class SignedEscrow(Contract):
     --------
     Classic Signature
 
-    >>> SignedEscrow(alice=..., bob=..., escrow=SignatureCheckClause(escrow_key))
+    >>> SignedEscrow(alice=..., bob=..., escrow=SignedBy(escrow_key))
 
     Either party after timeout.
 
@@ -21,7 +21,7 @@ class SignedEscrow(Contract):
 
     Escrow multisig
 
-    >>> SignedEscrow(alice=..., bob=..., escrow=SignatureCheckClause(escrow_key_a) & SignatureCheckClause(escrow_key_b))
+    >>> SignedEscrow(alice=..., bob=..., escrow=SignedBy(escrow_key_a) & SignedBy(escrow_key_b))
 
     Binary Oracle Escrow
 
@@ -40,15 +40,15 @@ class SignedEscrow(Contract):
         Pathway to be taken if cooperation cannot be reached between alice and bob
         """
         return (
-            SignatureCheckClause(self.alice) | SignatureCheckClause(self.bob)
-        ) & SignatureCheckClause(self.escrow)
+                       SignedBy(self.alice) | SignedBy(self.bob)
+        ) & SignedBy(self.escrow)
 
     @unlock
     def cooperatative_close(self):
         """
         Pathway to be taken with cooperation between alice and bob
         """
-        return SignatureCheckClause(self.alice) & SignatureCheckClause(self.bob)
+        return SignedBy(self.alice) & SignedBy(self.bob)
 
     @staticmethod
     def BinaryEscrow(alice: PubKey, bob: PubKey, alice_h: Hash, bob_h: Hash):
@@ -58,8 +58,8 @@ class SignedEscrow(Contract):
         return SignedEscrow(
             alice=alice,
             bob=bob,
-            escrow=(SignatureCheckClause(alice) & PreImageCheckClause(alice_h))
-            | (SignatureCheckClause(bob) & PreImageCheckClause(bob_h)),
+            escrow=(SignedBy(alice) & RevealPreImage(alice_h))
+            | (SignedBy(bob) & RevealPreImage(bob_h)),
         )
 
 
@@ -111,7 +111,7 @@ class TrustlessEscrow(Contract):
 
     @unlock
     def cooperative_close(self) -> Clause:
-        ret = SatisfiedClause()
+        ret = Satisfied()
         for cl in self.parties:
             ret &= cl
         return ret

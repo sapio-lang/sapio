@@ -52,19 +52,19 @@ class StringClauseMixin:
 class LogicMixin:
     """Mixin to add logic syntax to a class"""
 
-    def __or__(self, other: Clause) -> OrClause:
-        return OrClause(cast(Clause, self), other)
+    def __or__(self, other: Clause) -> Or:
+        return Or(cast(Clause, self), other)
 
-    def __and__(self, other: Clause) -> AndClause:
-        return AndClause(cast(Clause, self), other)
+    def __and__(self, other: Clause) -> And:
+        return And(cast(Clause, self), other)
 
 
-class SatisfiedClause:
+class Satisfied:
     """A Base type clause which is always true. Useful in compiler logic."""
 
     # When or'd to another clause, the other clause disappears
     # because A + True --> True
-    def __or__(self, other: Clause) -> SatisfiedClause:
+    def __or__(self, other: Clause) -> Satisfied:
         return self
 
     # When and'd to another clause, this clause disappears
@@ -73,13 +73,13 @@ class SatisfiedClause:
         return other
 
     def __eq__(self, other: Clause) -> bool:
-        return isinstance(other, SatisfiedClause)
+        return isinstance(other, Satisfied)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
 
 
-class UnsatisfiableClause:
+class Unsatisfiable:
     """A Base type clause which is always false. Useful in compiler logic."""
 
     # When or'd to another clause, this clause disappears
@@ -92,7 +92,7 @@ class UnsatisfiableClause:
 
     # When and'd to another clause, the other clause disappears
     # because A*False --> False
-    def __and__(self, other: Clause) -> UnsatisfiableClause:
+    def __and__(self, other: Clause) -> Unsatisfiable:
         return self
 
     def __repr__(self) -> str:
@@ -108,19 +108,19 @@ class BinaryLogicClause:
         return f"({self.left!r} {self.symbol} {self.right!r})"
 
 
-class AndClause(BinaryLogicClause, LogicMixin):
+class And(BinaryLogicClause, LogicMixin):
     """Expresses that both the left hand and right hand arguments must be satisfied."""
 
     symbol = "&"
 
 
-class OrClause(BinaryLogicClause, LogicMixin):
+class Or(BinaryLogicClause, LogicMixin):
     """Expresses that either the left hand or right hand arguments must be satisfied."""
 
     symbol = "|"
 
 
-class SignatureCheckClause(LogicMixin):
+class SignedBy(LogicMixin):
     """Requires a signature from the passed in key to be satisfied"""
 
     def __init__(self, a: PubKey):
@@ -130,7 +130,7 @@ class SignatureCheckClause(LogicMixin):
         return f"{self.__class__.__name__}({self.pubkey!r})"
 
 
-class PreImageCheckClause(LogicMixin):
+class RevealPreImage(LogicMixin):
     """Requires a preimage of the passed in hash to be revealed to be satisfied"""
 
     preimage: Hash
@@ -142,7 +142,7 @@ class PreImageCheckClause(LogicMixin):
         return f"{self.__class__.__name__}({self.preimage!r})"
 
 
-class CheckTemplateVerifyClause(LogicMixin):
+class CheckTemplateVerify(LogicMixin):
     """The transaction must match the passed in StandardTemplateHash exactly for this clause to be satisfied"""
 
     def __init__(self, a: Hash):
@@ -264,7 +264,7 @@ def Days(n: float) -> RelativeTimeSpec:
     return RelativeTimeSpec.from_seconds(seconds)
 
 
-class AfterClause(LogicMixin):
+class Wait(LogicMixin):
     """Takes either a RelativeTimeSpec or an AbsoluteTimeSpec and enforces the condition"""
 
     time: TimeSpec
@@ -292,12 +292,12 @@ class AfterClause(LogicMixin):
 
 
 DNFClause = Union[
-    SatisfiedClause,
-    UnsatisfiableClause,
-    SignatureCheckClause,
-    PreImageCheckClause,
-    CheckTemplateVerifyClause,
-    AfterClause,
+    Satisfied,
+    Unsatisfiable,
+    SignedBy,
+    RevealPreImage,
+    CheckTemplateVerify,
+    Wait,
 ]
 """DNF Clauses are basic types of clauses that can't be reduced further."""
 
@@ -305,5 +305,5 @@ DNF = List[List[DNFClause]]
 """Every element in the base list is AND'd together, every list in the outer
 list is OR'd"""
 
-Clause = Union[OrClause, AndClause, DNFClause]
+Clause = Union[Or, And, DNFClause]
 """Clause includes AndClause and OrClause in addition to DNFClause"""
