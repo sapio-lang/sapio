@@ -5,7 +5,7 @@ import typing
 from typing import Any, Dict, List, Type
 
 from .core.bindable_contract import BindableContract
-from .core.initializer import ContractBase
+from .core.initializer import Initializer
 from .decorators import get_type_tag
 
 
@@ -28,7 +28,7 @@ class MetaContract(type):
         class MetaBase(BindableContract[Any]):
             """MetaBase is the actual class which gets constructed"""
 
-            init_class = ContractBase(
+            init_class = Initializer(
                 nmspc["Fields"], path_funcs, pay_funcs, unlock_funcs, assertions
             )
 

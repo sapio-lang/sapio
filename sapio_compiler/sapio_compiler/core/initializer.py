@@ -49,7 +49,7 @@ T = TypeVar("T")
 FieldsType = TypeVar("FieldsType")
 
 
-class ContractBase(Generic[FieldsType]):
+class Initializer(Generic[FieldsType]):
     """
     ContractBase handles the initialization logic of a a new instance of a contract.
 
@@ -77,10 +77,10 @@ class ContractBase(Generic[FieldsType]):
         self.all_fields: Dict[str, Type[Any]] = typing.get_type_hints(self.fields_obj)
         self.path_functions = path_functions
         self.pay_functions: Optional[
-            PayFunction[ContractBase.ContractType]
+            PayFunction[Initializer.ContractType]
         ] = pay_functions[0] if len(pay_functions) else None
         self.unlock_functions = unlock_functions
-        self.assertions: List[CheckFunction[ContractBase.ContractType]] = assertions
+        self.assertions: List[CheckFunction[Initializer.ContractType]] = assertions
 
     def _setup_call(self, obj: ContractType, kwargs: Dict[str, Any]) -> None:
         if kwargs.keys() != self.all_fields.keys():
@@ -105,7 +105,7 @@ class ContractBase(Generic[FieldsType]):
     def make_new_fields(self) -> Any:
         return self.fields_obj()
 
-    def __call__(self, obj: ContractBase.ContractType, kwargs: Dict[str, Any],) -> None:
+    def __call__(self, obj: Initializer.ContractType, kwargs: Dict[str, Any], ) -> None:
         self._setup_call(obj, kwargs)
         obj.amount_range = sapio_compiler.core.bindable_contract.AmountRange()
         obj.guaranteed_txns = []

@@ -19,7 +19,7 @@ from typing import (
 from bitcoin_script_compiler import WitnessManager, Clause
 from bitcoinlib.messages import COutPoint, CTransaction, CTxInWitness, CTxWitness
 from bitcoinlib.static_types import Amount
-from sapio_compiler.core.initializer import ContractBase
+from sapio_compiler.core.initializer import Initializer
 
 from .txtemplate import TransactionTemplate
 
@@ -93,7 +93,7 @@ class BindableContract(Generic[FieldsType]):
     amount_range: AmountRange
     fields: FieldsType
     is_initialized: bool
-    init_class: ContractBase[FieldsType]
+    init_class: Initializer[FieldsType]
 
     class Fields:
         """
