@@ -1,5 +1,5 @@
 """
-contract_base.py
+initializer.py
 -----------------
 
 Initialization routine for a new contract instance.

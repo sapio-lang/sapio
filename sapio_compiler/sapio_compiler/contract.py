@@ -5,7 +5,7 @@ import typing
 from typing import Any, Dict, List, Type
 
 from .core.bindable_contract import BindableContract
-from .core.contract_base import ContractBase
+from .core.initializer import ContractBase
 from .decorators import get_type_tag
 
 

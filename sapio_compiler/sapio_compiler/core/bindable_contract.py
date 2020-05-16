@@ -19,7 +19,7 @@ from typing import (
 from bitcoin_script_compiler import WitnessManager, Clause
 from bitcoinlib.messages import COutPoint, CTransaction, CTxInWitness, CTxWitness
 from bitcoinlib.static_types import Amount
-from sapio_compiler.core.contract_base import ContractBase
+from sapio_compiler.core.initializer import ContractBase
 
 from .txtemplate import TransactionTemplate
 
