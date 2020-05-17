@@ -1,8 +1,8 @@
 from typing import TypedDict, Union
 
 from jsonschema import Draft7Validator
-from server.context import Context
-from server.network.json import amount
+from sapio_server.context import Context
+from sapio_server.network.json import amount
 from sapio_compiler import BindableContract, AmountRange
 from sapio_zoo.p2pk import PayToSegwitAddress
 

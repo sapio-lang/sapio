@@ -1,7 +1,7 @@
 from typing import TypedDict, Literal
 from typing import Union
 from jsonschema import Draft7Validator
-from server.context import Context
+from sapio_server.context import Context
 from bitcoinlib.static_types import Amount, int64
 
 schema = {

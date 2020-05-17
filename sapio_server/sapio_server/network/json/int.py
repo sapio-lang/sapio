@@ -1,6 +1,6 @@
 from typing import TypedDict
 from jsonschema import Draft7Validator
-from server.context import Context
+from sapio_server.context import Context
 
 schema = {
     "$schema": "http://json-schema.org/draft-07/schema#",

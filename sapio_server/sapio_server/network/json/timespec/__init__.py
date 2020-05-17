@@ -1,8 +1,8 @@
 from typing import Union
 from jsonschema import Draft7Validator
-from server.context import Context
-from server.network.json.timespec import absolute
-from server.network.json.timespec import relative
+from sapio_server.context import Context
+from sapio_server.network.json.timespec import absolute
+from sapio_server.network.json.timespec import relative
 from sapio_compiler import RelativeTimeSpec, AbsoluteTimeSpec
 
 schema = {

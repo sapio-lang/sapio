@@ -19,7 +19,7 @@ from .context import Context
 
 import jsonschema
 
-import server.network.json as schemas
+import sapio_server.network.json as schemas
 
 print(dir(schemas))
 subschemas = {

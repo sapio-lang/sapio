@@ -1,6 +1,6 @@
 from typing import Union
 from jsonschema import Draft7Validator
-from server.context import Context
+from sapio_server.context import Context
 from bitcoin_script_compiler import AbsoluteTimeSpec
 import datetime
 
