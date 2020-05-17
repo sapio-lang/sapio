@@ -1,11 +1,11 @@
 import unittest
 
-from bitcoinlib.static_types import Sats, Bitcoin
+from sapio_bitcoinlib.static_types import Sats, Bitcoin
 from sapio_zoo.p2pk import *
 from sapio_zoo.tree_pay import *
 from sapio_zoo.smarter_vault import *
 from bitcoin_script_compiler.clause import Weeks
-from bitcoinlib.messages import COutPoint
+from sapio_bitcoinlib.messages import COutPoint
 
 import os
 from functools import lru_cache

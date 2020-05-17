@@ -5,8 +5,8 @@ from typing import Any, Dict, List, Tuple, Union
 from bitcoin_script_compiler import RelativeTimeSpec, AbsoluteTimeSpec
 import sapio_compiler.contract
 import sapio_compiler.core.bindable_contract
-from bitcoinlib.messages import COutPoint, CScript, CTransaction, CTxIn, CTxOut
-from bitcoinlib.static_types import Amount, LockTime, Sequence, Version, uint32
+from sapio_bitcoinlib.messages import COutPoint, CScript, CTransaction, CTxIn, CTxOut
+from sapio_bitcoinlib.static_types import Amount, LockTime, Sequence, Version, uint32
 from sapio_compiler.core.analysis.funds import HasEnoughFunds, WithinFee
 import struct
 import hashlib
@@ -175,7 +175,7 @@ class TransactionTemplate:
         """
         computes the standard template hash for a given input index
 
-        is computed equivalently to bitcoinlib.messages version, but is "inlined" to avoid
+        is computed equivalently to sapio_bitcoinlib.messages version, but is "inlined" to avoid
         performance issueS
         """
         ret = hashlib.sha256()

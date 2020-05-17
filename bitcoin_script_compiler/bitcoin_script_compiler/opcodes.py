@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from typing import ClassVar, List, Union
 
-from bitcoinlib.script import *
-from bitcoinlib.static_types import max_uint32
+from sapio_bitcoinlib.script import *
+from sapio_bitcoinlib.static_types import max_uint32
 
 
 class AllowedOp:

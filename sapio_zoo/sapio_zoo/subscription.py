@@ -5,7 +5,7 @@ from bitcoin_script_compiler import (
     RelativeTimeSpec,
     SignedBy,
 )
-from bitcoinlib.static_types import Amount, PubKey, int64
+from sapio_bitcoinlib.static_types import Amount, PubKey, int64
 from sapio_compiler import Contract, TransactionTemplate, guarantee, require
 from sapio_zoo.p2pk import PayToSegwitAddress
 

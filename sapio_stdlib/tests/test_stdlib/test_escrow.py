@@ -1,8 +1,8 @@
 from sapio_stdlib.escrow import *
 from sapio_stdlib.p2pk import P2PK
 import unittest
-from bitcoinlib.test_framework import BitcoinTestFramework
-from bitcoinlib.util import assert_equal, wait_until
+from sapio_bitcoinlib.test_framework import BitcoinTestFramework
+from sapio_bitcoinlib.util import assert_equal, wait_until
 
 
 class TestEscrow(unittest.TestCase):

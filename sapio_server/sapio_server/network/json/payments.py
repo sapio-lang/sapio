@@ -2,7 +2,7 @@ from typing import TypedDict, List, Tuple
 from jsonschema import Draft7Validator
 from sapio_server.context import Context
 from sapio_server.network.json import address
-from bitcoinlib.static_types import Amount
+from sapio_bitcoinlib.static_types import Amount
 from sapio_compiler import BindableContract
 
 schema = {

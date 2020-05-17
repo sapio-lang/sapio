@@ -5,9 +5,9 @@ from typing import Any, Callable, Dict, Optional, Tuple, Type, Union, ClassVar
 import tornado
 import tornado.websocket
 
-from bitcoinlib import segwit_addr
-from bitcoinlib.messages import COutPoint, CTransaction, CTxIn, CTxOut
-from bitcoinlib.static_types import Amount, PubKey, Sequence
+from sapio_bitcoinlib import segwit_addr
+from sapio_bitcoinlib.messages import COutPoint, CTransaction, CTxIn, CTxOut
+from sapio_bitcoinlib.static_types import Amount, PubKey, Sequence
 from sapio_compiler import BindableContract, ContractProtocol
 from sapio_compiler import Contract
 

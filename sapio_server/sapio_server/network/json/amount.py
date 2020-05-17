@@ -2,7 +2,7 @@ from typing import TypedDict, Literal
 from typing import Union
 from jsonschema import Draft7Validator
 from sapio_server.context import Context
-from bitcoinlib.static_types import Amount, int64
+from sapio_bitcoinlib.static_types import Amount, int64
 
 schema = {
     "$schema": "http://json-schema.org/draft-07/schema#",

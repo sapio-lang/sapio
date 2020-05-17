@@ -34,7 +34,7 @@ from bitcoin_script_compiler import (
     Unsatisfiable,
     WitnessManager,
 )
-from bitcoinlib.static_types import Amount, Hash, Sats
+from sapio_bitcoinlib.static_types import Amount, Hash, Sats
 from sapio_compiler.core.errors import ExtraArgumentError, MissingArgumentError
 
 from .txtemplate import TransactionTemplate

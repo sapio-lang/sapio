@@ -1,7 +1,7 @@
 from typing import Callable
 
 from bitcoin_script_compiler import TimeSpec
-from bitcoinlib.static_types import Amount
+from sapio_bitcoinlib.static_types import Amount
 from sapio_compiler import Contract, TransactionTemplate, guarantee
 from sapio_zoo.undo_send import UndoSend, UndoSend2
 

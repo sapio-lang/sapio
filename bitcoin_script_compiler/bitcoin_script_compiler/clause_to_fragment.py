@@ -1,8 +1,8 @@
 from functools import singledispatchmethod
 from typing import TYPE_CHECKING, Any, ClassVar, Union
 
-from bitcoinlib.hash_functions import sha256
-from bitcoinlib.script import CScript
+from sapio_bitcoinlib.hash_functions import sha256
+from sapio_bitcoinlib.script import CScript
 
 from .clause import (
     AbsoluteTimeSpec,

@@ -2,8 +2,8 @@ from typing import Dict, Type, Callable, Any, Union, Tuple, Optional, List, Type
 
 
 from sapio_zoo.p2pk import PayToSegwitAddress
-from bitcoinlib.static_types import Amount, Sequence, PubKey
-from bitcoinlib.static_types import int64
+from sapio_bitcoinlib.static_types import Amount, Sequence, PubKey
+from sapio_bitcoinlib.static_types import int64
 
 from sapio_compiler import (
     Contract,

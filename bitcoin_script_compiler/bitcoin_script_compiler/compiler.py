@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, List
 
-from bitcoinlib.script import CScript
+from sapio_bitcoinlib.script import CScript
 
 from .clause import DNF, Clause, DNFClause, Unsatisfiable
 from .clause_to_fragment import FragmentCompiler

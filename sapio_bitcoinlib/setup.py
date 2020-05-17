@@ -8,7 +8,7 @@ with open("LICENSE") as f:
     license = f.read()
 
 setup(
-    name="bitcoinlib",
+    name="sapio_bitcoinlib",
     version="0.1.0",
     description="Bitcoin Transaction Programming Language",
     long_description=readme,

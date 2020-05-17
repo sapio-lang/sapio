@@ -1,5 +1,5 @@
 from bitcoin_script_compiler import SignedBy
-from bitcoinlib.static_types import Amount, PubKey
+from sapio_bitcoinlib.static_types import Amount, PubKey
 from sapio_compiler import Contract, pay_address, unlock, AmountRange
 
 

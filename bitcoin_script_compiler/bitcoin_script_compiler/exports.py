@@ -1,4 +1,4 @@
-from bitcoinlib.static_types import *
+from sapio_bitcoinlib.static_types import *
 
 from .clause import (
     AbsoluteTimeSpec,

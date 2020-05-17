@@ -23,7 +23,7 @@ from datetime import datetime
 from functools import singledispatchmethod
 from typing import Any, List, Protocol, Union, cast, Literal, TYPE_CHECKING
 
-from bitcoinlib.static_types import Hash, LockTime, PubKey, Sequence, uint32
+from sapio_bitcoinlib.static_types import Hash, LockTime, PubKey, Sequence, uint32
 
 
 class ClauseProtocol(Protocol):

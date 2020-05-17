@@ -17,8 +17,8 @@ from typing import (
     runtime_checkable,
 )
 from bitcoin_script_compiler import WitnessManager, Clause
-from bitcoinlib.messages import COutPoint, CTransaction, CTxInWitness, CTxWitness
-from bitcoinlib.static_types import Amount
+from sapio_bitcoinlib.messages import COutPoint, CTransaction, CTxInWitness, CTxWitness
+from sapio_bitcoinlib.static_types import Amount
 from sapio_compiler.core.initializer import Initializer
 
 from .txtemplate import TransactionTemplate

@@ -28,7 +28,7 @@ from typing import (
 
 import sapio_compiler
 from bitcoin_script_compiler.clause import Clause, Satisfied
-from bitcoinlib.static_types import Amount
+from sapio_bitcoinlib.static_types import Amount
 
 from .core.txtemplate import TransactionTemplate
 

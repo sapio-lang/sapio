@@ -1,6 +1,6 @@
 # Re-Export these names for end users
 from bitcoin_script_compiler import *
-from bitcoinlib.static_types import *
+from sapio_bitcoinlib.static_types import *
 
 from .contract import Contract
 from .core.bindable_contract import BindableContract, ContractProtocol, AmountRange

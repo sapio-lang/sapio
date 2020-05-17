@@ -1,10 +1,10 @@
 from functools import singledispatchmethod
 from typing import Any, ClassVar, Dict, List, NewType, Optional, Union, TYPE_CHECKING
 
-from bitcoinlib import segwit_addr
-from bitcoinlib.address import script_to_p2wsh
-from bitcoinlib.hash_functions import sha256
-from bitcoinlib.script import CScript
+from sapio_bitcoinlib import segwit_addr
+from sapio_bitcoinlib.address import script_to_p2wsh
+from sapio_bitcoinlib.hash_functions import sha256
+from sapio_bitcoinlib.script import CScript
 
 from .opcodes import AllowedOp
 from .unassigned import PreImageVar, SignatureVar, Variable

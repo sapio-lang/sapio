@@ -6,7 +6,7 @@ import sapio_zoo
 import sapio_zoo.channel
 import sapio_zoo.p2pk
 import sapio_zoo.subscription
-from bitcoinlib import segwit_addr
+from sapio_bitcoinlib import segwit_addr
 from sapio_zoo.tree_pay import TreePay
 from sapio_zoo.undo_send import UndoSend2
 from sapio_zoo.pricebet import PriceOracle
@@ -20,7 +20,7 @@ from sapio_compiler import (
 )
 
 from .ws import CompilerWebSocket
-from bitcoinlib.static_types import Bitcoin, PubKey, Amount
+from sapio_bitcoinlib.static_types import Bitcoin, PubKey, Amount
 from sapio_zoo.p2pk import PayToPubKey
 from sapio_zoo.smarter_vault import SmarterVault
 

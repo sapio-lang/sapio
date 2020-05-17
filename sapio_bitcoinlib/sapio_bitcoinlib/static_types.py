@@ -1,6 +1,6 @@
 from typing import NewType, TYPE_CHECKING
 from numpy import uint32, int64, iinfo
-import bitcoinlib
+import sapio_bitcoinlib
 
 if TYPE_CHECKING:
     Sequence = NewType("Sequence", int)
@@ -17,9 +17,9 @@ else:
 
 class PubKey(bytes):
     def __new__(self, b):
-        import bitcoinlib.address
+        import sapio_bitcoinlib.address
         try:
-            return super().__new__(bitcoinlib.address.check_key(b))
+            return super().__new__(sapio_bitcoinlib.address.check_key(b))
         except:
             raise ValueError("Not a Valid key", b)
 

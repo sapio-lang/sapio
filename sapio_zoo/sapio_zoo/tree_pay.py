@@ -6,7 +6,7 @@ from bitcoin_script_compiler import (
     SignedBy,
     Weeks,
 )
-from bitcoinlib.static_types import Amount, PubKey
+from sapio_bitcoinlib.static_types import Amount, PubKey
 from sapio_compiler import Contract, TransactionTemplate, guarantee, unlock
 
 

@@ -20,7 +20,7 @@ from bitcoin_script_compiler import (
     Satisfied,
     SignedBy,
 )
-from bitcoinlib.static_types import Amount, Hash, PubKey
+from sapio_bitcoinlib.static_types import Amount, Hash, PubKey
 from sapio_compiler import (
     BindableContract,
     Contract,
