@@ -1,6 +1,6 @@
 import json
 import typing
-from typing import Any, Callable, Dict, Optional, Tuple, Type, Union
+from typing import Any, Callable, Dict, Optional, Tuple, Type, Union, ClassVar
 
 import tornado
 import tornado.websocket
@@ -12,6 +12,7 @@ from sapio_compiler import BindableContract, ContractProtocol
 from sapio_compiler import Contract
 
 from .api_serialization import conversion_functions, Context, create_jsonschema
+import jsonschema
 
 DEBUG = True
 
@@ -30,8 +31,14 @@ base_meta = {
 
 class CompilerWebSocket(tornado.websocket.WebSocketHandler):
     contracts: Dict[str, Union[BindableContract, ContractProtocol]] = {}
-    menu: Dict[str, Dict[str, str]] = {}
-    conv: Dict[str, Dict[str, Callable[[Any], Any]]] = {}
+    menu_items: ClassVar = []
+    menu_items_map: ClassVar = {}
+    menu: ClassVar = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "oneOf": menu_items,
+    }
+    deserialize_args: Dict[str, Dict[str, Type]] = {}
     cached: Optional[str] = None
     example_message: Any = None
     context: Context
@@ -48,14 +55,13 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
             for (tx, meta) in zip(txns, metadata)
         ]
         cls.example_message = {
-            "type": "created",
+            "action": "created",
             "content": [int(amount), addr, {"program": data}],
         }
 
     def open(self):
         if self.cached is None:
-            print(self.menu)
-            cached = json.dumps({"type": "menu", "content": self.menu})
+            cached = json.dumps({"action": "menu", "content": self.menu})
         self.write_message(cached)
         if self.example_message is not None:
             self.write_message(self.example_message)
@@ -64,106 +70,122 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
     """
     Start/End Protocol:
     # Server enumerates available Contract Blocks and their arguments
-        Server: {type: "menu", content: {contract_name : {arg_name: data type, ...}, ...}}
-        Server: {type: "session_id", content: [bool, String]}
+        Server: {action: "menu", content: {contract_name : {arg_name: data type, ...}, ...}}
+        Server: {action: "session_id", content: [bool, String]}
         ...
-        Client: {type: "close"}
+        Client: {action: "close"}
 
     Create Contract:
     # Attempt to create a Contract
     # Contract may access a compilation cache of both saved and not saved Contracts
-        Client: {type: "create", content: {type: contract_name, {arg_name:data, ...}...}}
-        Server: {type: "created", content: [Amount, Address]}
+        Client: {action: "create", content: {type: contract_name, {arg_name:data, ...}...}}
+        Server: {action: "created", content: [Amount, Address]}
 
     Save Contract:
     # Attempt to save Contract to durable storage for this session
     # If session id was [false, _] should not return true (but may!)
-        Client: {type: "save", content: Address}
-        Server: {type: "saved", content: Bool}
+        Client: {action: "save", content: Address}
+        Server: {action: "saved", content: Bool}
 
     Export Session:
     # Provide a JSON of all saved data for this session
-        Client: {type: "export"}
-        Server: {type: "exported", content: ...}
+        Client: {action: "export"}
+        Server: {action: "exported", content: ...}
 
     Export Authenticated:
     # Provide a signed Pickle object which can be re-loaded
     # directly if the signature checks
-        Client: {type: "export_auth"}
-        Server: {type: "exported_auth", content: ...}
+        Client: {action: "export_auth"}
+        Server: {action: "exported_auth", content: ...}
 
     Load Authenticated:
     # Provide a signed Pickle object which can be re-loaded
     # directly if the signature checks to the current session
-        Client: {type: "load_auth", content:...}
-        Server: {type: "loaded_auth", content: bool}
+        Client: {action: "load_auth", content:...}
+        Server: {action: "loaded_auth", content: bool}
 
     Bind Contract:
     # Attach a Contract to a particular UTXO
     # Return all Transactions
-        Client: {type: "bind", content: [COutPoint, Address]}
-        Server: {type: "bound", content: [Transactions]}
-
-
-
+        Client: {action: "bind", content: [COutPoint, Address]}
+        Server: {action: "bound", content: [Transactions]}
     """
+    PROTOCOL_SCHEMA = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "oneOf": [
+            {
+                "type": "object",
+                "properties": {
+                    "action": {"const": "create"},
+                    "content": {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string"},
+                            "args": {"type": "object",},
+                        },
+                        "required": ["type", "args"],
+                    },
+                },
+                "required": ["content"],
+            }
+        ],
+        "required": ["action"],
+    }
 
-    def on_message(self, message):
-        print()
-        print("#####################")
-        print("New Message:")
-        print(message)
-        request = json.loads(message)
-        print(request)
-        request_type = request["type"]
-        if request_type == "create":
-            create_req = request["content"]
-            create_type = create_req["type"]
-            if create_type in self.menu:
-                args = create_req["args"]
-                args_t = self.menu[create_type]
-                conv_args = self.conv[create_type]
-                if args.keys() != args_t.keys():
-                    if not DEBUG:
-                        self.close()
-                    else:
-                        print("Mismatch", args, args_t)
-                for (name, value) in args.items():
-                    typ = args_t[name]
-                    args[name] = conv_args[name](value, self)
-                print("ARGS", args)
-                contract = self.contracts[create_type].create_instance(**args)
-                addr = contract.witness_manager.get_p2wsh_address()
-                amount = contract.amount_range.max
-                self.context(addr, contract)
-                txns, metadata = contract.bind(base_out)
-                txns.append(base_tx)
-                metadata.append(base_meta)
-                data = [
-                    {"hex": tx.serialize_with_witness().hex(), **meta}
-                    for (tx, meta) in zip(txns, metadata)
-                ]
-                self.write_message(
-                    {
-                        "type": "created",
-                        "content": [int(amount), addr, {"program": data}],
-                    }
-                )
-        elif request_type == "bind":
+    def on_message(self, raw_message):
+        toplevel_request = json.loads(raw_message)
+        # TODO: Cache!
+        jsonschema.Draft7Validator(CompilerWebSocket.PROTOCOL_SCHEMA).validate(
+            toplevel_request
+        )
+
+        action = toplevel_request["action"]
+        if action == "create":
+            request = toplevel_request["content"]
+            contract_type = request["type"]
+            args = request["args"]
+            self.menu_items_map[contract_type].validate(args)
+            deserialize_args = self.deserialize_args[contract_type]
+            contract = self.contracts[contract_type].create_instance(
+                **{
+                    name: conversion_functions[deserialize_args[name]](
+                        value, self.context
+                    )
+                    for (name, value) in args.items()
+                }
+            )
+            addr = contract.witness_manager.get_p2wsh_address()
+            amount = contract.amount_range.max
+            self.context.cache(addr, contract)
+            txns, metadata = contract.bind(base_out)
+            txns.append(base_tx)
+            metadata.append(base_meta)
+            data = [
+                {"hex": tx.serialize_with_witness().hex(), **meta}
+                for (tx, meta) in zip(txns, metadata)
+            ]
+            self.write_message(
+                {
+                    "action": "created",
+                    "content": [int(amount), addr, {"program": data}],
+                }
+            )
+        elif action == "bind":
             raise NotImplementedError("Pending!")
-        elif request_type == "load_auth":
+        elif action == "load_auth":
             raise NotImplementedError("Pending!")
-        elif request_type == "export_auth":
+        elif action == "export_auth":
             raise NotImplementedError("Pending!")
-        elif request_type == "export":
+        elif action == "export":
             raise NotImplementedError("Pending!")
-        elif request_type == "save":
+        elif action == "save":
             raise NotImplementedError("Pending!")
-        elif request_type == "close":
+        elif action == "close":
             self.close()
         else:
             if DEBUG:
-                print("No Type", request_type)
+                print("No Type", action)
             else:
                 self.close()
 
@@ -175,15 +197,10 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
         assert isinstance(contract, (BindableContract, ContractProtocol))
         assert name not in cls.menu
         hints = typing.get_type_hints(contract.Fields)
-        menu: Dict[str, Any] = create_jsonschema(hints.items())
-        print(name)
-        print(menu)
-        print()
-        conv: Dict[str, Callable] = {}
-        for key, hint in hints.items():
-            conv[key] = conversion_functions[hint]
-        cls.menu[name] = menu
-        cls.conv[name] = conv
+        menu: Dict[str, Any] = create_jsonschema(name, hints.items())
+        cls.menu_items.append(menu)
+        cls.menu_items_map[name] = jsonschema.Draft7Validator(menu)
+        cls.deserialize_args[name] = hints
         cls.contracts[name] = contract
         cls.cached = None
 

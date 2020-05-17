@@ -36,11 +36,10 @@ subschemas = {
 }
 
 
-def create_jsonschema(hints: Dict[str, Type]):
+def create_jsonschema(name: str, hints: Dict[str, Type]):
     return {
-        "$schema": "http://json-schema.org/draft-07/schema#",
-        "type": "object",
-        "properties": {s: dict(**subschemas[t], **{"title": s}) for (s, t) in hints},
+        "title": name,
+        "properties": dict(**{s: subschemas[t] for (s, t) in hints}),
         "required": [s for (s, _) in hints],
     }
 

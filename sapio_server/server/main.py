@@ -30,9 +30,9 @@ def make_app():
 
 
 example_to_make = "Price Contract"
-example_to_make = "tree"
-example_to_make = "vault"
 example_to_make = "payroll"
+example_to_make = "vault"
+example_to_make = "tree"
 if __name__ == "__main__":
     CompilerWebSocket.add_contract("Channel", sapio_zoo.channel.BasicChannel)
     CompilerWebSocket.add_contract("Pay to Public Key", sapio_zoo.p2pk.PayToPubKey)

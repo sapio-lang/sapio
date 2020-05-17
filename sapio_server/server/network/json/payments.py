@@ -7,23 +7,15 @@ from sapio_compiler import BindableContract
 
 schema = {
     "$schema": "http://json-schema.org/draft-07/schema#",
-    "type": "object",
-    "properties": {
-        "payments": {
-            "type": "array",
-            "items": {"type": "object", "properties": {"payment": address.schema}},
-        }
-    },
-    "required": ["payments"],
-    "maxProperties": 1,
+    "type": "array",
+    "items": address.schema,
 }
 validator = Draft7Validator(schema)
 
 
-class PayDict(TypedDict):
-    payments: List[address.AddrDict]
+PayDict = List[address.AddrDict]
 
 
 def convert(arg: PayDict, ctx: Context) -> List[Tuple[Amount, BindableContract]]:
     validator.validate(arg)
-    return list(map(lambda p: address.convert(p["payment"], ctx), arg["payments"]))
+    return list(map(lambda p: address.convert(p, ctx), arg))
