@@ -14,15 +14,12 @@ else:
     Amount = NewType("Amount", int64)
 
 
-PubKey = NewType("PubKey", bytes)
-
 
 class PubKey(bytes):
     def __new__(self, b):
         import bitcoinlib.address
-
         try:
-            return PubKey(bitcoinlib.address.check_key(b))
+            return super().__new__(bitcoinlib.address.check_key(b))
         except:
             raise ValueError("Not a Valid key", b)
 
