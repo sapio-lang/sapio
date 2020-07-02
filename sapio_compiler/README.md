@@ -139,7 +139,7 @@ t = TrustlessEscrow(alice=key_alice,
                     bob_escrow=(Sats(10000), PayToPublicKey(key=key_bob)))
 ```
 
-The power of Sapio becomes aparent when you look at the composability of the
+The power of Sapio becomes apparent when you look at the composability of the
 framework. We can also put an escrow inside an escrow:
 
 
