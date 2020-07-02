@@ -69,7 +69,7 @@ class BindableContract(Generic[FieldsType]):
     BindableContract is the base contract object that gets created by the Sapio
     language frontend.
 
-    It should not be directly constructed, but indirectly by inheritence
+    It should not be directly constructed, but indirectly by inheritance
     through Contract.
     """
 
@@ -97,14 +97,14 @@ class BindableContract(Generic[FieldsType]):
 
     class Fields:
         """
-        Fields should be overriden by base classes
+        Fields should be overridden by base classes
         """
 
         pass
 
     class MetaData:
         """
-        MetaData may be overriden by base classes. It's only used for pretty
+        MetaData may be overridden by base classes. It's only used for pretty
         outputs generation so it's not critical that it be set.
         """
 
