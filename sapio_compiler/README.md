@@ -48,14 +48,16 @@ A Basic Pay to Public Key contract can be generated as follows:
 class PayToPublicKey(Contract):
     class Fields:
         key: PubKey
-    @unlock(lambda self: SignatureCheckClause(self.key))
-    def _(self): pass
+
+    @unlock
+    def with_key(self):
+        return SignedBy(self.key)
 ```
 
 Now let's look at an Escrow Contract. Here either Alice and Escrow, Bob and
 Escrow, or Alice and Bob can spend the funds. Note that we use logic notation
-where (|) is OR and (&) is and. These can also be written as `OrClause(a,b)` and
-`AndClause(a,b)`.
+where (|) is OR and (&) is and. These can also be written as `Or(a,b)` and
+`And(a,b)`.
 
 ```python
 class BasicEscrow(Contract):
@@ -63,28 +65,30 @@ class BasicEscrow(Contract):
         alice: PubKey
         bob: PubKey
         escrow: PubKey
-    @unlock(lambda self: SignatureCheckClause(self.escrow) &\
-        (SignatureCheckClause(self.alice) | SignatureCheckClause(self.bob)) | \
-        (SignatureCheckClause(self.alice) & SignatureCheckClause(self.bob))
-    )
-    def redeem(self): pass
+
+    @unlock
+    def redeem(self):
+        return SignedBy(self.escrow) & (SignedBy(self.alice) | SignedBy(self.bob)) | (
+            SignedBy(self.alice) & SignedBy(self.bob)
+        )
 ```
 
 We can also write this a bit more clearly as:
 
 ```python
-class BasicEscrow(Contract):
+class BasicEscrow2(Contract):
     class Fields:
         alice: PubKey
         bob: PubKey
         escrow: PubKey
-    @unlock(lambda self: SignatureCheckClause(self.escrow) &\
-        (SignatureCheckClause(self.alice) | SignatureCheckClause(self.bob))
-    )
-    def use_escrow(self): pass
 
-    @unlock(lambda self: SignatureCheckClause(self.alice) & SignatureCheckClause(self.bob))
-    def cooperate(self): pass
+    @unlock
+    def use_escrow(self):
+        return SignedBy(self.escrow) & (SignedBy(self.alice) | SignedBy(self.bob))
+
+    @unlock
+    def cooperate(self):
+        return SignedBy(self.alice) & SignedBy(self.bob)
 ```
 
 Until this point, we haven't made use of any of the CheckTemplateVerify
@@ -99,22 +103,24 @@ class TrustlessEscrow(Contract):
     class Fields:
         alice: PubKey
         bob: PubKey
-        alice_escrow: Tuple[Amount, Contract]        
-        bob_escrow: Tuple[Amount, Contract]        
-    @path
-    def use_escrow(self) -> TransactionTemplate:
-        tx = TransactionTemplate()                    
-        tx.add_output(*self.alice_escrow.assigned_value)
-        tx.add_output(*self.bob_escrow.assigned_value)
-        tx.set_sequence(Days(10).time)        
-        return tx    
+        alice_escrow: Tuple[Amount, Contract]
+        bob_escrow: Tuple[Amount, Contract]
 
-    @unlock(lambda self: SignatureCheckClause(self.alice) & SignatureCheckClause(self.bob))
-    def cooperate(self): pass
+    @guarantee
+    def use_escrow(self) -> TransactionTemplate:
+        tx = TransactionTemplate()
+        tx.add_output(*self.alice_escrow)
+        tx.add_output(*self.bob_escrow)
+        tx.set_sequence(Days(10))
+        return tx
+
+    @unlock
+    def cooperate(self):
+        return SignedBy(self.alice) & SignedBy(self.bob)
 ```
 
 
-Now with `TrustlessEscrow`, we've done a few things differently. A `@path`
+Now with `TrustlessEscrow`, we've done a few things differently. A `@guarantee`
 designator tells the contract compiler to add a branch which *must* create the
 returned transaction if that branch is taken.  We've also passed in a
 sub-contract for both Alice and Bob to allow us to specify at a higher layer
@@ -138,23 +144,38 @@ framework. We can also put an escrow inside an escrow:
 
 
 ```python
+key_alice = b"0" * 32
+key_bob = b"1" * 32
+t = TrustlessEscrow(
+    alice=key_alice,
+    bob=key_bob,
+    alice_escrow=(Bitcoin(1), PayToPublicKey(key=key_alice)),
+    bob_escrow=(Sats(10000), PayToPublicKey(key=key_bob)),
+)
 
-key_alice = #...
-key_bob = #...
-t1 = TrustlessEscrow(alice=key_alice,
-                    bob=key_bob,
-                    alice_escrow=(Bitcoin(1), PayToPublicKey(key=key_alice)),
-                    bob_escrow=(Sats(10000), PayToPublicKey(key=key_bob)))
-t2 = TrustlessEscrow(alice=key_alice,
-                    bob=key_bob,
-                    alice_escrow=(Bitcoin(1), PayToPublicKey(key=key_alice)),
-                    bob_escrow=(Sats(10000)+Bitcoin(1), t1))
+t1 = TrustlessEscrow(
+    alice=key_alice,
+    bob=key_bob,
+    alice_escrow=(Bitcoin(1), PayToPublicKey(key=key_alice)),
+    bob_escrow=(Sats(10000), PayToPublicKey(key=key_bob)),
+)
+t2 = TrustlessEscrow(
+    alice=key_alice,
+    bob=key_bob,
+    alice_escrow=(Bitcoin(1), PayToPublicKey(key=key_alice)),
+    bob_escrow=(Sats(10000) + Bitcoin(1), t1),
+)
 
 # t3 throws an error because we would lose value
-t3 = TrustlessEscrow(alice=key_alice,
-                    bob=key_bob,
-                    alice_escrow=(Bitcoin(1), PayToPublicKey(key=key_alice)),
-                    bob_escrow=(Sats(10000), t1))
+try:
+    t3 = TrustlessEscrow(
+        alice=key_alice,
+        bob=key_bob,
+        alice_escrow=(Bitcoin(1), PayToPublicKey(key=key_alice)),
+        bob_escrow=(Sats(10000), t1),
+    )
+except ValueError:
+    pass
 ```
 
 Sapio will look to make sure that all paths of our contract are sufficiently
