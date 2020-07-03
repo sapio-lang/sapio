@@ -39,8 +39,11 @@ class UndoSend2(Contract):
         timeout: TimeSpec
 
     class MetaData:
-        color = lambda self: "red"
-        label = lambda self: "Undo Send"
+        def color(self):
+            return "red"
+
+        def label(self):
+            return "Undo Send"
 
     @guarantee
     def complete(self) -> TransactionTemplate:

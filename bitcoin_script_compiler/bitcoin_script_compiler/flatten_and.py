@@ -67,7 +67,7 @@ class FlattenPass:
     @flatten.register(SignedBy)
     def flatten_after(
         self,
-        arg: Union[Wait, CheckTemplateVerify, RevealPreImage, SignedBy,],
+        arg: Union[Wait, CheckTemplateVerify, RevealPreImage, SignedBy],
         or_allowed: bool = False,
     ) -> DNF:
         return [[arg]]

@@ -124,7 +124,10 @@ class P2PConnection(asyncio.Protocol):
         conn_gen_unsafe = loop.create_connection(
             lambda: self, host=self.dstaddr, port=self.dstport
         )
-        conn_gen = lambda: loop.call_soon_threadsafe(loop.create_task, conn_gen_unsafe)
+
+        def conn_gen():
+            return loop.call_soon_threadsafe(loop.create_task, conn_gen_unsafe)
+
         return conn_gen
 
     def peer_disconnect(self):
@@ -413,7 +416,9 @@ class P2PInterface(P2PConnection):
     # Connection helper methods
 
     def wait_for_disconnect(self, timeout=60):
-        test_function = lambda: not self.is_connected
+        def test_function():
+            return not self.is_connected
+
         wait_until(test_function, timeout=timeout, lock=mininode_lock)
 
     # Message receiving helper methods

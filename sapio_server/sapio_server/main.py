@@ -26,7 +26,8 @@ from sapio_zoo.smarter_vault import SmarterVault
 
 
 def make_app():
-    return tornado.web.Application([(r"/", CompilerWebSocket),], autoreload=True)
+    return tornado.web.Application([(r"/", CompilerWebSocket)], autoreload=True)
+
 
 if __name__ == "__main__":
     CompilerWebSocket.add_contract("Channel", sapio_zoo.channel.BasicChannel)
