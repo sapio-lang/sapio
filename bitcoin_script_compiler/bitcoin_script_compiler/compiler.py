@@ -41,7 +41,7 @@ class DNFClauseCompiler:
         cl: List[DNFClause]
             A list of base DNFClause which are to be treated as anded together
         w: WitnessTemplate
-            The WitnessTemplate which will contain the ABI desciption for this function
+            The WitnessTemplate which will contain the ABI description for this function
 
         Returns
         -------

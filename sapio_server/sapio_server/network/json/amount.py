@@ -8,7 +8,7 @@ schema = {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
     "description": "An amount of coins.",
-    "properties": {"units": {"enum": ["Bitcoin", "Sats"], "default": "Bitcoin"},},
+    "properties": {"units": {"enum": ["Bitcoin", "Sats"], "default": "Bitcoin"}},
     "required": ["units", "amount"],
     "dependencies": {
         "units": {
@@ -16,7 +16,7 @@ schema = {
                 {
                     "properties": {
                         "units": {"enum": ["Bitcoin"]},
-                        "amount": {"type": "number", "min": 0, "max": 21e6,},
+                        "amount": {"type": "number", "min": 0, "max": 21e6},
                     },
                 },
                 {

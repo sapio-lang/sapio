@@ -49,7 +49,10 @@ class TestCompiler(unittest.TestCase):
             [I],
         ]
         output = ClauseToDNF().compile_cnf(inputs)
-        to_set = lambda s: frozenset(frozenset(y.time.locktime for y in x) for x in s)
+
+        def to_set(s):
+            return frozenset(frozenset(y.time.locktime for y in x) for x in s)
+
         self.assertSetEqual(to_set(output), to_set(expected), "Computes Correctly")
 
 

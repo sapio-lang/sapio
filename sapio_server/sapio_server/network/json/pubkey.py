@@ -6,7 +6,7 @@ from sapio_bitcoinlib.static_types import PubKey
 schema = {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
-    "properties": {"pubkey": {"type": "string",},},
+    "properties": {"pubkey": {"type": "string"}},
     "required": ["pubkey"],
     "maxProperties": 1,
 }

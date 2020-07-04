@@ -55,7 +55,7 @@ class AfterClauseSimplification:
             elif isinstance(cl.time, AbsoluteTimeSpec):
                 absolute.append(cl.time)
             else:
-                raise ValueError("Unkown Type")
+                raise ValueError("Unknown Type")
 
         # Filter the relative clauses into blocks and time
         relative_blocks: List[RelativeTimeSpec] = []

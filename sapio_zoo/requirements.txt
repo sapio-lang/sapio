@@ -8,7 +8,6 @@ mccabe==0.6.1
 mypy==0.770
 mypy-extensions==0.4.3
 numpy==1.18.2
-pkg-resources==0.0.0
 pylint==2.4.4
 pyrsistent==0.16.0
 rope==0.16.0

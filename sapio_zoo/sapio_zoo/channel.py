@@ -47,6 +47,8 @@ memoize: Dict[T, Type[BindableContract]] = {}
 
 # We use a class factory here because inehritence isn't really the right model
 # for logically different contracts & Mixins don't work presently.
+
+
 def ChannelClassFactory(stage: T):
     if stage in memoize:
         return memoize[stage]
@@ -60,8 +62,11 @@ def ChannelClassFactory(stage: T):
             amount: Amount
 
         class MetaData:
-            label = lambda s: "BASE"
-            color = lambda s: "blue"
+            def label(s):
+                return "BASE"
+
+            def color(s):
+                return "blue"
 
         @require
         def cooperate(self) -> Clause:
@@ -141,8 +146,11 @@ class ContestedChannelAfterUpdate(Contract):
         honest: PubKey
 
     class MetaData:
-        label = lambda s: "revoke"
-        color = lambda s: "yellow"
+        def label(s):
+            return "revoke"
+
+        def color(s):
+            return "yellow"
 
     @guarantee
     def close(self) -> TransactionTemplate:

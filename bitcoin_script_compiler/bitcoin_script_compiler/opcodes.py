@@ -147,8 +147,8 @@ def handle(
         elif op == OP_CHECKSIGVERIFY:
             if len(stack) < 2:
                 return False
-            key = stack.pop()
-            sig = stack.pop()
+            stack.pop()  # key
+            stack.pop()  # sig
         elif op == OP_CHECKTEMPLATEVERIFY:
             if len(stack) < 1:
                 return False

@@ -16,8 +16,11 @@ class SmarterVault(Contract):
         mature: TimeSpec
 
     class MetaData:
-        label = lambda s: "Vault"
-        color = lambda s: "blue"
+        def label(s):
+            return "Vault"
+
+        def color(s):
+            return "blue"
 
     @guarantee
     def step(self) -> TransactionTemplate:
