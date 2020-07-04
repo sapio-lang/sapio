@@ -27,8 +27,11 @@ class CancellableSubscription(Contract):
         return_timeout: RelativeTimeSpec
 
     class MetaData:
-        color = lambda self: "blue"
-        label = lambda self: "Cancellable Subscription"
+        def color(self):
+            return "blue"
+
+        def label(self):
+            return "Cancellable Subscription"
 
     @guarantee
     def cancel(self):
@@ -80,8 +83,11 @@ class CancelContest(Contract):
         return_timeout: RelativeTimeSpec
 
     class MetaData:
-        color = lambda self: "red"
-        label = lambda self: "Cancellation Attempt"
+        def color(self):
+            return "red"
+
+        def label(self):
+            return "Cancellation Attempt"
 
     @require
     def watchtower_selects_best(self):

@@ -8,8 +8,8 @@ schema = {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
     "oneOf": [
-        {"title": "Block Height", "type": "number", "min": 0, "multipleOf": 1.0,},
-        {"title": "Network Date", "type": "string", "format": "date-time",},
+        {"title": "Block Height", "type": "number", "min": 0, "multipleOf": 1.0},
+        {"title": "Network Date", "type": "string", "format": "date-time"},
     ],
 }
 

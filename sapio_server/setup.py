@@ -24,6 +24,6 @@ setup(
         "typed-ast>=1.4.0",
         "typing-extensions>=3.7.4.2",
         "jsonschema>=3.2.0",
-        "tornado>=6.0.4"
+        "tornado>=6.0.4",
     ],
 )

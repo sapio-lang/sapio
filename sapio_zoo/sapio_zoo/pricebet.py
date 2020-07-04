@@ -49,8 +49,11 @@ def BinaryBetFactory(t1: Type[T1], t2: Type[T2]):
             lo_outcome: T2
 
         class MetaData:
-            label = lambda self: f"BinaryOption[price > ${self.price}]"
-            color = lambda self: "turquoise"
+            def label(self):
+                return f"BinaryOption[price > ${self.price}]"
+
+            def color(self):
+                return "turquoise"
 
         @require
         def price_hi(self):

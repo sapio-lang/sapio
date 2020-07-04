@@ -122,7 +122,7 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
                         "type": "object",
                         "properties": {
                             "type": {"type": "string"},
-                            "args": {"type": "object",},
+                            "args": {"type": "object"},
                         },
                         "required": ["type", "args"],
                     },
