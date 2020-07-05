@@ -1107,7 +1107,7 @@ class Node:
         prop_str = ""
         prop_str += "B" if child_x.p.B and child_z.p.B else ""
         prop_str += "K" if child_x.p.K and child_z.p.K else ""
-        prop_str += "K" if child_x.p.V and child_z.p.V else ""
+        prop_str += "V" if child_x.p.V and child_z.p.V else ""
         prop_str += "u" if child_x.p.u and child_z.p.u else ""
         prop_str += "d" if child_x.p.d or child_z.p.d else ""
         prop_str += "o" if child_x.p.z and child_z.p.z else ""
