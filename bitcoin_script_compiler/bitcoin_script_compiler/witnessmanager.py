@@ -83,6 +83,16 @@ class WitnessManager:
     def __init__(self, ms: miniscript.Node) -> None:
         self.override_program: Optional[str] = None
         self.ms = ms
+        try:
+            self._program = ms.script
+        except:
+            pass
+    @property
+    def program(self):
+        if self.override_program is None:
+            return self._program
+        else:
+            return CScript()
     def to_json(self) -> Dict[str, Any]:
         return {}
 
