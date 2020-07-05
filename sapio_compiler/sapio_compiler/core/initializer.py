@@ -35,6 +35,7 @@ from bitcoin_script_compiler import (
     WitnessManager,
 )
 from sapio_bitcoinlib.static_types import Amount, Hash, Sats
+from sapio_bitcoinlib import miniscript
 from sapio_compiler.core.errors import ExtraArgumentError, MissingArgumentError
 
 from .txtemplate import TransactionTemplate
@@ -119,7 +120,7 @@ class Initializer(Generic[FieldsType]):
         if self.pay_functions is not None:
             amt_rng, addr = self.pay_functions(obj)
             obj.amount_range = amt_rng
-            obj.witness_manager = WitnessManager()
+            obj.witness_manager = WitnessManager(miniscript.Node())
             obj.witness_manager.override_program = addr
             return
 
@@ -174,4 +175,7 @@ class Initializer(Generic[FieldsType]):
 
         if isinstance(paths, Unsatisfiable):
             raise AssertionError("Must Have at least one spending condition")
-        obj.witness_manager = ProgramBuilder().compile(paths)
+        desc = paths.to_miniscript()
+        desc = f"and_v({desc}, 1)"
+        ms = miniscript.Node.from_desc(desc)
+        obj.witness_manager = WitnessManager(ms)

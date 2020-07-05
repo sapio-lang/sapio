@@ -52,7 +52,7 @@ class WitnessTemplate:
     def _add_sig(self, it: SignatureVar) -> None:
         idx = len(self.witness)
         self.pending[idx] = it
-        self.add(self.PREFIX + b"_sig_by_" + it.pk)
+        self.add(self.PREFIX + b"_sig_by_" + it.pk.get_bytes())
 
     @internal_add.register
     def _add_preim(self, it: PreImageVar) -> None:
@@ -78,40 +78,13 @@ class FinalizationComplete(Exception):
     pass
 
 
+from sapio_bitcoinlib import miniscript
 class WitnessManager:
-    def __init__(self) -> None:
+    def __init__(self, ms: miniscript.Node) -> None:
         self.override_program: Optional[str] = None
-        self.program: CScript = CScript()
-        self.witnesses: Dict[int, WitnessTemplate] = {}
-        self.is_final = False
-
-    def assert_final(self) -> None:
-        if not self.is_final:
-            raise FinalizationNotComplete()
-
-    def assert_not_final(self) -> None:
-        if self.is_final:
-            raise FinalizationComplete()
-
+        self.ms = ms
     def to_json(self) -> Dict[str, Any]:
-        self.assert_final()
         return {}
-
-    def finalize(self) -> None:
-        self.is_final = True
-
-    def get_witness(self, key: int) -> List[Any]:
-        self.assert_final()
-        item = self.witnesses[key].witness.copy()
-        item.append(self.program)
-        return item
-
-    def make_witness(self, key: int) -> WitnessTemplate:
-        self.assert_not_final()
-        if key in self.witnesses:
-            raise KeyError("Key Already Set")
-        self.witnesses[key] = WitnessTemplate()
-        return self.witnesses[key]
 
     def get_p2wsh_script(self, main: bool = False) -> CScript:
         if self.override_program is not None:
@@ -121,9 +94,9 @@ class WitnessManager:
             if version is None or program is None:
                 raise ValueError("Corrupt override program")
             return CScript([version, bytes(program)])
-        return CScript([AllowedOp.OP_0, sha256(self.program)])
+        return CScript([AllowedOp.OP_0, sha256(self.ms.script)])
 
     def get_p2wsh_address(self) -> str:
         if self.override_program is not None:
             return self.override_program
-        return script_to_p2wsh(self.program)
+        return script_to_p2wsh(self.ms.script)
