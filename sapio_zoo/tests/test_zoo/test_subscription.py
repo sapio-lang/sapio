@@ -9,7 +9,8 @@ from sapio_zoo.p2pk import *
 from sapio_zoo.subscription import *
 from bitcoin_script_compiler.clause import Weeks
 from sapio_bitcoinlib.messages import COutPoint
-
+from .testutil import random_k
+from sapio_compiler import AmountRange
 
 class MyTestCase(unittest.TestCase):
     def test_something(self):
@@ -21,9 +22,10 @@ class MyTestCase(unittest.TestCase):
         # return_timeout: RelativeTimeSpec
         alice_script = script_to_p2wsh(CScript([b"Alice's Key Goes Here!"]))
         bob_script = script_to_p2wsh(CScript([b"Bob's Key Goes Here!"]))
-        Alice = PayToSegwitAddress(amount=Bitcoin(5), address=alice_script)
-        Bob = PayToSegwitAddress(amount=Bitcoin(5), address=bob_script)
-        watchtower_key = b"......"
+        ar = AmountRange()
+        Alice = PayToSegwitAddress(amount=ar, address=alice_script)
+        Bob = PayToSegwitAddress(amount=ar, address=bob_script)
+        watchtower_key = random_k()
         now = datetime.now()
         c = CancellableSubscription(
             amount=Bitcoin(5),
@@ -37,7 +39,6 @@ class MyTestCase(unittest.TestCase):
             watchtower_key=watchtower_key,
             return_timeout=Weeks(1),
         )
-        c.bind(COutPoint())
 
 
 if __name__ == "__main__":

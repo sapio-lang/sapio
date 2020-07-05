@@ -15,13 +15,10 @@ else:
 
 
 
-class PubKey(bytes):
-    def __new__(self, b):
-        import sapio_bitcoinlib.address
-        try:
-            return super().__new__(sapio_bitcoinlib.address.check_key(b))
-        except:
-            raise ValueError("Not a Valid key", b)
+from sapio_bitcoinlib.key import ECPubKey
+class PubKey(ECPubKey):
+    def __init__(self, b):
+        self.set(b)
 
 
 Hash = NewType("Hash", bytes)

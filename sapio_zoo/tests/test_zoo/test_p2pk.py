@@ -2,11 +2,11 @@ import unittest
 
 from sapio_bitcoinlib.static_types import Sats
 from sapio_zoo.p2pk import *
-
+from .testutil import random_k
 
 class TestP2Pk(unittest.TestCase):
     def test(self):
-        key = b"1" * 32
+        key = random_k()
         PayToPubKey(key=key, amount=Sats(10))
 
 

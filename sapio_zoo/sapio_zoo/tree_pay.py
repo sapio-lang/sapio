@@ -7,6 +7,7 @@ from bitcoin_script_compiler import (
     Weeks,
 )
 from sapio_bitcoinlib.static_types import Amount, PubKey
+from sapio_bitcoinlib.key import ECKey
 from sapio_compiler import Contract, TransactionTemplate, guarantee, unlock
 
 
@@ -41,8 +42,11 @@ class TreePay(Contract):
         return tx
 
 
-def libsecp_make_musig(x):
-    return "0" * 32
+# Mock!
+def libsecp_make_musig():
+    e = ECKey()
+    e.generate()
+    return e.get_pubkey()
 
 
 class CollapsibleTree(Contract):
@@ -65,8 +69,8 @@ class CollapsibleTree(Contract):
                 tx.add_output(amount, TreePay(payments=segment, radix=self.radix))
         return tx
 
-    def get_musig(self) -> PubKey:
-        return PubKey(b"0" * 32)
+    def get_musig(self) -> ECKey:
+        return libsecp_make_musig()
 
     @unlock
     def cooperate_out(self):
