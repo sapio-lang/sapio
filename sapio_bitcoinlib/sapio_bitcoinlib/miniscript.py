@@ -14,7 +14,7 @@ from .script import CScript, OP_ADD, OP_BOOLAND, OP_BOOLOR, OP_DUP, OP_ELSE, \
     OP_CHECKLOCKTIMEVERIFY, OP_CHECKMULTISIG, OP_CHECKMULTISIGVERIFY, \
     OP_CHECKSEQUENCEVERIFY, OP_CHECKSIG, OP_CHECKSIGVERIFY, OP_HASH160, \
     OP_HASH256, OP_NOTIF, OP_RIPEMD160, OP_SHA256, OP_SIZE, OP_SWAP, \
-    OP_TOALTSTACK, OP_VERIFY, OP_0NOTEQUAL
+    OP_TOALTSTACK, OP_VERIFY, OP_0NOTEQUAL, OP_CHECKTEMPLATEVERIFY, OP_DROP
 
 
 class Property:
@@ -37,8 +37,21 @@ class Property:
     props = "zonduefsmx"
 
     def __init__(self):
-        for literal in self.types+self.props:
-            setattr(self, literal, False)
+        # Prefer this form for static analysis
+        self.B = False # Base type
+        self.V = False # Verify type
+        self.K = False # Key type
+        self.W = False # Wrapped type
+        self.z = False # Zero-arg property
+        self.o = False # One-arg property
+        self.n = False # Nonzero arg property
+        self.d = False # Dissatisfiable property
+        self.u = False # Unit property
+        self.e = False # Expression property
+        self.f = False # Forced property
+        self.s = False # Safe property
+        self.m = False # Nonmalleable property
+        self.x = False # Expensive verify
 
     def from_string(self, property_str):
         """Construct property from string of valid property and types"""
@@ -111,6 +124,7 @@ class NodeType(Enum):
     ANDOR = 27
     THRESH = 28
     THRESH_M = 29
+    TXTEMPLATE = 30
 
 
 class SatType(Enum):
@@ -127,6 +141,7 @@ class SatType(Enum):
     RIPEMD160_PREIMAGE = 6          # Value: 20B RIPEMD160 Digest
     HASH160_PREIMAGE = 7            # Value: 20B HASH160 Digest
     DATA = 8                        # Value: Bytes
+    TXTEMPLATE = 9
 
 
 class Node:
@@ -177,6 +192,10 @@ class Node:
             return Node().construct_after(time)
 
         if tag in ["sha256", "hash256", "ripemd160", "hash160"]:
+            hash_b = bytes.fromhex(child_exprs[0])
+            return getattr(Node(), "construct_"+tag)(hash_b)
+
+        if tag in ["txtmpl"]:
             hash_b = bytes.fromhex(child_exprs[0])
             return getattr(Node(), "construct_"+tag)(hash_b)
 
@@ -260,8 +279,21 @@ class Node:
                         node = Node().construct_after(n_int)
                         expr_list = expr_list[:idx]+[node]+expr_list[idx+2:]
                         expr_list_len -= 1
+                    else:
+                        raise ValueError("Was not after/older")
                 except Exception:
                     pass
+
+            # 3 element terminal expressions
+            if expr_list_len-idx >= 3:
+                # Match against txtmpl(tmplh)
+                if isinstance(expr_list, bytes) and \
+                        len(expr_list[idx]) == 32 \
+                        and expr_list[idx+1] == OP_CHECKTEMPLATEVERIFY \
+                        and expr_list[idx+2] == OP_DROP:
+                    node = Node().construct_txtmpl(expr_list[idx+1])
+                    expr_list = expr_list[:idx]+[node]+expr_list[idx+3:]
+                    expr_list_len -= 2
 
             # 4 element terminal expressions.
             if expr_list_len-idx >= 5:
@@ -867,6 +899,17 @@ class Node:
                         )
         return self
 
+    def construct_txtmpl(self, tmplh):
+        assert isinstance(tmplh, bytes) and len(tmplh) == 32
+        self._tmplh = tmplh
+        self._construct(NodeType.TXTEMPLATE, Property().from_string("Vzfm"),
+                        [],
+                        self._txtmpl_sat, self._txtmpl_dsat,
+                        [tmplh, OP_CHECKTEMPLATEVERIFY, OP_DROP],
+                        'txtmpl('+tmplh.hex()+')'
+                        )
+        return self
+
     def construct_sha256(self, hash_digest):
         assert isinstance(hash_digest, bytes) and len(hash_digest) == 32
         self._sha256 = hash_digest
@@ -1392,6 +1435,12 @@ class Node:
         return [[(SatType.AFTER, self._time)]]
 
     def _after_dsat(self):
+        return [[]]
+
+    def _txtmpl_sat(self):
+        return [[(SatType.TXTEMPLATE, self._tmplh)]]
+
+    def _txtmpl_dsat(self):
         return [[]]
 
     def _sha256_sat(self):
