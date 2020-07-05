@@ -902,7 +902,7 @@ class Node:
     def construct_txtmpl(self, tmplh):
         assert isinstance(tmplh, bytes) and len(tmplh) == 32
         self._tmplh = tmplh
-        self._construct(NodeType.TXTEMPLATE, Property().from_string("Bzfm"),
+        self._construct(NodeType.TXTEMPLATE, Property().from_string("Vzfm"),
                         [],
                         self._txtmpl_sat, self._txtmpl_dsat,
                         [tmplh, OP_CHECKTEMPLATEVERIFY, OP_DROP],

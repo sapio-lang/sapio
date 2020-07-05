@@ -169,7 +169,7 @@ class CheckTemplateVerify(LogicMixin):
         return f"{self.__class__.__name__}({self.hash!r})"
 
     def to_miniscript(self):
-        return f"v:txtmpl({self.hash.hex()})"
+        return f"txtmpl({self.hash.hex()})"
 
 
 TimeTypes = Union[Literal["time"], Literal["blocks"]]
