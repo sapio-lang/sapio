@@ -163,7 +163,7 @@ class Initializer(Generic[FieldsType]):
                     # and then and at the top with the unlock clause,
                     # it could help with later code generation sharing the
                     ctv = CheckTemplateVerify(Hash(ctv_hash))
-                    paths |= ctv & unlock_clause
+                    paths |= unlock_clause & ctv
                     obj.guaranteed_txns.append(template)
                 else:
                     paths |= unlock_clause
