@@ -5,6 +5,7 @@ from sapio_zoo.multisig import *
 import os
 import unittest
 from .testutil import random_k
+from sapio_bitcoinlib.messages import COutPoint
 
 
 class TestMultiSig(unittest.TestCase):
@@ -17,6 +18,9 @@ class TestMultiSig(unittest.TestCase):
             amount=Bitcoin(5),
             path=a,
         )
+        a.bind(COutPoint(0, 0))
+        b.bind(COutPoint(0, 0))
+
 
 
 if __name__ == "__main__":

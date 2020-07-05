@@ -54,6 +54,7 @@ class TestSmarterVault(unittest.TestCase):
         )
 
 
+        s.bind(COutPoint(0, 0))
 
 if __name__ == "__main__":
     unittest.main()

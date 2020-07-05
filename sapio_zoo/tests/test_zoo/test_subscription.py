@@ -40,6 +40,7 @@ class MyTestCase(unittest.TestCase):
             return_timeout=Weeks(1),
         )
 
+        c.bind(COutPoint(0, 0))
 
 if __name__ == "__main__":
     unittest.main()

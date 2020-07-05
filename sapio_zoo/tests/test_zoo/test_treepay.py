@@ -5,6 +5,7 @@ from sapio_zoo.p2pk import *
 from sapio_zoo.tree_pay import *
 from bitcoin_script_compiler.clause import Weeks
 from .testutil import random_k
+from sapio_bitcoinlib.messages import COutPoint
 
 
 class TestTreePay(unittest.TestCase):
@@ -14,8 +15,10 @@ class TestTreePay(unittest.TestCase):
             for _ in range(102)
         ]
         for radix in [2, 4, 25, 1000]:
-            CollapsibleTree(payments=payments, radix=radix)
-            TreePay(payments=payments, radix=radix)
+            c = CollapsibleTree(payments=payments, radix=radix)
+            t = TreePay(payments=payments, radix=radix)
+            c.bind(COutPoint(0, 0))
+            t.bind(COutPoint(0, 0))
 
 
 if __name__ == "__main__":
