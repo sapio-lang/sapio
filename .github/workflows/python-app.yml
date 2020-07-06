@@ -1,7 +1,7 @@
 # This workflow will install Python dependencies, run tests and lint with a single version of Python
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
 
-name: Python application
+name: Sapio Unit Tests
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
     branches: [ master ]
 
 jobs:
-  build:
+  build: 
 
     runs-on: ubuntu-latest
 
@@ -25,12 +25,32 @@ jobs:
         python -m pip install --upgrade pip
         pip install flake8 pytest
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        #flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-    - name: Test with pytest
+        #flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    
+    - name: Install modules
       run: |
-        pytest
+        for MODULE in sapio_bitcoinlib bitcoin_script_compiler sapio_compiler sapio_stdlib sapio_zoo sapio_server; do
+          echo "Building ${MODULE}"
+          cd $MODULE && make && python3 setup.py build && python3 setup.py install && cd ..
+        done
+        
+    - name: Run unit tests
+      run: |
+        testresult=0
+        for MODULE in sapio_bitcoinlib bitcoin_script_compiler sapio_compiler sapio_stdlib sapio_zoo sapio_server; do
+          echo "Testing ${MODULE} started"
+          cd $MODULE && pwd && make test && pwd 
+          testresult=$(($testresult+$?))
+          echo $testresult
+        cd ..
+        echo "Testing ${MODULE} finished"
+        done
+        echo "Number of failing tests: ${testresult}"
+        exit $testresult
+
