@@ -3,12 +3,13 @@ from sapio_stdlib.p2pk import P2PK
 import unittest
 from sapio_bitcoinlib.test_framework import BitcoinTestFramework
 from sapio_bitcoinlib.util import assert_equal, wait_until
+from .util import random_k
 
 
 class TestEscrow(unittest.TestCase):
     def test_multisig(self):
-        alice = P2PK(key=PubKey(b"a"))
-        bob = P2PK(key=PubKey(b"b"))
+        alice = P2PK(key=random_k())
+        bob = P2PK(key=random_k())
 
         t = TransactionTemplate()
         t.add_output(Bitcoin(1), alice)
@@ -22,8 +23,8 @@ class TestEscrow(unittest.TestCase):
             escrow.conditions_abi[escrow.uncooperative_close.__func__], Satisfied(),
         )
         coop_close = escrow.conditions_abi[escrow.cooperative_close.__func__]
-        assert_equal(coop_close.left.pk, alice.key)
-        assert_equal(coop_close.right.pk, bob.key)
+        assert_equal(coop_close.left.pubkey, alice.key)
+        assert_equal(coop_close.right.pubkey, bob.key)
 
 
 if __name__ == "__main__":
