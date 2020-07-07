@@ -8,16 +8,6 @@ from sapio_compiler import *
 from sapio_zoo.p2pk import PayToSegwitAddress
 
 
-def multisig(l, n):
-    assert len(l) > n
-    assert n > 0
-    l2 = [SignedBy(v) for i, v in enumerate(l)]
-    l3 = [
-        reduce(lambda a, b: a & b, combo[1:], combo[0]) for combo in combinations(l2, n)
-    ]
-    return reduce(lambda a, b: a | b, l3[1:], l3[0])
-
-
 # Demonstrates multisig without using any special multisig functionality
 class RawMultiSig(Contract):
     class Fields:
@@ -26,7 +16,7 @@ class RawMultiSig(Contract):
 
     @unlock
     def _(self):
-        return multisig(self.keys, self.thresh)
+        return Threshold(self.thresh, self.keys)
 
 
 # Demonstrates multisig with a default path accessible at a lower threshold
@@ -40,11 +30,11 @@ class RawMultiSigWithPath(Contract):
 
     @unlock
     def _(self):
-        return multisig(self.keys, self.thresh_all)
+        return Threshold(self.thresh_all, self.keys)
 
     @require
     def lower_threshold(self):
-        return multisig(self.keys, self.thresh_path)
+        return Threshold(self.thresh_path, self.keys)
 
     @lower_threshold
     @guarantee
