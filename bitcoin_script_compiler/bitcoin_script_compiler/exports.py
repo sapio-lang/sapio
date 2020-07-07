@@ -13,6 +13,7 @@ from .clause import (
     TimeSpec,
     Unsatisfiable,
     Weeks,
+    Threshold
 )
 from .compiler import ProgramBuilder
 from .witnessmanager import CTVHash, WitnessManager
