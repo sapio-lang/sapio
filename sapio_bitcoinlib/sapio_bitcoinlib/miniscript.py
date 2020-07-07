@@ -227,6 +227,7 @@ class Node:
         """Construct miniscript node from script"""
         expr_list = []
         for op in c_script:
+            print(op)
             # Encode 0, 20, 32 as int.
             # Other values are coerced to int types with Node._coerce_to_int()
             if op in [b'', b'\x14', b'\x20']:
@@ -287,11 +288,11 @@ class Node:
             # 3 element terminal expressions
             if expr_list_len-idx >= 3:
                 # Match against txtmpl(tmplh)
-                if isinstance(expr_list, bytes) and \
+                if isinstance(expr_list[idx], bytes) and \
                         len(expr_list[idx]) == 32 \
                         and expr_list[idx+1] == OP_CHECKTEMPLATEVERIFY \
                         and expr_list[idx+2] == OP_DROP:
-                    node = Node().construct_txtmpl(expr_list[idx+1])
+                    node = Node().construct_txtmpl(expr_list[idx])
                     expr_list = expr_list[:idx]+[node]+expr_list[idx+3:]
                     expr_list_len -= 2
 
