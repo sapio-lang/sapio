@@ -18,7 +18,9 @@ from typing import (
 )
 from bitcoin_script_compiler import WitnessManager, Clause
 from sapio_bitcoinlib.messages import COutPoint, CTransaction, CTxInWitness, CTxWitness
+from sapio_bitcoinlib import miniscript
 from sapio_bitcoinlib.static_types import Amount
+from sapio_bitcoinlib.script import CScript
 from sapio_compiler.core.initializer import Initializer
 
 from .txtemplate import TransactionTemplate
@@ -185,10 +187,11 @@ class BindableContract(Generic[FieldsType]):
                     # This uniquely binds things with a CTV hash to the
                     # appropriate witnesses. Also binds things with None to all
                     # possible witnesses that do not have a ctv
+                    ctv_sat =  (miniscript.SatType.TXTEMPLATE, ctv_hash)
                     candidates = [
                         wit
-                        for wit in this.witness_manager.witnesses.values()
-                        if wit.ctv_hash == ctv_hash
+                        for wit in this.witness_manager.ms.sat
+                        if ctv_sat in wit
                     ]
                     # There should always be a candidate otherwise we shouldn't
                     # have a txn
@@ -203,7 +206,7 @@ class BindableContract(Generic[FieldsType]):
                     # Create all possible candidates
                     for wit in candidates:
                         t = copy.deepcopy(tx)
-                        t.wit.vtxinwit[0].scriptWitness.stack = wit.witness + [program]
+                        t.wit.vtxinwit[0].scriptWitness.stack = wit + [(miniscript.SatType.DATA, program)]
                         txns.append(t)
                         utxo_metadata = [
                             md.to_json() for md in txn_template.outputs_metadata

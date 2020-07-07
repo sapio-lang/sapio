@@ -78,6 +78,9 @@ class Satisfied:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
 
+    def to_miniscript(self):
+        return "v:1"
+
 
 class Unsatisfiable:
     """A Base type clause which is always false. Useful in compiler logic."""
@@ -98,6 +101,9 @@ class Unsatisfiable:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
 
+    def to_miniscript(self):
+        return "v:0"
+
 
 class BinaryLogicClause:
     def __init__(self, a: Clause, b: Clause):
@@ -113,11 +119,16 @@ class And(BinaryLogicClause, LogicMixin):
 
     symbol = "&"
 
+    def to_miniscript(self):
+        return f"and_v({self.left.to_miniscript()}, {self.right.to_miniscript()})"
+
 
 class Or(BinaryLogicClause, LogicMixin):
     """Expresses that either the left hand or right hand arguments must be satisfied."""
 
     symbol = "|"
+    def to_miniscript(self):
+        return f"or_i({self.left.to_miniscript()}, {self.right.to_miniscript()})"
 
 
 class SignedBy(LogicMixin):
@@ -128,6 +139,9 @@ class SignedBy(LogicMixin):
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.pubkey!r})"
+
+    def to_miniscript(self):
+        return f"vc:pk({self.pubkey.get_bytes().hex()})"
 
 
 class RevealPreImage(LogicMixin):
@@ -141,6 +155,9 @@ class RevealPreImage(LogicMixin):
     def __repr__(self):
         return f"{self.__class__.__name__}({self.preimage!r})"
 
+    def to_miniscript(self):
+        return f"v:sha256({self.image.hex()})"
+
 
 class CheckTemplateVerify(LogicMixin):
     """The transaction must match the passed in StandardTemplateHash exactly for this clause to be satisfied"""
@@ -150,6 +167,9 @@ class CheckTemplateVerify(LogicMixin):
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.hash!r})"
+
+    def to_miniscript(self):
+        return f"txtmpl({self.hash.hex()})"
 
 
 TimeTypes = Union[Literal["time"], Literal["blocks"]]
@@ -210,6 +230,8 @@ class AbsoluteTimeSpec:
             return f"{self.__class__.__name__}.at_height({self.locktime})"
         else:
             return f"{self.__class__.__name__}({self.locktime})"
+    def to_miniscript(self):
+        return f"v:after({self.locktime})"
 
 
 class RelativeTimeSpec:
@@ -241,6 +263,9 @@ class RelativeTimeSpec:
             return f"{self.__class__.__name__}.from_seconds({self.locktime&0x00FFFF})"
         elif t == "blocks":
             return f"{self.__class__.__name__}.blocks_later({self.locktime & 0x00FFFF})"
+
+    def to_miniscript(self):
+        return f"v:older({self.sequence})"
 
 
 TimeSpec = Union[AbsoluteTimeSpec, RelativeTimeSpec]
@@ -289,6 +314,9 @@ class Wait(LogicMixin):
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.time!r})"
+
+    def to_miniscript(self):
+        return self.time.to_miniscript()
 
 
 DNFClause = Union[

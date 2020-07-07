@@ -9,17 +9,17 @@ from sapio_bitcoinlib.messages import COutPoint
 
 import os
 from functools import lru_cache
+from .testutil import random_k
 
 
 class TestSmarterVault(unittest.TestCase):
     def test_smarter_vault(self):
-        key2 = PayToPubKey(key=b"1" * 32, amount=Bitcoin(100))
+        key2 = PayToPubKey(key=random_k(), amount=Bitcoin(100))
 
         @lru_cache()
         def cold_storage(v: Amount):
-            # TODO: Use a real PubKey Generator
             payments = [
-                (v // 10, PayToPubKey(key=os.urandom(32), amount=v // 10))
+                (v // 10, PayToPubKey(key=random_k(), amount=v // 10))
                 for _ in range(10)
             ]
             return TreePay(payments=payments, radix=4)
@@ -35,7 +35,6 @@ class TestSmarterVault(unittest.TestCase):
 
         @lru_cache()
         def cold_storage2(v: Amount):
-            # TODO: Use a real PubKey Generator
             return SmarterVault(
                 cold_storage=cold_storage,
                 hot_storage=key2,
@@ -54,8 +53,8 @@ class TestSmarterVault(unittest.TestCase):
             amount_step=100,
         )
 
-        s.bind(COutPoint())
 
+        s.bind(COutPoint(0, 0))
 
 if __name__ == "__main__":
     unittest.main()
