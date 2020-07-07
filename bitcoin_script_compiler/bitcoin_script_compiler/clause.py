@@ -24,6 +24,7 @@ from functools import singledispatchmethod
 from typing import Any, List, Protocol, Union, cast, Literal, TYPE_CHECKING
 
 from sapio_bitcoinlib.static_types import Hash, LockTime, PubKey, Sequence, uint32
+from sapio_bitcoinlib.key import ECPubKey
 
 
 class ClauseProtocol(Protocol):
@@ -321,14 +322,38 @@ class Wait(LogicMixin):
         return self.time.to_miniscript()
 
 
+class Threshold(LogicMixin):
+    """Takes a list of clauses and a threshold"""
+
+    thresh: int
+
+    clauses: List[DNFClause]
+
+    def __init__(self, thresh: int, clauses: Union[List[DNFClause], List[ECPubKey]]):
+        self.thresh = thresh
+        self.clauses = clauses
+
+    def to_miniscript(self) -> str:
+        if all(isinstance(c, ECPubKey) for c in self.clauses):
+            s = ",".join([c.get_bytes().hex() for c in self.clauses])
+            return f"v:thresh_m({self.thresh},{s})"
+        else:
+            # Wrap each clause so that it's dissatisfiable trivially
+            # But also so that when satisified, it's a B type
+            s = ','.join([f"or_i(0, and_v({cl.to_miniscript()}, 1))" for cl in
+                        self.clauses])
+            return f"v:thresh({self.thresh},{s})"
+
+
 DNFClause = Union[
-    Satisfied, Unsatisfiable, SignedBy, RevealPreImage, CheckTemplateVerify, Wait,
+    Satisfied, Unsatisfiable, SignedBy, RevealPreImage, CheckTemplateVerify,
+    Wait, Threshold
 ]
 """DNF Clauses are basic types of clauses that can't be reduced further."""
 
+
 DNF = List[List[DNFClause]]
-"""Every element in the base list is AND'd together, every list in the outer
-list is OR'd"""
+"""Every element in the base list is AND'd together, every list in the outer list is OR'd"""
 
 Clause = Union[Or, And, DNFClause]
 """Clause includes AndClause and OrClause in addition to DNFClause"""

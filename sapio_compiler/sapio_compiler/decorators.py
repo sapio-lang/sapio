@@ -27,7 +27,7 @@ from typing import (
 )
 
 import sapio_compiler
-from bitcoin_script_compiler.clause import Clause, Satisfied
+from bitcoin_script_compiler.clause import Clause, Satisfied, Threshold
 from sapio_bitcoinlib.static_types import Amount
 
 from .core.txtemplate import TransactionTemplate
@@ -335,6 +335,7 @@ def threshold(
         raise ValueError("Expected to get more conditions in threshold")
     if not n > 0:
         raise ValueError("Threshold int must be positive")
+
     if any(get_type_tag(i) != "require" for i in l):
         raise ValueError("All conditions must be require declarations")
 
@@ -343,12 +344,7 @@ def threshold(
         @require
         def inner(y: ContractType) -> Clause:
             clauses: List[Clause] = [(req.original_func or satisfied)(y) for req in l]
-            # higher-order combo
-            combos: List[Clause] = [
-                reduce(lambda a, b: a & b, combo[1:], combo[0])
-                for combo in combinations(clauses, n)
-            ]
-            return reduce(lambda a, b: a | b, combos[1:], combos[0])
+            return Threshold(n, *clauses)
 
         return inner
 
