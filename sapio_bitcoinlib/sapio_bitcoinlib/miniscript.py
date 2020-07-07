@@ -227,7 +227,6 @@ class Node:
         """Construct miniscript node from script"""
         expr_list = []
         for op in c_script:
-            print(op)
             # Encode 0, 20, 32 as int.
             # Other values are coerced to int types with Node._coerce_to_int()
             if op in [b'', b'\x14', b'\x20']:
