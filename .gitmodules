@@ -1,0 +1,3 @@
+[submodule "rust_miniscript/rust_miniscript/rust-miniscript"]
+	path = rust_miniscript/rust_miniscript/rust-miniscript
+    url = git@github.com:sapio-lang/rust-miniscript.git
