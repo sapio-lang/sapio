@@ -3,7 +3,7 @@ import ctypes
 import os
 
 
-lib = ctypes.cdll.LoadLibrary(os.path.dirname(__file__)+"/target/debug/liblibminiscript.so")
+lib = ctypes.cdll.LoadLibrary(os.path.dirname(__file__)+"/rust-miniscript/target/release/liblibminiscript.so")
 lib.make_policy.argtypes = [POINTER(c_char), POINTER(c_size_t), POINTER(POINTER(c_ubyte))]
 
 def compile_policy(key: bytes) -> bytes:
