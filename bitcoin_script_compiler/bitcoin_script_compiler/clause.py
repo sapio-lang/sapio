@@ -80,7 +80,7 @@ class Satisfied:
         return f"{self.__class__.__name__}()"
 
     def to_miniscript(self):
-        return "v:1"
+        return "1"
 
 
 class Unsatisfiable:
@@ -103,7 +103,7 @@ class Unsatisfiable:
         return f"{self.__class__.__name__}()"
 
     def to_miniscript(self):
-        return "v:0"
+        return "0"
 
 
 class BinaryLogicClause:
@@ -121,7 +121,7 @@ class And(BinaryLogicClause, LogicMixin):
     symbol = "&"
 
     def to_miniscript(self):
-        return f"and_v({self.left.to_miniscript()}, {self.right.to_miniscript()})"
+        return f"and({self.left.to_miniscript()},{self.right.to_miniscript()})"
 
 
 class Or(BinaryLogicClause, LogicMixin):
@@ -129,7 +129,7 @@ class Or(BinaryLogicClause, LogicMixin):
 
     symbol = "|"
     def to_miniscript(self):
-        return f"or_i({self.left.to_miniscript()}, {self.right.to_miniscript()})"
+        return f"or({self.left.to_miniscript()},{self.right.to_miniscript()})"
 
 
 class SignedBy(LogicMixin):
@@ -142,7 +142,7 @@ class SignedBy(LogicMixin):
         return f"{self.__class__.__name__}({self.pubkey!r})"
 
     def to_miniscript(self):
-        return f"vc:pk({self.pubkey.get_bytes().hex()})"
+        return f"pk({self.pubkey.get_bytes().hex()})"
 
 
 class RevealPreImage(LogicMixin):
@@ -157,7 +157,7 @@ class RevealPreImage(LogicMixin):
         return f"{self.__class__.__name__}({self.preimage!r})"
 
     def to_miniscript(self):
-        return f"v:sha256({self.image.hex()})"
+        return f"sha256({self.image.hex()})"
 
 
 class CheckTemplateVerify(LogicMixin):
@@ -232,7 +232,7 @@ class AbsoluteTimeSpec:
         else:
             return f"{self.__class__.__name__}({self.locktime})"
     def to_miniscript(self):
-        return f"v:after({self.locktime})"
+        return f"after({self.locktime})"
 
 
 class RelativeTimeSpec:
@@ -266,7 +266,7 @@ class RelativeTimeSpec:
             return f"{self.__class__.__name__}.blocks_later({self.locktime & 0x00FFFF})"
 
     def to_miniscript(self):
-        return f"v:older({self.sequence})"
+        return f"older({self.sequence})"
 
 
 TimeSpec = Union[AbsoluteTimeSpec, RelativeTimeSpec]
@@ -333,14 +333,14 @@ class Threshold(LogicMixin):
 
     def to_miniscript(self) -> str:
         if all(isinstance(c, ECPubKey) for c in self.clauses):
-            s = ",".join([c.get_bytes().hex() for c in self.clauses])
-            return f"v:thresh_m({self.thresh},{s})"
+            s = ",".join([f"pk({c.get_bytes().hex()})" for c in self.clauses])
+            return f"thresh({self.thresh},{s})"
         else:
             # Wrap each clause so that it's dissatisfiable trivially
             # But also so that when satisified, it's a B type
-            s = ','.join([f"or_i(0, and_v({cl.to_miniscript()}, 1))" for cl in
+            s = ','.join([cl.to_miniscript() for cl in
                         self.clauses])
-            return f"v:thresh({self.thresh},{s})"
+            return f"thresh({self.thresh},{s})"
 
 
 DNFClause = Union[
