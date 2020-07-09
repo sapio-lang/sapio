@@ -236,11 +236,7 @@ $ for MODULE in sapio_bitcoinlib bitcoin_script_compiler sapio_compiler sapio_st
 Run the unit tests:
 
 ```
-$ for MODULE in sapio_bitcoinlib bitcoin_script_compiler sapio_compiler sapio_stdlib sapio_zoo sapio_server; do
-      echo "Testing ${MODULE}"
-      cd $MODULE && make test && cd ..
-      echo
-  done
+$ make test
 ```
 
 #### TODO
