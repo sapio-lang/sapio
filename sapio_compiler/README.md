@@ -24,7 +24,7 @@ Policy/Miniscript, etc). A few languages, such as BitML, placed emphasis on
 multi-transaction and multi-party use cases.
 
 Sapio in particular focuses on transactions using BIP-119
-OP_CHECKTEMPLATEVERIFY. OP_CHECKTEMPLATEVERIFY enables Bitcoin Script to support
+`OP_CHECKTEMPLATEVERIFY`. `OP_CHECKTEMPLATEVERIFY` enables Bitcoin Script to support
 complex multi-step smart contracts without a trusted setup. 
 
 Sapio is a tool for defining such smart contracts in an easy way and exporting
@@ -38,7 +38,7 @@ contracts and limit risk of losing funds.
 
 ### Show Me The Money! Sapio Crash Course:
 Let's look at some example Sapio contracts (see
-https://github.com/JeremyRubin/sapio/tree/master/sapio_zoo/sapio_zoo for more
+[sapio_zoo/](https://github.com/JeremyRubin/sapio/tree/master/sapio_zoo/sapio_zoo) for more
 examples).
 
 
@@ -91,7 +91,7 @@ class BasicEscrow2(Contract):
         return SignedBy(self.alice) & SignedBy(self.bob)
 ```
 
-Until this point, we haven't made use of any of the CheckTemplateVerify
+Until this point, we haven't made use of any of the `CheckTemplateVerify`
 functionality of Sapio. These could all be done in Bitcoin today.
 
 But Sapio lets us go further. What if we wanted to protect from Alice and the
@@ -122,7 +122,7 @@ class TrustlessEscrow(Contract):
 
 Now with `TrustlessEscrow`, we've done a few things differently. A `@guarantee`
 designator tells the contract compiler to add a branch which *must* create the
-returned transaction if that branch is taken.  We've also passed in a
+returned transaction if that branch is taken. We've also passed in a
 sub-contract for both Alice and Bob to allow us to specify at a higher layer
 what kind of pay out they receive. Lastly, we used a call to `set_sequence` to
 specify that we should have to wait 10 days before using the escrow (we could
@@ -199,7 +199,7 @@ with Wallet() as w:
 ```
 
 The wallet will automatically watch for payments to
-bcrt1qh4ddpny622fcjf5m02nmdare7wgsuys5sau3jh5tdhm2kzwg9rzqw2sk00 and bind an
+`bcrt1qh4ddpny622fcjf5m02nmdare7wgsuys5sau3jh5tdhm2kzwg9rzqw2sk00` and bind an
 instance of the contract to the output.
 
 # Getting Started With Sapio
