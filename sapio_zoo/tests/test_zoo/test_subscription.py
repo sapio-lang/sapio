@@ -12,6 +12,7 @@ from sapio_bitcoinlib.messages import COutPoint
 from .testutil import random_k
 from sapio_compiler import AmountRange
 
+
 class MyTestCase(unittest.TestCase):
     def test_something(self):
         # amount: Amount
@@ -41,6 +42,7 @@ class MyTestCase(unittest.TestCase):
         )
 
         c.bind(COutPoint(0, 0))
+
 
 if __name__ == "__main__":
     unittest.main()

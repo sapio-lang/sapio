@@ -50,7 +50,7 @@ def _convert_ip_port(array):
     host = unhexlify(host)
     host_out = ""
     for x in range(0, len(host) // 4):
-        (val,) = struct.unpack("=I", host[x * 4 : (x + 1) * 4])
+        (val,) = struct.unpack("=I", host[x * 4: (x + 1) * 4])
         host_out += "%08x" % val
 
     return host_out, int(port, 16)
@@ -121,8 +121,8 @@ def all_interfaces():
     namestr = names.tobytes()
     return [
         (
-            namestr[i : i + 16].split(b"\0", 1)[0],
-            socket.inet_ntoa(namestr[i + 20 : i + 24]),
+            namestr[i: i + 16].split(b"\0", 1)[0],
+            socket.inet_ntoa(namestr[i + 20: i + 24]),
         )
         for i in range(0, outbytes, struct_size)
     ]

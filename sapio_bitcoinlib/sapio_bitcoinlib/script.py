@@ -561,7 +561,7 @@ class CScript(bytes):
                 else:
                     assert False  # shouldn't happen
 
-                data = bytes(self[i : i + datasize])
+                data = bytes(self[i: i + datasize])
 
                 # Check for truncation
                 if len(data) < datasize:
@@ -657,7 +657,7 @@ def FindAndDelete(script: CScript, sig: bytes) -> CScript:
         if not skip:
             r += script[last_sop_idx:sop_idx]
         last_sop_idx = sop_idx
-        if script[sop_idx : sop_idx + len(sig)] == sig:
+        if script[sop_idx: sop_idx + len(sig)] == sig:
             skip = True
         else:
             skip = False

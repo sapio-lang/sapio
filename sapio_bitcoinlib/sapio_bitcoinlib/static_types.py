@@ -14,8 +14,9 @@ else:
     Amount = NewType("Amount", int64)
 
 
-
 from sapio_bitcoinlib.key import ECPubKey
+
+
 class PubKey(ECPubKey):
     def __init__(self, b):
         self.set(b)

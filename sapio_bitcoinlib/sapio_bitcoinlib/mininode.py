@@ -188,17 +188,17 @@ class P2PConnection(asyncio.Protocol):
                     )
                 if len(self.recvbuf) < 4 + 12 + 4 + 4:
                     return
-                command = self.recvbuf[4 : 4 + 12].split(b"\x00", 1)[0]
-                msglen = struct.unpack("<i", self.recvbuf[4 + 12 : 4 + 12 + 4])[0]
-                checksum = self.recvbuf[4 + 12 + 4 : 4 + 12 + 4 + 4]
+                command = self.recvbuf[4: 4 + 12].split(b"\x00", 1)[0]
+                msglen = struct.unpack("<i", self.recvbuf[4 + 12: 4 + 12 + 4])[0]
+                checksum = self.recvbuf[4 + 12 + 4: 4 + 12 + 4 + 4]
                 if len(self.recvbuf) < 4 + 12 + 4 + 4 + msglen:
                     return
-                msg = self.recvbuf[4 + 12 + 4 + 4 : 4 + 12 + 4 + 4 + msglen]
+                msg = self.recvbuf[4 + 12 + 4 + 4: 4 + 12 + 4 + 4 + msglen]
                 th = sha256(msg)
                 h = sha256(th)
                 if checksum != h[:4]:
                     raise ValueError("got bad checksum " + repr(self.recvbuf))
-                self.recvbuf = self.recvbuf[4 + 12 + 4 + 4 + msglen :]
+                self.recvbuf = self.recvbuf[4 + 12 + 4 + 4 + msglen:]
                 if command not in MESSAGEMAP:
                     raise ValueError(
                         "Received unknown command from %s:%d: '%s' %s"
@@ -615,7 +615,7 @@ class P2PDataStore(P2PInterface):
                 break
 
         # Truncate the list if there are too many headers
-        headers_list = headers_list[: -maxheaders - 1 : -1]
+        headers_list = headers_list[: -maxheaders - 1: -1]
         response = msg_headers(headers_list)
 
         if response is not None:

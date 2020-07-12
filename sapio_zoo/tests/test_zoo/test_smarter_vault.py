@@ -53,8 +53,8 @@ class TestSmarterVault(unittest.TestCase):
             amount_step=100,
         )
 
-
         s.bind(COutPoint(0, 0))
+
 
 if __name__ == "__main__":
     unittest.main()

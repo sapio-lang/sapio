@@ -30,25 +30,30 @@ base_meta = {
 }
 
 allowed_sat_types = {
-    miniscript.SatType.SIGNATURE ,
-    miniscript.SatType.KEY_AND_HASH160_PREIMAGE ,
-    miniscript.SatType.SHA256_PREIMAGE ,
-    miniscript.SatType.HASH256_PREIMAGE ,
-    miniscript.SatType.RIPEMD160_PREIMAGE ,
-    miniscript.SatType.HASH160_PREIMAGE ,
+    miniscript.SatType.SIGNATURE,
+    miniscript.SatType.KEY_AND_HASH160_PREIMAGE,
+    miniscript.SatType.SHA256_PREIMAGE,
+    miniscript.SatType.HASH256_PREIMAGE,
+    miniscript.SatType.RIPEMD160_PREIMAGE,
+    miniscript.SatType.HASH160_PREIMAGE,
     miniscript.SatType.DATA
 }
+
+
 def clean_witness(tx):
     # TODO: Store the witness satisfaction templates in a different format to
     # avoid creating invalid CTransaction objects.
     for witness in tx.wit.vtxinwit:
         witness.scriptWitness.stack = [w[1] for w in witness.scriptWitness.stack if w[0] in allowed_sat_types]
     return tx
+
+
 def get_tx_data(txns, metadata):
     return [
-            {"hex": clean_witness(tx).serialize_with_witness().hex(), **meta}
-            for (tx, meta) in zip(txns, metadata)
-        ]
+        {"hex": clean_witness(tx).serialize_with_witness().hex(), **meta}
+        for (tx, meta) in zip(txns, metadata)
+    ]
+
 
 class CompilerWebSocket(tornado.websocket.WebSocketHandler):
     contracts: Dict[str, Union[BindableContract, ContractProtocol]] = {}
