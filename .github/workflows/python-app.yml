@@ -29,10 +29,7 @@ jobs:
         
     - name: Lint with flake8
       run: |
-        # stop the build if there are Python syntax errors or undefined names
-        #flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        #flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        flake8 --ignore=E121,E126,E203,E222,E226,E227,E261,E272,E301,E302,E303,E305,E306,E402,E501,E701,E711,E712,E722,E741,F401,F403,F405,F821,W391,W503,W504 --count --show-source --statistics $(git ls-files -- "*.py")
     
     - name: Install modules
       run: |
