@@ -11,15 +11,16 @@ on:
 
 jobs:
   build: 
-
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v2
+
     - name: Set up Python 3.8
       uses: actions/setup-python@v2
       with:
         python-version: 3.8
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -42,15 +43,4 @@ jobs:
         
     - name: Run unit tests
       run: |
-        testresult=0
-        for MODULE in sapio_bitcoinlib bitcoin_script_compiler sapio_compiler sapio_stdlib sapio_zoo sapio_server; do
-          echo "Testing ${MODULE} started"
-          cd $MODULE && pwd && make test && pwd 
-          testresult=$(($testresult+$?))
-          echo $testresult
-        cd ..
-        echo "Testing ${MODULE} finished"
-        done
-        echo "Number of failing tests: ${testresult}"
-        exit $testresult
-
+        make test
