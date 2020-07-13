@@ -187,7 +187,7 @@ class BindableContract(Generic[FieldsType]):
                     # This uniquely binds things with a CTV hash to the
                     # appropriate witnesses. Also binds things with None to all
                     # possible witnesses that do not have a ctv
-                    ctv_sat =  (miniscript.SatType.TXTEMPLATE, ctv_hash)
+                    ctv_sat = (miniscript.SatType.TXTEMPLATE, ctv_hash)
                     candidates = [
                         wit
                         for wit in this.witness_manager.ms.sat

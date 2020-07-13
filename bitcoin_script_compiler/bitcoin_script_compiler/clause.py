@@ -127,6 +127,7 @@ class Or(BinaryLogicClause, LogicMixin):
     """Expresses that either the left hand or right hand arguments must be satisfied."""
 
     symbol = "|"
+
     def to_miniscript(self):
         return f"or_i({self.left.to_miniscript()}, {self.right.to_miniscript()})"
 
@@ -230,6 +231,7 @@ class AbsoluteTimeSpec:
             return f"{self.__class__.__name__}.at_height({self.locktime})"
         else:
             return f"{self.__class__.__name__}({self.locktime})"
+
     def to_miniscript(self):
         return f"v:after({self.locktime})"
 

@@ -5,6 +5,7 @@ from sapio_zoo.p2pk import *
 from .testutil import random_k
 from sapio_bitcoinlib.messages import COutPoint
 
+
 class TestP2Pk(unittest.TestCase):
     def test(self):
         key = random_k()

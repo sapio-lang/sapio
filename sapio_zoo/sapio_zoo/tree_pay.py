@@ -18,7 +18,7 @@ def segment_by_radix(L, n):
             yield L[i:]
             return
         else:
-            yield L[i : i + size]
+            yield L[i: i + size]
 
 
 class TreePay(Contract):

@@ -12,6 +12,8 @@ import logging
 logger = logging.getLogger("TestFramework.socks5")
 
 # Protocol constants
+
+
 class Command:
     CONNECT = 0x01
 

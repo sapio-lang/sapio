@@ -38,20 +38,20 @@ class Property:
 
     def __init__(self):
         # Prefer this form for static analysis
-        self.B = False # Base type
-        self.V = False # Verify type
-        self.K = False # Key type
-        self.W = False # Wrapped type
-        self.z = False # Zero-arg property
-        self.o = False # One-arg property
-        self.n = False # Nonzero arg property
-        self.d = False # Dissatisfiable property
-        self.u = False # Unit property
-        self.e = False # Expression property
-        self.f = False # Forced property
-        self.s = False # Safe property
-        self.m = False # Nonmalleable property
-        self.x = False # Expensive verify
+        self.B = False  # Base type
+        self.V = False  # Verify type
+        self.K = False  # Key type
+        self.W = False  # Wrapped type
+        self.z = False  # Zero-arg property
+        self.o = False  # One-arg property
+        self.n = False  # Nonzero arg property
+        self.d = False  # Dissatisfiable property
+        self.u = False  # Unit property
+        self.e = False  # Expression property
+        self.f = False  # Forced property
+        self.s = False  # Safe property
+        self.m = False  # Nonmalleable property
+        self.x = False  # Expensive verify
 
     def from_string(self, property_str):
         """Construct property from string of valid property and types"""
@@ -216,7 +216,7 @@ class Node:
         # Standard node constructor forms:
         # construct_tag(node_x, node_y, ...):
         return getattr(Node(), "construct_"+tag)(
-                *Node._parse_child_strings(child_exprs))
+            *Node._parse_child_strings(child_exprs))
 
     @property
     def script(self):
@@ -748,7 +748,7 @@ class Node:
         child_sat_var_ls = []
         child_dsat_var_ls = []
         for child in self.children:
-            child_sat_var_ls.append(child.sat) # what if multiple are returned?
+            child_sat_var_ls.append(child.sat)  # what if multiple are returned?
             child_dsat_var_ls.append(child.dsat)
 
         # Generate all permutations of sets each containing a single satisfying
@@ -1423,7 +1423,7 @@ class Node:
 
     def _pk_h_dsat(self):
         return [[(SatType.DATA, b''),
-                (SatType.KEY_AND_HASH160_PREIMAGE, self._pk_h)]]
+                 (SatType.KEY_AND_HASH160_PREIMAGE, self._pk_h)]]
 
     def _older_sat(self):
         return [[(SatType.OLDER, self._delay)]]
@@ -1743,4 +1743,3 @@ class Node:
                     idx+2:]
             idx += 1
         return expr_list
-

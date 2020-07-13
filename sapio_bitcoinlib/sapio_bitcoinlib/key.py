@@ -316,7 +316,7 @@ class ECPubKey:
             return False
         if rlen > 1 and (sig[4] == 0) and not (sig[5] & 0x80):
             return False
-        r = int.from_bytes(sig[4 : 4 + rlen], "big")
+        r = int.from_bytes(sig[4: 4 + rlen], "big")
         if sig[4 + rlen] != 0x02:
             return False
         slen = sig[5 + rlen]
@@ -328,7 +328,7 @@ class ECPubKey:
             return False
         if slen > 1 and (sig[6 + rlen] == 0) and not (sig[7 + rlen] & 0x80):
             return False
-        s = int.from_bytes(sig[6 + rlen : 6 + rlen + slen], "big")
+        s = int.from_bytes(sig[6 + rlen: 6 + rlen + slen], "big")
 
         # Verify that r and s are within the group order
         if r < 1 or s < 1 or r >= SECP256K1_ORDER or s >= SECP256K1_ORDER:
