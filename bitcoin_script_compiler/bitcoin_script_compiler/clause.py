@@ -24,6 +24,7 @@ from functools import singledispatchmethod
 from typing import Any, List, Protocol, Union, cast, Literal, TYPE_CHECKING
 
 from sapio_bitcoinlib.static_types import Hash, LockTime, PubKey, Sequence, uint32
+from sapio_bitcoinlib.key import ECPubKey
 
 
 class ClauseProtocol(Protocol):
@@ -79,7 +80,7 @@ class Satisfied:
         return f"{self.__class__.__name__}()"
 
     def to_miniscript(self):
-        return "v:1"
+        return "1"
 
 
 class Unsatisfiable:
@@ -102,7 +103,7 @@ class Unsatisfiable:
         return f"{self.__class__.__name__}()"
 
     def to_miniscript(self):
-        return "v:0"
+        return "0"
 
 
 class BinaryLogicClause:
@@ -120,7 +121,7 @@ class And(BinaryLogicClause, LogicMixin):
     symbol = "&"
 
     def to_miniscript(self):
-        return f"and_v({self.left.to_miniscript()}, {self.right.to_miniscript()})"
+        return f"and({self.left.to_miniscript()},{self.right.to_miniscript()})"
 
 
 class Or(BinaryLogicClause, LogicMixin):
@@ -129,7 +130,7 @@ class Or(BinaryLogicClause, LogicMixin):
     symbol = "|"
 
     def to_miniscript(self):
-        return f"or_i({self.left.to_miniscript()}, {self.right.to_miniscript()})"
+        return f"or({self.left.to_miniscript()},{self.right.to_miniscript()})"
 
 
 class SignedBy(LogicMixin):
@@ -142,7 +143,7 @@ class SignedBy(LogicMixin):
         return f"{self.__class__.__name__}({self.pubkey!r})"
 
     def to_miniscript(self):
-        return f"vc:pk({self.pubkey.get_bytes().hex()})"
+        return f"pk({self.pubkey.get_bytes().hex()})"
 
 
 class RevealPreImage(LogicMixin):
@@ -157,7 +158,7 @@ class RevealPreImage(LogicMixin):
         return f"{self.__class__.__name__}({self.preimage!r})"
 
     def to_miniscript(self):
-        return f"v:sha256({self.image.hex()})"
+        return f"sha256({self.image.hex()})"
 
 
 class CheckTemplateVerify(LogicMixin):
@@ -233,7 +234,7 @@ class AbsoluteTimeSpec:
             return f"{self.__class__.__name__}({self.locktime})"
 
     def to_miniscript(self):
-        return f"v:after({self.locktime})"
+        return f"after({self.locktime})"
 
 
 class RelativeTimeSpec:
@@ -267,7 +268,7 @@ class RelativeTimeSpec:
             return f"{self.__class__.__name__}.blocks_later({self.locktime & 0x00FFFF})"
 
     def to_miniscript(self):
-        return f"v:older({self.sequence})"
+        return f"older({self.sequence})"
 
 
 TimeSpec = Union[AbsoluteTimeSpec, RelativeTimeSpec]
@@ -321,14 +322,42 @@ class Wait(LogicMixin):
         return self.time.to_miniscript()
 
 
+class Threshold(LogicMixin):
+    """Takes a list of clauses and a threshold"""
+
+    thresh: int
+
+    clauses: List[DNFClause]
+
+    def __init__(self, thresh: int, clauses: Union[List[DNFClause], List[ECPubKey]]):
+        self.thresh = thresh
+        self.clauses = clauses
+
+    def to_miniscript(self) -> str:
+        if all(isinstance(c, ECPubKey) for c in self.clauses):
+            s = ",".join([f"pk({c.get_bytes().hex()})" for c in self.clauses])
+            return f"thresh({self.thresh},{s})"
+        else:
+            # Wrap each clause so that it's dissatisfiable trivially
+            # But also so that when satisified, it's a B type
+            s = ",".join([cl.to_miniscript() for cl in self.clauses])
+            return f"thresh({self.thresh},{s})"
+
+
 DNFClause = Union[
-    Satisfied, Unsatisfiable, SignedBy, RevealPreImage, CheckTemplateVerify, Wait,
+    Satisfied,
+    Unsatisfiable,
+    SignedBy,
+    RevealPreImage,
+    CheckTemplateVerify,
+    Wait,
+    Threshold,
 ]
 """DNF Clauses are basic types of clauses that can't be reduced further."""
 
+
 DNF = List[List[DNFClause]]
-"""Every element in the base list is AND'd together, every list in the outer
-list is OR'd"""
+"""Every element in the base list is AND'd together, every list in the outer list is OR'd"""
 
 Clause = Union[Or, And, DNFClause]
 """Clause includes AndClause and OrClause in addition to DNFClause"""

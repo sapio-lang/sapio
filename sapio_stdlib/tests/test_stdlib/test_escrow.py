@@ -8,7 +8,9 @@ from .util import random_k
 
 class TestEscrow(unittest.TestCase):
     def test_multisig(self):
+        print("MAKING ALICE")
         alice = P2PK(key=random_k())
+        print("MADE ALICE")
         bob = P2PK(key=random_k())
 
         t = TransactionTemplate()

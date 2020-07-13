@@ -1,0 +1,2 @@
+setuptools-rust==0.10.6
+cffi==1.14.0

@@ -23,6 +23,7 @@ from typing import (
     Union,
 )
 
+import rust_miniscript
 import sapio_compiler.contract
 import sapio_compiler.core.bindable_contract
 from bitcoin_script_compiler import (
@@ -36,6 +37,7 @@ from bitcoin_script_compiler import (
 )
 from sapio_bitcoinlib.static_types import Amount, Hash, Sats
 from sapio_bitcoinlib import miniscript
+from sapio_bitcoinlib.script import CScript
 from sapio_compiler.core.errors import ExtraArgumentError, MissingArgumentError
 
 from .txtemplate import TransactionTemplate
@@ -176,6 +178,6 @@ class Initializer(Generic[FieldsType]):
         if isinstance(paths, Unsatisfiable):
             raise AssertionError("Must Have at least one spending condition")
         desc = paths.to_miniscript()
-        desc = f"and_v({desc}, 1)"
-        ms = miniscript.Node.from_desc(desc)
+        script = CScript(rust_miniscript.compile_policy(bytes(desc, 'utf-8')))
+        ms = miniscript.Node.from_script(script)
         obj.witness_manager = WitnessManager(ms)
