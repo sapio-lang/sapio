@@ -211,6 +211,12 @@ $ git clone https://github.com/sapio-lang/sapio
 $ cd sapio/
 ```
 
+Install Rust (https://www.rust-lang.org/learn/get-started):
+
+```
+$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
 Install Python 3.8 and create a separate Python virtual environment:
 
 ```
