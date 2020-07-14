@@ -36,6 +36,10 @@ application.
 Sapio has intelligent built in features which help developers design safe smart
 contracts and limit risk of losing funds.
 
+For more information on Sapio, check out Jeremy's Reckless VR Talk [Sapio: Stateful Smart Contracts
+for Bitcoin with OP_CTV](https://www.youtube.com/watch?v=4vDuttlImPc) and
+[slides](https://docs.google.com/presentation/d/1X4AGNXJ5yCeHRrf5sa9DarWfDyEkm6fFUlrcIRQtUw4).
+
 ### Show Me The Money! Sapio Crash Course:
 Let's look at some example Sapio contracts (see
 [sapio_zoo/](https://github.com/JeremyRubin/sapio/tree/master/sapio_zoo/sapio_zoo) for more
