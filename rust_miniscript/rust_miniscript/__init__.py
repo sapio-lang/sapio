@@ -26,7 +26,6 @@ def compile_policy(key: bytes) -> bytes:
     size = ffi.new("size_t *")
     data = ffi.new("const uint8_t const **")
     handle = lib.make_policy(key, size, data)
-    print(size, data)
     if handle == ffi.NULL or size[0] == ffi.NULL or data[0] == 0:
         raise ValueError(f"Bad Policy! {key}")
     ret = bytearray(size[0])
