@@ -3,7 +3,8 @@ from bitcoin_script_compiler import *
 from sapio_bitcoinlib.static_types import *
 
 from .contract import Contract
-from .core.bindable_contract import BindableContract, ContractProtocol, AmountRange
+from .core.bindable_contract import BindableContract, ContractProtocol
+from .core.amountrange import AmountRange
 from .core.txtemplate import TransactionTemplate
 from .decorators import (
     check,

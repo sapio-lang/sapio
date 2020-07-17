@@ -280,7 +280,7 @@ class ECPubKey:
     def is_valid(self):
         return self.valid
 
-    def get_bytes(self):
+    def get_bytes(self) -> bytes:
         assert self.valid
         p = SECP256K1.affine(self.p)
         if p is None:

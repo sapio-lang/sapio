@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 # From Bitcoin Core PR #17975
 
 # Copyright (c) 2020 The Bitcoin Core developers
@@ -152,7 +153,7 @@ class Node:
     list of tuples which encode the (dis)satisfying witness stack.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.desc = ''
         self.children = None
         self.t = None
@@ -162,7 +163,7 @@ class Node:
         self._pk_h = None
 
     @staticmethod
-    def from_desc(string):
+    def from_desc(string) -> Node:
         """Construct miniscript node from string descriptor"""
         tag, child_exprs = Node._parse_string(string)
         k = None
@@ -219,11 +220,11 @@ class Node:
             *Node._parse_child_strings(child_exprs))
 
     @property
-    def script(self):
+    def script(self) -> CScript:
         return CScript(Node._collapse_script(self._script))
 
     @staticmethod
-    def from_script(c_script):
+    def from_script(c_script) -> Node:
         """Construct miniscript node from script"""
         expr_list = []
         for op in c_script:
@@ -358,7 +359,7 @@ class Node:
         return Node._parse_expr_list(expr_list)
 
     @staticmethod
-    def _parse_expr_list(expr_list):
+    def _parse_expr_list(expr_list) -> Node:
         # Every recursive call must progress the AST construction,
         # until it is complete (single root node remains).
         expr_list_len = len(expr_list)

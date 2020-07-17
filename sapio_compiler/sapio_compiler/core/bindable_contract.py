@@ -24,46 +24,28 @@ from sapio_bitcoinlib.script import CScript
 from sapio_compiler.core.initializer import Initializer
 
 from .txtemplate import TransactionTemplate
+from .amountrange import AmountRange
 
 FieldsType = TypeVar("FieldsType")
 
 
-class AmountRange:
-    """
-    Utility class which tracks the amount of funds that a contract has a
-    guaranteed path to spend minimally and maximally.
-    """
+class BindableContractProtocol(Protocol):
+    @classmethod
+    @abstractmethod
+    def create_instance(cls, **kwargs: Any) -> BindableContract[Any]:
+        pass
 
-    MIN: Final[Amount] = Amount(0)
-    """Minimum amount of BTC to send"""
-    MAX: Final[Amount] = Amount(21_000_000 * 100_000_000)
-    """Maximum amount of BTC to send"""
+    @abstractmethod
+    def to_json(self) -> Dict[str, Any]:
+        pass
 
-    def __init__(self):
-        """
-        By default we construct it with the max value for min, and the min
-        value for max. This means that any subsequent update will be correct.
-        """
-        self.min = AmountRange.MAX
-        self.max = AmountRange.MIN
+    @abstractmethod
+    def bind(
+        self, out_in: COutPoint
+    ) -> Tuple[List[CTransaction], List[Dict[str, Any]]]:
+        pass
 
-    @staticmethod
-    def of(a: Amount) -> AmountRange:
-        ar = AmountRange()
-        ar.update_range(a)
-        return ar
-
-    def get_min(self) -> Amount:
-        return self.min
-
-    def get_max(self) -> Amount:
-        return self.max
-
-    def update_range(self, amount) -> None:
-        if not AmountRange.MIN <= amount <= AmountRange.MAX:
-            raise ValueError("Invalid Amount of Bitcoin", amount)
-        self.min = min(self.min, amount)
-        self.max = max(self.max, amount)
+    amount_range: AmountRange
 
 
 class BindableContract(Generic[FieldsType]):
@@ -189,9 +171,7 @@ class BindableContract(Generic[FieldsType]):
                     # possible witnesses that do not have a ctv
                     ctv_sat = (miniscript.SatType.TXTEMPLATE, ctv_hash)
                     candidates = [
-                        wit
-                        for wit in this.witness_manager.ms.sat
-                        if ctv_sat in wit
+                        wit for wit in this.witness_manager.ms.sat if ctv_sat in wit
                     ]
                     # There should always be a candidate otherwise we shouldn't
                     # have a txn
@@ -206,7 +186,9 @@ class BindableContract(Generic[FieldsType]):
                     # Create all possible candidates
                     for wit in candidates:
                         t = copy.deepcopy(tx)
-                        t.wit.vtxinwit[0].scriptWitness.stack = wit + [(miniscript.SatType.DATA, program)]
+                        t.wit.vtxinwit[0].scriptWitness.stack = wit + [
+                            (miniscript.SatType.DATA, program)
+                        ]
                         txns.append(t)
                         utxo_metadata = [
                             md.to_json() for md in txn_template.outputs_metadata
