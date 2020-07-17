@@ -15,7 +15,6 @@ from .clause import (
     Weeks,
     Threshold,
 )
-from .compiler import ProgramBuilder
 from .witnessmanager import CTVHash, WitnessManager
 
 __all__ = [
@@ -32,7 +31,6 @@ __all__ = [
     "Unsatisfiable",
     "Weeks",
     "Threshold",
-    "ProgramBuilder",
     "CTVHash",
     "WitnessManager",
 ]
