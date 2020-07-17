@@ -31,7 +31,7 @@ from bitcoin_script_compiler.clause import Clause, Satisfied, Threshold
 from sapio_bitcoinlib.static_types import Amount
 
 from .core.txtemplate import TransactionTemplate
-from .core.bindable_contract import AmountRange
+from .core.amountrange import AmountRange
 
 import sapio_compiler.core.bindable_contract
 

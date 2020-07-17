@@ -30,7 +30,6 @@ from bitcoin_script_compiler import (
     CheckTemplateVerify,
     Clause,
     CTVHash,
-    ProgramBuilder,
     Satisfied,
     Unsatisfiable,
     WitnessManager,
