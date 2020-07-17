@@ -131,7 +131,8 @@ class Initializer(Generic[FieldsType]):
         paths: Clause = Unsatisfiable()
         for path_func in self.path_functions:
             # set up abi documentation
-            txn_abi = []
+
+            txn_abi: List[TransactionTemplate] = []
             obj.txn_abi[path_func] = txn_abi
             obj.conditions_abi[path_func] = Satisfied()
 
@@ -178,6 +179,6 @@ class Initializer(Generic[FieldsType]):
         if isinstance(paths, Unsatisfiable):
             raise AssertionError("Must Have at least one spending condition")
         desc = paths.to_miniscript()
-        script = CScript(rust_miniscript.compile_policy(bytes(desc, 'utf-8')))
+        script = CScript(rust_miniscript.compile_policy(bytes(desc, "utf-8")))
         ms = miniscript.Node.from_script(script)
         obj.witness_manager = WitnessManager(ms)

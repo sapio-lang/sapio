@@ -252,7 +252,7 @@ class CInv:
         self.type = struct.unpack("<i", f.read(4))[0]
         self.hash = deser_uint256(f)
 
-    def serialize(self):
+    def serialize(self) -> bytes:
         r = b""
         r += struct.pack("<i", self.type)
         r += ser_uint256(self.hash)
@@ -359,7 +359,7 @@ class CTxOut:
         self.nValue = struct.unpack("<q", f.read(8))[0]
         self.scriptPubKey = deser_string(f)
 
-    def serialize(self):
+    def serialize(self) -> bytes:
         r = b""
         r += struct.pack("<q", self.nValue)
         r += ser_string(self.scriptPubKey)

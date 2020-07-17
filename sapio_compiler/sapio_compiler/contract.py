@@ -19,7 +19,9 @@ class MetaContract(type):
     Contract which inherits from BindableContract.
     """
 
-    def __new__(mcl: Type, name: str, bases: List[Type], nmspc: Dict[str, Any]):
+    def __new__(
+        mcl: Type[Any], name: str, bases: List[Type[Any]], nmspc: Dict[str, Any]
+    ) -> MetaContract:
         pay_funcs = [v for (k, v) in nmspc.items() if get_type_tag(v) == "pay_address"]
         path_funcs = [v for (k, v) in nmspc.items() if get_type_tag(v) == "path"]
         unlock_funcs = [v for (k, v) in nmspc.items() if get_type_tag(v) == "unlock"]
@@ -35,7 +37,7 @@ class MetaContract(type):
         return super(MetaContract, mcl).__new__(mcl, name, (MetaBase,), nmspc)
 
 
-class Contract(BindableContract, metaclass=MetaContract):
+class Contract(BindableContract[Any], metaclass=MetaContract):
     """Base class to inherit from when making a new contract"""
 
     class Fields:

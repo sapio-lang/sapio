@@ -329,7 +329,7 @@ class Threshold(LogicMixin):
 
     clauses: List[DNFClause]
 
-    def __init__(self, thresh: int, clauses: Union[List[DNFClause], List[ECPubKey]]):
+    def __init__(self, thresh: int, clauses: Union[List[Clause], List[ECPubKey]]):
         self.thresh = thresh
         self.clauses = clauses
 

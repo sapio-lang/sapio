@@ -31,6 +31,7 @@ from bitcoin_script_compiler.clause import Clause, Satisfied, Threshold
 from sapio_bitcoinlib.static_types import Amount
 
 from .core.txtemplate import TransactionTemplate
+from .core.bindable_contract import AmountRange
 
 import sapio_compiler.core.bindable_contract
 
@@ -344,7 +345,7 @@ def threshold(
         @require
         def inner(y: ContractType) -> Clause:
             clauses: List[Clause] = [(req.original_func or satisfied)(y) for req in l]
-            return Threshold(n, *clauses)
+            return Threshold(n, clauses)
 
         return inner
 

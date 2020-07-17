@@ -28,6 +28,25 @@ from .txtemplate import TransactionTemplate
 FieldsType = TypeVar("FieldsType")
 
 
+class BindableContractProtocol(Protocol):
+    @abstractmethod
+    @classmethod
+    def create_instance(cls, **kwargs: Any) -> BindableContract[Any]:
+        pass
+
+    @abstractmethod
+    def to_json(self) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
+    def bind(
+        self, out_in: COutPoint
+    ) -> Tuple[List[CTransaction], List[Dict[str, Any]]]:
+        pass
+
+    amount_range: AmountRange
+
+
 class AmountRange:
     """
     Utility class which tracks the amount of funds that a contract has a
@@ -39,7 +58,7 @@ class AmountRange:
     MAX: Final[Amount] = Amount(21_000_000 * 100_000_000)
     """Maximum amount of BTC to send"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """
         By default we construct it with the max value for min, and the min
         value for max. This means that any subsequent update will be correct.
@@ -59,14 +78,14 @@ class AmountRange:
     def get_max(self) -> Amount:
         return self.max
 
-    def update_range(self, amount) -> None:
+    def update_range(self, amount: Amount) -> None:
         if not AmountRange.MIN <= amount <= AmountRange.MAX:
             raise ValueError("Invalid Amount of Bitcoin", amount)
         self.min = min(self.min, amount)
         self.max = max(self.max, amount)
 
 
-class BindableContract(Generic[FieldsType]):
+class BindableContract(Generic[FieldsType], BindableContractProtocol):
     """
     BindableContract is the base contract object that gets created by the Sapio
     language frontend.
@@ -189,9 +208,7 @@ class BindableContract(Generic[FieldsType]):
                     # possible witnesses that do not have a ctv
                     ctv_sat = (miniscript.SatType.TXTEMPLATE, ctv_hash)
                     candidates = [
-                        wit
-                        for wit in this.witness_manager.ms.sat
-                        if ctv_sat in wit
+                        wit for wit in this.witness_manager.ms.sat if ctv_sat in wit
                     ]
                     # There should always be a candidate otherwise we shouldn't
                     # have a txn
@@ -206,7 +223,9 @@ class BindableContract(Generic[FieldsType]):
                     # Create all possible candidates
                     for wit in candidates:
                         t = copy.deepcopy(tx)
-                        t.wit.vtxinwit[0].scriptWitness.stack = wit + [(miniscript.SatType.DATA, program)]
+                        t.wit.vtxinwit[0].scriptWitness.stack = wit + [
+                            (miniscript.SatType.DATA, program)
+                        ]
                         txns.append(t)
                         utxo_metadata = [
                             md.to_json() for md in txn_template.outputs_metadata
