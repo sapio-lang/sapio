@@ -21,13 +21,17 @@ from __future__ import annotations
 
 from datetime import datetime
 from functools import singledispatchmethod
-from typing import Any, List, Protocol, Union, cast, Literal, TYPE_CHECKING
+from typing import Any, List, Protocol, Union, cast, Literal, TYPE_CHECKING, ClassVar
 
 from sapio_bitcoinlib.static_types import Hash, LockTime, PubKey, Sequence, uint32
 from sapio_bitcoinlib.key import ECPubKey
+from abc import abstractmethod
 
 
 class ClauseProtocol(Protocol):
+    n_args: ClassVar[int]
+    symbol: ClassVar[str] = ""
+
     @property
     def a(self) -> Any:
         pass
@@ -36,9 +40,15 @@ class ClauseProtocol(Protocol):
     def b(self) -> Any:
         pass
 
+    @abstractmethod
+    def to_miniscript(self) -> str:
+        pass
+
 
 class StringClauseMixin:
     """Mixin to add str printing"""
+
+    MODE = "+"
 
     def __str__(self: ClauseProtocol) -> str:
         if StringClauseMixin.MODE == "+":
@@ -48,6 +58,7 @@ class StringClauseMixin:
                 return f"{self.a}{self.symbol}{self.b}"
             else:
                 return f"{self.__class__.__name__}()"
+        assert False
 
 
 class LogicMixin:
@@ -73,13 +84,13 @@ class Satisfied:
     def __and__(self, other: Clause) -> Clause:
         return other
 
-    def __eq__(self, other: Clause) -> bool:
+    def __eq__(self, other: object) -> bool:
         return isinstance(other, Satisfied)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
 
-    def to_miniscript(self):
+    def to_miniscript(self) -> str:
         return "1"
 
 
@@ -102,11 +113,13 @@ class Unsatisfiable:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
 
-    def to_miniscript(self):
+    def to_miniscript(self) -> str:
         return "0"
 
 
 class BinaryLogicClause:
+    symbol: ClassVar[str]
+
     def __init__(self, a: Clause, b: Clause):
         self.left = a
         self.right = b
@@ -120,7 +133,7 @@ class And(BinaryLogicClause, LogicMixin):
 
     symbol = "&"
 
-    def to_miniscript(self):
+    def to_miniscript(self) -> str:
         return f"and({self.left.to_miniscript()},{self.right.to_miniscript()})"
 
 
@@ -129,7 +142,7 @@ class Or(BinaryLogicClause, LogicMixin):
 
     symbol = "|"
 
-    def to_miniscript(self):
+    def to_miniscript(self) -> str:
         return f"or({self.left.to_miniscript()},{self.right.to_miniscript()})"
 
 
@@ -139,10 +152,10 @@ class SignedBy(LogicMixin):
     def __init__(self, a: PubKey):
         self.pubkey = a
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.pubkey!r})"
 
-    def to_miniscript(self):
+    def to_miniscript(self) -> str:
         return f"pk({self.pubkey.get_bytes().hex()})"
 
 
@@ -154,10 +167,10 @@ class RevealPreImage(LogicMixin):
     def __init__(self, a: Hash):
         self.image = a
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.preimage!r})"
 
-    def to_miniscript(self):
+    def to_miniscript(self) -> str:
         return f"sha256({self.image.hex()})"
 
 
@@ -167,10 +180,10 @@ class CheckTemplateVerify(LogicMixin):
     def __init__(self, a: Hash):
         self.hash = a
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.hash!r})"
 
-    def to_miniscript(self):
+    def to_miniscript(self) -> str:
         return f"txtmpl({self.hash.hex()})"
 
 
@@ -233,7 +246,7 @@ class AbsoluteTimeSpec:
         else:
             return f"{self.__class__.__name__}({self.locktime})"
 
-    def to_miniscript(self):
+    def to_miniscript(self) -> str:
         return f"after({self.locktime})"
 
 
@@ -263,11 +276,11 @@ class RelativeTimeSpec:
     def __repr__(self) -> str:
         t = self.get_type()
         if t == "time":
-            return f"{self.__class__.__name__}.from_seconds({self.locktime&0x00FFFF})"
+            return f"{self.__class__.__name__}.from_seconds({self.sequence&0x00FFFF})"
         elif t == "blocks":
-            return f"{self.__class__.__name__}.blocks_later({self.locktime & 0x00FFFF})"
+            return f"{self.__class__.__name__}.blocks_later({self.sequence & 0x00FFFF})"
 
-    def to_miniscript(self):
+    def to_miniscript(self) -> str:
         return f"older({self.sequence})"
 
 
@@ -318,7 +331,7 @@ class Wait(LogicMixin):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.time!r})"
 
-    def to_miniscript(self):
+    def to_miniscript(self) -> str:
         return self.time.to_miniscript()
 
 
@@ -327,7 +340,7 @@ class Threshold(LogicMixin):
 
     thresh: int
 
-    clauses: List[DNFClause]
+    clauses: Union[List[Clause], List[ECPubKey]]
 
     def __init__(self, thresh: int, clauses: Union[List[Clause], List[ECPubKey]]):
         self.thresh = thresh
@@ -335,12 +348,15 @@ class Threshold(LogicMixin):
 
     def to_miniscript(self) -> str:
         if all(isinstance(c, ECPubKey) for c in self.clauses):
-            s = ",".join([f"pk({c.get_bytes().hex()})" for c in self.clauses])
+            l: List[ECPubKey] = cast(List[ECPubKey], self.clauses)
+            s = ",".join([f"pk({c.get_bytes().hex()})" for c in l])
             return f"thresh({self.thresh},{s})"
         else:
+
+            l2: List[Clause] = cast(List[Clause], self.clauses)
             # Wrap each clause so that it's dissatisfiable trivially
             # But also so that when satisified, it's a B type
-            s = ",".join([cl.to_miniscript() for cl in self.clauses])
+            s = ",".join([cl.to_miniscript() for cl in l2])
             return f"thresh({self.thresh},{s})"
 
 
