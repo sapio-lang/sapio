@@ -1,5 +1,5 @@
 from bitcoin_script_compiler import *
-from sapio_bitcoinlib.static_types import Amount
+from sapio_bitcoinlib.static_types import Amount, PubKey
 from sapio_compiler import Contract, TransactionTemplate, guarantee, require, unlock
 
 
