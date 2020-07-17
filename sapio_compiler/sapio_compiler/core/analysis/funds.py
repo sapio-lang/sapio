@@ -3,12 +3,15 @@ from __future__ import annotations
 import sapio_compiler
 import sapio_compiler.core.bindable_contract as bc
 from sapio_bitcoinlib.static_types import Amount, Sats
+from typing import Any
 
 
 class WithinFee:
     fee_modifier: Amount = Sats(100)
 
-    def __init__(self, contract: bc.BindableContract, amount_sent: Amount) -> None:
+    def __init__(
+        self, contract: bc.BindableContractProtocol, amount_sent: Amount
+    ) -> None:
         if contract.amount_range.min + self.fee_modifier < amount_sent:
             raise ValueError(
                 f"Contract {bc.__class__.__name__} May Burn Funds!",
@@ -16,14 +19,14 @@ class WithinFee:
             )
 
     @classmethod
-    def change_fee_modifier(cls, fee_modifier: Amount):
+    def change_fee_modifier(cls, fee_modifier: Amount) -> None:
         cls.fee_modifier = fee_modifier
 
 
 class HasEnoughFunds:
     def __init__(
         self,
-        contract: sapio_compiler.core.bindable_contract.BindableContract,
+        contract: sapio_compiler.core.bindable_contract.BindableContractProtocol,
         amount_sent: Amount,
     ) -> None:
         if contract.amount_range.max > amount_sent:
