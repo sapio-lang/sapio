@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 # From Bitcoin Core PR #17975
 
 # Copyright (c) 2020 The Bitcoin Core developers
