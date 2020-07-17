@@ -30,8 +30,8 @@ FieldsType = TypeVar("FieldsType")
 
 
 class BindableContractProtocol(Protocol):
-    @abstractmethod
     @classmethod
+    @abstractmethod
     def create_instance(cls, **kwargs: Any) -> BindableContract[Any]:
         pass
 
@@ -48,8 +48,7 @@ class BindableContractProtocol(Protocol):
     amount_range: AmountRange
 
 
-
-class BindableContract(Generic[FieldsType], BindableContractProtocol):
+class BindableContract(Generic[FieldsType]):
     """
     BindableContract is the base contract object that gets created by the Sapio
     language frontend.
