@@ -73,7 +73,7 @@ def get_filename(dirname, n_node):
     This file will contain a list of RPC commands covered.
     """
     pid = str(os.getpid())
-    return os.path.join(dirname, "coverage.pid%s.node%s.txt" % (pid, str(n_node)))
+    return os.path.join(dirname, "coverage.pid{}.node{}.txt".format(pid, str(n_node)))
 
 
 def write_all_rpc_commands(dirname, node):

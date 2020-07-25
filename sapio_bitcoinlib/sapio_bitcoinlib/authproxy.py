@@ -99,7 +99,7 @@ class AuthServiceProxy:
             # Python internal stuff
             raise AttributeError
         if self._service_name is not None:
-            name = "%s.%s" % (self._service_name, name)
+            name = "{}.{}".format(self._service_name, name)
         return AuthServiceProxy(self.__service_url, name, connection=self.__conn)
 
     def _request(self, method, path, postdata):
@@ -245,7 +245,7 @@ class AuthServiceProxy:
                 )
             )
         else:
-            log.debug("<-- [%.6f] %s" % (elapsed, responsedata))
+            log.debug("<-- [{:.6f}] {}".format(elapsed, responsedata))
         return response, http_response.status
 
     def __truediv__(self, relative_uri):

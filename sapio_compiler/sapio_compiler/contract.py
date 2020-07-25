@@ -34,7 +34,7 @@ class MetaContract(type):
                 nmspc["Fields"], path_funcs, pay_funcs, unlock_funcs, assertions
             )
 
-        return super(MetaContract, mcl).__new__(mcl, name, (MetaBase,), nmspc)
+        return super().__new__(mcl, name, (MetaBase,), nmspc)
 
 
 class Contract(BindableContract[Any], metaclass=MetaContract):
