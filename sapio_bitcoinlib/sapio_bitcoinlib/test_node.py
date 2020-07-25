@@ -307,7 +307,7 @@ class TestNode:
                 self.rpc_connected = True
                 self.url = self.rpc.url
                 return
-            except IOError as e:
+            except OSError as e:
                 if e.errno != errno.ECONNREFUSED:  # Port not yet open?
                     raise  # unknown IO error
             except JSONRPCException as e:  # Initialization phase

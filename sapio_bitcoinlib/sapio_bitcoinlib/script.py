@@ -101,7 +101,7 @@ class CScriptOp(int):
             return _opcode_instances[n]
         except IndexError:
             assert len(_opcode_instances) == n
-            _opcode_instances.append(super(CScriptOp, cls).__new__(cls, n))
+            _opcode_instances.append(super().__new__(cls, n))
             return _opcode_instances[n]
 
 
@@ -383,7 +383,7 @@ class CScriptTruncatedPushDataError(CScriptInvalidError):
 
     def __init__(self, msg: str, data: bytes) -> None:
         self.data = data
-        super(CScriptTruncatedPushDataError, self).__init__(msg)
+        super().__init__(msg)
 
 
 # This is used, eg, for blockchain heights in coinbase scripts (bip34)
@@ -483,7 +483,7 @@ class CScript(bytes):
 
         try:
             # bytes.__add__ always returns bytes instances unfortunately
-            return CScript(super(CScript, self).__add__(other))
+            return CScript(super().__add__(other))
         except TypeError:
             raise TypeError("Can not add a %r instance to a CScript" % other.__class__)
 
@@ -495,7 +495,7 @@ class CScript(bytes):
         cls, value: Union[Iterable[Coercable], bytes, bytearray] = b""
     ) -> CScript:
         if isinstance(value, bytes) or isinstance(value, bytearray):
-            c: CScript = super(CScript, cls).__new__(cls, value)
+            c: CScript = super().__new__(cls, value)
             return c
         else:
 
@@ -507,7 +507,7 @@ class CScript(bytes):
 
             # Annoyingly on both python2 and python3 bytes.join() always
             # returns a bytes instance even when subclassed.
-            c = super(CScript, cls).__new__(cls, b"".join(coerce_iterable(value)))
+            c = super().__new__(cls, b"".join(coerce_iterable(value)))
             return c
 
     def raw_iter(self) -> Iterator[Tuple[CScriptOp, Optional[bytes], int]]:
@@ -608,7 +608,7 @@ class CScript(bytes):
             try:
                 op = _repr(next(i))
             except CScriptTruncatedPushDataError as err:
-                op = "%s...<ERROR: %s>" % (_repr(err.data), err)
+                op = "{}...<ERROR: {}>".format(_repr(err.data), err)
                 break
             except CScriptInvalidError as err:
                 op = "<ERROR: %s>" % err

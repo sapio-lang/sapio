@@ -31,7 +31,7 @@ def recvall(s, n):
     while n > 0:
         d = s.recv(n)
         if not d:
-            raise IOError("Unexpected end of stream")
+            raise OSError("Unexpected end of stream")
         rv.extend(d)
         n -= len(d)
     return rv
@@ -60,7 +60,7 @@ class Socks5Command:
         self.password = password
 
     def __repr__(self):
-        return "Socks5Command(%s,%s,%s,%s,%s,%s)" % (
+        return "Socks5Command({},{},{},{},{},{})".format(
             self.cmd,
             self.atyp,
             self.addr,
@@ -81,7 +81,7 @@ class Socks5Connection:
             # Verify socks version
             ver = recvall(self.conn, 1)[0]
             if ver != 0x05:
-                raise IOError("Invalid socks version %i" % ver)
+                raise OSError("Invalid socks version %i" % ver)
             # Choose authentication method
             nmethods = recvall(self.conn, 1)[0]
             methods = bytearray(recvall(self.conn, nmethods))
@@ -91,7 +91,7 @@ class Socks5Connection:
             elif 0x00 in methods and self.serv.conf.unauth:
                 method = 0x00  # unauthenticated
             if method is None:
-                raise IOError("No supported authentication method was offered")
+                raise OSError("No supported authentication method was offered")
             # Send response
             self.conn.sendall(bytearray([0x05, method]))
             # Read authentication (optional)
@@ -100,7 +100,7 @@ class Socks5Connection:
             if method == 0x02:
                 ver = recvall(self.conn, 1)[0]
                 if ver != 0x01:
-                    raise IOError("Invalid auth packet version %i" % ver)
+                    raise OSError("Invalid auth packet version %i" % ver)
                 ulen = recvall(self.conn, 1)[0]
                 username = str(recvall(self.conn, ulen))
                 plen = recvall(self.conn, 1)[0]
@@ -111,9 +111,9 @@ class Socks5Connection:
             # Read connect request
             ver, cmd, _, atyp = recvall(self.conn, 4)
             if ver != 0x05:
-                raise IOError("Invalid socks version %i in connect request" % ver)
+                raise OSError("Invalid socks version %i in connect request" % ver)
             if cmd != Command.CONNECT:
-                raise IOError("Unhandled command %i in connect request" % cmd)
+                raise OSError("Unhandled command %i in connect request" % cmd)
 
             if atyp == AddressType.IPV4:
                 addr = recvall(self.conn, 4)
@@ -123,7 +123,7 @@ class Socks5Connection:
             elif atyp == AddressType.IPV6:
                 addr = recvall(self.conn, 16)
             else:
-                raise IOError("Unknown address type %i" % atyp)
+                raise OSError("Unknown address type %i" % atyp)
             port_hi, port_lo = recvall(self.conn, 2)
             port = (port_hi << 8) | port_lo
 
