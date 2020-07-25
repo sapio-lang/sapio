@@ -30,7 +30,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 pytest
+        pip install flake8 pytest pyupgrade
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Build Rust Miniscript
       run: |
@@ -39,7 +39,11 @@ jobs:
     - name: Lint with flake8
       run: |
         flake8 --ignore=E203,E226,E402,E501,E722,E741,F401,F403,F405,F821,W503,W504 --count --show-source --statistics $(git ls-files -- "*.py")
-    
+
+    - name: Lint with pyupgrade
+      run: |
+        pyupgrade --py3-plus $(git ls-files -- "*.py")
+
     - name: Install modules
       run: |
         for MODULE in sapio_bitcoinlib rust_miniscript bitcoin_script_compiler sapio_compiler sapio_stdlib sapio_zoo sapio_server; do
