@@ -230,7 +230,7 @@ class P2PConnection(asyncio.Protocol):
 
     def send_raw_message(self, raw_message_bytes):
         if not self.is_connected:
-            raise IOError("Not connected")
+            raise OSError("Not connected")
 
         def maybe_write():
             if not self._transport:
@@ -324,7 +324,7 @@ class P2PInterface(P2PConnection):
                 self.last_message[command] = message
                 getattr(self, "on_" + command)(message)
             except:
-                print("ERROR delivering %s (%s)" % (repr(message), sys.exc_info()[0]))
+                print("ERROR delivering {} ({})".format(repr(message), sys.exc_info()[0]))
                 raise
 
     # Callback methods. Can be overridden by subclasses in individual test

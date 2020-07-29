@@ -259,7 +259,7 @@ class CInv:
         return r
 
     def __repr__(self):
-        return "CInv(type=%s hash=%064x)" % (self.typemap[self.type], self.hash)
+        return "CInv(type={} hash={:064x})".format(self.typemap[self.type], self.hash)
 
 
 class CBlockLocator:
@@ -665,16 +665,16 @@ class CBlock(CBlockHeader):
     __slots__ = ("vtx",)
 
     def __init__(self, header=None):
-        super(CBlock, self).__init__(header)
+        super().__init__(header)
         self.vtx = []
 
     def deserialize(self, f):
-        super(CBlock, self).deserialize(f)
+        super().deserialize(f)
         self.vtx = deser_vector(f, CTransaction)
 
     def serialize(self, with_witness=True):
         r = b""
-        r += super(CBlock, self).serialize()
+        r += super().serialize()
         if with_witness:
             r += ser_vector(self.vtx, "serialize_with_witness")
         else:
@@ -840,7 +840,7 @@ class P2PHeaderAndShortWitnessIDs(P2PHeaderAndShortIDs):
     __slots__ = ()
 
     def serialize(self):
-        return super(P2PHeaderAndShortWitnessIDs, self).serialize(with_witness=True)
+        return super().serialize(with_witness=True)
 
 
 # Calculate the BIP 152-compact blocks shortid for a given transaction hash
@@ -968,7 +968,7 @@ class BlockTransactionsRequest:
         return absolute_indexes
 
     def __repr__(self):
-        return "BlockTransactionsRequest(hash=%064x indexes=%s)" % (
+        return "BlockTransactionsRequest(hash={:064x} indexes={})".format(
             self.blockhash,
             repr(self.indexes),
         )
@@ -995,7 +995,7 @@ class BlockTransactions:
         return r
 
     def __repr__(self):
-        return "BlockTransactions(hash=%064x transactions=%s)" % (
+        return "BlockTransactions(hash={:064x} transactions={})".format(
             self.blockhash,
             repr(self.transactions),
         )
@@ -1053,7 +1053,7 @@ class CMerkleBlock:
         return r
 
     def __repr__(self):
-        return "CMerkleBlock(header=%s, txn=%s)" % (repr(self.header), repr(self.txn))
+        return "CMerkleBlock(header={}, txn={})".format(repr(self.header), repr(self.txn))
 
 
 # Objects that correspond to messages on the wire
@@ -1226,7 +1226,7 @@ class msg_getblocks:
         return r
 
     def __repr__(self):
-        return "msg_getblocks(locator=%s hashstop=%064x)" % (
+        return "msg_getblocks(locator={} hashstop={:064x})".format(
             repr(self.locator),
             self.hashstop,
         )
@@ -1432,7 +1432,7 @@ class msg_getheaders:
         return r
 
     def __repr__(self):
-        return "msg_getheaders(locator=%s, stop=%064x)" % (
+        return "msg_getheaders(locator={}, stop={:064x})".format(
             repr(self.locator),
             self.hashstop,
         )

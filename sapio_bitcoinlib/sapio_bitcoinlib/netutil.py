@@ -62,7 +62,7 @@ def netstat(typ="tcp"):
     To get pid of all network process running on system, you must run this script
     as superuser
     """
-    with open("/proc/net/" + typ, "r", encoding="utf8") as f:
+    with open("/proc/net/" + typ, encoding="utf8") as f:
         content = f.readlines()
         content.pop(0)
     result = []
@@ -172,6 +172,6 @@ def test_ipv6_local():
     try:
         s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
         s.connect(("::1", 0))
-    except socket.error:
+    except OSError:
         have_ipv6 = False
     return have_ipv6

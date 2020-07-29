@@ -30,11 +30,11 @@ def assert_approx(v, vexp, vspan=0.00001):
     """Assert that `v` is within `vspan` of `vexp`"""
     if v < vexp - vspan:
         raise AssertionError(
-            "%s < [%s..%s]" % (str(v), str(vexp - vspan), str(vexp + vspan))
+            "{} < [{}..{}]".format(str(v), str(vexp - vspan), str(vexp + vspan))
         )
     if v > vexp + vspan:
         raise AssertionError(
-            "%s > [%s..%s]" % (str(v), str(vexp - vspan), str(vexp + vspan))
+            "{} > [{}..{}]".format(str(v), str(vexp - vspan), str(vexp + vspan))
         )
 
 
@@ -43,12 +43,12 @@ def assert_fee_amount(fee, tx_size, fee_per_kB):
     target_fee = round(tx_size * fee_per_kB / 1000, 8)
     if fee < target_fee:
         raise AssertionError(
-            "Fee of %s BTC too low! (Should be %s BTC)" % (str(fee), str(target_fee))
+            "Fee of {} BTC too low! (Should be {} BTC)".format(str(fee), str(target_fee))
         )
     # allow the wallet's estimation to be at most 2 bytes off
     if fee > (tx_size + 2) * fee_per_kB / 1000:
         raise AssertionError(
-            "Fee of %s BTC too high! (Should be %s BTC)" % (str(fee), str(target_fee))
+            "Fee of {} BTC too high! (Should be {} BTC)".format(str(fee), str(target_fee))
         )
 
 
@@ -61,12 +61,12 @@ def assert_equal(thing1, thing2, *args):
 
 def assert_greater_than(thing1, thing2):
     if thing1 <= thing2:
-        raise AssertionError("%s <= %s" % (str(thing1), str(thing2)))
+        raise AssertionError("{} <= {}".format(str(thing1), str(thing2)))
 
 
 def assert_greater_than_or_equal(thing1, thing2):
     if thing1 < thing2:
-        raise AssertionError("%s < %s" % (str(thing1), str(thing2)))
+        raise AssertionError("{} < {}".format(str(thing1), str(thing2)))
 
 
 def assert_raises(exc, fun, *args, **kwds):
@@ -164,7 +164,7 @@ def assert_is_hex_string(string):
         int(string, 16)
     except Exception as e:
         raise AssertionError(
-            "Couldn't interpret %r as hexadecimal; raised: %s" % (string, e)
+            "Couldn't interpret {!r} as hexadecimal; raised: {}".format(string, e)
         )
 
 
@@ -204,7 +204,7 @@ def assert_array_result(object_array, to_match, expected, should_not_find=False)
         for key, value in expected.items():
             if item[key] != value:
                 raise AssertionError(
-                    "%s : expected %s=%s" % (str(item), str(key), str(value))
+                    "{} : expected {}={}".format(str(item), str(key), str(value))
                 )
             num_matched = num_matched + 1
     if num_matched == 0 and not should_not_find:
@@ -397,7 +397,7 @@ def get_auth_cookie(datadir, chain):
     user = None
     password = None
     if os.path.isfile(os.path.join(datadir, "bitcoin.conf")):
-        with open(os.path.join(datadir, "bitcoin.conf"), "r", encoding="utf8") as f:
+        with open(os.path.join(datadir, "bitcoin.conf"), encoding="utf8") as f:
             for line in f:
                 if line.startswith("rpcuser="):
                     assert user is None  # Ensure that there is only one rpcuser line
@@ -408,7 +408,7 @@ def get_auth_cookie(datadir, chain):
                     )  # Ensure that there is only one rpcpassword line
                     password = line.split("=")[1].strip("\n")
     try:
-        with open(os.path.join(datadir, chain, ".cookie"), "r", encoding="ascii") as f:
+        with open(os.path.join(datadir, chain, ".cookie"), encoding="ascii") as f:
             userpass = f.read()
             split_userpass = userpass.split(":")
             user = split_userpass[0]
@@ -527,7 +527,7 @@ def find_output(node, txid, amount, *, blockhash=None):
     for i in range(len(txdata["vout"])):
         if txdata["vout"][i]["value"] == amount:
             return i
-    raise RuntimeError("find_output txid %s : %s not found" % (txid, str(amount)))
+    raise RuntimeError("find_output txid {} : {} not found".format(txid, str(amount)))
 
 
 def gather_inputs(from_node, amount_needed, confirmations_required=1):
@@ -692,4 +692,4 @@ def find_vout_for_address(node, txid, addr):
     for i in range(len(tx["vout"])):
         if any([addr == a for a in tx["vout"][i]["scriptPubKey"]["addresses"]]):
             return i
-    raise RuntimeError("Vout not found for address: txid=%s, addr=%s" % (txid, addr))
+    raise RuntimeError("Vout not found for address: txid={}, addr={}".format(txid, addr))
