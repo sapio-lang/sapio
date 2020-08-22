@@ -213,6 +213,7 @@ Clone the project:
 ```
 git clone https://github.com/sapio-lang/sapio
 cd sapio/
+git submodule update --init
 ```
 
 Install Rust (https://www.rust-lang.org/learn/get-started):
@@ -236,7 +237,7 @@ pyenv activate sapio
 Install the Sapio Python modules:
 
 ```
-for MODULE in sapio_bitcoinlib bitcoin_script_compiler sapio_compiler sapio_stdlib sapio_zoo sapio_server; do
+for MODULE in sapio_bitcoinlib bitcoin_script_compiler sapio_compiler sapio_stdlib sapio_zoo sapio_server rust_miniscript; do
     echo "Building ${MODULE}"
     cd $MODULE && make && python3 setup.py build && python3 setup.py install && cd ..
     echo
