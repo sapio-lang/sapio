@@ -19,15 +19,10 @@ DEBUG = True
 
 
 base_tx = CTransaction()
-base_tx.vin.append(CTxIn())
 base_tx.vout.append(CTxOut())
 base_tx.rehash()
-base_out = COutPoint(base_tx.sha256, 0)
-base_meta = {
-    "color": "white",
-    "label": "Base Contract Unspecified",
-    "utxo_metadata": [],
-}
+from hashlib import sha256
+base_out = COutPoint(int(sha256(b"mock:"+bytes(f"{0}", 'utf-8')).digest().hex(), 16), 0)
 
 allowed_sat_types = {
     miniscript.SatType.SIGNATURE,
@@ -72,8 +67,6 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
     @classmethod
     def set_example(cls, example: BindableContract):
         txns, metadata = example.bind(base_out)
-        txns.append(base_tx)
-        metadata.append(base_meta)
         addr = example.witness_manager.get_p2wsh_address()
         amount = example.amount_range.max
         data = get_tx_data(txns, metadata)
@@ -182,8 +175,6 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
             amount = contract.amount_range.max
             self.context.cache(addr, contract)
             txns, metadata = contract.bind(base_out)
-            txns.append(base_tx)
-            metadata.append(base_meta)
             data = get_tx_data(txns, metadata)
             self.write_message(
                 {
