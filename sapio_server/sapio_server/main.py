@@ -2,10 +2,6 @@ import os
 
 import tornado
 
-import sapio_zoo
-import sapio_zoo.channel
-import sapio_zoo.p2pk
-import sapio_zoo.subscription
 from sapio_bitcoinlib import segwit_addr
 from sapio_zoo.tree_pay import TreePay
 from sapio_zoo.undo_send import UndoSend2
@@ -21,8 +17,10 @@ from sapio_compiler import (
 
 from .ws import CompilerWebSocket
 from sapio_bitcoinlib.static_types import Bitcoin, PubKey, Amount
-from sapio_zoo.p2pk import PayToPubKey
+from sapio_zoo.p2pk import PayToPubKey, PayToSegwitAddress
+from sapio_zoo.channel import BasicChannel
 from sapio_zoo.smarter_vault import SmarterVault
+from sapio_zoo.subscription import auto_pay
 
 
 def make_app():
@@ -30,9 +28,9 @@ def make_app():
 
 
 if __name__ == "__main__":
-    CompilerWebSocket.add_contract("Channel", sapio_zoo.channel.BasicChannel)
-    CompilerWebSocket.add_contract("Pay to Public Key", sapio_zoo.p2pk.PayToPubKey)
-    CompilerWebSocket.add_contract("Subscription", sapio_zoo.subscription.auto_pay)
+    CompilerWebSocket.add_contract("Channel", BasicChannel)
+    CompilerWebSocket.add_contract("Pay to Public Key", PayToPubKey)
+    CompilerWebSocket.add_contract("Subscription", auto_pay)
     CompilerWebSocket.add_contract("TreePay", TreePay)
     generate_n_address = [
         segwit_addr.encode("bcrt", 0, os.urandom(32)) for _ in range(64)
@@ -40,7 +38,7 @@ if __name__ == "__main__":
     payments = [
         (
             5,
-            sapio_zoo.p2pk.PayToSegwitAddress(
+            PayToSegwitAddress(
                 amount=AmountRange.of(0), address=address
             ),
         )
