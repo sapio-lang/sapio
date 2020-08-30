@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union, TYPE_CHECKING
 
 from bitcoin_script_compiler import RelativeTimeSpec, AbsoluteTimeSpec
-import sapio_compiler.contract
-import sapio_compiler.core.bindable_contract
 from sapio_bitcoinlib.messages import COutPoint, CScript, CTransaction, CTxIn, CTxOut
 from sapio_bitcoinlib.static_types import Amount, LockTime, Sequence, Version, uint32
 from sapio_compiler.core.analysis.funds import HasEnoughFunds, WithinFee
 import struct
 import hashlib
+
+if TYPE_CHECKING:
+    import sapio_compiler.core.protocol as protocol
 
 
 class OutputMetaDataContainer:
@@ -51,9 +52,7 @@ class TransactionTemplate:
     def __init__(self) -> None:
         self.n_inputs: int = 0
         self.sequences: List[Sequence] = [Sequence(uint32(0))]
-        self.outputs: List[
-            Tuple[Amount, sapio_compiler.core.bindable_contract.BindableContract[Any]]
-        ] = []
+        self.outputs: List[Tuple[Amount, "protocol.ContractProtocol[Any]"]] = []
         self.outputs_metadata: List[OutputMetaDataContainer] = []
         self.version: Version = Version(uint32(2))
         self.lock_time: LockTime = LockTime(uint32(0))
@@ -71,17 +70,6 @@ class TransactionTemplate:
             return
         self.cached_ctv = self.get_ctv_hash()
         self.is_final = True
-
-    def to_json(self) -> Dict[str, Any]:
-        return {
-            "n_inputs": self.n_inputs,
-            "sequences": self.sequences,
-            "version": self.version,
-            "lock_time": self.lock_time,
-            "label": self.label,
-            "outputs": [(amt, contract.to_json()) for (amt, contract) in self.outputs],
-            "outputs_metadata": [o.to_json() for o in self.outputs_metadata],
-        }
 
     def get_ctv_hash(self) -> bytes:
         """
@@ -201,9 +189,7 @@ class TransactionTemplate:
         return ret.digest()
 
     def add_output(
-        self,
-        amount: Amount,
-        contract: sapio_compiler.core.bindable_contract.BindableContract[Any],
+        self, amount: Amount, contract: "protocol.ContractProtocol[Any]",
     ) -> None:
         """
         Adds an output to a tx template. Checks that the amount is sufficient and that fees won't be
@@ -220,7 +206,12 @@ class TransactionTemplate:
         self.outputs.append((amount, contract))
         self.outputs_metadata.append(
             OutputMetaDataContainer(
-                contract.MetaData.color(contract), contract.MetaData.label(contract)
+                getattr(
+                    getattr(contract.data, "metadata", None), "color", "green"
+                ),
+                getattr(
+                    getattr(contract.data, "metadata", None), "label", "unknown"
+                ),
             )
         )
 
