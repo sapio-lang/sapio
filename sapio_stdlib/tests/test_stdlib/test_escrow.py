@@ -8,25 +8,23 @@ from .util import random_k
 
 class TestEscrow(unittest.TestCase):
     def test_multisig(self):
-        print("MAKING ALICE")
-        alice = P2PK(key=random_k())
-        print("MADE ALICE")
-        bob = P2PK(key=random_k())
+        alice = P2PK.create(key=random_k(), amount=Bitcoin(1))
+        bob = P2PK.create(key=random_k(), amount=Bitcoin(2))
 
         t = TransactionTemplate()
         t.add_output(Bitcoin(1), alice)
         t.add_output(Bitcoin(2), bob)
         t.set_sequence(Weeks(2))
-        escrow = TrustlessEscrow(
-            parties=[SignedBy(alice.key), SignedBy(bob.key)], default_escrow=t,
+        escrow = TrustlessEscrow.create(
+            parties=[SignedBy(alice.data.key), SignedBy(bob.data.key)], default_escrow=t
         )
-        assert escrow.txn_abi[escrow.uncooperative_close.__func__][0] is t
+        assert escrow.txn_abi["uncooperative_close"][1][0] is t
         assert_equal(
-            escrow.conditions_abi[escrow.uncooperative_close.__func__], Satisfied(),
+            escrow.conditions_abi["uncooperative_close"][1], Satisfied(),
         )
-        coop_close = escrow.conditions_abi[escrow.cooperative_close.__func__]
-        assert_equal(coop_close.left.pubkey, alice.key)
-        assert_equal(coop_close.right.pubkey, bob.key)
+        coop_close = escrow.conditions_abi["cooperative_close"][1]
+        assert_equal(coop_close.left.pubkey, alice.data.key)
+        assert_equal(coop_close.right.pubkey, bob.data.key)
 
 
 if __name__ == "__main__":
