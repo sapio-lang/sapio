@@ -12,7 +12,7 @@ class TestMultiSig(unittest.TestCase):
     def test_multisig(self):
         a = [random_k() for _ in range(4)]
         b = [random_k() for _ in range(3)]
-        f = FederatedPegIn(
+        f = FederatedPegIn.create(
             keys=a, thresh_all=3, keys_backup=b, thresh_backup=2, amount=Bitcoin(1)
         )
         f.bind(COutPoint(0, 0))

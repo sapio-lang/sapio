@@ -1,19 +1,12 @@
 from bitcoin_script_compiler import SignedBy
 from sapio_bitcoinlib.static_types import Amount, PubKey
-from sapio_compiler import Contract, pay_address, unlock, AmountRange
+from sapio_compiler import Contract, AmountRange, contract
+from dataclasses import dataclass
 
+from sapio_stdlib.p2pk import P2PK as PayToPubKey
 
-class PayToPubKey(Contract):
-    class Fields:
-        key: PubKey
-        amount: Amount
-
-    @unlock
-    def with_key(self):
-        return SignedBy(self.key)
-
-
-class PayToSegwitAddress(Contract):
+@contract
+class PayToSegwitAddress:
     """
     Allows inputting an external opaque segwit address.
 
@@ -21,17 +14,15 @@ class PayToSegwitAddress(Contract):
     that address. This sets the min/max values on the amount range.
     """
 
-    class Fields:
-        amount: AmountRange
-        address: str
-
+    amount: AmountRange
+    address: str
+    @dataclass
     class MetaData:
-        def color(self):
-            return "grey"
+        label = "Segwit Address"
+        color = "grey"
+    metadata: MetaData = MetaData()
 
-        def label(self):
-            return "Segwit Address"
 
-    @pay_address
-    def _(self):
-        return (self.amount, self.address)
+def p(self):
+    return (self.amount, self.address)
+PayToSegwitAddress.override = p

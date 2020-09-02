@@ -24,11 +24,11 @@ class MyTestCase(unittest.TestCase):
         alice_script = script_to_p2wsh(CScript([b"Alice's Key Goes Here!"]))
         bob_script = script_to_p2wsh(CScript([b"Bob's Key Goes Here!"]))
         ar = AmountRange()
-        Alice = PayToSegwitAddress(amount=ar, address=alice_script)
-        Bob = PayToSegwitAddress(amount=ar, address=bob_script)
+        Alice = PayToSegwitAddress.create(amount=ar, address=alice_script)
+        Bob = PayToSegwitAddress.create(amount=ar, address=bob_script)
         watchtower_key = random_k()
         now = datetime.now()
-        c = CancellableSubscription(
+        c = CancellableSubscription.create(
             amount=Bitcoin(5),
             recipient=Bob,
             schedule=[

@@ -10,8 +10,8 @@ from sapio_bitcoinlib.messages import COutPoint
 
 class TestMultiSig(unittest.TestCase):
     def test_multisig(self):
-        a = RawMultiSig(keys=[random_k() for _ in range(5)], thresh=2)
-        b = RawMultiSigWithPath(
+        a = RawMultiSig.create(keys=[random_k() for _ in range(5)], thresh=2)
+        b = RawMultiSigWithPath.create(
             keys=[random_k() for _ in range(5)],
             thresh_all=3,
             thresh_path=2,

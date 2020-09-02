@@ -9,7 +9,7 @@ from sapio_bitcoinlib.messages import COutPoint
 class TestP2Pk(unittest.TestCase):
     def test(self):
         key = random_k()
-        p = PayToPubKey(key=key, amount=Sats(10))
+        p = PayToPubKey.create(key=key, amount=Sats(10))
         p.bind(COutPoint(0, 0))
 
 
