@@ -11,12 +11,12 @@ from sapio_bitcoinlib.messages import COutPoint
 class TestTreePay(unittest.TestCase):
     def test_tree_pay(self):
         payments = [
-            (Bitcoin(10), PayToPubKey(key=random_k(), amount=Bitcoin(10)))
+            (Bitcoin(10), PayToPubKey.create(key=random_k(), amount=Bitcoin(10)))
             for _ in range(102)
         ]
         for radix in [2, 4, 25, 1000]:
-            c = CollapsibleTree(payments=payments, radix=radix)
-            t = TreePay(payments=payments, radix=radix)
+            c = CollapsibleTree.create(payments=payments, radix=radix)
+            t = TreePay.create(payments=payments, radix=radix)
             c.bind(COutPoint(0, 0))
             t.bind(COutPoint(0, 0))
 

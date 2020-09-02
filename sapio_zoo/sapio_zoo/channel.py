@@ -23,13 +23,9 @@ from sapio_compiler import (
     BindableContract,
     Contract,
     TransactionTemplate,
-    enable_if,
-    guarantee,
-    require,
-    unlock,
-    unlock_but_suggest,
 )
 from sapio_zoo.p2pk import PayToPubKey, PayToSegwitAddress
+from dataclasses import dataclass
 
 
 class OPENING:
@@ -53,77 +49,78 @@ def ChannelClassFactory(stage: T):
     if stage in memoize:
         return memoize[stage]
 
-    class Self(Contract):
-        class Fields:
-            initial: Contract
-            alice: PubKey
-            bob: PubKey
-            timeout: RelativeTimeSpec
-            amount: Amount
+    @dataclass
+    class MetaData:
+        label: str = f"channel[{stage.__name__}]"
+        color: str = "red"
 
-        class MetaData:
-            def label(s):
-                return "BASE"
+    @dataclass
+    class Fields:
+        initial: Contract
+        alice: PubKey
+        bob: PubKey
+        timeout: RelativeTimeSpec
+        amount: Amount
+        metadata: MetaData
+    Self = Contract(f"ChannelState_{stage.__name__}", Fields, [])
 
-            def color(s):
-                return "blue"
+    @Self.let
+    def cooperate(self) -> Clause:
+        return SignedBy(self.alice) & SignedBy(self.bob)
 
-        @require
-        def cooperate(self) -> Clause:
-            return SignedBy(self.alice) & SignedBy(self.bob)
+    @cooperate
+    @Self.finish_or
+    def update_state(
+        self,
+        state: Optional[List[Tuple[Amount, str]]] = None,
+        proposer_id: Literal["alice", "bob"] = "alice",
+        revocation: Hash = Hash(b""),
+    ) -> TransactionTemplate:
+        next_tx = TransactionTemplate()
+        if state is None:
+            next_tx.add_output(self.amount, self.initial)
+        else:
+            for (amt, addr) in state:
+                next_tx.add_output(
+                    amt, PayToSegwitAddress(amount=amt, address=addr)
+                )
+        next_tx.set_sequence(self.timeout)
+        tx = TransactionTemplate()
 
-        @cooperate
-        @unlock_but_suggest
-        def update_state(
-            self,
-            state: Optional[List[Tuple[Amount, str]]] = None,
-            proposer_id: Literal["alice", "bob"] = "alice",
-            revocation: Hash = Hash(b""),
-        ) -> TransactionTemplate:
-            next_tx = TransactionTemplate()
-            if state is None:
-                next_tx.add_output(self.amount, self.initial)
-            else:
-                for (amt, addr) in state:
-                    next_tx.add_output(
-                        amt, PayToSegwitAddress(amount=amt, address=addr)
-                    )
-            next_tx.set_sequence(self.timeout)
-            tx = TransactionTemplate()
+        contest = ContestedChannelAfterUpdate(
+            amount=self.amount,
+            state=next_tx,
+            revocation=revocation,
+            honest=self.alice if proposer_id == "alice" else self.bob,
+        )
+        print(contest.amount_range)
+        tx.add_output(self.amount.contest)
+        return tx
 
-            contest = ContestedChannelAfterUpdate(
-                amount=self.amount,
-                state=next_tx,
-                revocation=revocation,
-                honest=self.alice if proposer_id == "alice" else self.bob,
-            )
-            print(contest.amount_range)
-            tx.add_output(self.amount.contest)
-            return tx
+    @cooperate
+    @Self.finish
+    def coop_close(self) -> Clause:
+        return Satisfied()
 
-        @cooperate
-        @unlock
-        def coop_close(self) -> Clause:
-            return Satisfied()
-
-        @enable_if(stage is OPENING)
-        @guarantee
+    if stage is OPENING:
+        @Self.then
         def begin_contest(self) -> TransactionTemplate:
             tx = TransactionTemplate()
+            closing = ChannelClassFactory(CLOSING)
             tx.add_output(
                 self.amount,
-                ChannelClassFactory(CLOSING)(
+                closing(closing.Props(
                     amount=self.amount,
                     initial=self.initial,
                     timeout=self.timeout,
                     alice=self.alice,
                     bob=self.bob,
-                ),
+                )),
             )
             return tx
 
-        @enable_if(stage is CLOSING)
-        @guarantee
+    if stage is CLOSING:
+        @Self.then
         def finish_contest(self) -> TransactionTemplate:
             tx = TransactionTemplate()
             tx.set_sequence(self.timeout)
@@ -138,36 +135,38 @@ BasicContestedChannel = ChannelClassFactory(CLOSING)
 BasicChannel = ChannelClassFactory(OPENING)
 
 
-class ContestedChannelAfterUpdate(Contract):
-    class Fields:
-        amount: Amount
-        state: TransactionTemplate
-        revocation: Hash
-        honest: PubKey
+@dataclass
+class MetaData:
+    label: str = "revoke"
+    color: str = "yellow"
 
-    class MetaData:
-        def label(s):
-            return "revoke"
 
-        def color(s):
-            return "yellow"
+@dataclass
+class Props:
+    amount: Amount
+    state: TransactionTemplate
+    revocation: Hash
+    honest: PubKey
+    metadata: MetaData
+ContestedChannelAfterUpdate = Contract("ContestedChannelAfterUpdate", Props, [])
 
-    @guarantee
-    def close(self) -> TransactionTemplate:
-        t: TransactionTemplate = self.state
-        return t
 
-    @require
-    def cheating_caught(self) -> Clause:
-        return RevealPreImage(self.revocation) & SignedBy(self.honest)
+@ContestedChannelAfterUpdate.then
+def close(self) -> TransactionTemplate:
+    t: TransactionTemplate = self.state
+    return t
 
-    @cheating_caught
-    @unlock_but_suggest
-    def close_channel(
-        self, tx_override: Optional[TransactionTemplate] = None
-    ) -> TransactionTemplate:
-        if tx_override is not None:
-            return tx_override
-        tx = TransactionTemplate()
-        tx.add_output(self.amount, PayToPubKey(key=self.honest, amount=self.amount))
-        return tx
+@ContestedChannelAfterUpdate.let
+def cheating_caught(self) -> Clause:
+    return RevealPreImage(self.revocation) & SignedBy(self.honest)
+
+@cheating_caught
+@ContestedChannelAfterUpdate.finish_or
+def close_channel(
+    self, tx_override: Optional[TransactionTemplate] = None
+) -> TransactionTemplate:
+    if tx_override is not None:
+        return tx_override
+    tx = TransactionTemplate()
+    tx.add_output(self.amount, PayToPubKey(key=self.honest, amount=self.amount))
+    return tx

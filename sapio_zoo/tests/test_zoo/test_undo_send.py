@@ -12,9 +12,9 @@ class TestUndoSend(unittest.TestCase):
     def test_undo_send(self):
         key1 = random_k()
         key2 = random_k()
-        pk2 = PayToPubKey(key=key2, amount=Sats(10))
-        u = UndoSend(to_key=key1, from_contract=pk2, amount=Sats(10), timeout=Weeks(6))
-        u2 = UndoSend2(
+        pk2 = PayToPubKey.create(key=key2, amount=Sats(10))
+        u = UndoSend.create(to_key=key1, from_contract=pk2, amount=Sats(10), timeout=Weeks(6))
+        u2 = UndoSend2.create(
             to_contract=u, from_contract=pk2, amount=Sats(10), timeout=Weeks(6)
         )
 

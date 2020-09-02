@@ -25,75 +25,71 @@ from sapio_compiler import (
     BindableContract,
     Contract,
     TransactionTemplate,
-    check,
-    enable_if,
-    guarantee,
-    require,
-    unlock,
-    unlock_but_suggest,
 )
 from sapio_zoo.p2pk import PayToPubKey, PayToSegwitAddress
+from dataclasses import dataclass, field
 
 T1 = TypeVar("T1")
 T2 = TypeVar("T2")
 
 
 def BinaryBetFactory(t1: Type[T1], t2: Type[T2]):
-    class BinaryBet(Contract):
-        class Fields:
-            price: int
-            h_price_hi: Hash  # preimage revealed if price above threshold
-            h_price_lo: Hash  # preimage revealed if price below threshold
-            amount: Amount
-            hi_outcome: T1
-            lo_outcome: T2
-
+    @contract
+    class BinaryBet:
+        price: int
+        h_price_hi: Hash  # preimage revealed if price above threshold
+        h_price_lo: Hash  # preimage revealed if price below threshold
+        amount: Amount
+        hi_outcome: T1
+        lo_outcome: T2
+        @dataclass
         class MetaData:
-            def label(self):
-                return f"BinaryOption[price > ${self.price}]"
+            label: str = field(init=False)
+            color: str = "turquoise"
+        metadata: MetaData = field(init=False)
+        def __post_init__(self):
+            self.metadata = MetaData()
+            self.metadata.label = "BinaryOption[price > ${self.price}]"
 
-            def color(self):
-                return "turquoise"
+    @BinaryBet.let
+    def price_hi(self):
+        return RevealPreImage(self.h_price_hi)
 
-        @require
-        def price_hi(self):
-            return RevealPreImage(self.h_price_hi)
+    @BinaryBet.let
+    def price_lo(self):
+        return RevealPreImage(self.h_price_lo)
 
-        @require
-        def price_lo(self):
-            return RevealPreImage(self.h_price_lo)
+    if t1 is PubKey:
 
-        if t1 is PubKey:
+        @price_hi
+        @BinaryBet.finish
+        def pay_hi(self):
+            return SignedBy(self.hi_outcome)
 
-            @price_hi
-            @unlock
-            def pay_hi(self):
-                return SignedBy(self.hi_outcome)
+    elif t1 is Contract:
 
-        elif t1 is Contract:
+        @price_hi
+        @BinaryBet.then
+        def pay_hi(self):
+            tx = TransactionTemplate()
+            tx.add_output(self.amount, self.hi_outcome)
+            return tx
 
-            @price_hi
-            @guarantee
-            def pay_hi(self):
-                tx = TransactionTemplate()
-                tx.add_output(self.amount, self.hi_outcome)
-                return tx
+    if t2 is PubKey:
 
-        if t2 is PubKey:
+        @price_lo
+        @BinaryBet.finish
+        def pay_lo(self):
+            return SignedBy(self.lo_outcome)
 
-            @price_lo
-            @unlock
-            def pay_lo(self):
-                return SignedBy(self.lo_outcome)
+    elif t2 is Contract:
 
-        elif t2 is Contract:
-
-            @price_lo
-            @guarantee
-            def pay_lo(self):
-                tx = TransactionTemplate()
-                tx.add_output(self.amount, self.lo_outcome)
-                return tx
+        @price_lo
+        @BinaryBet.then
+        def pay_lo(self):
+            tx = TransactionTemplate()
+            tx.add_output(self.amount, self.lo_outcome)
+            return tx
 
     return BinaryBet
 
@@ -141,14 +137,14 @@ class PriceOracle:
             hi_outcome = PriceOracle.generate(
                 PriceOracle.BetStructure(price_array[:middle]), amount, True
             )
-            return b(
+            return b(b.Props(
                 price=price,
                 hi_outcome=hi_outcome,
                 lo_outcome=lo_outcome,
                 h_price_hi=h_hi,
                 h_price_lo=h_lo,
                 amount=amount,
-            )
+            ))
         else:
             assert len(price_array)
             return price_array[0][-1]
