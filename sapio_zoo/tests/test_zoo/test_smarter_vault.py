@@ -7,7 +7,6 @@ from sapio_zoo.smarter_vault import *
 from bitcoin_script_compiler.clause import Weeks
 from sapio_bitcoinlib.messages import COutPoint
 
-import os
 from functools import lru_cache
 from .testutil import random_k
 

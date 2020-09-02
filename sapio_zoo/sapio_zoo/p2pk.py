@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from sapio_stdlib.p2pk import P2PK as PayToPubKey
 
+
 @contract
 class PayToSegwitAddress:
     """
@@ -16,13 +17,17 @@ class PayToSegwitAddress:
 
     amount: AmountRange
     address: str
+
     @dataclass
     class MetaData:
         label = "Segwit Address"
         color = "grey"
+
     metadata: MetaData = MetaData()
 
 
 def p(self):
     return (self.amount, self.address)
+
+
 PayToSegwitAddress.override = p

@@ -8,7 +8,7 @@ class Context:
     def __init__(self):
         self.compilation_cache = {}
 
-    def cache(self, k: str, b: Contract ):
+    def cache(self, k: str, b: Contract):
         self.compilation_cache[k] = b
 
     def uncache(self, k: str) -> Optional[Contract]:

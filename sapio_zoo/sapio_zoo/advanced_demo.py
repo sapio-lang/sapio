@@ -18,6 +18,7 @@ class Fields:
     amount: Amount
     setup: TransactionTemplate
 
+
 DemoLayeredConditions = Contract("DemoLayeredConditions", Fields, [])
 """
 DemoLayeredConditions is a example contract which demonstrates various
@@ -30,6 +31,7 @@ then = DemoLayeredConditions.then
 threshold = DemoLayeredConditions.threshold
 finish_or = DemoLayeredConditions.finish_or
 
+
 @let
 def a_signed(self) -> Clause:
     """
@@ -37,26 +39,32 @@ def a_signed(self) -> Clause:
     """
     return SignedBy(self.key_a)
 
+
 @let
 def two_weeks(self) -> Clause:
     return Wait(Weeks(2))
+
 
 @let
 def one_month(self) -> Clause:
     return Wait(Weeks(4))
 
+
 @let
 def b_signed(self) -> Clause:
     return SignedBy(self.key_b)
+
 
 @let
 def c_signed(self) -> Clause:
     return SignedBy(self.key_c)
 
+
 @threshold(3, [a_signed, b_signed, c_signed])
 @finish
 def all_signed(self) -> Clause:
     return Satisfied()
+
 
 @threshold(3, [a_signed, b_signed, c_signed])
 @then
@@ -65,16 +73,19 @@ def setup_tx(self) -> TransactionTemplate:
     t: TransactionTemplate = self.setup
     return t
 
+
 @a_signed
 @two_weeks
 @finish
 def time_release(self) -> Clause:
     return Satisfied()
 
+
 @one_month
 @let
 def d_signed_and_one_month(self) -> Clause:
     return SignedBy(self.key_d)
+
 
 @d_signed_and_one_month
 @then
@@ -83,10 +94,12 @@ def setup_tx2(self) -> TransactionTemplate:
     t: TransactionTemplate = self.setup
     return t
 
+
 @threshold(3, [a_signed, b_signed, c_signed])
 @finish_or
 def cooperate_example(
-    self, state: Optional[List[Tuple[Amount, str]]] = None,
+    self,
+    state: Optional[List[Tuple[Amount, str]]] = None,
 ) -> TransactionTemplate:
     if state is None:
         # Default example:
@@ -94,20 +107,25 @@ def cooperate_example(
     else:
         tx = TransactionTemplate()
         tx.add_output(
-            self.amount, DemoContractClose(amount=self.amount, payments=state),
+            self.amount,
+            DemoContractClose(amount=self.amount, payments=state),
         )
         return tx
+
 
 @dataclass
 class FieldsFinish:
     amount: Amount
     payments: List[Tuple[Amount, str]]
 
+
 DemoContractClose = Contract("DemoContractClose", FieldsFinish, [])
+
 
 @DemoContractClose.let
 def wait(self):
     return Wait(Weeks(2))
+
 
 @wait
 @DemoContractClose.then

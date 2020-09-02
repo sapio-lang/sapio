@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-import copy
-import inspect
-import typing
-from typing import Any, Dict, List, Type
 
 from bitcoin_script_compiler import (
     WitnessManager,
@@ -12,19 +8,14 @@ from bitcoin_script_compiler import (
 from sapio_bitcoinlib.static_types import Amount, Hash, Sats
 from sapio_bitcoinlib.script import CScript
 from typing import (
-    Protocol,
-    TypedDict,
+    Any,
+    Dict,
+    List,
+    Type,
     ClassVar,
     Callable,
     Tuple,
-    Any,
     Optional,
-    Iterator,
-    Union,
-    Generator,
-    Iterable,
-    TypeVar,
-    Final,
 )
 from .core.txtemplate import TransactionTemplate
 from .core.amountrange import AmountRange
@@ -47,8 +38,12 @@ from dataclasses import dataclass
 
 
 Contract = ContractProtocol[Any]
+
+
 def MakeContract(
-    in_name: str, props_t: Type[Props], traits: List[Trait],
+    in_name: str,
+    props_t: Type[Props],
+    traits: List[Trait],
 ) -> Type[ContractProtocol[Props]]:
     class X(ContractBase[Props], ContractProtocol[Props]):
         Props: ClassVar[Type[Props]] = props_t
@@ -65,8 +60,10 @@ def MakeContract(
         conditions_abi: Dict[str, Tuple[ThenF[Props], Clause]]
         witness_manager: WitnessManager
         amount_range: AmountRange
-        def __init__(self, data:Props) -> None:
+
+        def __init__(self, data: Props) -> None:
             super().__init__(data)
+
     # Wrap as a new_class to rename
     return types.new_class(in_name, bases=(X,))
 
@@ -76,4 +73,3 @@ def contract(props_t: Type[Any]) -> Type[ContractProtocol[Any]]:
     traits = getattr(props_t, "Traits", [])
     name = props_t.__name__
     return MakeContract(name, props_t, traits)
-

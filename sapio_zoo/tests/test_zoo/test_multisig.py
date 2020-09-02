@@ -1,8 +1,5 @@
-from functools import reduce
-
 from sapio_compiler import *
 from sapio_zoo.multisig import *
-import os
 import unittest
 from .testutil import random_k
 from sapio_bitcoinlib.messages import COutPoint
