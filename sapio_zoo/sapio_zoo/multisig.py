@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from functools import reduce
 from itertools import combinations
-from typing import List, Optional, Tuple
+from typing import List
 
 from sapio_compiler import *
 from sapio_zoo.p2pk import PayToSegwitAddress
@@ -29,13 +28,16 @@ class RawMultiSigWithPath:
     path: Contract
     amount: Amount
 
+
 @RawMultiSigWithPath.finish
 def _(self):
     return Threshold(self.thresh_all, self.keys)
 
+
 @RawMultiSigWithPath.let
 def lower_threshold(self):
     return Threshold(self.thresh_path, self.keys)
+
 
 @lower_threshold
 @RawMultiSigWithPath.then

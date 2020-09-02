@@ -1,13 +1,10 @@
 from typing import (
     Dict,
-    Generic,
     List,
     Literal,
     Optional,
-    Protocol,
     Tuple,
     Type,
-    TypeVar,
     Union,
 )
 
@@ -62,6 +59,7 @@ def ChannelClassFactory(stage: T):
         timeout: RelativeTimeSpec
         amount: Amount
         metadata: MetaData
+
     Self = Contract(f"ChannelState_{stage.__name__}", Fields, [])
 
     @Self.let
@@ -81,9 +79,7 @@ def ChannelClassFactory(stage: T):
             next_tx.add_output(self.amount, self.initial)
         else:
             for (amt, addr) in state:
-                next_tx.add_output(
-                    amt, PayToSegwitAddress(amount=amt, address=addr)
-                )
+                next_tx.add_output(amt, PayToSegwitAddress(amount=amt, address=addr))
         next_tx.set_sequence(self.timeout)
         tx = TransactionTemplate()
 
@@ -103,23 +99,27 @@ def ChannelClassFactory(stage: T):
         return Satisfied()
 
     if stage is OPENING:
+
         @Self.then
         def begin_contest(self) -> TransactionTemplate:
             tx = TransactionTemplate()
             closing = ChannelClassFactory(CLOSING)
             tx.add_output(
                 self.amount,
-                closing(closing.Props(
-                    amount=self.amount,
-                    initial=self.initial,
-                    timeout=self.timeout,
-                    alice=self.alice,
-                    bob=self.bob,
-                )),
+                closing(
+                    closing.Props(
+                        amount=self.amount,
+                        initial=self.initial,
+                        timeout=self.timeout,
+                        alice=self.alice,
+                        bob=self.bob,
+                    )
+                ),
             )
             return tx
 
     if stage is CLOSING:
+
         @Self.then
         def finish_contest(self) -> TransactionTemplate:
             tx = TransactionTemplate()
@@ -148,6 +148,8 @@ class Props:
     revocation: Hash
     honest: PubKey
     metadata: MetaData
+
+
 ContestedChannelAfterUpdate = Contract("ContestedChannelAfterUpdate", Props, [])
 
 
@@ -156,9 +158,11 @@ def close(self) -> TransactionTemplate:
     t: TransactionTemplate = self.state
     return t
 
+
 @ContestedChannelAfterUpdate.let
 def cheating_caught(self) -> Clause:
     return RevealPreImage(self.revocation) & SignedBy(self.honest)
+
 
 @cheating_caught
 @ContestedChannelAfterUpdate.finish_or

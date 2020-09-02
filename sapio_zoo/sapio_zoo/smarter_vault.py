@@ -18,6 +18,7 @@ class SmarterVault:
     class MetaData:
         color: str = "blue"
         label: str = "Smart Vault"
+
     metadata: MetaData = MetaData()
 
 
@@ -29,10 +30,10 @@ def step(self) -> TransactionTemplate:
         self.amount_step,
         UndoSend2(
             UndoSend2.Props(
-            from_contract=self.cold_storage(self.amount_step),
-            to_contract=self.hot_storage,
-            timeout=self.mature,
-            amount=self.amount_step,
+                from_contract=self.cold_storage(self.amount_step),
+                to_contract=self.hot_storage,
+                timeout=self.mature,
+                amount=self.amount_step,
             )
         ),
     )
@@ -40,12 +41,12 @@ def step(self) -> TransactionTemplate:
         sub_amount = (self.n_steps - 1) * self.amount_step
         sub_vault = SmarterVault(
             SmarterVault.Props(
-            cold_storage=self.cold_storage,
-            hot_storage=self.hot_storage,
-            n_steps=self.n_steps - 1,
-            timeout=self.timeout,
-            mature=self.mature,
-            amount_step=self.amount_step,
+                cold_storage=self.cold_storage,
+                hot_storage=self.hot_storage,
+                n_steps=self.n_steps - 1,
+                timeout=self.timeout,
+                mature=self.mature,
+                amount_step=self.amount_step,
             )
         )
         tx.add_output(sub_amount, sub_vault)

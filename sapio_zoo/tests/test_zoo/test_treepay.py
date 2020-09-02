@@ -3,6 +3,7 @@ import unittest
 from sapio_bitcoinlib.static_types import Sats, Bitcoin, PubKey
 from sapio_zoo.p2pk import *
 from sapio_zoo.tree_pay import *
+from sapio_zoo.collapsible_tree import *
 from bitcoin_script_compiler.clause import Weeks
 from .testutil import random_k
 from sapio_bitcoinlib.messages import COutPoint

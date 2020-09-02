@@ -1,16 +1,10 @@
 from __future__ import annotations
 
 from typing import (
-    Dict,
-    Generic,
     List,
-    Literal,
-    Optional,
-    Protocol,
     Tuple,
     Type,
     TypeVar,
-    Union,
 )
 
 from bitcoin_script_compiler import (
@@ -42,11 +36,14 @@ def BinaryBetFactory(t1: Type[T1], t2: Type[T2]):
         amount: Amount
         hi_outcome: T1
         lo_outcome: T2
+
         @dataclass
         class MetaData:
             label: str = field(init=False)
             color: str = "turquoise"
+
         metadata: MetaData = field(init=False)
+
         def __post_init__(self):
             self.metadata = MetaData()
             self.metadata.label = "BinaryOption[price > ${self.price}]"
@@ -137,14 +134,16 @@ class PriceOracle:
             hi_outcome = PriceOracle.generate(
                 PriceOracle.BetStructure(price_array[:middle]), amount, True
             )
-            return b(b.Props(
-                price=price,
-                hi_outcome=hi_outcome,
-                lo_outcome=lo_outcome,
-                h_price_hi=h_hi,
-                h_price_lo=h_lo,
-                amount=amount,
-            ))
+            return b(
+                b.Props(
+                    price=price,
+                    hi_outcome=hi_outcome,
+                    lo_outcome=lo_outcome,
+                    h_price_hi=h_hi,
+                    h_price_lo=h_lo,
+                    amount=amount,
+                )
+            )
         else:
             assert len(price_array)
             return price_array[0][-1]

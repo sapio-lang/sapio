@@ -11,7 +11,10 @@ from sapio_zoo.tree_pay import TreePay
 class Props:
     batches: List[Tuple[TimeSpec, List[Tuple[Amount, Contract]]]]
     radix: int
+
+
 AirDrop = Contract("AirDrop", Props, [])
+
 
 @AirDrop.then
 def payout(self):

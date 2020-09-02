@@ -10,15 +10,18 @@ from sapio_compiler import Contract, TransactionTemplate, guarantee, unlock
 class PayToPublicKey:
     key: PubKey
 
+
 @PayToPublicKey.finish
 def with_key(self):
     return SignedBy(self.key)
+
 
 @contract
 class BasicEscrow:
     alice: PubKey
     bob: PubKey
     escrow: PubKey
+
 
 @BasicEscrow.finish
 def redeem(self):
@@ -33,13 +36,16 @@ class BasicEscrow2:
     bob: PubKey
     escrow: PubKey
 
+
 @BasicEscrow2.finish
 def use_escrow(self):
     return SignedBy(self.escrow) & (SignedBy(self.alice) | SignedBy(self.bob))
 
+
 @BasicEscrow2.finish
-def cooperate(self):
+def cooperate_(self):
     return SignedBy(self.alice) & SignedBy(self.bob)
+
 
 @contract
 class TrustlessEscrow:
@@ -48,13 +54,15 @@ class TrustlessEscrow:
     alice_escrow: Tuple[Amount, Contract]
     bob_escrow: Tuple[Amount, Contract]
 
+
 @TrustlessEscrow.then
-def use_escrow(self) -> TransactionTemplate:
+def use_escrow_(self) -> TransactionTemplate:
     tx = TransactionTemplate()
     tx.add_output(*self.alice_escrow)
     tx.add_output(*self.bob_escrow)
     tx.set_sequence(Days(10))
     return tx
+
 
 @TrustlessEscrow.finish
 def cooperate(self):
@@ -66,27 +74,36 @@ if __name__ == "__main__":
     key_bob = b"1" * 32
     t = TrustlessEscrow(
         TrustlessEscrow.Props(
-        alice=key_alice,
-        bob=key_bob,
-        alice_escrow=(Bitcoin(1), PayToPublicKey(PayToPublicKey.Props(key=key_alice))),
-        bob_escrow=(Sats(10000), PayToPublicKey(PayToPublicKey.Props(key=key_bob))),
+            alice=key_alice,
+            bob=key_bob,
+            alice_escrow=(
+                Bitcoin(1),
+                PayToPublicKey(PayToPublicKey.Props(key=key_alice)),
+            ),
+            bob_escrow=(Sats(10000), PayToPublicKey(PayToPublicKey.Props(key=key_bob))),
         )
     )
 
     t1 = TrustlessEscrow(
         TrustlessEscrow.Props(
-        alice=key_alice,
-        bob=key_bob,
-        alice_escrow=(Bitcoin(1), PayToPublicKey(PayToPublicKey.Props(key=key_alice))),
-        bob_escrow=(Sats(10000), PayToPublicKey(PayToPublicKey.Props(key=key_bob))),
+            alice=key_alice,
+            bob=key_bob,
+            alice_escrow=(
+                Bitcoin(1),
+                PayToPublicKey(PayToPublicKey.Props(key=key_alice)),
+            ),
+            bob_escrow=(Sats(10000), PayToPublicKey(PayToPublicKey.Props(key=key_bob))),
         )
     )
     t2 = TrustlessEscrow(
         TrustlessEscrow.Props(
-        alice=key_alice,
-        bob=key_bob,
-        alice_escrow=(Bitcoin(1), PayToPublicKey(PayToPublicKey.Props(key=key_alice))),
-        bob_escrow=(Sats(10000) + Bitcoin(1), t1),
+            alice=key_alice,
+            bob=key_bob,
+            alice_escrow=(
+                Bitcoin(1),
+                PayToPublicKey(PayToPublicKey.Props(key=key_alice)),
+            ),
+            bob_escrow=(Sats(10000) + Bitcoin(1), t1),
         )
     )
     print(t2.bind(COutPoint()))
@@ -97,10 +114,10 @@ if __name__ == "__main__":
     try:
         t3 = TrustlessEscrow(
             TrustlessEscrow.Props(
-            alice=key_alice,
-            bob=key_bob,
-            alice_escrow=(Bitcoin(1), PayToPublicKey(key=key_alice)),
-            bob_escrow=(Sats(10000), t1),
+                alice=key_alice,
+                bob=key_bob,
+                alice_escrow=(Bitcoin(1), PayToPublicKey(key=key_alice)),
+                bob_escrow=(Sats(10000), t1),
             )
         )
     except ValueError:

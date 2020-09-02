@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import sapio_compiler
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     import sapio_compiler.core.protocol as proto
 from sapio_bitcoinlib.static_types import Amount, Sats
-from typing import Any
 
 
 class WithinFee:
@@ -24,7 +24,11 @@ class WithinFee:
 
 
 class HasEnoughFunds:
-    def __init__(self, contract: proto.ContractProtocol, amount_sent: Amount,) -> None:
+    def __init__(
+        self,
+        contract: proto.ContractProtocol,
+        amount_sent: Amount,
+    ) -> None:
         if contract.amount_range.max > amount_sent:
             raise ValueError(
                 f"Contract {contract.__class__.__name__} May Burn Funds!",

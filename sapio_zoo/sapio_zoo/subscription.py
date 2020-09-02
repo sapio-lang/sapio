@@ -28,23 +28,28 @@ class CancellableSubscription(Contract):
 
     class MetaData:
         color = "teal"
-        label =  "Cancellable Subscription"
-    metadata : MetaData = MetaData()
+        label = "Cancellable Subscription"
+
+    metadata: MetaData = MetaData()
+
 
 @CancellableSubscription.then
 def cancel(self):
     tx = TransactionTemplate()
     amount = self.amount
-    cc = CancelContest(CancelContest.Props(
-        amount=amount,
-        recipient=self.recipient,
-        schedule=self.schedule,
-        return_address=self.return_address,
-        watchtower_key=self.watchtower_key,
-        return_timeout=self.return_timeout,
-    ))
+    cc = CancelContest(
+        CancelContest.Props(
+            amount=amount,
+            recipient=self.recipient,
+            schedule=self.schedule,
+            return_address=self.return_address,
+            watchtower_key=self.watchtower_key,
+            return_timeout=self.return_timeout,
+        )
+    )
     tx.add_output(amount, cc)
     return tx
+
 
 @CancellableSubscription.then
 def claim(self):
@@ -59,14 +64,16 @@ def claim(self):
         new_amount = total_amount - amount
         tx.add_output(
             new_amount,
-            CancellableSubscription(CancellableSubscription.Props(
-                amount=new_amount,
-                recipient=self.recipient,
-                schedule=self.schedule[1:],
-                watchtower_key=self.watchtower_key,
-                return_timeout=self.return_timeout,
-                return_address=self.return_address,
-            )),
+            CancellableSubscription(
+                CancellableSubscription.Props(
+                    amount=new_amount,
+                    recipient=self.recipient,
+                    schedule=self.schedule[1:],
+                    watchtower_key=self.watchtower_key,
+                    return_timeout=self.return_timeout,
+                    return_address=self.return_address,
+                )
+            ),
         )
     return tx
 
@@ -83,11 +90,14 @@ class CancelContest:
     class MetaData:
         color = "red"
         label = "Cancellation Attempt"
+
     metadata = MetaData()
+
 
 @CancelContest.let
 def watchtower_selects_best(self):
     return SignedBy(self.watchtower_key)
+
 
 @watchtower_selects_best
 @CancelContest.then
@@ -102,6 +112,7 @@ def counterclaim(self) -> Iterator[TransactionTemplate]:
         if amount_refundable:
             tx.add_output(amount_refundable, self.return_address)
         yield tx
+
 
 @CancelContest.then
 def finish_cancel(self):

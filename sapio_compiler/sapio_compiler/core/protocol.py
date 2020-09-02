@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import copy
-import inspect
-import typing
 from typing import Any, Dict, List, Type, TYPE_CHECKING, Generic
 
 
@@ -21,7 +19,6 @@ from sapio_bitcoinlib.static_types import Amount, Hash, Sats
 from sapio_bitcoinlib.script import CScript
 from typing import (
     Protocol,
-    TypedDict,
     ClassVar,
     Callable,
     Tuple,
@@ -31,15 +28,12 @@ from typing import (
     Generator,
     Iterable,
     TypeVar,
-    Final,
     overload,
 )
 from .amountrange import AmountRange
 from functools import wraps
 import itertools
 import functools
-from abc import abstractmethod
-from dataclasses import dataclass, asdict
 
 import rust_miniscript
 
@@ -100,7 +94,6 @@ class ContractProtocol(Protocol[Props]):
     """
     override: Optional[Callable[[Props], Tuple[AmountRange, str]]]
 
-
     """
     let declares a requirement variable, but does not
     enforce it.
@@ -126,15 +119,26 @@ class ContractProtocol(Protocol[Props]):
     """
 
     @classmethod
-    def let(cls, c: Finisher[Props]) -> Union[Callable[[IndexType], IndexType], Callable[[ Callable[[IndexType], [IndexType]]], Callable[[IndexType], IndexType]]]:
+    def let(
+        cls, c: Finisher[Props]
+    ) -> Union[
+        Callable[[IndexType], IndexType],
+        Callable[
+            [Callable[[IndexType], [IndexType]]], Callable[[IndexType], IndexType]
+        ],
+    ]:
         @overload
         def wrapper(x: None) -> None:
             raise NotImplementedError()
+
         @overload
         def wrapper(x: IndexType) -> IndexType:
             raise NotImplementedError()
+
         @overload
-        def wrapper(f: Callable[[IndexType], IndexType]) -> Callable[[IndexType], IndexType]:
+        def wrapper(
+            f: Callable[[IndexType], IndexType]
+        ) -> Callable[[IndexType], IndexType]:
             raise NotImplementedError()
 
         @wraps(c)
@@ -152,13 +156,15 @@ class ContractProtocol(Protocol[Props]):
                 return x
             if callable(arg):
                 f: Callable[[IndexType], IndexType] = arg
+
                 def inner_wrapper(y: IndexType) -> IndexType:
                     return wrapper(f(y))
+
                 return inner_wrapper
             else:
                 raise ValueError("Cannot Use Wrapper")
-        return wrapper
 
+        return wrapper
 
     @classmethod
     def then(cls, c: ThenF[Props]) -> ThenFuncIndex:
@@ -261,7 +267,7 @@ class ContractProtocol(Protocol[Props]):
             is_ctv_before = len(this.then_funcs)
             for (i, (func, _)) in enumerate(
                 itertools.chain(
-                    this.then_funcs, this.finish_or_funcs # , this.finish_funcs #
+                    this.then_funcs, this.finish_or_funcs  # , this.finish_funcs #
                 )
             ):
                 is_ctv = i < is_ctv_before
@@ -274,7 +280,13 @@ class ContractProtocol(Protocol[Props]):
                     # possible witnesses that do not have a ctv
                     ctv_sat = (miniscript.SatType.TXTEMPLATE, ctv_hash)
                     candidates = [
-                        wit for wit in this.witness_manager.ms.sat if (ctv_sat in wit if is_ctv else all(w[0] != miniscript.SatType.TXTEMPLATE for w in wit))
+                        wit
+                        for wit in this.witness_manager.ms.sat
+                        if (
+                            ctv_sat in wit
+                            if is_ctv
+                            else all(w[0] != miniscript.SatType.TXTEMPLATE for w in wit)
+                        )
                     ]
                     # There should always be a candidate otherwise we shouldn't
                     # have a txn
@@ -309,17 +321,24 @@ class ContractProtocol(Protocol[Props]):
                         queue.append((COutPoint(txid, i), contract))
 
         return txns, metadata_out
+
     @classmethod
     def create(cls, **kwargs: Any) -> ContractProtocol[Props]:
         """Convenience -- type inference may not work!"""
         return cls(cls.Props(**kwargs))
-        
+
+
 def reduce_and(c: Clause, c2: Clause) -> Clause:
     return c & c2
-def mapargs(*args:Any):
+
+
+def mapargs(*args: Any):
     def apply(f: Callable[[X], Y]) -> Y:
         return f(*args)
+
     return apply
+
+
 class ContractBase(Generic[Props]):
     # Instance Variables
     data: Props
@@ -327,6 +346,7 @@ class ContractBase(Generic[Props]):
     conditions_abi: Dict[str, Tuple[ThenF[Props], Clause]]
     witness_manager: WitnessManager
     amount_range: AmountRange
+
     # kwargs does not support typeddict
     def __init__(self, props: Props) -> None:
         self.data = props
@@ -356,8 +376,10 @@ class ContractBase(Generic[Props]):
                     self.then_funcs, self.finish_or_funcs, self.finish_funcs
                 )
             ):
-                conditions = functools.reduce(reduce_and, map(mapargs(self.data), conditions), Satisfied())
-                conditions_abi[func.__name__] = ( func,conditions)
+                conditions = functools.reduce(
+                    reduce_and, map(mapargs(self.data), conditions), Satisfied()
+                )
+                conditions_abi[func.__name__] = (func, conditions)
                 all_ctvs: Clause = Unsatisfiable()
                 if i < add_tx_before:
                     txn_abi[func.__name__] = (func, [])
@@ -390,7 +412,7 @@ class ContractBase(Generic[Props]):
                 if i >= use_ctv_before:
                     paths |= conditions_abi[func.__name__][1]
                 else:
-                    paths |= (conditions_abi[func.__name__][1] & all_ctvs)
+                    paths |= conditions_abi[func.__name__][1] & all_ctvs
             if isinstance(paths, Unsatisfiable):
                 raise AssertionError("Must Have at least one spending condition")
             desc = paths.to_miniscript()

@@ -1,4 +1,5 @@
 from sapio_stdlib.escrow import *
+from sapio_stdlib.trustless_escrow import *
 from sapio_stdlib.p2pk import P2PK
 import unittest
 from sapio_bitcoinlib.test_framework import BitcoinTestFramework
@@ -20,7 +21,8 @@ class TestEscrow(unittest.TestCase):
         )
         assert escrow.txn_abi["uncooperative_close"][1][0] is t
         assert_equal(
-            escrow.conditions_abi["uncooperative_close"][1], Satisfied(),
+            escrow.conditions_abi["uncooperative_close"][1],
+            Satisfied(),
         )
         coop_close = escrow.conditions_abi["cooperative_close"][1]
         assert_equal(coop_close.left.pubkey, alice.data.key)

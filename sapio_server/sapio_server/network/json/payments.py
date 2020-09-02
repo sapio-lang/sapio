@@ -1,4 +1,4 @@
-from typing import TypedDict, List, Tuple
+from typing import List, Tuple
 from jsonschema import Draft7Validator
 from sapio_server.context import Context
 from sapio_server.network.json import address

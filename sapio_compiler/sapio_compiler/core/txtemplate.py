@@ -189,7 +189,9 @@ class TransactionTemplate:
         return ret.digest()
 
     def add_output(
-        self, amount: Amount, contract: "protocol.ContractProtocol[Any]",
+        self,
+        amount: Amount,
+        contract: "protocol.ContractProtocol[Any]",
     ) -> None:
         """
         Adds an output to a tx template. Checks that the amount is sufficient and that fees won't be
@@ -206,12 +208,8 @@ class TransactionTemplate:
         self.outputs.append((amount, contract))
         self.outputs_metadata.append(
             OutputMetaDataContainer(
-                getattr(
-                    getattr(contract.data, "metadata", None), "color", "green"
-                ),
-                getattr(
-                    getattr(contract.data, "metadata", None), "label", "unknown"
-                ),
+                getattr(getattr(contract.data, "metadata", None), "color", "green"),
+                getattr(getattr(contract.data, "metadata", None), "label", "unknown"),
             )
         )
 

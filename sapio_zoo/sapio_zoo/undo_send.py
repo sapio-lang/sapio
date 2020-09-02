@@ -10,22 +10,26 @@ class UndoSend:
     amount: Amount
     timeout: TimeSpec
 
+
 @UndoSend.let
 def is_matured(self):
     return Wait(self.timeout)
+
 
 @UndoSend.let
 def check_key(self):
     return SignedBy(self.to_key)
 
+
 @is_matured
 @check_key
 @UndoSend.finish
-def complete(self):
+def complete_key(self):
     return Satisfied()
 
+
 @UndoSend.then
-def undo(self) -> TransactionTemplate:
+def return_to_sender(self) -> TransactionTemplate:
     tx = TransactionTemplate()
     tx.add_output(self.amount, self.from_contract)
     return tx
@@ -41,7 +45,9 @@ class UndoSend2:
     class MetaData:
         color: str = "red"
         label: str = "UndoSend2"
+
     metadata: MetaData = MetaData()
+
 
 @UndoSend2.then
 def complete(self) -> TransactionTemplate:
@@ -49,6 +55,7 @@ def complete(self) -> TransactionTemplate:
     tx.set_sequence(self.timeout)
     tx.add_output(self.amount, self.to_contract)
     return tx
+
 
 @UndoSend2.then
 def undo(self) -> TransactionTemplate:

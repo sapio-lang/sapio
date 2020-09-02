@@ -1,4 +1,3 @@
-from typing import TypedDict
 from jsonschema import Draft7Validator
 from sapio_server.context import Context
 
