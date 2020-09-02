@@ -9,7 +9,7 @@ from sapio_bitcoinlib import segwit_addr
 from sapio_bitcoinlib import miniscript
 from sapio_bitcoinlib.messages import COutPoint, CTransaction, CTxIn, CTxOut
 from sapio_bitcoinlib.static_types import Amount, PubKey, Sequence
-from sapio_compiler import BindableContract, ContractProtocol
+from sapio_compiler import Contract, ContractProtocol
 from sapio_compiler import Contract
 
 from .api_serialization import conversion_functions, Context, create_jsonschema
@@ -51,7 +51,7 @@ def get_tx_data(txns, metadata):
 
 
 class CompilerWebSocket(tornado.websocket.WebSocketHandler):
-    contracts: Dict[str, Union[BindableContract, ContractProtocol]] = {}
+    contracts: Dict[str, Union[Contract, ContractProtocol]] = {}
     menu_items: ClassVar = []
     menu_items_map: ClassVar = {}
     menu: ClassVar = {
@@ -65,7 +65,7 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
     context: Context
 
     @classmethod
-    def set_example(cls, example: BindableContract):
+    def set_example(cls, example: Contract):
         txns, metadata = example.bind(base_out)
         addr = example.witness_manager.get_p2wsh_address()
         amount = example.amount_range.max
@@ -205,7 +205,7 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
 
     @classmethod
     def add_contract(cls, name: str, contract: Any):
-        assert isinstance(contract, (BindableContract, ContractProtocol))
+        assert isinstance(contract, (Contract, ContractProtocol))
         assert name not in cls.menu
         hints = typing.get_type_hints(contract.Fields)
         menu: Dict[str, Any] = create_jsonschema(name, hints.items())

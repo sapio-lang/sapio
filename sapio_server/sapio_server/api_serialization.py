@@ -10,7 +10,7 @@ from sapio_compiler import (
     RelativeTimeSpec,
     AbsoluteTimeSpec,
     AmountRange,
-    BindableContract,
+    Contract,
     Days,
     Weeks,
 )
