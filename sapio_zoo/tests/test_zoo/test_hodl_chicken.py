@@ -18,9 +18,9 @@ class TestHodlChicken(unittest.TestCase):
         alice_key = random_k()
         bob_key = random_k()
 
-        hodl_chicken = HodlChicken(
-            alice_contract=lambda x: PayToSegwitAddress(amount=AmountRange.of(x), address=alice_script), 
-            bob_contract=lambda x: PayToSegwitAddress(amount=AmountRange.of(x), address=bob_script), 
+        hodl_chicken = HodlChicken.create(
+            alice_contract=lambda x: PayToSegwitAddress.create(amount=AmountRange.of(x), address=alice_script),
+            bob_contract=lambda x: PayToSegwitAddress.create(amount=AmountRange.of(x), address=bob_script),
             alice_key=alice_key,
             bob_key=bob_key,
             alice_deposit=Sats(100_000_000),
