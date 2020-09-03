@@ -1,6 +1,6 @@
 import json
 import typing
-from typing import Any, Callable, Dict, Optional, Tuple, Type, Union, ClassVar
+from typing import Any, ClassVar, Dict, Optional, Type, Union
 
 import tornado
 import tornado.websocket
@@ -9,8 +9,7 @@ from sapio_bitcoinlib import segwit_addr
 from sapio_bitcoinlib import miniscript
 from sapio_bitcoinlib.messages import COutPoint, CTransaction, CTxIn, CTxOut
 from sapio_bitcoinlib.static_types import Amount, PubKey, Sequence
-from sapio_compiler import BindableContract, ContractProtocol
-from sapio_compiler import Contract
+from sapio_compiler import Contract, ContractProtocol
 
 from .api_serialization import conversion_functions, Context, create_jsonschema
 import jsonschema
@@ -22,7 +21,10 @@ base_tx = CTransaction()
 base_tx.vout.append(CTxOut())
 base_tx.rehash()
 from hashlib import sha256
-base_out = COutPoint(int(sha256(b"mock:"+bytes(f"{0}", 'utf-8')).digest().hex(), 16), 0)
+
+base_out = COutPoint(
+    int(sha256(b"mock:" + bytes(f"{0}", "utf-8")).digest().hex(), 16), 0
+)
 
 allowed_sat_types = {
     miniscript.SatType.SIGNATURE,
@@ -31,7 +33,7 @@ allowed_sat_types = {
     miniscript.SatType.HASH256_PREIMAGE,
     miniscript.SatType.RIPEMD160_PREIMAGE,
     miniscript.SatType.HASH160_PREIMAGE,
-    miniscript.SatType.DATA
+    miniscript.SatType.DATA,
 }
 
 
@@ -39,7 +41,9 @@ def clean_witness(tx):
     # TODO: Store the witness satisfaction templates in a different format to
     # avoid creating invalid CTransaction objects.
     for witness in tx.wit.vtxinwit:
-        witness.scriptWitness.stack = [w[1] for w in witness.scriptWitness.stack if w[0] in allowed_sat_types]
+        witness.scriptWitness.stack = [
+            w[1] for w in witness.scriptWitness.stack if w[0] in allowed_sat_types
+        ]
     return tx
 
 
@@ -51,7 +55,7 @@ def get_tx_data(txns, metadata):
 
 
 class CompilerWebSocket(tornado.websocket.WebSocketHandler):
-    contracts: Dict[str, Union[BindableContract, ContractProtocol]] = {}
+    contracts: Dict[str, Union[Contract, ContractProtocol]] = {}
     menu_items: ClassVar = []
     menu_items_map: ClassVar = {}
     menu: ClassVar = {
@@ -65,7 +69,7 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
     context: Context
 
     @classmethod
-    def set_example(cls, example: BindableContract):
+    def set_example(cls, example: Contract):
         txns, metadata = example.bind(base_out)
         addr = example.witness_manager.get_p2wsh_address()
         amount = example.amount_range.max
@@ -205,7 +209,7 @@ class CompilerWebSocket(tornado.websocket.WebSocketHandler):
 
     @classmethod
     def add_contract(cls, name: str, contract: Any):
-        assert isinstance(contract, (BindableContract, ContractProtocol))
+        assert isinstance(contract, (Contract, ContractProtocol))
         assert name not in cls.menu
         hints = typing.get_type_hints(contract.Fields)
         menu: Dict[str, Any] = create_jsonschema(name, hints.items())

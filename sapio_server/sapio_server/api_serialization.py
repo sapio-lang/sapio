@@ -1,4 +1,4 @@
-from typing import Dict, Type, Callable, Any, Union, Tuple, Optional, List, TypedDict
+from typing import Callable, Dict, List, Tuple, Type, Union
 
 
 from sapio_zoo.p2pk import PayToSegwitAddress
@@ -6,11 +6,10 @@ from sapio_bitcoinlib.static_types import Amount, Sequence, PubKey
 from sapio_bitcoinlib.static_types import int64
 
 from sapio_compiler import (
-    Contract,
     RelativeTimeSpec,
     AbsoluteTimeSpec,
     AmountRange,
-    BindableContract,
+    Contract,
     Days,
     Weeks,
 )
@@ -31,7 +30,7 @@ subschemas = {
     PayToSegwitAddress: schemas.address.schema,
     Contract: schemas.address.schema,
     PubKey: schemas.pubkey.schema,
-    int: schemas.int.schema,
+    int: schemas.integer.schema,
     List[Tuple[Amount, Contract]]: schemas.payments.schema,
 }
 
@@ -58,7 +57,7 @@ conversion_functions = {
     Amount: schemas.amount.convert,
     Sequence: schemas.timespec.relative.convert_sequence,
     RelativeTimeSpec: schemas.timespec.relative.convert,
-    int: schemas.int.convert,
+    int: schemas.integer.convert,
     str: lambda x, y: x,
     Union[AbsoluteTimeSpec, RelativeTimeSpec]: schemas.timespec.convert,
     PayToSegwitAddress: schemas.address.convert,

@@ -1,55 +1,75 @@
 from __future__ import annotations
 
-import inspect
-import typing
-from typing import Any, Dict, List, Type
 
-from .core.bindable_contract import BindableContract
-from .core.initializer import Initializer
-from .decorators import get_type_tag
+from bitcoin_script_compiler import (
+    WitnessManager,
+    Clause,
+)
+from sapio_bitcoinlib.static_types import Amount, Hash, Sats
+from sapio_bitcoinlib.script import CScript
+from typing import (
+    Any,
+    Dict,
+    List,
+    Type,
+    ClassVar,
+    Callable,
+    Tuple,
+    Optional,
+)
+from .core.txtemplate import TransactionTemplate
+from .core.amountrange import AmountRange
+from .core.protocol import (
+    ContractProtocol,
+    ContractBase,
+    IndexType,
+    Props,
+    Trait,
+    ThenFuncIndex,
+    FinishOrFuncIndex,
+    FinishFuncIndex,
+    FuncIndex,
+    ThenF,
+    Finisher,
+    TxRetType,
+)
+import types
+from dataclasses import dataclass
 
 
-class MetaContract(type):
-    """
-    MetaContract is a base metaclass which handles the creation of a
-    new Contract instance and stitches the relevant parts together into a
-    class that can be initialized correctly.
-
-    It should not be inherited from directly, prefer to inherit from
-    Contract which inherits from BindableContract.
-    """
-
-    def __new__(
-        mcl: Type[Any], name: str, bases: List[Type[Any]], nmspc: Dict[str, Any]
-    ) -> MetaContract:
-        pay_funcs = [v for (k, v) in nmspc.items() if get_type_tag(v) == "pay_address"]
-        path_funcs = [v for (k, v) in nmspc.items() if get_type_tag(v) == "path"]
-        unlock_funcs = [v for (k, v) in nmspc.items() if get_type_tag(v) == "unlock"]
-        assertions = [v for (k, v) in nmspc.items() if get_type_tag(v) == "check"]
-
-        class MetaBase(BindableContract[Any]):
-            """MetaBase is the actual class which gets constructed"""
-
-            init_class = Initializer(
-                nmspc["Fields"], path_funcs, pay_funcs, unlock_funcs, assertions
-            )
-
-        return super().__new__(mcl, name, (MetaBase,), nmspc)
+Contract = ContractProtocol[Any]
 
 
-class Contract(BindableContract[Any], metaclass=MetaContract):
-    """Base class to inherit from when making a new contract"""
+def MakeContract(
+    in_name: str,
+    props_t: Type[Props],
+    traits: List[Trait],
+) -> Type[ContractProtocol[Props]]:
+    class X(ContractBase[Props], ContractProtocol[Props]):
+        Props: ClassVar[Type[Props]] = props_t
+        # Class Variables
+        then_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]] = []
+        finish_or_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]] = []
+        finish_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]] = []
+        assert_funcs: ClassVar[List[Callable[[Props], bool]]] = []
+        override: Optional[Callable[[Props], Tuple[AmountRange, str]]] = None
 
-    class Fields:
-        """
-        Mock-value for subcontract to replace.
+        # Instance Variables
+        data: Props
+        txn_abi: Dict[str, Tuple[ThenF[Props], List[TransactionTemplate]]]
+        conditions_abi: Dict[str, Tuple[ThenF[Props], Clause]]
+        witness_manager: WitnessManager
+        amount_range: AmountRange
 
-        Fields should be just a type list with no values
+        def __init__(self, data: Props) -> None:
+            super().__init__(data)
 
-        Examples
-        --------
-        >>> class Fields:
-        ...     amount: Amount
-        ...     steps: int
+    # Wrap as a new_class to rename
+    return types.new_class(in_name, bases=(X,))
 
-        """
+
+def contract(props_t: Type[Any]) -> Type[ContractProtocol[Any]]:
+    props_t = dataclass(props_t)
+    traits = getattr(props_t, "Traits", [])
+    name = props_t.__name__
+    return MakeContract(name, props_t, traits)

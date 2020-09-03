@@ -1,4 +1,3 @@
-import os
 from sapio_compiler import (
     AbsoluteTimeSpec,
     Days,
@@ -12,7 +11,7 @@ from sapio_bitcoinlib.static_types import Bitcoin, PubKey, Amount
 from sapio_zoo.p2pk import PayToPubKey
 
 from sapio_compiler import *
-from typing import Tuple, Optional, Any
+from typing import Any, Optional
 from functools import lru_cache
 
 
@@ -57,7 +56,7 @@ def TicTacToeState(board: Board, player: bool):
         return cache[board]
     board_won = winner(board)
     unwinnable = board_won is None and all_filled(board)
-    shift = 9*player
+    shift = 9 * player
     filled = board | (board >> 9)
     moves = [board | ((1 << j) << (shift)) for j in range(9) if filled & (1 << j) == 0]
 
@@ -66,6 +65,7 @@ def TicTacToeState(board: Board, player: bool):
             amount: Amount
             player_1: PubKey
             player_2: PubKey
+
         # declare the checks for signatures from players
 
         @require
@@ -86,6 +86,7 @@ def TicTacToeState(board: Board, player: bool):
 
         # Player 1 wins, only enabled for winning=True boards
         if board_won is True:
+
             @player_one
             @unlock
             def player_1_wins(self):
@@ -93,6 +94,7 @@ def TicTacToeState(board: Board, player: bool):
 
         # Player 2 wins, only enabled for winning=False boards
         if board_won is False:
+
             @player_two
             @unlock
             def player_2_wins(self):
@@ -115,8 +117,16 @@ def TicTacToeState(board: Board, player: bool):
                 for new in moves:
                     tx = TransactionTemplate()
                     tx.set_sequence(Weeks(1))
-                    tx.add_output(self.amount, TicTacToeState(new, not player)(amount=self.amount, player_1=self.player_1, player_2=self.player_2))
+                    tx.add_output(
+                        self.amount,
+                        TicTacToeState(new, not player)(
+                            amount=self.amount,
+                            player_1=self.player_1,
+                            player_2=self.player_2,
+                        ),
+                    )
                     yield tx
+
             # current player can accept next player's move at any time
 
             @current_player
@@ -125,7 +135,14 @@ def TicTacToeState(board: Board, player: bool):
             def coop_boards(self):
                 for new in moves:
                     tx = TransactionTemplate()
-                    tx.add_output(self.amount, TicTacToeState(new, not player)(amount=self.amount, player_1=self.player_1, player_2=self.player_2))
+                    tx.add_output(
+                        self.amount,
+                        TicTacToeState(new, not player)(
+                            amount=self.amount,
+                            player_1=self.player_1,
+                            player_2=self.player_2,
+                        ),
+                    )
                     yield tx
 
             # If no move is made in 2 weeks, any move can be made
@@ -134,13 +151,22 @@ def TicTacToeState(board: Board, player: bool):
                 for new in moves:
                     tx = TransactionTemplate()
                     tx.set_sequence(Weeks(2))
-                    tx.add_output(self.amount, TicTacToeState(new, not player)(amount=self.amount, player_1=self.player_1, player_2=self.player_2))
+                    tx.add_output(
+                        self.amount,
+                        TicTacToeState(new, not player)(
+                            amount=self.amount,
+                            player_1=self.player_1,
+                            player_2=self.player_2,
+                        ),
+                    )
                     yield tx
+
         if unwinnable:
+
             @guarantee
             def tie(self):
                 t = TransactionTemplate()
-                amt = self.amount//2
+                amt = self.amount // 2
                 t.add_output(amt, PayToPubKey(amount=amt, key=self.player_1))
                 t.add_output(amt, PayToPubKey(amount=amt, key=self.player_2))
                 return t
@@ -153,7 +179,9 @@ def TicTacToeState(board: Board, player: bool):
             return TicTacToe(**kwargs)
 
         def __call__(self, amount, player_1, player_2):
-            return self.create_instance(amount=amount, player_1=player_1, player_2=player_2)
+            return self.create_instance(
+                amount=amount, player_1=player_1, player_2=player_2
+            )
 
     cache[board] = W()
 

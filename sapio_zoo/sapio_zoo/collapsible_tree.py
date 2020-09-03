@@ -9,25 +9,26 @@ from bitcoin_script_compiler import (
 from sapio_bitcoinlib.static_types import Amount, PubKey
 from sapio_bitcoinlib.key import ECKey
 from sapio_compiler import Contract, TransactionTemplate, contract
+from .tree_pay import segment_by_radix
 
 
-def segment_by_radix(L, n):
-    size = max(len(L) // n, n)
-    for i in range(0, len(L), size):
-        if i + size + size > len(L):
-            yield L[i:]
-            return
-        else:
-            yield L[i : i + size]
+# Mock!
+def libsecp_make_musig():
+    e = ECKey()
+    e.generate()
+    return e.get_pubkey()
 
 
 @contract
-class TreePay(Contract):
+class CollapsibleTree(Contract):
     payments: List[Tuple[Amount, Contract]]
     radix: int
 
+    def get_musig(self) -> ECKey:
+        return libsecp_make_musig()
 
-@TreePay.then
+
+@CollapsibleTree.then
 def expand(self) -> TransactionTemplate:
     tx = TransactionTemplate()
     segments = list(segment_by_radix(self.payments, self.radix))
@@ -40,6 +41,14 @@ def expand(self) -> TransactionTemplate:
                 lambda x, y: x + y, [a for (a, _) in segment], Amount(0)
             )
             tx.add_output(
-                amount, TreePay(TreePay.Props(payments=segment, radix=self.radix))
+                amount,
+                CollapsibleTree(
+                    CollapsibleTree.Props(payments=segment, radix=self.radix)
+                ),
             )
     return tx
+
+
+@CollapsibleTree.finish
+def cooperate_out(self):
+    return SignedBy(self.get_musig())

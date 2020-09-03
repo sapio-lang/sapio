@@ -3,7 +3,7 @@ from typing import TypedDict, Union
 from jsonschema import Draft7Validator
 from sapio_server.context import Context
 from sapio_server.network.json import amount
-from sapio_compiler import BindableContract, AmountRange
+from sapio_compiler import AmountRange, Contract
 from sapio_zoo.p2pk import PayToSegwitAddress
 
 schema = {
@@ -32,7 +32,7 @@ class AddrDict(TypedDict, AmountField):
     address: str
 
 
-def convert(arg: AddrDict, ctx: Context) -> BindableContract:
+def convert(arg: AddrDict, ctx: Context) -> Contract:
     validator.validate(arg)
 
     cached = ctx.uncache(arg["address"])
@@ -42,4 +42,4 @@ def convert(arg: AddrDict, ctx: Context) -> BindableContract:
         a = AmountRange()
         if "amount" in arg:
             a.update_range(amount.convert(arg["amount"], ctx))
-        return PayToSegwitAddress(amount=a, address=arg["address"])
+        return PayToSegwitAddress.create(amount=a, address=arg["address"])

@@ -6,7 +6,7 @@ from bitcoin_script_compiler import (
     SignedBy,
 )
 from sapio_bitcoinlib.static_types import Amount, PubKey, int64
-from sapio_compiler import Contract, TransactionTemplate, guarantee, require
+from sapio_compiler import Contract, TransactionTemplate, contract
 from sapio_zoo.p2pk import PayToSegwitAddress
 
 
@@ -17,27 +17,28 @@ def add_timeout(tx, delay):
         tx.set_lock_time(delay)
 
 
+@contract
 class CancellableSubscription(Contract):
-    class Fields:
-        amount: Amount
-        recipient: PayToSegwitAddress
-        schedule: List[Tuple[AbsoluteTimeSpec, Amount]]
-        return_address: PayToSegwitAddress
-        watchtower_key: PubKey
-        return_timeout: RelativeTimeSpec
+    amount: Amount
+    recipient: PayToSegwitAddress
+    schedule: List[Tuple[AbsoluteTimeSpec, Amount]]
+    return_address: PayToSegwitAddress
+    watchtower_key: PubKey
+    return_timeout: RelativeTimeSpec
 
     class MetaData:
-        def color(self):
-            return "blue"
+        color = "teal"
+        label = "Cancellable Subscription"
 
-        def label(self):
-            return "Cancellable Subscription"
+    metadata: MetaData = MetaData()
 
-    @guarantee
-    def cancel(self):
-        tx = TransactionTemplate()
-        amount = self.amount
-        cc = CancelContest(
+
+@CancellableSubscription.then
+def cancel(self):
+    tx = TransactionTemplate()
+    amount = self.amount
+    cc = CancelContest(
+        CancelContest.Props(
             amount=amount,
             recipient=self.recipient,
             schedule=self.schedule,
@@ -45,80 +46,86 @@ class CancellableSubscription(Contract):
             watchtower_key=self.watchtower_key,
             return_timeout=self.return_timeout,
         )
-        tx.add_output(amount, cc)
-        return tx
+    )
+    tx.add_output(amount, cc)
+    return tx
 
-    @guarantee
-    def claim(self):
-        tx = TransactionTemplate()
-        (delay, amount) = self.schedule[0]
-        add_timeout(tx, delay)
 
-        total_amount = self.amount
-        tx.add_output(amount, self.recipient)
+@CancellableSubscription.then
+def claim(self):
+    tx = TransactionTemplate()
+    (delay, amount) = self.schedule[0]
+    add_timeout(tx, delay)
 
-        if len(self.schedule) > 1:
-            new_amount = total_amount - amount
-            tx.add_output(
-                new_amount,
-                CancellableSubscription(
+    total_amount = self.amount
+    tx.add_output(amount, self.recipient)
+
+    if len(self.schedule) > 1:
+        new_amount = total_amount - amount
+        tx.add_output(
+            new_amount,
+            CancellableSubscription(
+                CancellableSubscription.Props(
                     amount=new_amount,
                     recipient=self.recipient,
                     schedule=self.schedule[1:],
                     watchtower_key=self.watchtower_key,
                     return_timeout=self.return_timeout,
                     return_address=self.return_address,
-                ),
-            )
-        return tx
+                )
+            ),
+        )
+    return tx
 
 
-class CancelContest(Contract):
-    class Fields:
-        amount: Amount
-        recipient: Contract
-        schedule: List[Tuple[AbsoluteTimeSpec, Amount]]
-        return_address: Contract
-        watchtower_key: PubKey
-        return_timeout: RelativeTimeSpec
+@contract
+class CancelContest:
+    amount: Amount
+    recipient: Contract
+    schedule: List[Tuple[AbsoluteTimeSpec, Amount]]
+    return_address: Contract
+    watchtower_key: PubKey
+    return_timeout: RelativeTimeSpec
 
     class MetaData:
-        def color(self):
-            return "red"
+        color = "red"
+        label = "Cancellation Attempt"
 
-        def label(self):
-            return "Cancellation Attempt"
+    metadata = MetaData()
 
-    @require
-    def watchtower_selects_best(self):
-        return SignedBy(self.watchtower_key)
 
-    @watchtower_selects_best
-    @guarantee
-    def counterclaim(self) -> Iterator[TransactionTemplate]:
-        amount_earned = Amount(int64(0))
-        for (timeout, amount) in self.schedule:
-            amount_earned += amount
-            amount_refundable = self.amount - amount_earned
-            tx = TransactionTemplate()
-            add_timeout(tx, timeout)
-            tx.add_output(amount_earned, self.recipient)
-            if amount_refundable:
-                tx.add_output(amount_refundable, self.return_address)
-            yield tx
+@CancelContest.let
+def watchtower_selects_best(self):
+    return SignedBy(self.watchtower_key)
 
-    @guarantee
-    def finish_cancel(self):
+
+@watchtower_selects_best
+@CancelContest.then
+def counterclaim(self) -> Iterator[TransactionTemplate]:
+    amount_earned = Amount(int64(0))
+    for (timeout, amount) in self.schedule:
+        amount_earned += amount
+        amount_refundable = self.amount - amount_earned
         tx = TransactionTemplate()
-        tx.set_sequence(self.return_timeout)
-        amount = self.amount
-        return_address = self.return_address
-        tx.add_output(amount, return_address)
-        return tx
+        add_timeout(tx, timeout)
+        tx.add_output(amount_earned, self.recipient)
+        if amount_refundable:
+            tx.add_output(amount_refundable, self.return_address)
+        yield tx
+
+
+@CancelContest.then
+def finish_cancel(self):
+    tx = TransactionTemplate()
+    tx.set_sequence(self.return_timeout)
+    amount = self.amount
+    return_address = self.return_address
+    tx.add_output(amount, return_address)
+    return tx
 
 
 class auto_pay:
-    class Fields:
+    class Props:
         period: int
         per_time: Amount
         times: int
@@ -137,4 +144,4 @@ class auto_pay:
             for t in range(times)
         ]
         kwargs["amount"] = per_time * times
-        return CancellableSubscription(**kwargs)
+        return CancellableSubscription(CancellableSubscription.Props(**kwargs))
