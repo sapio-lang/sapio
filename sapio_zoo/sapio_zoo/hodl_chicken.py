@@ -45,19 +45,25 @@ class HodlChicken:
     winner_gets: Amount
     chicken_gets: Amount
 
+
 @HodlChicken.require
 def amounts_sum_correctly(self):
     # Make sure all sats will be spent when the game completes
-    return (self.alice_deposit + self.bob_deposit) == self.winner_gets + self.chicken_gets
+    return (
+        self.alice_deposit + self.bob_deposit
+    ) == self.winner_gets + self.chicken_gets
+
 
 @HodlChicken.require
 def equal_amounts(self):
     # Both participants should commit the same amount
     return self.alice_deposit == self.bob_deposit
 
+
 @HodlChicken.let
 def alice_is_a_chicken(self):
     return SignedBy(self.alice_key)
+
 
 @alice_is_a_chicken
 @HodlChicken.then
@@ -67,9 +73,11 @@ def alice_redeem(self) -> TransactionTemplate:
     tx.add_output(self.chicken_gets, self.alice_contract(self.chicken_gets))
     return tx
 
+
 @HodlChicken.let
 def bob_is_a_chicken(self):
     return SignedBy(self.bob_key)
+
 
 @bob_is_a_chicken
 @HodlChicken.then
