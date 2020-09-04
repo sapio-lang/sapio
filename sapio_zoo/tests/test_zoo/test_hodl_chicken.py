@@ -25,8 +25,8 @@ class TestHodlChicken(unittest.TestCase):
             bob_key=bob_key,
             alice_deposit=Sats(100_000_000),
             bob_deposit=Sats(100_000_000),
-            winner_gets=Sats(50_000_000),
-            chicken_gets=Sats(150_000_000))
+            winner_gets=Sats(150_000_000),
+            chicken_gets=Sats(50_000_000))
 
         hodl_chicken.bind(COutPoint(0, 0))
 
