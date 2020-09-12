@@ -60,126 +60,126 @@ def TicTacToeState(board: Board, player: bool):
     filled = board | (board >> 9)
     moves = [board | ((1 << j) << (shift)) for j in range(9) if filled & (1 << j) == 0]
 
-    class TicTacToe(Contract):
-        class Fields:
-            amount: Amount
-            player_1: PubKey
-            player_2: PubKey
+    @contract
+    class TicTacToe:
+        amount: Amount
+        player_1: PubKey
+        player_2: PubKey
 
-        # declare the checks for signatures from players
+    # declare the checks for signatures from players
 
-        @require
-        def player_one(self):
-            return SignedBy(self.player_1)
+    @TicTacToe.let
+    def player_one(self):
+        return SignedBy(self.player_1)
 
-        @require
-        def player_two(self):
-            return SignedBy(self.player_2)
+    @TicTacToe.let
+    def player_two(self):
+        return SignedBy(self.player_2)
 
-        @require
-        def current_player(self):
-            return SignedBy(self.player_2) if player else SignedBy(self.player_1)
+    @TicTacToe.let
+    def current_player(self):
+        return SignedBy(self.player_2) if player else SignedBy(self.player_1)
 
-        @require
-        def next_player(self):
-            return SignedBy(self.player_2) if not player else SignedBy(self.player_1)
+    @TicTacToe.let
+    def next_player(self):
+        return SignedBy(self.player_2) if not player else SignedBy(self.player_1)
 
-        # Player 1 wins, only enabled for winning=True boards
-        if board_won is True:
+    # Player 1 wins, only enabled for winning=True boards
+    if board_won is True:
 
-            @player_one
-            @unlock
-            def player_1_wins(self):
-                return Satisfied()
+        @player_one
+        @TicTacToe.finish
+        def player_1_wins(self):
+            return Satisfied()
 
-        # Player 2 wins, only enabled for winning=False boards
-        if board_won is False:
+    # Player 2 wins, only enabled for winning=False boards
+    if board_won is False:
 
-            @player_two
-            @unlock
-            def player_2_wins(self):
-                return Satisfied()
+        @player_two
+        @TicTacToe.finish
+        def player_2_wins(self):
+            return Satisfied()
 
-        # Only enable other cases when a winner is not yet picked.
-        if board_won is None and not unwinnable:
-            # The current player has a week to select and broadcast their move
-            # between when the anymove branch is available.
-            #
-            # Either a week goes by, then their turn can be finalized,
-            # or via the coop path the signed tx gets accepted.
-            #
-            # This protects the case that a game result is contested, giving
-            # sufficient time for player 1 to pick the correct result from the
-            # ones learned.
-            @current_player
-            @guarantee
-            def boards(self):
-                for new in moves:
-                    tx = TransactionTemplate()
-                    tx.set_sequence(Weeks(1))
-                    tx.add_output(
-                        self.amount,
-                        TicTacToeState(new, not player)(
-                            amount=self.amount,
-                            player_1=self.player_1,
-                            player_2=self.player_2,
-                        ),
-                    )
-                    yield tx
+    # Only enable other cases when a winner is not yet picked.
+    if board_won is None and not unwinnable:
+        # The current player has a week to select and broadcast their move
+        # between when the anymove branch is available.
+        #
+        # Either a week goes by, then their turn can be finalized,
+        # or via the coop path the signed tx gets accepted.
+        #
+        # This protects the case that a game result is contested, giving
+        # sufficient time for player 1 to pick the correct result from the
+        # ones learned.
+        @current_player
+        @TicTacToe.then
+        def boards(self):
+            for new in moves:
+                tx = TransactionTemplate()
+                tx.set_sequence(Weeks(1))
+                tx.add_output(
+                    self.amount,
+                    TicTacToeState(new, not player)(
+                        amount=self.amount,
+                        player_1=self.player_1,
+                        player_2=self.player_2,
+                    ),
+                )
+                yield tx
 
-            # current player can accept next player's move at any time
+        # current player can accept next player's move at any time
 
-            @current_player
-            @next_player
-            @guarantee
-            def coop_boards(self):
-                for new in moves:
-                    tx = TransactionTemplate()
-                    tx.add_output(
-                        self.amount,
-                        TicTacToeState(new, not player)(
-                            amount=self.amount,
-                            player_1=self.player_1,
-                            player_2=self.player_2,
-                        ),
-                    )
-                    yield tx
+        @current_player
+        @next_player
+        @TicTacToe.then
+        def coop_boards(self):
+            for new in moves:
+                tx = TransactionTemplate()
+                tx.add_output(
+                    self.amount,
+                    TicTacToeState(new, not player)(
+                        amount=self.amount,
+                        player_1=self.player_1,
+                        player_2=self.player_2,
+                    ),
+                )
+                yield tx
 
-            # If no move is made in 2 weeks, any move can be made
-            @guarantee
-            def anymove(self):
-                for new in moves:
-                    tx = TransactionTemplate()
-                    tx.set_sequence(Weeks(2))
-                    tx.add_output(
-                        self.amount,
-                        TicTacToeState(new, not player)(
-                            amount=self.amount,
-                            player_1=self.player_1,
-                            player_2=self.player_2,
-                        ),
-                    )
-                    yield tx
+        # If no move is made in 2 weeks, any move can be made
+        @TicTacToe.then
+        def anymove(self):
+            for new in moves:
+                tx = TransactionTemplate()
+                tx.set_sequence(Weeks(2))
+                tx.add_output(
+                    self.amount,
+                    TicTacToeState(new, not player)(
+                        amount=self.amount,
+                        player_1=self.player_1,
+                        player_2=self.player_2,
+                    ),
+                )
+                yield tx
 
-        if unwinnable:
+    if unwinnable:
 
-            @guarantee
-            def tie(self):
-                t = TransactionTemplate()
-                amt = self.amount // 2
-                t.add_output(amt, PayToPubKey(amount=amt, key=self.player_1))
-                t.add_output(amt, PayToPubKey(amount=amt, key=self.player_2))
-                return t
+        @TicTacToe.then
+        def tie(self):
+            t = TransactionTemplate()
+            amt = self.amount // 2
+            t.add_output(amt, PayToPubKey(amount=amt, key=self.player_1))
+            t.add_output(amt, PayToPubKey(amount=amt, key=self.player_2))
+            return t
 
     class W:
-        Fields = TicTacToe.Fields
+        Props = TicTacToe.Props
 
         @lru_cache
-        def create_instance(self, **kwargs: Any) -> BindableContract[TicTacToe.Fields]:
+        def create(self, **kwargs: Any) -> Contract:
             return TicTacToe(**kwargs)
 
         def __call__(self, amount, player_1, player_2):
-            return self.create_instance(
+            return self.create(
                 amount=amount, player_1=player_1, player_2=player_2
             )
 

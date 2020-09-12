@@ -17,9 +17,9 @@ from bitcoin_script_compiler import (
 )
 from sapio_bitcoinlib.static_types import Amount, Hash, PubKey
 from sapio_compiler import (
-    BindableContract,
+    contract,
     Contract,
-    TransactionTemplate,
+    TransactionTemplate
 )
 from sapio_zoo.p2pk import PayToPubKey, PayToSegwitAddress
 from dataclasses import dataclass
@@ -36,7 +36,7 @@ class CLOSING:
 T = Union[Type[OPENING], Type[CLOSING]]
 
 # memoize means only one instance of the type of class gets created
-memoize: Dict[T, Type[BindableContract]] = {}
+memoize: Dict[T, Type[Contract]] = {}
 
 # We use a class factory here because inehritence isn't really the right model
 # for logically different contracts & Mixins don't work presently.
@@ -51,8 +51,9 @@ def ChannelClassFactory(stage: T):
         label: str = f"channel[{stage.__name__}]"
         color: str = "red"
 
-    @dataclass
-    class Fields:
+    @contract
+    class Self:
+        __OVERRIDE_NAME__ =  f"ChannelState_{stage.__name__}"
         initial: Contract
         alice: PubKey
         bob: PubKey
@@ -60,7 +61,6 @@ def ChannelClassFactory(stage: T):
         amount: Amount
         metadata: MetaData
 
-    Self = Contract(f"ChannelState_{stage.__name__}", Fields, [])
 
     @Self.let
     def cooperate(self) -> Clause:
@@ -141,8 +141,8 @@ class MetaData:
     color: str = "yellow"
 
 
-@dataclass
-class Props:
+@contract
+class ContestedChannelAfterUpdate:
     amount: Amount
     state: TransactionTemplate
     revocation: Hash
@@ -150,7 +150,6 @@ class Props:
     metadata: MetaData
 
 
-ContestedChannelAfterUpdate = Contract("ContestedChannelAfterUpdate", Props, [])
 
 
 @ContestedChannelAfterUpdate.then
