@@ -38,7 +38,7 @@ subschemas = {
 def create_jsonschema(name: str, hints: Dict[str, Type]):
     return {
         "title": name,
-        "properties": dict(**{s: subschemas[t] for (s, t) in hints}),
+        "properties": dict(**{s: subschemas[t] for (s, t) in hints if t in subschemas}),
         "required": [s for (s, _) in hints],
     }
 
