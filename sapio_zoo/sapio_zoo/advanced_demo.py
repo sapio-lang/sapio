@@ -6,11 +6,10 @@ This is an advanced contract which uses many features in Sapio.
 """
 from typing import Optional, List, Tuple
 from sapio_compiler import *
-from dataclasses import dataclass
 
 
-@dataclass
-class Fields:
+@contract
+class DemoLayeredConditions:
     key_a: PubKey
     key_b: PubKey
     key_c: PubKey
@@ -19,7 +18,6 @@ class Fields:
     setup: TransactionTemplate
 
 
-DemoLayeredConditions = Contract("DemoLayeredConditions", Fields, [])
 """
 DemoLayeredConditions is a example contract which demonstrates various
 features available in Sapio.
@@ -113,13 +111,11 @@ def cooperate_example(
         return tx
 
 
-@dataclass
-class FieldsFinish:
+@contract
+class DemoContractClose:
     amount: Amount
     payments: List[Tuple[Amount, str]]
 
-
-DemoContractClose = Contract("DemoContractClose", FieldsFinish, [])
 
 
 @DemoContractClose.let

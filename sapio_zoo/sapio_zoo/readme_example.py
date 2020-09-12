@@ -3,7 +3,7 @@ from typing import Tuple
 from bitcoin_script_compiler import Days, SignedBy
 from sapio_bitcoinlib.messages import COutPoint
 from sapio_bitcoinlib.static_types import Amount, Bitcoin, PubKey, Sats
-from sapio_compiler import Contract, TransactionTemplate, guarantee, unlock
+from sapio_compiler import Contract, TransactionTemplate, contract
 
 
 @contract

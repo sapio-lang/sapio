@@ -8,12 +8,11 @@ from sapio_compiler import *
 from sapio_zoo.tree_pay import TreePay
 
 
-class Props:
+@contract
+class AirDrop:
     batches: List[Tuple[TimeSpec, List[Tuple[Amount, Contract]]]]
     radix: int
 
-
-AirDrop = Contract("AirDrop", Props, [])
 
 
 @AirDrop.then

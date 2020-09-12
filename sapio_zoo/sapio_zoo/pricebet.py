@@ -16,8 +16,8 @@ from bitcoin_script_compiler import (
 )
 from sapio_bitcoinlib.static_types import Amount, Hash, PubKey
 from sapio_compiler import (
-    BindableContract,
     Contract,
+    contract,
     TransactionTemplate,
 )
 from sapio_zoo.p2pk import PayToPubKey, PayToSegwitAddress
