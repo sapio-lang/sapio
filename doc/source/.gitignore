@@ -1,6 +1,8 @@
 _static
 _templates
 bitcoin_script_compiler
-bitcoinlib
+sapio_bitcoinlib
 sapio_compiler
 sapio_zoo
+sapio_stdlib
+sapio_server

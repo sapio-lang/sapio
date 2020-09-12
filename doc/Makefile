@@ -16,8 +16,9 @@ docs:
 	sphinx-apidoc -o source/sapio_compiler/ ../sapio_compiler/sapio_compiler
 	sphinx-apidoc -o source/sapio_zoo ../sapio_zoo/sapio_zoo
 	sphinx-apidoc -o source/sapio_stdlib ../sapio_stdlib/sapio_stdlib
-	sphinx-apidoc -o source/bitcoinlib ../bitcoinlib/bitcoinlib
+	sphinx-apidoc -o source/sapio_bitcoinlib ../sapio_bitcoinlib/sapio_bitcoinlib
 	sphinx-apidoc -o source/bitcoin_script_compiler ../bitcoin_script_compiler/bitcoin_script_compiler
+	sphinx-apidoc -o source/sapio_server ../sapio_server/sapio_server
 	make html
 
 
