@@ -20,10 +20,11 @@ That's the tip of the iceberg of what Sapio lets you accomplish.
     :maxdepth: 1
 
     bitcoin_script_compiler/modules.rst
-    bitcoinlib/modules.rst
+    sapio_bitcoinlib/modules.rst
     sapio_compiler/modules.rst
     sapio_stdlib/modules.rst
     sapio_zoo/modules.rst
+    sapio_server/modules.rst
 
 
 
