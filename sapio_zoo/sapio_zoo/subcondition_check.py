@@ -15,6 +15,7 @@ class DataHasTimeout(Protocol):
     """
     DataHasTimeout requires a method which extracts a timeout.
     """
+
     def timeout(self) -> int:
         pass
 
@@ -24,6 +25,7 @@ class HasTimeout(Contract):
     HasTimeout is a protocol for a contract which requires that the data field
     must be of type DataHasTimeout
     """
+
     data: DataHasTimeout
 
 
@@ -33,6 +35,7 @@ class ChecksSubCondition:
     ChecksSubCondition demonstrates a contract which verifies the compatibility
     of trait data between two sub-contracts.
     """
+
     a_f: Callable[[Amount], HasTimeout]
     b_f: Callable[[Amount], HasTimeout]
     c: Amount

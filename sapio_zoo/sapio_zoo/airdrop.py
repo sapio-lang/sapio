@@ -14,7 +14,6 @@ class AirDrop:
     radix: int
 
 
-
 @AirDrop.then
 def payout(self):
     tx = TransactionTemplate()

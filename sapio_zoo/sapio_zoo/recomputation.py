@@ -20,6 +20,7 @@ class Recomputation:
     drive an adjusting computation and search a parameter space for a solution
     that meets constraints.
     """
+
     k1: PubKey
     k2: PubKey
     amount: Amount
@@ -47,8 +48,11 @@ class Recomputation:
             nonlocal not_ready
             if self.a.data.timeout() == x:
                 not_ready = False
+
         while not_ready:
-            self.a = PostHook.create(k=self.k1, timeout_=var1, mult=1, post_hook=lambda x: None)
+            self.a = PostHook.create(
+                k=self.k1, timeout_=var1, mult=1, post_hook=lambda x: None
+            )
             self.b = PostHook.create(k=self.k2, timeout_=var2, mult=2, post_hook=hook)
             var1 -= 2
             var2 += 1
@@ -82,7 +86,7 @@ class PostHook:
     post_hook: Callable[[int], None]
 
     def timeout(self) -> int:
-        return self.timeout_*self.mult
+        return self.timeout_ * self.mult
 
     def __post_init__(self):
         self.post_hook(self.timeout())

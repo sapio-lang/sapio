@@ -179,9 +179,7 @@ def TicTacToeState(board: Board, player: bool):
             return TicTacToe(**kwargs)
 
         def __call__(self, amount, player_1, player_2):
-            return self.create(
-                amount=amount, player_1=player_1, player_2=player_2
-            )
+            return self.create(amount=amount, player_1=player_1, player_2=player_2)
 
     cache[board] = W()
 
