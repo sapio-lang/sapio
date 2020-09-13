@@ -22,7 +22,7 @@ def segment_by_radix(L, n):
 
 
 @contract
-class TreePay(Contract):
+class TreePay:
     payments: List[Tuple[Amount, Contract]]
     radix: int
 
