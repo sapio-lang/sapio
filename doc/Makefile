@@ -12,14 +12,23 @@ BUILDDIR      = build
 help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
+
 docs:
-	sphinx-apidoc -o source/sapio_compiler/ ../sapio_compiler/sapio_compiler
-	sphinx-apidoc -o source/sapio_zoo ../sapio_zoo/sapio_zoo
-	sphinx-apidoc -o source/sapio_stdlib ../sapio_stdlib/sapio_stdlib
-	sphinx-apidoc -o source/sapio_bitcoinlib ../sapio_bitcoinlib/sapio_bitcoinlib
-	sphinx-apidoc -o source/bitcoin_script_compiler ../bitcoin_script_compiler/bitcoin_script_compiler
-	sphinx-apidoc -o source/sapio_server ../sapio_server/sapio_server
+	sphinx-apidoc  --ext-autodoc -o source/sapio_compiler/ ../sapio_compiler/sapio_compiler
+	sphinx-apidoc  --ext-autodoc -o source/sapio_zoo ../sapio_zoo/sapio_zoo
+	sphinx-apidoc  --ext-autodoc -o source/sapio_stdlib ../sapio_stdlib/sapio_stdlib
+	sphinx-apidoc  --ext-autodoc -o source/sapio_bitcoinlib ../sapio_bitcoinlib/sapio_bitcoinlib
+	sphinx-apidoc  --ext-autodoc -o source/bitcoin_script_compiler ../bitcoin_script_compiler/bitcoin_script_compiler
+	sphinx-apidoc  --ext-autodoc -o source/sapio_server ../sapio_server/sapio_server
 	make html
+cleanup:
+	rm -r source/sapio_compiler/
+	rm -r source/sapio_zoo
+	rm -r source/sapio_stdlib
+	rm -r source/sapio_bitcoinlib
+	rm -r source/bitcoin_script_compiler
+	rm -r source/sapio_server
+	make clean
 
 
 .PHONY: help Makefile

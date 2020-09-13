@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.abspath("../"))
 # -- Project information -----------------------------------------------------
 
 project = "Sapio"
-copyright = "2020, Jeremy Rubin"
+copyright = "2020, Judica, Inc"
 author = "Jeremy Rubin"
 
 
@@ -60,3 +60,10 @@ html_static_path = ["_static"]
 
 # -- Extension configuration -------------------------------------------------
 napoleon_use_param = True
+
+autodoc_default_options = {
+    'members': True,
+    'show-inheritance': True,
+    'inherited-members': True
+}
+
