@@ -117,7 +117,6 @@ class DemoContractClose:
     payments: List[Tuple[Amount, str]]
 
 
-
 @DemoContractClose.let
 def wait(self):
     return Wait(Weeks(2))

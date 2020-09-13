@@ -1,5 +1,3 @@
-
-
 from bitcoin_script_compiler import (
     WitnessManager,
     Clause,

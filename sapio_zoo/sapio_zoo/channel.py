@@ -16,11 +16,7 @@ from bitcoin_script_compiler import (
     SignedBy,
 )
 from sapio_bitcoinlib.static_types import Amount, Hash, PubKey
-from sapio_compiler import (
-    contract,
-    Contract,
-    TransactionTemplate
-)
+from sapio_compiler import contract, Contract, TransactionTemplate
 from sapio_zoo.p2pk import PayToPubKey, PayToSegwitAddress
 from dataclasses import dataclass
 
@@ -53,14 +49,13 @@ def ChannelClassFactory(stage: T):
 
     @contract
     class Self:
-        __OVERRIDE_NAME__ =  f"ChannelState_{stage.__name__}"
+        __OVERRIDE_NAME__ = f"ChannelState_{stage.__name__}"
         initial: Contract
         alice: PubKey
         bob: PubKey
         timeout: RelativeTimeSpec
         amount: Amount
         metadata: MetaData
-
 
     @Self.let
     def cooperate(self) -> Clause:
@@ -148,8 +143,6 @@ class ContestedChannelAfterUpdate:
     revocation: Hash
     honest: PubKey
     metadata: MetaData
-
-
 
 
 @ContestedChannelAfterUpdate.then

@@ -352,7 +352,7 @@ class ContractBase(Generic[Props]):
         self.data = props
         amount_range = AmountRange()
         # Check all assertions. Assertions should not return anything.
-        for  assert_func in self.assert_funcs:
+        for assert_func in self.assert_funcs:
             if not assert_func(self.data):
                 raise AssertionError(
                     f"CheckFunction {assert_func.__name__} for {self.__class__.__name__} did not throw any error, but returned False"

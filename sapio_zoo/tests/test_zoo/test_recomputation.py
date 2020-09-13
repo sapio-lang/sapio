@@ -1,4 +1,3 @@
-
 from functools import reduce
 
 from sapio_zoo.recomputation import Recomputation

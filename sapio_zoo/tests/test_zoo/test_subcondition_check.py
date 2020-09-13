@@ -16,17 +16,20 @@ class TestHodlChicken(unittest.TestCase):
         alice_timeout = 10
         bob_timeout = 6
 
-        ChecksSubCondition.create(a_f = lambda a: SubCondition.create(k=alice_key, timeout_=alice_timeout),
-                                  b_f = lambda a: SubCondition.create(k=bob_key, timeout_=bob_timeout),
-                                  c =  10)
+        ChecksSubCondition.create(
+            a_f=lambda a: SubCondition.create(k=alice_key, timeout_=alice_timeout),
+            b_f=lambda a: SubCondition.create(k=bob_key, timeout_=bob_timeout),
+            c=10,
+        )
 
         try:
-            ChecksSubCondition.create(a_f = lambda a: SubCondition.create(k=alice_key, timeout_=alice_timeout),
-                                    b_f = lambda a: SubCondition.create(k=bob_key, timeout_=alice_timeout),
-                                    c =  10)
+            ChecksSubCondition.create(
+                a_f=lambda a: SubCondition.create(k=alice_key, timeout_=alice_timeout),
+                b_f=lambda a: SubCondition.create(k=bob_key, timeout_=alice_timeout),
+                c=10,
+            )
         except AssertionError as e:
-            assert 'check_timing' in str(e)
-
+            assert "check_timing" in str(e)
 
 
 if __name__ == "__main__":

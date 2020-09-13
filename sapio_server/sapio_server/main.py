@@ -9,8 +9,14 @@ import sapio_zoo.subscription
 from sapio_bitcoinlib import segwit_addr
 from sapio_bitcoinlib.key import ECKey
 from sapio_bitcoinlib.static_types import Amount, Bitcoin, PubKey, Sats
-from sapio_compiler import (AbsoluteTimeSpec, AmountRange, Days,
-                            RelativeTimeSpec, TimeSpec, Weeks)
+from sapio_compiler import (
+    AbsoluteTimeSpec,
+    AmountRange,
+    Days,
+    RelativeTimeSpec,
+    TimeSpec,
+    Weeks,
+)
 from sapio_zoo.hodl_chicken import HodlChicken
 from sapio_zoo.p2pk import PayToPubKey, PayToSegwitAddress
 from sapio_zoo.pricebet import PriceOracle
@@ -25,7 +31,6 @@ def random_k():
     e = ECKey()
     e.generate()
     return e.get_pubkey()
-
 
 
 def make_app():
@@ -54,6 +59,7 @@ if __name__ == "__main__":
 
     from sapio_bitcoinlib.address import key_to_p2pkh, key_to_p2wpkh, script_to_p2wsh
     from sapio_bitcoinlib.script import CScript
+
     alice_script = script_to_p2wsh(CScript([b"Alice's Key Goes Here!"]))
     bob_script = script_to_p2wsh(CScript([b"Bob's Key Goes Here!"]))
     alice_key = random_k()
