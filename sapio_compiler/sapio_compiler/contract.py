@@ -48,12 +48,24 @@ def MakeContract(
     class ContractFactory(ContractBase[Props], ContractProtocol[Props]):
         class Props(props_t):
             f""" Interior {in_name} State Type"""
+        class Then:
+            """Continuations driven by OP_CHECKTEMPLATEVERIFY"""
+        class Finish:
+            f"""End of {in_name} with key signature or other satisfaction"""
+        class FinishOr:
+            f"""End of {in_name} with key signature or other satisfaction,
+            and additional logic to suggest a next transaction.
+            """
+        class Requires:
+            f"""Properties required by {in_name} for correctness"""
+        class Let:
+            f"""{in_name} Bindings for specific reusable logic clauses"""
 
         # Class Variables
-        then_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]] = []
-        finish_or_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]] = []
-        finish_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]] = []
-        assert_funcs: ClassVar[List[Callable[[Props], bool]]] = []
+        _then_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]] = []
+        _finish_or_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]] = []
+        _finish_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]] = []
+        _assert_funcs: ClassVar[List[Callable[[Props], bool]]] = []
         override: Optional[Callable[[Props], Tuple[AmountRange, str]]] = None
 
         # Instance Variables

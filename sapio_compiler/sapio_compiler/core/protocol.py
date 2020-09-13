@@ -74,10 +74,15 @@ ThenF = Callable[[Props], TxRetType]
 class ContractProtocol(Protocol[Props]):
     Props: ClassVar[Type[Props]]
     # Class Variables
-    then_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]]
-    finish_or_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]]
-    finish_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]]
-    assert_funcs: ClassVar[List[Callable[[Props], bool]]]
+    Then: ClassVar[type]
+    Finish: ClassVar[type]
+    FinishOr: ClassVar[type]
+    Requires: ClassVar[type]
+    Let: ClassVar[type]
+    _then_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]]
+    _finish_or_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]]
+    _finish_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]]
+    _assert_funcs: ClassVar[List[Callable[[Props], bool]]]
 
     """
     A PayAddress function is a special type which stubs out
@@ -127,6 +132,7 @@ class ContractProtocol(Protocol[Props]):
             [Callable[[IndexType], [IndexType]]], Callable[[IndexType], IndexType]
         ],
     ]:
+        setattr(cls.Let, c.__name__, c)
         @overload
         def wrapper(x: None) -> None:
             raise NotImplementedError()
@@ -146,11 +152,11 @@ class ContractProtocol(Protocol[Props]):
             if isinstance(arg, FuncIndex):
                 x: FuncIndex = arg
                 if isinstance(x, ThenFuncIndex):
-                    cls.then_funcs[x.i][1].append(c)
+                    cls._then_funcs[x.i][1].append(c)
                 elif isinstance(x, FinishOrFuncIndex):
-                    cls.finish_or_funcs[x.i][1].append(c)
+                    cls._finish_or_funcs[x.i][1].append(c)
                 elif isinstance(x, FinishFuncIndex):
-                    cls.finish_funcs[x.i][1].append(c)
+                    cls._finish_funcs[x.i][1].append(c)
                 else:
                     raise ValueError("Invalid FuncIndex Instance")
                 return x
@@ -179,8 +185,9 @@ class ContractProtocol(Protocol[Props]):
         guarantee instructs the compiler to use CheckTemplateVerify to ensure the
         outcomes whereas unlock_but_suggest does not.
         """
-        cls.then_funcs.append((c, []))
-        return ThenFuncIndex(len(cls.then_funcs) - 1)
+        setattr(cls.Then, c.__name__, c)
+        cls._then_funcs.append((c, []))
+        return ThenFuncIndex(len(cls._then_funcs) - 1)
 
     @classmethod
     def finish_or(cls, c: ThenF[Props]) -> FinishOrFuncIndex:
@@ -196,8 +203,10 @@ class ContractProtocol(Protocol[Props]):
 
         This is useful for HTLC based protocols.
         """
-        cls.finish_or_funcs.append((c, []))
-        return FinishOrFuncIndex(len(cls.finish_or_funcs) - 1)
+        setattr(cls.FinishOr, c.__name__, c)
+        cls._then_funcs.append((c, []))
+        cls._finish_or_funcs.append((c, []))
+        return FinishOrFuncIndex(len(cls._finish_or_funcs) - 1)
 
     @classmethod
     def finish(cls, c: Finisher[Props]) -> FinishFuncIndex:
@@ -205,13 +214,13 @@ class ContractProtocol(Protocol[Props]):
         An UnlockFunction expresses a keypath spending. There are no further
         restrictions on how a coin may be spent.
         """
-
+        setattr(cls.Finish, c.__name__, c)
         def mock(x: Props) -> Iterator[TransactionTemplate]:
             return iter([])
 
         mock.__name__ = c.__name__
-        cls.finish_funcs.append((mock, [c]))
-        return FinishFuncIndex(len(cls.finish_funcs) - 1)
+        cls._finish_funcs.append((mock, [c]))
+        return FinishFuncIndex(len(cls._finish_funcs) - 1)
 
     @classmethod
     def threshold(
@@ -242,7 +251,8 @@ class ContractProtocol(Protocol[Props]):
         Raising your own exception is preferable because it can help users
         debug their own contracts more readily.
         """
-        cls.assert_funcs.append(f)
+        setattr(cls.Requires, f.__name__, f)
+        cls._assert_funcs.append(f)
 
     def bind(
         self, out_in: COutPoint
@@ -264,10 +274,10 @@ class ContractProtocol(Protocol[Props]):
             color = getattr(metadata, "color", "green")
             contract_name = getattr(metadata, "label", "unknown")
             program = this.witness_manager.program
-            is_ctv_before = len(this.then_funcs)
+            is_ctv_before = len(this._then_funcs)
             for (i, (func, _)) in enumerate(
                 itertools.chain(
-                    this.then_funcs, this.finish_or_funcs  # , this.finish_funcs #
+                    this._then_funcs, this._finish_or_funcs  # , this._finish_funcs #
                 )
             ):
                 is_ctv = i < is_ctv_before
@@ -352,7 +362,7 @@ class ContractBase(Generic[Props]):
         self.data = props
         amount_range = AmountRange()
         # Check all assertions. Assertions should not return anything.
-        for assert_func in self.assert_funcs:
+        for assert_func in self._assert_funcs:
             if not assert_func(self.data):
                 raise AssertionError(
                     f"CheckFunction {assert_func.__name__} for {self.__class__.__name__} did not throw any error, but returned False"
@@ -360,7 +370,7 @@ class ContractBase(Generic[Props]):
         txn_abi: Dict[str, Tuple[ThenF[Props], List[TransactionTemplate]]] = {}
         conditions_abi = {}
         if self.override is not None:
-            if self.finish_funcs or self.finish_or_funcs or self.then_funcs:
+            if self._finish_funcs or self._finish_or_funcs or self._then_funcs:
                 raise ValueError("Overriden Contract has other branches")
             amt_rng, addr = self.override.__func__(self.data)
             amount_range = amt_rng
@@ -370,11 +380,11 @@ class ContractBase(Generic[Props]):
             # Get the value from all paths.
             # Paths return a TransactionTemplate object, or list, or iterable.
             paths: Clause = Unsatisfiable()
-            use_ctv_before = len(self.then_funcs)
-            add_tx_before = len(self.then_funcs) + len(self.finish_or_funcs)
+            use_ctv_before = len(self._then_funcs)
+            add_tx_before = len(self._then_funcs) + len(self._finish_or_funcs)
             for (i, (func, conditions)) in enumerate(
                 itertools.chain(
-                    self.then_funcs, self.finish_or_funcs, self.finish_funcs
+                    self._then_funcs, self._finish_or_funcs, self._finish_funcs
                 )
             ):
                 conditions = functools.reduce(
