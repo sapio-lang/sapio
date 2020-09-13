@@ -42,10 +42,12 @@ def MakeContract(
     props_t: Type[Props],
     traits: List[Trait],
 ) -> Type[ContractProtocol[Props]]:
-    class X(ContractBase[Props], ContractProtocol[Props]):
-        f""" Base Class for Contract {in_name}"""
-        Props: ClassVar[Type[Props]] = props_t
-        f""" Interior {in_name} State Type"""
+    # Get a Global ContractFactory
+    global ContractFactory
+    class ContractFactory(ContractBase[Props], ContractProtocol[Props]):
+        #Props: ClassVar[Type[Props]] = props_t
+        class Props(props_t):
+            f""" Interior {in_name} State Type"""
         # Class Variables
         then_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]] = []
         finish_or_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]] = []
@@ -64,8 +66,16 @@ def MakeContract(
         def __init__(self, data: Props) -> None:
             super().__init__(data)
 
+    ContractFactory.__doc__ = props_t.__doc__
+    ContractFactory.__name__ = in_name
+    ContractFactory.__module__ = props_t.__module__
     # Wrap as a new_class to rename
-    return types.new_class(in_name, bases=(X,))
+    Y = types.new_class(in_name, (ContractFactory,))
+    Y.__module__ = ContractFactory.__module__
+    Y.__doc__ = props_t.__doc__
+    # don't leak the ContractFactory ref
+    del ContractFactory
+    return Y
 
 
 def contract(props_t_in: Type[Any]) -> Type[ContractProtocol[Any]]:
