@@ -20,7 +20,7 @@ def libsecp_make_musig():
 
 
 @contract
-class CollapsibleTree(Contract):
+class CollapsibleTree:
     payments: List[Tuple[Amount, Contract]]
     radix: int
 
