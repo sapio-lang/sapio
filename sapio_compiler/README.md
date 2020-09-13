@@ -49,13 +49,14 @@ examples).
 A Basic Pay to Public Key contract can be generated as follows:
 
 ```python
-class PayToPublicKey(Contract):
-    class Fields:
-        key: PubKey
+@contract
+class PayToPublicKey:
+    key: PubKey
 
-    @unlock
-    def with_key(self):
-        return SignedBy(self.key)
+
+@PayToPublicKey.finish
+def with_key(self):
+    return SignedBy(self.key)
 ```
 
 Now let's look at an Escrow Contract. Here either Alice and Escrow, Bob and
@@ -64,35 +65,31 @@ where (|) is OR and (&) is and. These can also be written as `Or(a,b)` and
 `And(a,b)`.
 
 ```python
-class BasicEscrow(Contract):
-    class Fields:
-        alice: PubKey
-        bob: PubKey
-        escrow: PubKey
+@contract
+class BasicEscrow:
+    alice: PubKey
+    bob: PubKey
+    escrow: PubKey
 
-    @unlock
-    def redeem(self):
-        return SignedBy(self.escrow) & (SignedBy(self.alice) | SignedBy(self.bob)) | (
-            SignedBy(self.alice) & SignedBy(self.bob)
-        )
+
+@BasicEscrow.finish
+def redeem(self):
+    return SignedBy(self.escrow) & (SignedBy(self.alice) | SignedBy(self.bob)) | (
+        SignedBy(self.alice) & SignedBy(self.bob)
+    )
 ```
 
 We can also write this a bit more clearly as:
 
 ```python
-class BasicEscrow2(Contract):
-    class Fields:
-        alice: PubKey
-        bob: PubKey
-        escrow: PubKey
+@BasicEscrow2.finish
+def use_escrow(self):
+    return SignedBy(self.escrow) & (SignedBy(self.alice) | SignedBy(self.bob))
 
-    @unlock
-    def use_escrow(self):
-        return SignedBy(self.escrow) & (SignedBy(self.alice) | SignedBy(self.bob))
 
-    @unlock
-    def cooperate(self):
-        return SignedBy(self.alice) & SignedBy(self.bob)
+@BasicEscrow2.finish
+def cooperate_(self):
+    return SignedBy(self.alice) & SignedBy(self.bob)
 ```
 
 Until this point, we haven't made use of any of the `CheckTemplateVerify`
@@ -103,28 +100,30 @@ escrow or Bob and the escrow from cheating?
 
 
 ```python
-class TrustlessEscrow(Contract):
-    class Fields:
-        alice: PubKey
-        bob: PubKey
-        alice_escrow: Tuple[Amount, Contract]
-        bob_escrow: Tuple[Amount, Contract]
+@contract
+class TrustlessEscrow:
+    alice: PubKey
+    bob: PubKey
+    alice_escrow: Tuple[Amount, Contract]
+    bob_escrow: Tuple[Amount, Contract]
 
-    @guarantee
-    def use_escrow(self) -> TransactionTemplate:
-        tx = TransactionTemplate()
-        tx.add_output(*self.alice_escrow)
-        tx.add_output(*self.bob_escrow)
-        tx.set_sequence(Days(10))
-        return tx
 
-    @unlock
-    def cooperate(self):
-        return SignedBy(self.alice) & SignedBy(self.bob)
+@TrustlessEscrow.then
+def use_escrow_(self) -> TransactionTemplate:
+    tx = TransactionTemplate()
+    tx.add_output(*self.alice_escrow)
+    tx.add_output(*self.bob_escrow)
+    tx.set_sequence(Days(10))
+    return tx
+
+
+@TrustlessEscrow.finish
+def cooperate(self):
+    return SignedBy(self.alice) & SignedBy(self.bob)
 ```
 
 
-Now with `TrustlessEscrow`, we've done a few things differently. A `@guarantee`
+Now with `TrustlessEscrow`, we've done a few things differently. A `@<T>.then`
 designator tells the contract compiler to add a branch which *must* create the
 returned transaction if that branch is taken. We've also passed in a
 sub-contract for both Alice and Bob to allow us to specify at a higher layer
@@ -135,12 +134,12 @@ pass this as a parameter if we wanted though).
 Thus we could construct an instance of this contract as follows:
 
 ```python
-key_alice = #...
-key_bob = #...
-t = TrustlessEscrow(alice=key_alice,
+key_alice = random_k()
+key_bob = random_k()
+t = TrustlessEscrow.create(alice=key_alice,
                     bob=key_bob,
-                    alice_escrow=(Bitcoin(1), PayToPublicKey(key=key_alice)),
-                    bob_escrow=(Sats(10000), PayToPublicKey(key=key_bob)))
+                    alice_escrow=(Bitcoin(1), PayToPublicKey.create(key=key_alice)),
+                    bob_escrow=(Sats(10000), PayToPublicKey.create(key=key_bob)))
 ```
 
 The power of Sapio becomes apparent when you look at the composability of the
@@ -148,34 +147,32 @@ framework. We can also put an escrow inside an escrow:
 
 
 ```python
-key_alice = b"0" * 32
-key_bob = b"1" * 32
-t = TrustlessEscrow(
+t = TrustlessEscrow.create(
     alice=key_alice,
     bob=key_bob,
-    alice_escrow=(Bitcoin(1), PayToPublicKey(key=key_alice)),
-    bob_escrow=(Sats(10000), PayToPublicKey(key=key_bob)),
+    alice_escrow=(Bitcoin(1), PayToPublicKey.create(key=key_alice)),
+    bob_escrow=(Sats(10000), PayToPublicKey.create(key=key_bob)),
 )
 
-t1 = TrustlessEscrow(
+t1 = TrustlessEscrow.create(
     alice=key_alice,
     bob=key_bob,
-    alice_escrow=(Bitcoin(1), PayToPublicKey(key=key_alice)),
-    bob_escrow=(Sats(10000), PayToPublicKey(key=key_bob)),
+    alice_escrow=(Bitcoin(1), PayToPublicKey.create(key=key_alice)),
+    bob_escrow=(Sats(10000), PayToPublicKey.create(key=key_bob)),
 )
-t2 = TrustlessEscrow(
+t2 = TrustlessEscrow.create(
     alice=key_alice,
     bob=key_bob,
-    alice_escrow=(Bitcoin(1), PayToPublicKey(key=key_alice)),
+    alice_escrow=(Bitcoin(1), PayToPublicKey.create(key=key_alice)),
     bob_escrow=(Sats(10000) + Bitcoin(1), t1),
 )
 
 # t3 throws an error because we would lose value
 try:
-    t3 = TrustlessEscrow(
+    t3 = TrustlessEscrow.create(
         alice=key_alice,
         bob=key_bob,
-        alice_escrow=(Bitcoin(1), PayToPublicKey(key=key_alice)),
+        alice_escrow=(Bitcoin(1), PayToPublicKey.create(key=key_alice)),
         bob_escrow=(Sats(10000), t1),
     )
 except ValueError:
@@ -193,18 +190,6 @@ If you wanted to fund this contract from an exchange, all you need to do is requ
 2.0001 bcrt1qh4ddpny622fcjf5m02nmdare7wgsuys5sau3jh5tdhm2kzwg9rzqw2sk00
 ```
 
-#### TODO: Managing Smart Contracts
-
-The wallet manager can be configured to save and watch a contract you create.
-
-```
-with Wallet() as w:
-    w.watch(t2)
-```
-
-The wallet will automatically watch for payments to
-`bcrt1qh4ddpny622fcjf5m02nmdare7wgsuys5sau3jh5tdhm2kzwg9rzqw2sk00` and bind an
-instance of the contract to the output.
 
 # Getting Started With Sapio
 
@@ -251,3 +236,16 @@ make test
 ```
 
 #### TODO
+
+#####  Managing Smart Contracts
+
+The wallet manager can be configured to save and watch a contract you create.
+
+```
+with Wallet() as w:
+    w.watch(t2)
+```
+
+The wallet will automatically watch for payments to
+`bcrt1qh4ddpny622fcjf5m02nmdare7wgsuys5sau3jh5tdhm2kzwg9rzqw2sk00` and bind an
+instance of the contract to the output.
