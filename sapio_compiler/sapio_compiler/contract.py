@@ -44,10 +44,11 @@ def MakeContract(
 ) -> Type[ContractProtocol[Props]]:
     # Get a Global ContractFactory
     global ContractFactory
+
     class ContractFactory(ContractBase[Props], ContractProtocol[Props]):
-        #Props: ClassVar[Type[Props]] = props_t
         class Props(props_t):
             f""" Interior {in_name} State Type"""
+
         # Class Variables
         then_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]] = []
         finish_or_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]] = []
