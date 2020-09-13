@@ -1,4 +1,3 @@
-from __future__ import annotations
 
 
 from bitcoin_script_compiler import (
@@ -46,7 +45,9 @@ def MakeContract(
     traits: List[Trait],
 ) -> Type[ContractProtocol[Props]]:
     class X(ContractBase[Props], ContractProtocol[Props]):
+        f""" Base Class for Contract {in_name}"""
         Props: ClassVar[Type[Props]] = props_t
+        f""" Interior {in_name} State Type"""
         # Class Variables
         then_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]] = []
         finish_or_funcs: ClassVar[List[Tuple[ThenF[Props], List[Finisher[Props]]]]] = []
@@ -56,6 +57,7 @@ def MakeContract(
 
         # Instance Variables
         data: Props
+        f""" Interior {in_name} State Type"""
         txn_abi: Dict[str, Tuple[ThenF[Props], List[TransactionTemplate]]]
         conditions_abi: Dict[str, Tuple[ThenF[Props], Clause]]
         witness_manager: WitnessManager
@@ -68,8 +70,8 @@ def MakeContract(
     return types.new_class(in_name, bases=(X,))
 
 
-def contract(props_t: Type[Any]) -> Type[ContractProtocol[Any]]:
-    props_t = dataclass(props_t)
+def contract(props_t_in: Type[Any]) -> Type[ContractProtocol[Any]]:
+    props_t = dataclass(props_t_in)
     traits = getattr(props_t, "Traits", [])
-    name = props_t.__name__
+    name = getattr(props_t, "__OVERRIDE_NAME__", props_t.__name__)
     return MakeContract(name, props_t, traits)
