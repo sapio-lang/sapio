@@ -1,9 +1,2 @@
-**/__pycache__/
-.idea/
-.mypy_cache/
-build/
-dist/
-venv/
-*.pyc
-**/*.egg-info
-tags
+/target
+Cargo.lock
