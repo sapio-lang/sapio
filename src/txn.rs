@@ -176,11 +176,11 @@ impl CTVHash for bitcoin::Transaction {
 /// metadata
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct Template {
-    outputs: Vec<Output>,
-    tx: bitcoin::Transaction,
-    ctv: sha256::Hash,
-    max: CoinAmount,
-    label: String,
+    pub outputs: Vec<Output>,
+    pub tx: bitcoin::Transaction,
+    pub ctv: sha256::Hash,
+    pub max: CoinAmount,
+    pub label: String,
 }
 
 use bitcoin::hashes::Hash;

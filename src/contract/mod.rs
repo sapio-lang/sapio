@@ -7,6 +7,7 @@ use bitcoin::hashes::sha256;
 use bitcoin::util::amount::Amount;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::collections::HashMap;
 
 #[macro_use]
@@ -48,6 +49,52 @@ impl Compiled {
                 a
             }),
         }
+    }
+
+    pub fn bind(
+        &self,
+        out_in: bitcoin::OutPoint,
+    ) -> (Vec<bitcoin::Transaction>, Vec<serde_json::Value>) {
+        let mut txns = vec![];
+        let mut metadata_out = vec![];
+        // Could use a queue instead to do BFS linking, but order doesn't matter and stack is
+        // faster.
+        let mut stack = vec![(out_in, self)];
+
+        while let Some((
+            out,
+            Compiled {
+                descriptor,
+                ctv_to_tx,
+                ..
+            },
+        )) = stack.pop()
+        {
+            for (
+                _ctv_hash,
+                Template {
+                    label, outputs, tx, ..
+                },
+            ) in ctv_to_tx
+            {
+                let mut tx = tx.clone();
+                tx.input[0].previous_output = out;
+                // Missing other Witness Info.
+                tx.input[0].witness = vec![descriptor.witness_script().into_bytes()];
+                let txid = tx.txid();
+                txns.push(tx);
+                metadata_out.push(json!({
+                    "color" : "green",
+                    "label" : label,
+                    "utxo_metadata" : outputs.iter().map(|x| &x.metadata).collect::<Vec<_>>()
+                }));
+                for (vout, v) in outputs.iter().enumerate() {
+                    let vout = vout as u32;
+                    stack.push((bitcoin::OutPoint { txid, vout }, &v.contract));
+                }
+            }
+        }
+        (txns, metadata_out)
     }
 }
 
