@@ -1,6 +1,7 @@
 use bitcoin::consensus::encode::*;
 use bitcoin::util::amount::{Amount, CoinAmount};
 
+use crate::contract::CompilationError;
 use bitcoin::hashes::sha256;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -24,12 +25,12 @@ impl Output {
         amount: CoinAmount,
         contract: T,
         metadata: Option<OutputMeta>,
-    ) -> Output {
-        Output {
+    ) -> Result<Output, CompilationError> {
+        Ok(Output {
             amount,
-            contract: contract.compile(),
+            contract: contract.compile()?,
             metadata: metadata.unwrap_or_else(HashMap::new),
-        }
+        })
     }
 }
 

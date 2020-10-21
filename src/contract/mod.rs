@@ -51,19 +51,33 @@ impl Compiled {
     }
 }
 
+use std::error::Error;
+use std::fmt;
+#[derive(Debug)]
+pub enum CompilationError {
+    TerminateCompilation,
+}
+impl fmt::Display for CompilationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl Error for CompilationError {}
 /// An Iterator which yields TransactionTemplates.
 /// It is boxed to permit flexibility when returning.
-pub type TxTmplIt<'a> = Box<dyn Iterator<Item = TransactionTemplate> + 'a>;
+pub type TxTmplIt<'a> =
+    Box<dyn Iterator<Item = Result<TransactionTemplate, CompilationError>> + 'a>;
 
 /// Compilable is a trait for anything which can be compiled
 pub trait Compilable: private::ImplSeal {
-    fn compile(&self) -> Compiled;
+    fn compile(&self) -> Result<Compiled, CompilationError>;
 }
 
 /// Implements a basic identity
 impl Compilable for Compiled {
-    fn compile(&self) -> Compiled {
-        self.clone()
+    fn compile(&self) -> Result<Compiled, CompilationError> {
+        Ok(self.clone())
     }
 }
 
@@ -90,7 +104,7 @@ where
 {
     /// The main Compilation Logic for a Contract.
     /// TODO: Better Document Semantics
-    fn compile(&self) -> Compiled {
+    fn compile(&self) -> Result<Compiled, CompilationError> {
         #[derive(PartialEq, Eq)]
         enum UsesCTV {
             Yes,
@@ -166,17 +180,17 @@ where
                 });
             if uses_ctv == UsesCTV::Yes {
                 // TODO: Handle txtmpls.len() == 0
-                let hashes = Clause::Threshold(
-                    1,
-                    txtmpls
-                        .map(|txtmpl| {
-                            let h = txtmpl.hash();
-                            let txtmpl = ctv_to_tx.entry(h).or_insert(txtmpl);
-                            amount_range.update_range(txtmpl.total_amount());
-                            Clause::TxTemplate(h)
-                        })
-                        .collect(),
-                );
+                //
+                let tr: Result<Vec<_>, _> = txtmpls
+                    .map(|r_txtmpl| {
+                        let txtmpl = r_txtmpl?;
+                        let h = txtmpl.hash();
+                        let txtmpl = ctv_to_tx.entry(h).or_insert(txtmpl);
+                        amount_range.update_range(txtmpl.total_amount());
+                        Ok(Clause::TxTemplate(h))
+                    })
+                    .collect();
+                let hashes = Clause::Threshold(1, tr?);
                 option_guard = Some(match option_guard {
                     Some(guard) => Clause::And(vec![guard, hashes]),
                     None => hashes,
@@ -187,12 +201,12 @@ where
         // TODO: Handle clause_accumulator.len() == 0
         let policy = Clause::Threshold(1, clause_accumulator);
 
-        return Compiled {
+        Ok(Compiled {
             ctv_to_tx,
             // order flipped to borrow policy
             descriptor: Descriptor::Wsh(policy.compile().unwrap()),
             policy: Some(policy),
             amount_range,
-        };
+        })
     }
 }

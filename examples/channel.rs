@@ -1,5 +1,5 @@
-use contract::*;
 use contract::actions::*;
+use contract::*;
 use sapio::*;
 
 use crate::clause::Clause;
@@ -197,20 +197,20 @@ where
 impl<'a> FunctionalityAtState<'a> for Channel<Start> {
     then! {begin_contest |s| {
         Box::new(std::iter::once(
-                txn::TemplateBuilder::new()
-                .add_output(txn::Output::new(
-                        s.amount,
-                        Channel::<Stop> {
-                            pd: Default::default(),
-                            alice: s.alice,
-                            bob: s.bob,
-                            amount: s.amount.try_into().unwrap(),
-                            resolution: s.resolution.clone(),
-                            db: s.db.clone()
-                        },
-                        None,
-                ))
-                .into(),
+                txn::Output::new(
+                    s.amount,
+                    Channel::<Stop> {
+                        pd: Default::default(),
+                        alice: s.alice,
+                        bob: s.bob,
+                        amount: s.amount.try_into().unwrap(),
+                        resolution: s.resolution.clone(),
+                        db: s.db.clone()
+                    },
+                    None,
+                ).map(|o| txn::TemplateBuilder::new()
+                          .add_output(o)
+                          .into())
         ))
     }
     }
@@ -220,9 +220,13 @@ impl<'a> FunctionalityAtState<'a> for Channel<Start> {
 impl<'a> FunctionalityAtState<'a> for Channel<Stop> {
     then! {finish_contest [Self::timeout] |s| {
         Box::new(std::iter::once(
-                txn::TemplateBuilder::new()
-                .add_output(txn::Output::new(s.amount, s.resolution.clone(), None))
-                .into(),
+                txn::Output::new(
+                    s.amount,
+                    s.resolution.clone(),
+                    None
+                ).map(|o| txn::TemplateBuilder::new()
+                          .add_output(o)
+                          .into())
         ))
     }}
 }
