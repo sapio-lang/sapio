@@ -2,23 +2,23 @@ use contract::*;
 use sapio::*;
 
 use crate::clause::Clause;
-use ::miniscript::policy::concrete::Policy;
+
 use ::miniscript::*;
 use bitcoin;
 use bitcoin::secp256k1::*;
-use bitcoin::util::amount::{Amount, CoinAmount, ParseAmountError};
+use bitcoin::util::amount::{Amount, CoinAmount};
 use rand::OsRng;
 use schemars::{schema_for, JsonSchema};
-use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
-use std::fmt;
+
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
 
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryInto;
 
 fn main() {
-    DB_serde::register_db("mock".to_string(), |s| Arc::new(Mutex::new(MockDB {})));
+    DB_serde::register_db("mock".to_string(), |_s| Arc::new(Mutex::new(MockDB {})));
     let full = Secp256k1::new();
     let mut rng = OsRng::new().expect("OsRng");
     let public_keys: Vec<_> = (0..3)
@@ -101,7 +101,6 @@ impl DB for MockDB {
 mod DB_serde {
     use super::*;
     use serde::de::Error;
-    use std::fmt::{self, Display};
 
     use lazy_static::lazy_static;
     lazy_static! {

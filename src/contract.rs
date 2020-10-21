@@ -168,13 +168,12 @@ macro_rules! guard {
     {cached $name:ident |$s:ident| $b:block} => { const $name: Option<Guard<Self>> = Some(Guard( |$s: &Self| $b, true,)); };
 }
 
-
-    /// A catch-all type for any function that is a FinishOrFunc.
-    /// Unfortunately, because type signatures must all match, it's not
-    /// possible to have differing types across FinishOrFunc for a contract at compile time.
-    /// Use an enum if need be.
-    ///
-    /// TODO: use associated-type defaults here!
+/// A catch-all type for any function that is a FinishOrFunc.
+/// Unfortunately, because type signatures must all match, it's not
+/// possible to have differing types across FinishOrFunc for a contract at compile time.
+/// Use an enum if need be.
+///
+/// TODO: use associated-type defaults here!
 pub trait Contract<'a>
 where
     Self: Sized + 'a,
@@ -204,7 +203,7 @@ where
             let guards2 = Self::FINISH_OR_FUNCS
                 .iter()
                 .filter_map(|x| x.as_ref().map(|y| y.guards().iter()));
-            let guards3 = Self::FINISH_FNS.iter();
+            let _guards3 = Self::FINISH_FNS.iter();
             for guards in Self::THEN_FNS
                 .iter()
                 .filter_map(|x| x.as_ref().map(|y| y.0.iter()))
