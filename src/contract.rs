@@ -58,7 +58,7 @@ pub type TxTmplIt<'a> = Box<dyn Iterator<Item = TransactionTemplate> + 'a>;
 pub struct Guard<ContractSelf>(pub fn(&ContractSelf) -> Clause, pub bool);
 
 /// A List of Guards, for convenience
-pub type GuardList<'a, T> = &'a [Option<Guard<T>>];
+pub type GuardList<'a, T> = &'a [fn() -> Option<Guard<T>>];
 
 /// A ThenFunc takes a list of Guards and a TxTmplIt generator.  Each TxTmpl returned from the
 /// ThenFunc is Covenant Permitted only if the AND of all guards is satisfied.
@@ -90,7 +90,7 @@ impl<'a, ContractSelf: 'a, Extra> FinishOrFunc<'a, ContractSelf, Extra> {
     }
 
     /// Accessor to get the guards of a FinishOrFunc
-    fn guards(&self) -> &'a [Option<Guard<ContractSelf>>] {
+    fn guards(&self) -> &'a [fn() -> Option<Guard<ContractSelf>>] {
         self.ffn.0
     }
 }
@@ -118,7 +118,7 @@ impl Compilable for Compiled {
 #[macro_export]
 macro_rules! def {
     {then $(,$a:expr)*} => {
-        const THEN_FNS: &'a [Option<ThenFunc<'a, Self>>] = &[$($a,)*];
+        const THEN_FNS: &'a [fn() -> Option<ThenFunc<'a, Self>>] = &[$($a,)*];
     };
     [state $i:ident]  => {
         type StatefulArguments = $i;
@@ -128,11 +128,11 @@ macro_rules! def {
         type StatefulArguments;
     };
     {updatable<$($i:ident)?> $(,$a:expr)*} => {
-        const FINISH_OR_FUNCS: &'a [Option<FinishOrFunc<'a, Self, Self::StatefulArguments>>] = &[$($a,)*];
+        const FINISH_OR_FUNCS: &'a [fn() -> Option<FinishOrFunc<'a, Self, Self::StatefulArguments>>] = &[$($a,)*];
         def![state $($i)?];
     };
     {finish $(,$a:expr)*} => {
-        const FINISH_FNS: &'a [Option<Guard<Self>>] = &[$($a,)*];
+        const FINISH_FNS: &'a [fn() -> Option<Guard<Self>>] = &[$($a,)*];
     };
 
 
@@ -142,7 +142,7 @@ macro_rules! def {
 #[macro_export]
 macro_rules! then {
     {$name:ident $a:tt |$s:ident| $b:block } => {
-        const $name: Option<ThenFunc<'a, Self>> = Some(ThenFunc(&$a, |$s: &Self| $b));
+        fn $name() -> Option<ThenFunc<'a, Self>> { Some(ThenFunc(&$a, |$s: &Self| $b)) }
     };
     {$name:ident |$s:ident| $b:block } => { then!{$name [] |$s| $b } };
 }
@@ -151,7 +151,7 @@ macro_rules! then {
 #[macro_export]
 macro_rules! finish {
     {$name:ident $a:tt |$s:ident, $o:ident| $b:block } => {
-        const $name: Option<FinishOrFunc<'a, Self, Args>> = Some(FinishOrFuncNew(&$a, |$s: &Self, $o: Option<&_>| $b) .into());
+        fn $name() -> Option<FinishOrFunc<'a, Self, Args>>{ Some(FinishOrFuncNew(&$a, |$s: &Self, $o: Option<&_>| $b) .into())}
     };
     {$name:ident $a:tt} => {
         finish!($name $a |s, o| {Box::new(std::iter::empty())});
@@ -162,10 +162,15 @@ macro_rules! finish {
 #[macro_export]
 macro_rules! guard {
     {$name:ident |$s:ident| $b:block} => {
-                                             const $name: Option<Guard<Self>> = Some(Guard( |$s: &Self| $b, false,));
-
-                                         };
-    {cached $name:ident |$s:ident| $b:block} => { const $name: Option<Guard<Self>> = Some(Guard( |$s: &Self| $b, true,)); };
+            fn $name() -> Option<Guard<Self>> {
+                Some(Guard( |$s: &Self| $b, false,))
+            }
+        };
+    {cached $name:ident |$s:ident| $b:block} => {
+            fn $name() -> Option<Guard<Self>> {
+                Some(Guard( |$s: &Self| $b, true,))
+            }
+        };
 }
 
 /// A catch-all type for any function that is a FinishOrFunc.
@@ -198,18 +203,19 @@ where
             No,
         }
         // Evaluate all Guards One Time and store in a map
+        // TODO: Fixup after pointers made unstable
         let guard_clauses = {
             let mut guard_clauses: HashMap<usize, Clause> = HashMap::new();
             let guards2 = Self::FINISH_OR_FUNCS
                 .iter()
-                .filter_map(|x| x.as_ref().map(|y| y.guards().iter()));
+                .filter_map(|x| x().map(|y| y.guards().iter()));
             let _guards3 = Self::FINISH_FNS.iter();
             for guards in Self::THEN_FNS
                 .iter()
-                .filter_map(|x| x.as_ref().map(|y| y.0.iter()))
+                .filter_map(|x| x().map(|y| y.0.iter()))
                 .chain(guards2)
             {
-                for guard in guards.filter_map(|x| x.as_ref()) {
+                for guard in guards.filter_map(|x| x()) {
                     if guard.1 {
                         guard_clauses
                             .entry(guard.0 as usize)
@@ -222,7 +228,7 @@ where
 
         let finish_fns: Vec<_> = Self::FINISH_FNS
             .iter()
-            .filter_map(|x| x.as_ref())
+            .filter_map(|x| x())
             .map(|x| {
                 if x.1 {
                     guard_clauses[&(x.0 as usize)].clone()
@@ -236,11 +242,11 @@ where
 
         let then_fns = Self::THEN_FNS
             .iter()
-            .filter_map(|x| x.as_ref())
+            .filter_map(|x| x())
             .map(|x| (UsesCTV::Yes, x.0, x.1(self)));
         let finish_or_fns = Self::FINISH_OR_FUNCS
             .iter()
-            .filter_map(|x| x.as_ref())
+            .filter_map(|x| x())
             .map(|x| (UsesCTV::No, x.ffn.0, x.fun()(self, Default::default())));
 
         let mut amount_range = AmountRange::new();
@@ -250,7 +256,7 @@ where
             // If CTV and guards, CTV & guards added.
             let mut option_guard = guards
                 .iter()
-                .filter_map(|x| x.as_ref())
+                .filter_map(|x| x())
                 .map(|guard| {
                     if guard.1 {
                         guard_clauses[&(guard.0 as usize)].clone()
