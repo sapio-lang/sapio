@@ -6,8 +6,11 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::convert::TryInto;
+/// Metadata for outputs, arbitrary KV set.
 pub type OutputMeta = HashMap<String, String>;
 
+/// An Output is not a literal Bitcoin Output, but contains data needed to construct one, and
+/// metadata for linking & ABI building
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct Output {
     pub amount: CoinAmount,
@@ -15,6 +18,8 @@ pub struct Output {
     pub metadata: OutputMeta,
 }
 impl Output {
+    /// Creates a new Output, forcing the compilation of the compilable object and defaulting
+    /// metadata if not provided to blank.
     pub fn new<T: crate::contract::Compilable>(
         amount: CoinAmount,
         contract: T,
@@ -28,6 +33,8 @@ impl Output {
     }
 }
 
+/// TemplateBuilder can be used to interactively put together a transaction template before
+/// finalizing into a Template.
 pub struct TemplateBuilder {
     n_inputs: usize,
     sequences: Vec<u32>,
@@ -38,6 +45,7 @@ pub struct TemplateBuilder {
 }
 
 impl TemplateBuilder {
+    /// Creates a new transaction template with 1 input and no outputs.
     pub fn new() -> TemplateBuilder {
         TemplateBuilder {
             n_inputs: 1,
@@ -57,7 +65,7 @@ impl TemplateBuilder {
         self.sequences.push(s);
         self
     }
-
+    /// TODO: Logic to validate that changes are not breaking
     pub fn set_lock_time(mut self, lt: u32) -> Self {
         self.lock_time = lt;
         self
@@ -68,6 +76,8 @@ impl TemplateBuilder {
         self
     }
 
+    /// Creates a transaction from a TemplateBuilder.
+    /// Generally, should not be called directly.
     pub fn get_tx(&self) -> bitcoin::Transaction {
         bitcoin::Transaction {
             version: self.version,
@@ -107,11 +117,14 @@ impl From<TemplateBuilder> for Template {
     }
 }
 
+/// Any type which can generate a CTVHash. Allows some decoupling in the future if some types will
+/// not be literal transactions.
 trait CTVHash {
     fn get_ctv_hash(&self, input_index: u32) -> sha256::Hash;
     fn total_amount(&self) -> Amount;
 }
 impl CTVHash for bitcoin::Transaction {
+    /// Uses BIP-119 Logic to compute a CTV Hash
     fn get_ctv_hash(&self, input_index: u32) -> sha256::Hash {
         let mut ctv_hash = sha256::Hash::engine();
         self.version.consensus_encode(&mut ctv_hash).unwrap();
@@ -153,6 +166,8 @@ impl CTVHash for bitcoin::Transaction {
     }
 }
 
+/// Template holds the data needed to construct a Transaction for CTV Purposes, along with relevant
+/// metadata
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct Template {
     outputs: Vec<Output>,
@@ -167,9 +182,6 @@ use bitcoin::hashes::HashEngine;
 impl Template {
     pub fn hash(&self) -> sha256::Hash {
         self.ctv
-    }
-    pub fn relative_probability(&self) -> usize {
-        1000
     }
     pub fn new() -> TemplateBuilder {
         TemplateBuilder::new()
