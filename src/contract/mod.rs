@@ -66,8 +66,10 @@ impl fmt::Display for CompilationError {
 impl Error for CompilationError {}
 /// An Iterator which yields TransactionTemplates.
 /// It is boxed to permit flexibility when returning.
-pub type TxTmplIt<'a> =
-    Result<Box<dyn Iterator<Item = Result<TransactionTemplate, CompilationError>> + 'a>, CompilationError>;
+pub type TxTmplIt<'a> = Result<
+    Box<dyn Iterator<Item = Result<TransactionTemplate, CompilationError>> + 'a>,
+    CompilationError,
+>;
 
 /// Compilable is a trait for anything which can be compiled
 pub trait Compilable: private::ImplSeal {

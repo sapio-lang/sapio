@@ -84,8 +84,7 @@ struct MockDB {}
 impl DB for MockDB {
     fn save(&self, a: Args) {
         match a {
-            Args::Update { .. } => {
-            }
+            Args::Update { .. } => {}
         }
     }
     fn link(&self) -> DBHandle {
@@ -195,32 +194,30 @@ where
 /// Override begin_contest when state = Start
 impl<'a> FunctionalityAtState<'a> for Channel<Start> {
     then! {begin_contest |s| {
-        let o = txn::Output::new( s.amount,
+        let o = txn::Output::new(
+            s.amount,
             Channel::<Stop> {
                 pd: Default::default(),
                 alice: s.alice,
                 bob: s.bob,
                 amount: s.amount.try_into().unwrap(),
                 resolution: s.resolution.clone(),
-                db: s.db.clone()
+                db: s.db.clone(),
             },
-            None)?;
+            None,
+        )?;
         Ok(Box::new(std::iter::once(
-                    txn::TemplateBuilder::new()
-                    .add_output(o).into())
-        ))
-    }
-    }
+            txn::TemplateBuilder::new().add_output(o).into(),
+        )))
+    }}
 }
 
 /// Override finish_contest when state = Start
 impl<'a> FunctionalityAtState<'a> for Channel<Stop> {
     then! {finish_contest [Self::timeout] |s| {
-        let o =  txn::Output::new( s.amount, s.resolution.clone(), None)?;
+        let o = txn::Output::new(s.amount, s.resolution.clone(), None)?;
         Ok(Box::new(std::iter::once(
-                txn::TemplateBuilder::new()
-                          .add_output(o)
-                          .into()
+            txn::TemplateBuilder::new().add_output(o).into(),
         )))
     }}
 }
