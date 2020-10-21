@@ -1,7 +1,7 @@
 use contract::*;
 use sapio::*;
 
-use crate::clause::{Clause, SATISIFIABLE, UNSATISIFIABLE};
+use crate::clause::Clause;
 use ::miniscript::policy::concrete::Policy;
 use ::miniscript::*;
 use bitcoin;
