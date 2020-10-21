@@ -25,3 +25,7 @@ serde_derive = "1.0"
 [dependencies.bitcoin]
 version = "0.25"
 features = ['use-serde', 'rand']
+
+[[example]]
+name = "channel"
+doc = true
