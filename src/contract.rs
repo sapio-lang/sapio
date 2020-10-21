@@ -2,13 +2,15 @@ use crate::clause::Clause;
 use crate::txn::Template;
 use crate::txn::Template as TransactionTemplate;
 use crate::util::amountrange::AmountRange;
+use ::miniscript::*;
 use bitcoin::hashes::sha256;
 use bitcoin::util::amount::Amount;
-use ::miniscript::*;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// A struct which holds a compiled contract's context
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct Compiled {
     pub ctv_to_tx: HashMap<sha256::Hash, Template>,
     pub policy: Option<Clause>,

@@ -1,18 +1,22 @@
 use bitcoin::consensus::encode::*;
-use bitcoin::util::amount::Amount;
+use bitcoin::util::amount::{Amount, CoinAmount};
 
 use bitcoin::hashes::sha256;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::convert::TryInto;
 pub type OutputMeta = HashMap<String, String>;
-#[derive(Clone)]
+
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct Output {
-    pub amount: Amount,
+    pub amount: CoinAmount,
     pub contract: crate::contract::Compiled,
     pub metadata: OutputMeta,
 }
 impl Output {
     pub fn new<T: crate::contract::Compilable>(
-        amount: Amount,
+        amount: CoinAmount,
         contract: T,
         metadata: Option<OutputMeta>,
     ) -> Output {
@@ -82,7 +86,7 @@ impl TemplateBuilder {
                 .outputs
                 .iter()
                 .map(|out| bitcoin::TxOut {
-                    value: out.amount.as_sat(),
+                    value: TryInto::<Amount>::try_into(out.amount).unwrap().as_sat(),
                     script_pubkey: out.contract.descriptor.script_pubkey(),
                 })
                 .collect(),
@@ -96,7 +100,7 @@ impl From<TemplateBuilder> for Template {
         Template {
             outputs: t.outputs,
             ctv: tx.get_ctv_hash(0),
-            max: tx.total_amount(),
+            max: tx.total_amount().into(),
             tx,
             label: t.label,
         }
@@ -149,12 +153,12 @@ impl CTVHash for bitcoin::Transaction {
     }
 }
 
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct Template {
     outputs: Vec<Output>,
     tx: bitcoin::Transaction,
     ctv: sha256::Hash,
-    max: Amount,
+    max: CoinAmount,
     label: String,
 }
 

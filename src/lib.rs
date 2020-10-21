@@ -1,5 +1,6 @@
-use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
+extern crate serde;
 use ::miniscript::*;
+use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
 use std::collections::HashMap;
 use std::default::Default;
 

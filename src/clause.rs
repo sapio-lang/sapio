@@ -1,6 +1,6 @@
-use lazy_static::lazy_static;
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::{hash160, ripemd160, sha256, sha256d};
+use lazy_static::lazy_static;
 pub type Clause = miniscript::policy::concrete::Policy<bitcoin::PublicKey>;
 
 lazy_static! {

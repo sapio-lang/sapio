@@ -1,19 +1,21 @@
 use bitcoin::util::amount::Amount;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Copy)]
 pub struct AmountRange {
-    min: Amount,
-    max: Amount,
+    min: u64,
+    max: u64,
 }
 impl AmountRange {
     pub fn new() -> AmountRange {
         AmountRange {
-            min: Amount::max_value(),
-            max: Amount::min_value(),
+            min: Amount::max_value().as_sat(),
+            max: Amount::min_value().as_sat(),
         }
     }
     pub fn update_range(&mut self, amount: Amount) {
-        self.min = std::cmp::min(self.min, amount);
-        self.max = std::cmp::max(self.max, amount);
+        self.min = std::cmp::min(self.min, amount.as_sat());
+        self.max = std::cmp::max(self.max, amount.as_sat());
     }
 }
