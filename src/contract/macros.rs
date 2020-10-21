@@ -40,7 +40,7 @@ macro_rules! finish {
         }
     };
     {$name:ident $a:tt} => {
-        finish!($name $a |s, o| {Box::new(std::iter::empty())});
+        finish!($name $a |s, o| { Ok(Box::new(std::iter::empty()))});
     };
 }
 

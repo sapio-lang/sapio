@@ -8,7 +8,7 @@ use ::miniscript::*;
 use bitcoin;
 use bitcoin::secp256k1::*;
 use bitcoin::util::amount::{Amount, CoinAmount};
-use rand::OsRng;
+use rand::rngs::OsRng;
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 use std::convert::TryInto;
 
 fn main() {
-    DB_serde::register_db("mock".to_string(), |_s| Arc::new(Mutex::new(MockDB {})));
+    db_serde::register_db("mock".to_string(), |_s| Arc::new(Mutex::new(MockDB {})));
     let full = Secp256k1::new();
     let mut rng = OsRng::new().expect("OsRng");
     let public_keys: Vec<_> = (0..3)
@@ -59,7 +59,7 @@ fn main() {
 
 /// Args are some messages that can be passed to a Channel instance
 #[derive(Debug)]
-enum Args {
+pub enum Args {
     Update {
         revoke: bitcoin::hashes::sha256::Hash,
         split: (Amount, Amount),
@@ -68,13 +68,13 @@ enum Args {
 
 /// Handle for DB Types
 #[derive(JsonSchema, Serialize, Deserialize)]
-struct DBHandle {
+pub struct DBHandle {
     type_: String,
     id: String,
 }
 /// DB Trait is for a Trait Object that can be used to record state updates for a channel.
 /// Examples implements a MockDB
-trait DB {
+pub trait DB {
     fn save(&self, a: Args);
     fn link(&self) -> DBHandle;
 }
@@ -85,7 +85,6 @@ impl DB for MockDB {
     fn save(&self, a: Args) {
         match a {
             Args::Update { .. } => {
-                a;
             }
         }
     }
@@ -99,7 +98,7 @@ impl DB for MockDB {
 
 /// Custom Serialization Logic for DB Trait Critically, the method register_db can be used to add
 /// resolvers to get references to DB instances of arbitrary types.
-mod DB_serde {
+mod db_serde {
     use super::*;
     use serde::de::Error;
 
@@ -153,7 +152,7 @@ struct Channel<T: State> {
     resolution: Compiled,
     /// We instruct the JSONSchema to use strings
     #[schemars(with = "DBHandle")]
-    #[serde(with = "DB_serde")]
+    #[serde(with = "db_serde")]
     db: Arc<Mutex<dyn DB>>,
 }
 
@@ -165,13 +164,13 @@ impl<'a, T: State + 'a> Channel<T> {
     finish! {
         update_state_a [Self::signed]
             |s, o| {
-                Box::new(std::iter::empty())
+                Ok(Box::new(std::iter::empty()))
             }
     }
     finish! {
         update_state_b [Self::signed]
             |s, o| {
-                Box::new(std::iter::empty())
+                Ok(Box::new(std::iter::empty()))
             }
     }
 
@@ -196,21 +195,19 @@ where
 /// Override begin_contest when state = Start
 impl<'a> FunctionalityAtState<'a> for Channel<Start> {
     then! {begin_contest |s| {
-        Box::new(std::iter::once(
-                txn::Output::new(
-                    s.amount,
-                    Channel::<Stop> {
-                        pd: Default::default(),
-                        alice: s.alice,
-                        bob: s.bob,
-                        amount: s.amount.try_into().unwrap(),
-                        resolution: s.resolution.clone(),
-                        db: s.db.clone()
-                    },
-                    None,
-                ).map(|o| txn::TemplateBuilder::new()
-                          .add_output(o)
-                          .into())
+        let o = txn::Output::new( s.amount,
+            Channel::<Stop> {
+                pd: Default::default(),
+                alice: s.alice,
+                bob: s.bob,
+                amount: s.amount.try_into().unwrap(),
+                resolution: s.resolution.clone(),
+                db: s.db.clone()
+            },
+            None)?;
+        Ok(Box::new(std::iter::once(
+                    txn::TemplateBuilder::new()
+                    .add_output(o).into())
         ))
     }
     }
@@ -219,15 +216,12 @@ impl<'a> FunctionalityAtState<'a> for Channel<Start> {
 /// Override finish_contest when state = Start
 impl<'a> FunctionalityAtState<'a> for Channel<Stop> {
     then! {finish_contest [Self::timeout] |s| {
-        Box::new(std::iter::once(
-                txn::Output::new(
-                    s.amount,
-                    s.resolution.clone(),
-                    None
-                ).map(|o| txn::TemplateBuilder::new()
+        let o =  txn::Output::new( s.amount, s.resolution.clone(), None)?;
+        Ok(Box::new(std::iter::once(
+                txn::TemplateBuilder::new()
                           .add_output(o)
-                          .into())
-        ))
+                          .into()
+        )))
     }}
 }
 

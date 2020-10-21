@@ -117,6 +117,11 @@ impl From<TemplateBuilder> for Template {
         }
     }
 }
+impl From<TemplateBuilder> for Result<Template, CompilationError> {
+    fn from(t: TemplateBuilder) -> Self {
+        Ok(t.into())
+    }
+}
 
 /// Any type which can generate a CTVHash. Allows some decoupling in the future if some types will
 /// not be literal transactions.
@@ -179,7 +184,6 @@ pub struct Template {
 }
 
 use bitcoin::hashes::Hash;
-use bitcoin::hashes::HashEngine;
 impl Template {
     pub fn hash(&self) -> sha256::Hash {
         self.ctv

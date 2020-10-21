@@ -67,7 +67,7 @@ impl Error for CompilationError {}
 /// An Iterator which yields TransactionTemplates.
 /// It is boxed to permit flexibility when returning.
 pub type TxTmplIt<'a> =
-    Box<dyn Iterator<Item = Result<TransactionTemplate, CompilationError>> + 'a>;
+    Result<Box<dyn Iterator<Item = Result<TransactionTemplate, CompilationError>> + 'a>, CompilationError>;
 
 /// Compilable is a trait for anything which can be compiled
 pub trait Compilable: private::ImplSeal {
@@ -158,7 +158,8 @@ where
             .map(|x| (UsesCTV::No, x.guards(), x.fun()(self, Default::default())));
 
         let mut amount_range = AmountRange::new();
-        for (uses_ctv, guards, txtmpls) in then_fns.chain(finish_or_fns) {
+        for (uses_ctv, guards, r_txtmpls) in then_fns.chain(finish_or_fns) {
+            let txtmpls = r_txtmpls?;
             // If no guards and not CTV, then nothing gets added (not interpreted as Trivial True)
             // If CTV and no guards, just CTV added.
             // If CTV and guards, CTV & guards added.
