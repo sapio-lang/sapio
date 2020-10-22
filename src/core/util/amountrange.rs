@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Copy)]
 pub struct AmountRange {
-    min: u64,
-    max: u64,
+    pub min: u64,
+    pub max: u64,
 }
 impl AmountRange {
     pub fn new() -> AmountRange {

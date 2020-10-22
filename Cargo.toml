@@ -26,6 +26,8 @@ schemars = "0.8.0"
 serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
+bytes = "*"
+
 [dependencies.bitcoin]
 version = "0.25"
 features = ['use-serde', 'rand']
@@ -47,5 +49,5 @@ name = "channel"
 doc = true
 
 [[example]]
-name = "ws"
+name = "server"
 required-features = ["ws"]

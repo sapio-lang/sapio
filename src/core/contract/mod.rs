@@ -121,6 +121,14 @@ pub type TxTmplIt<'a> = Result<
 /// Compilable is a trait for anything which can be compiled
 pub trait Compilable: private::ImplSeal {
     fn compile(&self) -> Result<Compiled, CompilationError>;
+    fn from_json(s: &str) -> Result<Compiled, CompilationError>
+    where
+        Self: for<'a> Deserialize<'a> + Compilable,
+    {
+        let t: Self =
+            serde_json::from_str(s).map_err(|_| CompilationError::TerminateCompilation)?;
+        t.compile()
+    }
 }
 
 /// Implements a basic identity
