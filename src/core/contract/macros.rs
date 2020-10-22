@@ -29,6 +29,10 @@ macro_rules! then {
         fn $name() -> Option<$crate::contract::actions::ThenFunc<'a, Self>> { Some($crate::contract::actions::ThenFunc(&$a, |$s: &Self| $b)) }
     };
     {$name:ident |$s:ident| $b:block } => { then!{$name [] |$s| $b } };
+
+    {$name:ident} => {
+        fn $name() -> Option<$crate::contract::actions::ThenFunc<'a, Self>> {None}
+    };
 }
 
 /// The then macro is used to define a `FinishFunc` or a `FinishOrFunc`
