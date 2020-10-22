@@ -1,4 +1,5 @@
 type Key = bitcoin::hashes::sha256::Hash;
+use bitcoin::util::amount::CoinAmount;
 use crate::contract::{Compilable, CompilationError, Compiled, Contract};
 use schemars::schema::{RootSchema, Schema, SchemaObject};
 use schemars::{schema_for, JsonSchema};
@@ -31,7 +32,7 @@ pub enum Reaction {
     #[serde(rename = "session_id")]
     Session(bool, String),
     #[serde(rename = "created")]
-    Created(u64, bitcoin::Address),
+    Created(CoinAmount, bitcoin::Address),
     #[serde(rename = "saved")]
     Saved(bool),
     #[serde(rename = "bound")]
@@ -46,7 +47,7 @@ impl Action {
                 let c = session.menu.compile(type_, args).ok()?;
                 let a = c.descriptor.address(bitcoin::Network::Bitcoin)?;
                 // todo amount
-                Some(Reaction::Created(c.amount_range.max, a))
+                Some(Reaction::Created(c.amount_range.max(), a))
             }
             Action::Save(address) => Some(Reaction::Saved(true)),
             Action::Bind(out, address) => Some(Reaction::Bound(vec![])),
@@ -119,7 +120,7 @@ pub struct Session {
 }
 
 pub enum Msg {
-    Bytes(bytes::Bytes),
+    Bytes(actix_web::web::Bytes),
     Text(String),
 }
 
