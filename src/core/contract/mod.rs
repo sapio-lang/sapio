@@ -127,8 +127,6 @@ pub trait Compilable: private::ImplSeal {
     {
         let t: Self =
             serde_json::from_value(s).map_err(|_| CompilationError::TerminateCompilation)?;
-
-        println!("Loaded");
         t.compile()
     }
 }
@@ -157,6 +155,36 @@ where
     def! {finish}
 }
 
+use actions::Guard;
+use std::marker::PhantomData;
+struct GuardCache<T> {
+    cache: HashMap<usize, Option<(Guard<T>, Option<Clause>)>>,
+}
+impl<T> GuardCache<T> {
+    fn new() -> Self {
+        GuardCache {
+            cache: HashMap::new(),
+        }
+    }
+    fn get(&mut self, t: &T, f: fn() -> Option<Guard<T>>) -> Option<Clause> {
+        match self
+            .cache
+            .entry(f as usize)
+            .or_insert_with(|| f().map(|v| (v, None)))
+        {
+            Some((Guard(g, true), e @ Some(..))) => e.clone(),
+            Some((Guard(g, true), ref mut v @ None)) => {
+                *v = Some(g(t));
+                v.clone()
+            }
+            Some((Guard(g, false), None)) => Some(g(t)),
+
+            Some((Guard(g, false), Some(..))) => std::panic!("Impossible"),
+            None => None,
+        }
+    }
+}
+
 impl<T> Compilable for T
 where
     T: for<'a> Contract<'a>,
@@ -169,40 +197,11 @@ where
             Yes,
             No,
         }
-        // Evaluate all Guards One Time and store in a map
-        // TODO: Fixup after pointers made unstable
-        let guard_clauses = {
-            let mut guard_clauses: HashMap<usize, Clause> = HashMap::new();
-            let guards2 = Self::FINISH_OR_FUNCS
-                .iter()
-                .filter_map(|x| x().map(|y| y.guards().iter()));
-            let _guards3 = Self::FINISH_FNS.iter();
-            for guards in Self::THEN_FNS
-                .iter()
-                .filter_map(|x| x().map(|y| y.0.iter()))
-                .chain(guards2)
-            {
-                for guard in guards.filter_map(|x| x()) {
-                    if guard.1 {
-                        guard_clauses
-                            .entry(guard.0 as usize)
-                            .or_insert_with(|| guard.0(self));
-                    }
-                }
-            }
-            guard_clauses
-        };
+        let mut guard_clauses = GuardCache::new();
 
         let finish_fns: Vec<_> = Self::FINISH_FNS
             .iter()
-            .filter_map(|x| x())
-            .map(|x| {
-                if x.1 {
-                    guard_clauses[&(x.0 as usize)].clone()
-                } else {
-                    x.0(self)
-                }
-            })
+            .filter_map(|x| guard_clauses.get(self, *x))
             .collect();
         let mut clause_accumulator = vec![Clause::Threshold(1, finish_fns)];
         let mut ctv_to_tx = HashMap::new();
@@ -224,14 +223,7 @@ where
             // If CTV and guards, CTV & guards added.
             let mut option_guard = guards
                 .iter()
-                .filter_map(|x| x())
-                .map(|guard| {
-                    if guard.1 {
-                        guard_clauses[&(guard.0 as usize)].clone()
-                    } else {
-                        guard.0(self)
-                    }
-                })
+                .filter_map(|x| guard_clauses.get(self, *x))
                 .fold(None, |option_guard, guard| {
                     Some(match option_guard {
                         None => guard,

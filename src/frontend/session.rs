@@ -1,6 +1,6 @@
 type Key = bitcoin::hashes::sha256::Hash;
-use bitcoin::util::amount::CoinAmount;
 use crate::contract::{Compilable, CompilationError, Compiled, Contract};
+use bitcoin::util::amount::CoinAmount;
 use schemars::schema::{RootSchema, Schema, SchemaObject};
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
@@ -73,9 +73,9 @@ impl MenuBuilder {
         name: Option<String>,
     ) {
         let mut s = self.gen.root_schema_for::<T>();
-        let title : &mut Option<String> = &mut s.schema.metadata().title;
+        let title: &mut Option<String> = &mut s.schema.metadata().title;
         if name.is_some() {
-             *title = name;
+            *title = name;
         }
         self.internal_menu
             .insert(title.clone().unwrap(), <T as Compilable>::from_json);
