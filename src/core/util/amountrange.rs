@@ -3,7 +3,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Copy)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Copy, Debug)]
 pub struct AmountRange {
     min: CoinAmount,
     max: CoinAmount,

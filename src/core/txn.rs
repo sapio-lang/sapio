@@ -12,7 +12,7 @@ pub type OutputMeta = HashMap<String, String>;
 
 /// An Output is not a literal Bitcoin Output, but contains data needed to construct one, and
 /// metadata for linking & ABI building
-#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct Output {
     pub amount: CoinAmount,
     pub contract: crate::contract::Compiled,
@@ -174,7 +174,7 @@ impl CTVHash for bitcoin::Transaction {
 
 /// Template holds the data needed to construct a Transaction for CTV Purposes, along with relevant
 /// metadata
-#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct Template {
     pub outputs: Vec<Output>,
     pub tx: bitcoin::Transaction,

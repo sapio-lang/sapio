@@ -16,7 +16,7 @@ enum Action {
     Create {
         #[serde(rename = "type")]
         type_: String,
-        args: String,
+        args: Value,
     },
     #[serde(rename = "save")]
     Save(bitcoin::Address),
@@ -56,9 +56,9 @@ impl Action {
 }
 
 pub struct MenuBuilder {
-    menu: Vec<(String, RootSchema)>,
+    menu: Vec<RootSchema>,
     gen: schemars::gen::SchemaGenerator,
-    internal_menu: HashMap<String, fn(&str) -> Result<Compiled, CompilationError>>,
+    internal_menu: HashMap<String, fn(Value) -> Result<Compiled, CompilationError>>,
 }
 impl MenuBuilder {
     pub fn new() -> MenuBuilder {
@@ -70,17 +70,21 @@ impl MenuBuilder {
     }
     pub fn register_as<T: JsonSchema + for<'a> Deserialize<'a> + Compilable>(
         &mut self,
-        name: String,
+        name: Option<String>,
     ) {
         let mut s = self.gen.root_schema_for::<T>();
-        self.menu.push((name.clone(), s));
+        let title : &mut Option<String> = &mut s.schema.metadata().title;
+        if name.is_some() {
+             *title = name;
+        }
         self.internal_menu
-            .insert(name, <T as Compilable>::from_json);
+            .insert(title.clone().unwrap(), <T as Compilable>::from_json);
+        self.menu.push(s);
     }
     fn gen_menu(&self) -> Value {
         json!({
             "$schema": "http://json-schema.org/draft-07/schema#",
-            "oneOf": self.menu.iter().cloned().map(|(n,mut x)| {
+            "oneOf": self.menu.iter().cloned().map(|mut x| {
             x
         }).collect::<Vec<RootSchema>>(),
 
@@ -101,15 +105,15 @@ impl From<MenuBuilder> for Menu {
 
 pub struct Menu {
     menu: String,
-    internal_menu: HashMap<String, fn(&str) -> Result<Compiled, CompilationError>>,
+    internal_menu: HashMap<String, fn(Value) -> Result<Compiled, CompilationError>>,
 }
 impl Menu {
-    fn compile(&self, name: String, args: String) -> Result<Compiled, CompilationError> {
+    fn compile(&self, name: String, args: Value) -> Result<Compiled, CompilationError> {
         let f = self
             .internal_menu
             .get(&name)
             .ok_or(CompilationError::TerminateCompilation)?;
-        f(&args)
+        f(args)
     }
 }
 

@@ -46,6 +46,7 @@ pub struct ExampleB<T: BState> {
     participants: Vec<bitcoin::PublicKey>,
     threshold: u8,
     amount: CoinAmount,
+    #[serde(skip)]
     pd: PhantomData<T>,
 }
 

@@ -26,7 +26,7 @@ mod private {
 /// Compiled holds a contract's complete context required post-compilation
 /// There is no guarantee that Compiled is properly constructed presently.
 //TODO: Make type immutable and correct by construction...
-#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct Compiled {
     pub ctv_to_tx: HashMap<sha256::Hash, Template>,
     pub policy: Option<Clause>,
@@ -121,12 +121,14 @@ pub type TxTmplIt<'a> = Result<
 /// Compilable is a trait for anything which can be compiled
 pub trait Compilable: private::ImplSeal {
     fn compile(&self) -> Result<Compiled, CompilationError>;
-    fn from_json(s: &str) -> Result<Compiled, CompilationError>
+    fn from_json(s: serde_json::Value) -> Result<Compiled, CompilationError>
     where
         Self: for<'a> Deserialize<'a> + Compilable,
     {
         let t: Self =
-            serde_json::from_str(s).map_err(|_| CompilationError::TerminateCompilation)?;
+            serde_json::from_value(s).map_err(|_| CompilationError::TerminateCompilation)?;
+
+        println!("Loaded");
         t.compile()
     }
 }
