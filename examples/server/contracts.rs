@@ -42,10 +42,12 @@ impl BState for Finish {
     }
 }
 
-trait ExampleBThen<'a> where Self: Sized + 'a {
+trait ExampleBThen<'a>
+where
+    Self: Sized + 'a,
+{
     then! {begin_contest}
 }
-
 
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct ExampleB<T: BState> {
@@ -61,8 +63,7 @@ impl<'a, T: BState> ExampleB<T> {
     guard!(cached all_signed |s| {Clause::Threshold(T::get_n(s.threshold, s.participants.len()as u8) as usize, s.participants.iter().map(|k| Clause::Key(*k)).collect())});
 }
 
-impl<'a> ExampleBThen<'a> for ExampleB<Finish> {
-}
+impl<'a> ExampleBThen<'a> for ExampleB<Finish> {}
 impl<'a> ExampleBThen<'a> for ExampleB<Start> {
     then! {begin_contest |s| {
         let o = txn::Output::new(
@@ -81,8 +82,9 @@ impl<'a> ExampleBThen<'a> for ExampleB<Start> {
     }}
 }
 
-impl<'a, T: BState + 'a> Contract<'a> for ExampleB<T> 
-where ExampleB<T> : ExampleBThen<'a>
+impl<'a, T: BState + 'a> Contract<'a> for ExampleB<T>
+where
+    ExampleB<T>: ExampleBThen<'a>,
 {
     def! {then, Self::begin_contest}
     def! {finish, Self::all_signed}
