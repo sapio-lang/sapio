@@ -29,6 +29,7 @@ mod private {
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct Compiled {
     pub ctv_to_tx: HashMap<sha256::Hash, Template>,
+    pub suggested_txs: HashMap<sha256::Hash, Template>,
     pub policy: Option<Clause>,
     pub address: bitcoin::Address,
     pub descriptor: Option<Descriptor<bitcoin::PublicKey>>,
@@ -41,6 +42,7 @@ impl Compiled {
     pub fn from_descriptor(d: Descriptor<bitcoin::PublicKey>, a: Option<AmountRange>) -> Compiled {
         Compiled {
             ctv_to_tx: HashMap::new(),
+            suggested_txs: HashMap::new(),
             policy: None,
             address: d.address(bitcoin::Network::Bitcoin).unwrap(),
             descriptor: Some(d),
@@ -56,6 +58,7 @@ impl Compiled {
     pub fn from_address(address: bitcoin::Address, a: Option<AmountRange>) -> Compiled {
         Compiled {
             ctv_to_tx: HashMap::new(),
+            suggested_txs: HashMap::new(),
             policy: None,
             address,
             descriptor: None,
@@ -83,6 +86,7 @@ impl Compiled {
             Compiled {
                 descriptor,
                 ctv_to_tx,
+                suggested_txs,
                 ..
             },
         )) = stack.pop()
@@ -92,7 +96,7 @@ impl Compiled {
                 Template {
                     label, outputs, tx, ..
                 },
-            ) in ctv_to_tx
+            ) in ctv_to_tx.iter().chain(suggested_txs.iter())
             {
                 let mut tx = tx.clone();
                 tx.input[0].previous_output = out;
@@ -218,17 +222,17 @@ where
             No,
         }
         let mut guard_clauses = GuardCache::new();
+        let mut clause_accumulator = vec![];
+        let mut ctv_to_tx = HashMap::new();
+        let mut suggested_txs = HashMap::new();
 
         let finish_fns: Vec<_> = Self::FINISH_FNS
             .iter()
             .filter_map(|x| guard_clauses.get(self, *x))
             .collect();
-        let mut clause_accumulator = if finish_fns.len() > 0 {
-            vec![Clause::Threshold(1, finish_fns)]
-        } else {
-            vec![]
-        };
-        let mut ctv_to_tx = HashMap::new();
+        if finish_fns.len() > 0 {
+            clause_accumulator.push(Clause::Threshold(1, finish_fns))
+        }
 
         let then_fns = Self::THEN_FNS
             .iter()
@@ -240,11 +244,16 @@ where
             .map(|x| (UsesCTV::No, x.guards(), x.fun()(self, Default::default())));
 
         let mut amount_range = AmountRange::new();
+
+        // If no guards and not CTV, then nothing gets added (not interpreted as Trivial True)
+        // If CTV and no guards, just CTV added.
+        // If CTV and guards, CTV & guards added.
         for (uses_ctv, guards, r_txtmpls) in then_fns.chain(finish_or_fns) {
+            // it would be an error if any of r_txtmpls is an error instead of just an empty
+            // iterator.
             let txtmpls = r_txtmpls?;
-            // If no guards and not CTV, then nothing gets added (not interpreted as Trivial True)
-            // If CTV and no guards, just CTV added.
-            // If CTV and guards, CTV & guards added.
+            // Don't use a threshold here because then miniscript will just re-compile it into the
+            // And for again.
             let mut option_guard = guards
                 .iter()
                 .filter_map(|x| guard_clauses.get(self, *x))
@@ -254,32 +263,62 @@ where
                         Some(guards) => Clause::And(vec![guards, guard]),
                     })
                 });
-            if uses_ctv == UsesCTV::Yes {
-                // TODO: Handle txtmpls.len() == 0
-                //
-                let tr: Result<Vec<_>, _> = txtmpls
-                    .map(|r_txtmpl| {
-                        let txtmpl = r_txtmpl?;
-                        let h = txtmpl.hash();
-                        let txtmpl = ctv_to_tx.entry(h).or_insert(txtmpl);
-                        amount_range.update_range(txtmpl.total_amount());
-                        Ok(Clause::TxTemplate(h))
-                    })
-                    .collect();
-                let hashes = Clause::Threshold(1, tr?);
-                option_guard = Some(match option_guard {
-                    Some(guard) => Clause::And(vec![guard, hashes]),
-                    None => hashes,
-                });
-            }
-            option_guard.map(|guard| clause_accumulator.push(guard));
-        }
-        // TODO: Handle clause_accumulator.len() == 0
-        let policy = Clause::Threshold(1, clause_accumulator);
 
-        let descriptor = Descriptor::Wsh(policy.compile().unwrap());
+            let mut txtmpl_clauses = txtmpls
+                .map(|r_txtmpl| {
+                    let txtmpl = r_txtmpl?;
+                    let h = txtmpl.hash();
+                    let txtmpl = match uses_ctv {
+                        UsesCTV::Yes => &mut ctv_to_tx,
+                        UsesCTV::No => &mut suggested_txs,
+                    }
+                    .entry(h)
+                    .or_insert(txtmpl);
+                    amount_range.update_range(txtmpl.total_amount());
+                    Ok(Clause::TxTemplate(h))
+                })
+                // Forces any error to abort the whole thing
+                .collect::<Result<Vec<_>, _>>()?;
+            match uses_ctv {
+                UsesCTV::Yes => {
+                    let hashes = match txtmpl_clauses.len() {
+                        0 => {
+                            return Err(CompilationError::TerminateCompilation);
+                        }
+                        1 => {
+                            // Safe because size must be > 0
+                            txtmpl_clauses.pop().unwrap()
+                        }
+                        n => Clause::Threshold(1, txtmpl_clauses),
+                    };
+                    option_guard = Some(if let Some(guard) = option_guard {
+                        Clause::And(vec![guard, hashes])
+                    } else {
+                        hashes
+                    });
+                }
+                UsesCTV::No => {}
+            }
+            if let Some(guard) = option_guard {
+                clause_accumulator.push(guard);
+            }
+        }
+
+        let policy = match clause_accumulator.len() {
+            0 => return Err(CompilationError::TerminateCompilation),
+            1 => clause_accumulator.pop().unwrap(),
+            _ => Clause::Threshold(1, clause_accumulator),
+        };
+
+        let descriptor = Descriptor::Wsh(
+            policy
+                .compile()
+                .map_err(|_| CompilationError::TerminateCompilation)?,
+        );
+
         Ok(Compiled {
             ctv_to_tx,
+            suggested_txs,
             address: descriptor
                 .address(bitcoin::Network::Bitcoin)
                 .ok_or(CompilationError::TerminateCompilation)?,
