@@ -98,7 +98,7 @@ impl TemplateBuilder {
                 .iter()
                 .map(|out| bitcoin::TxOut {
                     value: TryInto::<Amount>::try_into(out.amount).unwrap().as_sat(),
-                    script_pubkey: out.contract.descriptor.script_pubkey(),
+                    script_pubkey: out.contract.address.script_pubkey(),
                 })
                 .collect(),
         }

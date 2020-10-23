@@ -60,7 +60,7 @@ impl Action {
             Action::Close => None,
             Action::Create { type_, args } => {
                 let c = session.menu.compile(type_, args).ok()?;
-                let a = c.descriptor.address(bitcoin::Network::Bitcoin)?;
+                let a = c.address.clone();
                 // todo amount
                 let (txns, metadata) = c.bind(create_mock_output());
                 let program = Program {

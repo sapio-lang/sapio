@@ -30,7 +30,8 @@ mod private {
 pub struct Compiled {
     pub ctv_to_tx: HashMap<sha256::Hash, Template>,
     pub policy: Option<Clause>,
-    pub descriptor: Descriptor<bitcoin::PublicKey>,
+    pub address: bitcoin::Address,
+    pub descriptor: Option<Descriptor<bitcoin::PublicKey>>,
     pub amount_range: AmountRange,
 }
 
@@ -41,7 +42,23 @@ impl Compiled {
         Compiled {
             ctv_to_tx: HashMap::new(),
             policy: None,
-            descriptor: d,
+            address: d.address(bitcoin::Network::Bitcoin).unwrap(),
+            descriptor: Some(d),
+            amount_range: a.unwrap_or_else(|| {
+                let mut a = AmountRange::new();
+                a.update_range(Amount::min_value());
+                a.update_range(Amount::max_value());
+                a
+            }),
+        }
+    }
+
+    pub fn from_address(address: bitcoin::Address, a: Option<AmountRange>) -> Compiled {
+        Compiled {
+            ctv_to_tx: HashMap::new(),
+            policy: None,
+            address,
+            descriptor: None,
             amount_range: a.unwrap_or_else(|| {
                 let mut a = AmountRange::new();
                 a.update_range(Amount::min_value());
@@ -80,7 +97,9 @@ impl Compiled {
                 let mut tx = tx.clone();
                 tx.input[0].previous_output = out;
                 // Missing other Witness Info.
-                tx.input[0].witness = vec![descriptor.witness_script().into_bytes()];
+                if let Some(d) = descriptor {
+                    tx.input[0].witness = vec![d.witness_script().into_bytes()];
+                }
                 let txid = tx.txid();
                 txns.push(tx);
                 metadata_out.push(json!({
@@ -254,10 +273,12 @@ where
         // TODO: Handle clause_accumulator.len() == 0
         let policy = Clause::Threshold(1, clause_accumulator);
 
+        let descriptor =  Descriptor::Wsh(policy.compile().unwrap());
         Ok(Compiled {
             ctv_to_tx,
+            address: descriptor.address(bitcoin::Network::Bitcoin).ok_or(CompilationError::TerminateCompilation)?,
+            descriptor: Some(descriptor),
             // order flipped to borrow policy
-            descriptor: Descriptor::Wsh(policy.compile().unwrap()),
             policy: Some(policy),
             amount_range,
         })

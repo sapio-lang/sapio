@@ -61,6 +61,7 @@ lazy_static::lazy_static! {
         let mut m = session::MenuBuilder::new();
         m.register_as::<contracts::ExampleA>("ExampleA".to_string().into());
         m.register_as::<contracts::ExampleB<contracts::Start>>("ExampleB".to_string().into());
+        m.register_as::<contracts::TreePay>("TreePay".to_string().into());
         m.into()
     };
 }
