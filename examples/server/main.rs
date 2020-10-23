@@ -62,6 +62,7 @@ lazy_static::lazy_static! {
         m.register_as::<contracts::ExampleA>("ExampleA".to_string().into());
         m.register_as::<contracts::ExampleB<contracts::Start>>("ExampleB".to_string().into());
         m.register_as::<contracts::treepay::TreePay>("TreePay".to_string().into());
+        m.register_as::<contracts::hodl_chicken::HodlChickenInner>("HodlChicken".to_string().into());
         m.into()
     };
 }

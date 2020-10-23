@@ -33,11 +33,19 @@ use serde::*;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 
+pub type Payout = Compiled;
+#[derive(JsonSchema, Serialize, Deserialize, Clone)]
+struct Payouts {
+    /// Winner
+    winner: Payout,
+    /// Loser
+    loser: Payout,
+}
 #[derive(JsonSchema, Serialize, Deserialize)]
 #[serde(try_from = "HodlChickenChecks")]
 pub struct HodlChickenInner {
-    alice_contract: HashMap<u64, Compiled>,
-    bob_contract: HashMap<u64, Compiled>,
+    alice_contract: Payouts,
+    bob_contract: Payouts,
     alice_key: bitcoin::PublicKey,
     bob_key: bitcoin::PublicKey,
     alice_deposit: u64,
@@ -62,15 +70,6 @@ impl TryFrom<HodlChickenChecks> for HodlChickenInner {
             Err("Amounts Overflow")
         } else if inner.alice_deposit != inner.bob_deposit {
             Err("Amounts differ")
-        } else if [&inner.alice_contract, &inner.bob_contract]
-            .iter()
-            .any(|c| {
-                [c.get(&inner.chicken_gets), c.get(&inner.winner_gets)]
-                    .iter()
-                    .any(Option::is_none)
-            })
-        {
-            Err("Map Incomplete")
         } else {
             Ok(inner)
         }
@@ -84,12 +83,12 @@ impl<'a> HodlChickenInner {
         Ok(Box::new(std::iter::once(Ok(txn::TemplateBuilder::new()
             .add_output(txn::Output::new(
                 CoinAmount::Sats(s.winner_gets),
-                s.bob_contract.get(&s.winner_gets).unwrap().clone(),
+                s.bob_contract.winner.clone(),
                 None,
             )?)
             .add_output(txn::Output::new(
                 CoinAmount::Sats(s.chicken_gets),
-                s.alice_contract.get(&s.chicken_gets).unwrap().clone(),
+                s.alice_contract.loser.clone(),
                 None,
             )?)
             .into()))))
@@ -99,12 +98,12 @@ impl<'a> HodlChickenInner {
         Ok(Box::new(std::iter::once(Ok(txn::TemplateBuilder::new()
             .add_output(txn::Output::new(
                 CoinAmount::Sats(s.winner_gets),
-                s.alice_contract.get(&s.winner_gets).unwrap().clone(),
+                s.alice_contract.winner.clone(),
                 None,
             )?)
             .add_output(txn::Output::new(
                 CoinAmount::Sats(s.chicken_gets),
-                s.bob_contract.get(&s.chicken_gets).unwrap().clone(),
+                s.bob_contract.loser.clone(),
                 None,
             )?)
             .into()))))
