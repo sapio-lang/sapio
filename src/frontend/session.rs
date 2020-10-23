@@ -1,5 +1,6 @@
 type Key = bitcoin::hashes::sha256::Hash;
 use crate::contract::{Compilable, CompilationError, Compiled, Contract};
+use bitcoin::hashes::hex::ToHex;
 use bitcoin::util::amount::CoinAmount;
 use schemars::schema::{RootSchema, Schema, SchemaObject};
 use schemars::{schema_for, JsonSchema};
@@ -7,6 +8,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Program {
+    program: Vec<Value>,
+}
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "action", content = "content")]
 enum Action {
@@ -32,11 +37,21 @@ pub enum Reaction {
     #[serde(rename = "session_id")]
     Session(bool, String),
     #[serde(rename = "created")]
-    Created(CoinAmount, bitcoin::Address),
+    Created(CoinAmount, bitcoin::Address, Program),
     #[serde(rename = "saved")]
     Saved(bool),
     #[serde(rename = "bound")]
     Bound(Vec<bitcoin::Transaction>),
+}
+use bitcoin::hashes::Hash;
+fn create_mock_output() -> bitcoin::OutPoint {
+    bitcoin::OutPoint {
+        txid: bitcoin::hashes::sha256d::Hash::from_inner(
+            bitcoin::hashes::sha256::Hash::hash(format!("mock:{}", 0).as_bytes()).into_inner(),
+        )
+        .into(),
+        vout: 0,
+    }
 }
 
 impl Action {
@@ -47,7 +62,21 @@ impl Action {
                 let c = session.menu.compile(type_, args).ok()?;
                 let a = c.descriptor.address(bitcoin::Network::Bitcoin)?;
                 // todo amount
-                Some(Reaction::Created(c.amount_range.max(), a))
+                let (txns, metadata) = c.bind(create_mock_output());
+                let program = Program {
+                    program: txns
+                        .iter()
+                        .map(bitcoin::consensus::encode::serialize)
+                        .zip(metadata.into_iter())
+                        .map(|(h, mut v)| {
+                            v.as_object_mut()
+                                .map(|ref mut m| m.insert("hex".into(), h.to_hex().into()));
+                            v
+                        })
+                        .collect(),
+                };
+                println!("{:?}", program);
+                Some(Reaction::Created(c.amount_range.max(), a, program))
             }
             Action::Save(address) => Some(Reaction::Saved(true)),
             Action::Bind(out, address) => Some(Reaction::Bound(vec![])),

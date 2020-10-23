@@ -128,7 +128,6 @@ pub trait Compilable: private::ImplSeal {
         let t: Self =
             serde_json::from_value(s).map_err(|_| CompilationError::TerminateCompilation)?;
         let c = t.compile();
-        println!("{:?}", c);
         c
     }
 }
