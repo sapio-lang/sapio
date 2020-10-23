@@ -223,7 +223,11 @@ where
             .iter()
             .filter_map(|x| guard_clauses.get(self, *x))
             .collect();
-        let mut clause_accumulator = vec![Clause::Threshold(1, finish_fns)];
+        let mut clause_accumulator = if finish_fns.len() > 0 {
+            vec![Clause::Threshold(1, finish_fns)]
+        } else {
+            vec![]
+        };
         let mut ctv_to_tx = HashMap::new();
 
         let then_fns = Self::THEN_FNS
@@ -273,10 +277,12 @@ where
         // TODO: Handle clause_accumulator.len() == 0
         let policy = Clause::Threshold(1, clause_accumulator);
 
-        let descriptor =  Descriptor::Wsh(policy.compile().unwrap());
+        let descriptor = Descriptor::Wsh(policy.compile().unwrap());
         Ok(Compiled {
             ctv_to_tx,
-            address: descriptor.address(bitcoin::Network::Bitcoin).ok_or(CompilationError::TerminateCompilation)?,
+            address: descriptor
+                .address(bitcoin::Network::Bitcoin)
+                .ok_or(CompilationError::TerminateCompilation)?,
             descriptor: Some(descriptor),
             // order flipped to borrow policy
             policy: Some(policy),
