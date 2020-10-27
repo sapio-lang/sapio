@@ -19,6 +19,8 @@ features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 
 [features]
 ws = ["actix-web", "actix", "actix-web-actors"]
+# used to enable some niceties if compiling on a nightly compiler
+nightly = []
 
 [dependencies]
 lazy_static = "*"

@@ -9,11 +9,18 @@ macro_rules! def {
     };
 
     [state]  => {
+        #[cfg(feature = "nightly")]
+        type StatefulArguments = ();
+        #[cfg(not(feature = "nightly"))]
         type StatefulArguments;
     };
     {updatable<$($i:ty)?> $(,$a:expr)*} => {
         const FINISH_OR_FUNCS: &'a [fn() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, Self::StatefulArguments>>] = &[$($a,)*];
         def![state $($i)?];
+    };
+    {non updatable} => {
+        #[cfg(not(feature = "nightly"))]
+        def![state ()];
     };
     {finish $(,$a:expr)*} => {
         const FINISH_FNS: &'a [fn() -> Option<$crate::contract::actions::Guard<Self>>] = &[$($a,)*];

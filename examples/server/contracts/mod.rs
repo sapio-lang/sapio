@@ -23,7 +23,7 @@ impl<'a> ExampleA {
 
 impl<'a> Contract<'a> for ExampleA {
     def! {finish, Self::signed, Self::timeout}
-    def! {updatable<()> }
+    def! {non updatable}
 }
 
 use std::marker::PhantomData;
@@ -89,5 +89,5 @@ where
 {
     def! {then, Self::begin_contest}
     def! {finish, Self::all_signed}
-    def! {updatable<()> }
+    def! {non updatable }
 }

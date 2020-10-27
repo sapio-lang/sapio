@@ -114,5 +114,5 @@ impl<'a> HodlChickenInner {
     };
 impl<'a> Contract<'a> for HodlChickenInner {
     def! {then, Self::alice_redeem, Self::bob_redeem}
-    def! {updatable<()>}
+    def! {non updatable}
 }
