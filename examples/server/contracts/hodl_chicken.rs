@@ -110,8 +110,9 @@ impl<'a> HodlChickenInner {
     }}
 }
 
-pub struct Args;
+    const _: () = {
+    };
 impl<'a> Contract<'a> for HodlChickenInner {
     def! {then, Self::alice_redeem, Self::bob_redeem}
-    def! {updatable<Args>}
+    def! {updatable<()>}
 }

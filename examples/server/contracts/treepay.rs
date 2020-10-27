@@ -39,9 +39,8 @@ impl<'a> TreePay {
         Ok(Box::new(std::iter::once(builder.into())))
     }}
 }
-pub struct Args;
 
 impl<'a> Contract<'a> for TreePay {
     def! {then, Self::expand}
-    def! {updatable<Args>}
+    def! {updatable<()>}
 }

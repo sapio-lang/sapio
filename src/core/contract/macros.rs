@@ -4,14 +4,14 @@ macro_rules! def {
     {then $(,$a:expr)*} => {
         const THEN_FNS: &'a [fn() -> Option<$crate::contract::actions::ThenFunc<'a, Self>>] = &[$($a,)*];
     };
-    [state $i:ident]  => {
+    [state $i:ty]  => {
         type StatefulArguments = $i;
     };
 
     [state]  => {
         type StatefulArguments;
     };
-    {updatable<$($i:ident)?> $(,$a:expr)*} => {
+    {updatable<$($i:ty)?> $(,$a:expr)*} => {
         const FINISH_OR_FUNCS: &'a [fn() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, Self::StatefulArguments>>] = &[$($a,)*];
         def![state $($i)?];
     };

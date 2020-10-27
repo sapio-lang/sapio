@@ -16,7 +16,6 @@ pub struct ExampleA {
     resolution: Compiled,
 }
 
-pub struct Args;
 impl<'a> ExampleA {
     guard!(timeout | s | { Clause::Older(100) });
     guard!(cached signed |s| {Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)])});
@@ -24,7 +23,7 @@ impl<'a> ExampleA {
 
 impl<'a> Contract<'a> for ExampleA {
     def! {finish, Self::signed, Self::timeout}
-    def! {updatable<Args> }
+    def! {updatable<()> }
 }
 
 use std::marker::PhantomData;
@@ -90,5 +89,5 @@ where
 {
     def! {then, Self::begin_contest}
     def! {finish, Self::all_signed}
-    def! {updatable<Args> }
+    def! {updatable<()> }
 }
