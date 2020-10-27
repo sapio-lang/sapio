@@ -174,9 +174,9 @@ where
     Option<&'a Self::StatefulArguments>: Default,
 {
     //! Main Contract Trait
-    def! {then}
-    def! { updatable<> }
-    def! {finish}
+    declare! {then}
+    declare! { updatable<> }
+    declare! {finish}
 }
 
 use actions::Guard;

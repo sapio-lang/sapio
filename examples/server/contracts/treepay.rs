@@ -41,6 +41,6 @@ impl<'a> TreePay {
 }
 
 impl<'a> Contract<'a> for TreePay {
-    def! {then, Self::expand}
-    def! {non updatable}
+    declare! {then, Self::expand}
+    declare! {non updatable}
 }

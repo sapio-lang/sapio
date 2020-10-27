@@ -22,8 +22,8 @@ impl<'a> ExampleA {
 }
 
 impl<'a> Contract<'a> for ExampleA {
-    def! {finish, Self::signed, Self::timeout}
-    def! {non updatable}
+    declare! {finish, Self::signed, Self::timeout}
+    declare! {non updatable}
 }
 
 use std::marker::PhantomData;
@@ -87,7 +87,7 @@ impl<'a, T: BState + 'a> Contract<'a> for ExampleB<T>
 where
     ExampleB<T>: ExampleBThen<'a>,
 {
-    def! {then, Self::begin_contest}
-    def! {finish, Self::all_signed}
-    def! {non updatable }
+    declare! {then, Self::begin_contest}
+    declare! {finish, Self::all_signed}
+    declare! {non updatable }
 }

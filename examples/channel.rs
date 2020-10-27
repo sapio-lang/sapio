@@ -228,7 +228,7 @@ impl<'a, T: State + 'a> Contract<'a> for Channel<T>
 where
     Channel<T>: FunctionalityAtState<'a>,
 {
-    def! {then, Self::begin_contest, Self::finish_contest}
-    def! {updatable<Args>, Self::update_state_a, Self::update_state_b }
-    def! {finish, Self::signed}
+    declare! {then, Self::begin_contest, Self::finish_contest}
+    declare! {updatable<Args>, Self::update_state_a, Self::update_state_b }
+    declare! {finish, Self::signed}
 }

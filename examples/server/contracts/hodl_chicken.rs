@@ -113,6 +113,6 @@ impl<'a> HodlChickenInner {
     const _: () = {
     };
 impl<'a> Contract<'a> for HodlChickenInner {
-    def! {then, Self::alice_redeem, Self::bob_redeem}
-    def! {non updatable}
+    declare! {then, Self::alice_redeem, Self::bob_redeem}
+    declare! {non updatable}
 }

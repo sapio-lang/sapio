@@ -1,6 +1,6 @@
-/// The def macro is used to define the list of pathways in a contract
+/// The declare macro is used to declare the list of pathways in a contract
 #[macro_export]
-macro_rules! def {
+macro_rules! declare {
     {then $(,$a:expr)*} => {
         const THEN_FNS: &'a [fn() -> Option<$crate::contract::actions::ThenFunc<'a, Self>>] = &[$($a,)*];
     };
@@ -16,11 +16,11 @@ macro_rules! def {
     };
     {updatable<$($i:ty)?> $(,$a:expr)*} => {
         const FINISH_OR_FUNCS: &'a [fn() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, Self::StatefulArguments>>] = &[$($a,)*];
-        def![state $($i)?];
+        declare![state $($i)?];
     };
     {non updatable} => {
         #[cfg(not(feature = "nightly"))]
-        def![state ()];
+        declare![state ()];
     };
     {finish $(,$a:expr)*} => {
         const FINISH_FNS: &'a [fn() -> Option<$crate::contract::actions::Guard<Self>>] = &[$($a,)*];
