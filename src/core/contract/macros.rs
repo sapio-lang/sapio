@@ -47,7 +47,7 @@ macro_rules! then {
 macro_rules! finish {
     {$name:ident $a:tt |$s:ident, $o:ident| $b:block } => {
         fn $name() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, Args>>{
-            Some($crate::contract::actions::FinishOrFuncNew{guard: &$a, func: |$s: &Self, $o: Option<&_>| $b} .into())
+            Some($crate::contract::actions::FinishOrFunc{guard: &$a, func: |$s: &Self, $o: Option<&_>| $b} .into())
         }
     };
     {$name:ident $a:tt} => {

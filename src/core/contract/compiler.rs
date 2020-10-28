@@ -106,8 +106,8 @@ where
         let finish_or_fns = self.finish_or_fns().iter().filter_map(|x| x()).map(|x| {
             (
                 UsesCTV::No,
-                x.guards(),
-                x.fun()(self_ref, Default::default()),
+                x.guard,
+                (x.func)(self_ref, Default::default()),
             )
         });
 
