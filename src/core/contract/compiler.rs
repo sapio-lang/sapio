@@ -169,17 +169,15 @@ where
             _ => Clause::Threshold(1, clause_accumulator),
         };
 
-        let descriptor = Descriptor::Wsh(policy.compile().map_err(Into::<CompilationError>::into)?);
-        let address = descriptor
-            .address(bitcoin::Network::Bitcoin)
-            .expect("WSH Address Should Never Fail");
+        let miniscript = policy.compile().map_err(Into::<CompilationError>::into)?;
+        let address = bitcoin::Address::p2wsh(&miniscript.encode(), bitcoin::Network::Bitcoin);
+        let descriptor = Some(Descriptor::Wsh(miniscript));
 
         Ok(Compiled {
             ctv_to_tx,
             suggested_txs,
             address,
-            descriptor: Some(descriptor),
-            // order flipped to borrow policy
+            descriptor,
             policy: Some(policy),
             amount_range,
         })
