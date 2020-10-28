@@ -4,7 +4,10 @@ use crate::clause::Clause;
 /// If bool = true, the computation of the guard is cached, which is useful if e.g. Guard
 /// must contact a remote server or it should be the same across calls *for a given contract
 /// instance*.
-pub struct Guard<ContractSelf>(pub fn(&ContractSelf) -> Clause, pub bool);
+pub enum Guard<ContractSelf> {
+    Cache(fn(&ContractSelf) -> Clause),
+    Fresh(fn(&ContractSelf) -> Clause),
+}
 
 /// A List of Guards, for convenience
 pub type GuardList<'a, T> = &'a [fn() -> Option<Guard<T>>];

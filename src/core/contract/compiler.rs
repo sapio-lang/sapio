@@ -26,8 +26,8 @@ impl<T> GuardCache<T> {
     }
     fn create_entry(g: Guard<T>, t: &T) -> CacheEntry<T> {
         match g {
-            Guard(f, true) => CacheEntry::Cached(f(t)),
-            Guard(f, false) => CacheEntry::Fresh(f),
+            Guard::Cache(f) => CacheEntry::Cached(f(t)),
+            Guard::Fresh(f) => CacheEntry::Fresh(f),
         }
     }
     fn get(&mut self, t: &T, f: fn() -> Option<Guard<T>>) -> Option<Clause> {

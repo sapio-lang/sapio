@@ -60,12 +60,12 @@ macro_rules! finish {
 macro_rules! guard {
     {$name:ident |$s:ident| $b:block} => {
             fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
-                Some($crate::contract::actions::Guard( |$s: &Self| $b, false))
+                Some($crate::contract::actions::Guard::Fresh( |$s: &Self| $b))
             }
         };
     {cached $name:ident |$s:ident| $b:block} => {
             fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
-                Some($crate::contract::actions::Guard( |$s: &Self| $b, true))
+                Some($crate::contract::actions::Guard::Cache( |$s: &Self| $b))
             }
         };
 }
