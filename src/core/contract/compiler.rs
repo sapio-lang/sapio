@@ -3,15 +3,20 @@ use super::CompilationError;
 use super::Compiled;
 use crate::util::amountrange::AmountRange;
 use serde::Deserialize;
-use std::marker::PhantomData;
 
 use super::actions::Guard;
 use crate::clause::Clause;
 use ::miniscript::*;
 use std::collections::HashMap;
 
+enum CacheEntry<T> {
+    Nothing,
+    Cached(Clause),
+    Fresh(fn(&T) -> Clause),
+}
+
 struct GuardCache<T> {
-    cache: HashMap<usize, Option<(Guard<T>, Option<Clause>)>>,
+    cache: HashMap<usize, CacheEntry<T>>,
 }
 impl<T> GuardCache<T> {
     fn new() -> Self {
@@ -19,21 +24,20 @@ impl<T> GuardCache<T> {
             cache: HashMap::new(),
         }
     }
+    fn create_entry(g: Guard<T>, t: &T) -> CacheEntry<T> {
+        match g {
+            Guard(f, true) => CacheEntry::Cached(f(t)),
+            Guard(f, false) => CacheEntry::Fresh(f),
+        }
+    }
     fn get(&mut self, t: &T, f: fn() -> Option<Guard<T>>) -> Option<Clause> {
-        match self
-            .cache
-            .entry(f as usize)
-            .or_insert_with(|| f().map(|v| (v, None)))
-        {
-            Some((Guard(g, true), e @ Some(..))) => e.clone(),
-            Some((Guard(g, true), ref mut v @ None)) => {
-                *v = Some(g(t));
-                v.clone()
-            }
-            Some((Guard(g, false), None)) => Some(g(t)),
-
-            Some((Guard(g, false), Some(..))) => std::panic!("Impossible"),
-            None => None,
+        match self.cache.entry(f as usize).or_insert_with(|| {
+            f().map(|v| Self::create_entry(v, t))
+                .unwrap_or(CacheEntry::Nothing)
+        }) {
+            CacheEntry::Nothing => None,
+            CacheEntry::Cached(s) => Some(s.clone()),
+            CacheEntry::Fresh(f) => Some(f(t)),
         }
     }
 }
