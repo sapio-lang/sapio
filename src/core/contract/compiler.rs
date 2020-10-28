@@ -24,17 +24,19 @@ impl<T> GuardCache<T> {
             cache: HashMap::new(),
         }
     }
-    fn create_entry(g: Guard<T>, t: &T) -> CacheEntry<T> {
+    fn create_entry(g: Option<Guard<T>>, t: &T) -> CacheEntry<T> {
         match g {
-            Guard::Cache(f) => CacheEntry::Cached(f(t)),
-            Guard::Fresh(f) => CacheEntry::Fresh(f),
+            Some(Guard::Cache(f)) => CacheEntry::Cached(f(t)),
+            Some(Guard::Fresh(f)) => CacheEntry::Fresh(f),
+            None => CacheEntry::Nothing,
         }
     }
     fn get(&mut self, t: &T, f: fn() -> Option<Guard<T>>) -> Option<Clause> {
-        match self.cache.entry(f as usize).or_insert_with(|| {
-            f().map(|v| Self::create_entry(v, t))
-                .unwrap_or(CacheEntry::Nothing)
-        }) {
+        match self
+            .cache
+            .entry(f as usize)
+            .or_insert_with(|| Self::create_entry(f(), t))
+        {
             CacheEntry::Nothing => None,
             CacheEntry::Cached(s) => Some(s.clone()),
             CacheEntry::Fresh(f) => Some(f(t)),
@@ -103,13 +105,11 @@ where
             .iter()
             .filter_map(|x| x())
             .map(|x| (UsesCTV::Yes, x.guard, (x.func)(self_ref)));
-        let finish_or_fns = self.finish_or_fns().iter().filter_map(|x| x()).map(|x| {
-            (
-                UsesCTV::No,
-                x.guard,
-                (x.func)(self_ref, Default::default()),
-            )
-        });
+        let finish_or_fns = self
+            .finish_or_fns()
+            .iter()
+            .filter_map(|x| x())
+            .map(|x| (UsesCTV::No, x.guard, (x.func)(self_ref, Default::default())));
 
         let mut amount_range = AmountRange::new();
 
