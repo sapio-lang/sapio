@@ -19,8 +19,8 @@ mod private {
     pub trait ImplSeal {}
 
     /// Allow Contract to implement Compile
-    impl<T> ImplSeal for T where T: for<'a> super::Contract<'a> {}
     impl ImplSeal for super::Compiled {}
+    impl<'a, C> ImplSeal for C where C: super::AnyContract<'a> {}
 }
 
 /// Compiled holds a contract's complete context required post-compilation
@@ -179,6 +179,67 @@ where
     declare! {finish}
 }
 
+struct DynamicContractRef<'a, T, S> {
+    then: &'a [fn() -> Option<actions::ThenFunc<'a, S>>],
+    finish_or: &'a [fn() -> Option<actions::FinishOrFunc<'a, S, T>>],
+    finish: &'a [fn() -> Option<actions::Guard<S>>],
+    data: &'a S,
+}
+impl<'a, T, S> AnyContract<'a> for DynamicContractRef<'a, T, S> {
+    type StatefulArguments = T;
+    type Ref = S;
+    fn then_fns(&self) -> &'a [fn() -> Option<actions::ThenFunc<'a, S>>] {
+        self.then
+    }
+    fn finish_or_fns(
+        &self,
+    ) -> &'a [fn() -> Option<actions::FinishOrFunc<'a, S, Self::StatefulArguments>>] {
+        self.finish_or
+    }
+    fn finish_fns(&self) -> &'a [fn() -> Option<actions::Guard<S>>] {
+        self.finish
+    }
+    fn get_inner_ref(&self) -> &Self::Ref {
+        self.data
+    }
+}
+
+pub trait AnyContract<'a>
+where
+    Self: Sized + 'a,
+{
+    type StatefulArguments;
+    type Ref;
+    fn then_fns(&self) -> &'a [fn() -> Option<actions::ThenFunc<'a, Self::Ref>>];
+    fn finish_or_fns(
+        &self,
+    ) -> &'a [fn() -> Option<actions::FinishOrFunc<'a, Self::Ref, Self::StatefulArguments>>];
+    fn finish_fns(&self) -> &'a [fn() -> Option<actions::Guard<Self::Ref>>];
+    fn get_inner_ref(&self) -> &Self::Ref;
+}
+
+impl<'a, C, T> AnyContract<'a> for C
+where
+    C: Contract<'a, StatefulArguments = T> + Sized,
+{
+    type StatefulArguments = T;
+    type Ref = Self;
+    fn then_fns(&self) -> &'a [fn() -> Option<actions::ThenFunc<'a, Self::Ref>>] {
+        Self::THEN_FNS
+    }
+    fn finish_or_fns(
+        &self,
+    ) -> &'a [fn() -> Option<actions::FinishOrFunc<'a, Self::Ref, Self::StatefulArguments>>] {
+        Self::FINISH_OR_FUNCS
+    }
+    fn finish_fns(&self) -> &'a [fn() -> Option<actions::Guard<Self::Ref>>] {
+        Self::FINISH_FNS
+    }
+    fn get_inner_ref(&self) -> &Self::Ref {
+        self
+    }
+}
+
 use actions::Guard;
 use std::marker::PhantomData;
 struct GuardCache<T> {
@@ -211,7 +272,7 @@ impl<T> GuardCache<T> {
 
 impl<T> Compilable for T
 where
-    T: for<'a> Contract<'a>,
+    T: for<'a> AnyContract<'a>,
 {
     /// The main Compilation Logic for a Contract.
     /// TODO: Better Document Semantics
@@ -225,23 +286,29 @@ where
         let mut clause_accumulator = vec![];
         let mut ctv_to_tx = HashMap::new();
         let mut suggested_txs = HashMap::new();
+        let self_ref = self.get_inner_ref();
 
-        let finish_fns: Vec<_> = Self::FINISH_FNS
+        let finish_fns: Vec<_> = self
+            .finish_fns()
             .iter()
-            .filter_map(|x| guard_clauses.get(self, *x))
+            .filter_map(|x| guard_clauses.get(self_ref, *x))
             .collect();
         if finish_fns.len() > 0 {
             clause_accumulator.push(Clause::Threshold(1, finish_fns))
         }
 
-        let then_fns = Self::THEN_FNS
+        let then_fns = self
+            .then_fns()
             .iter()
             .filter_map(|x| x())
-            .map(|x| (UsesCTV::Yes, x.0, x.1(self)));
-        let finish_or_fns = Self::FINISH_OR_FUNCS
-            .iter()
-            .filter_map(|x| x())
-            .map(|x| (UsesCTV::No, x.guards(), x.fun()(self, Default::default())));
+            .map(|x| (UsesCTV::Yes, x.0, x.1(self_ref)));
+        let finish_or_fns = self.finish_or_fns().iter().filter_map(|x| x()).map(|x| {
+            (
+                UsesCTV::No,
+                x.guards(),
+                x.fun()(self_ref, Default::default()),
+            )
+        });
 
         let mut amount_range = AmountRange::new();
 
@@ -256,7 +323,7 @@ where
             // And for again.
             let mut option_guard = guards
                 .iter()
-                .filter_map(|x| guard_clauses.get(self, *x))
+                .filter_map(|x| guard_clauses.get(self_ref, *x))
                 .fold(None, |option_guard, guard| {
                     Some(match option_guard {
                         None => guard,
