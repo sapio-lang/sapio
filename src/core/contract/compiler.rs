@@ -144,10 +144,9 @@ where
                         0 => {
                             return Err(CompilationError::MissingTemplates);
                         }
-                        1 => {
-                            // Safe because size must be > 0
-                            txtmpl_clauses.pop().unwrap()
-                        }
+                        1 => txtmpl_clauses
+                            .pop()
+                            .expect("Length of txtmpl_clauses must be at least 1"),
                         n => Clause::Threshold(1, txtmpl_clauses),
                     };
                     option_guard = Some(if let Some(guard) = option_guard {
@@ -165,7 +164,9 @@ where
 
         let policy = match clause_accumulator.len() {
             0 => return Err(CompilationError::EmptyPolicy),
-            1 => clause_accumulator.pop().unwrap(),
+            1 => clause_accumulator
+                .pop()
+                .expect("Length of policy must be at least 1"),
             _ => Clause::Threshold(1, clause_accumulator),
         };
 
