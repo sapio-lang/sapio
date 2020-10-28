@@ -76,6 +76,8 @@ impl Object {
             },
         )) = stack.pop()
         {
+            txns.reserve(ctv_to_tx.len() + suggested_txs.len());
+            metadata_out.reserve(ctv_to_tx.len() + suggested_txs.len());
             for (
                 _ctv_hash,
                 Template {
@@ -96,6 +98,7 @@ impl Object {
                     "label" : label,
                     "utxo_metadata" : outputs.iter().map(|x| &x.metadata).collect::<Vec<_>>()
                 }));
+                stack.reserve(outputs.len());
                 for (vout, v) in outputs.iter().enumerate() {
                     let vout = vout as u32;
                     stack.push((bitcoin::OutPoint { txid, vout }, &v.contract));
