@@ -63,6 +63,25 @@ impl<'a, T, S> From<&'a DynamicContract<'a, T, S>> for DynamicContractRef<'a, T,
         }
     }
 }
+
+impl<'a, T, S> AnyContract<'a> for DynamicContract<'a, T, S> {
+    type StatefulArguments = T;
+    type Ref = S;
+    fn then_fns(&'a self) -> &'a [fn() -> Option<actions::ThenFunc<'a, S>>] {
+        &self.then[..]
+    }
+    fn finish_or_fns(
+        &'a self,
+    ) -> &'a [fn() -> Option<actions::FinishOrFunc<'a, S, Self::StatefulArguments>>] {
+        &self.finish_or[..]
+    }
+    fn finish_fns(&'a self) -> &'a [fn() -> Option<actions::Guard<S>>] {
+        &self.finish[..]
+    }
+    fn get_inner_ref(&self) -> &Self::Ref {
+        &self.data
+    }
+}
 struct DynamicContractRef<'a, T, S> {
     then: &'a [fn() -> Option<actions::ThenFunc<'a, S>>],
     finish_or: &'a [fn() -> Option<actions::FinishOrFunc<'a, S, T>>],
@@ -94,12 +113,12 @@ where
 {
     type StatefulArguments;
     type Ref;
-    fn then_fns(&self) -> &'a [fn() -> Option<actions::ThenFunc<'a, Self::Ref>>];
+    fn then_fns(&'a self) -> &'a [fn() -> Option<actions::ThenFunc<'a, Self::Ref>>];
     fn finish_or_fns(
-        &self,
+        &'a self,
     ) -> &'a [fn() -> Option<actions::FinishOrFunc<'a, Self::Ref, Self::StatefulArguments>>];
-    fn finish_fns(&self) -> &'a [fn() -> Option<actions::Guard<Self::Ref>>];
-    fn get_inner_ref(&self) -> &Self::Ref;
+    fn finish_fns(&'a self) -> &'a [fn() -> Option<actions::Guard<Self::Ref>>];
+    fn get_inner_ref(&'a self) -> &'a Self::Ref;
 }
 
 impl<'a, C, T> AnyContract<'a> for C
