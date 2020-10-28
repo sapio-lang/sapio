@@ -14,7 +14,17 @@ use std::fmt;
 #[derive(Debug)]
 pub enum CompilationError {
     TerminateCompilation,
+    MissingTemplates,
+    EmptyPolicy,
+    Miniscript(miniscript::policy::compiler::CompilerError),
 }
+
+impl From<miniscript::policy::compiler::CompilerError> for CompilationError {
+    fn from(v: miniscript::policy::compiler::CompilerError) -> Self {
+        CompilationError::Miniscript(v)
+    }
+}
+
 impl fmt::Display for CompilationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)

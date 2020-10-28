@@ -8,6 +8,21 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
+pub enum SessionError {
+    Json(serde_json::Error),
+    Compiler(CompilationError),
+    ContractNotRegistered,
+}
+
+pub fn from_json<T>(s: serde_json::Value) -> Result<Compiled, SessionError>
+where
+    T: for<'a> Deserialize<'a> + Compilable,
+{
+    let t: T = serde_json::from_value(s).map_err(SessionError::Json)?;
+    let c = t.compile().map_err(SessionError::Compiler);
+    c
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Program {
     program: Vec<Value>,
@@ -87,7 +102,7 @@ impl Action {
 pub struct MenuBuilder {
     menu: Vec<RootSchema>,
     gen: schemars::gen::SchemaGenerator,
-    internal_menu: HashMap<String, fn(Value) -> Result<Compiled, CompilationError>>,
+    internal_menu: HashMap<String, fn(Value) -> Result<Compiled, SessionError>>,
 }
 impl MenuBuilder {
     pub fn new() -> MenuBuilder {
@@ -107,7 +122,7 @@ impl MenuBuilder {
             *title = name;
         }
         self.internal_menu
-            .insert(title.clone().unwrap(), <T as Compilable>::from_json);
+            .insert(title.clone().unwrap(), from_json::<T>);
         self.menu.push(s);
     }
     fn gen_menu(&self) -> Value {
@@ -134,14 +149,14 @@ impl From<MenuBuilder> for Menu {
 
 pub struct Menu {
     menu: String,
-    internal_menu: HashMap<String, fn(Value) -> Result<Compiled, CompilationError>>,
+    internal_menu: HashMap<String, fn(Value) -> Result<Compiled, SessionError>>,
 }
 impl Menu {
-    fn compile(&self, name: String, args: Value) -> Result<Compiled, CompilationError> {
+    fn compile(&self, name: String, args: Value) -> Result<Compiled, SessionError> {
         let f = self
             .internal_menu
             .get(&name)
-            .ok_or(CompilationError::TerminateCompilation)?;
+            .ok_or(SessionError::ContractNotRegistered)?;
         f(args)
     }
 }

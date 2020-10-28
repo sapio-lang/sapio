@@ -55,15 +55,6 @@ mod private {
 /// Compilable is a trait for anything which can be compiled
 pub trait Compilable: private::ImplSeal {
     fn compile(&self) -> Result<Compiled, CompilationError>;
-    fn from_json(s: serde_json::Value) -> Result<Compiled, CompilationError>
-    where
-        Self: for<'a> Deserialize<'a> + Compilable,
-    {
-        let t: Self =
-            serde_json::from_value(s).map_err(|_| CompilationError::TerminateCompilation)?;
-        let c = t.compile();
-        c
-    }
 }
 
 /// Implements a basic identity
@@ -146,12 +137,12 @@ where
                     Ok(Clause::TxTemplate(h))
                 })
                 // Forces any error to abort the whole thing
-                .collect::<Result<Vec<_>, _>>()?;
+                .collect::<Result<Vec<_>, CompilationError>>()?;
             match uses_ctv {
                 UsesCTV::Yes => {
                     let hashes = match txtmpl_clauses.len() {
                         0 => {
-                            return Err(CompilationError::TerminateCompilation);
+                            return Err(CompilationError::MissingTemplates);
                         }
                         1 => {
                             // Safe because size must be > 0
@@ -173,23 +164,20 @@ where
         }
 
         let policy = match clause_accumulator.len() {
-            0 => return Err(CompilationError::TerminateCompilation),
+            0 => return Err(CompilationError::EmptyPolicy),
             1 => clause_accumulator.pop().unwrap(),
             _ => Clause::Threshold(1, clause_accumulator),
         };
 
-        let descriptor = Descriptor::Wsh(
-            policy
-                .compile()
-                .map_err(|_| CompilationError::TerminateCompilation)?,
-        );
+        let descriptor = Descriptor::Wsh(policy.compile().map_err(Into::<CompilationError>::into)?);
+        let address = descriptor
+            .address(bitcoin::Network::Bitcoin)
+            .expect("WSH Address Should Never Fail");
 
         Ok(Compiled {
             ctv_to_tx,
             suggested_txs,
-            address: descriptor
-                .address(bitcoin::Network::Bitcoin)
-                .ok_or(CompilationError::TerminateCompilation)?,
+            address,
             descriptor: Some(descriptor),
             // order flipped to borrow policy
             policy: Some(policy),
