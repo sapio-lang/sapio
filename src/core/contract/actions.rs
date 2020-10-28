@@ -14,10 +14,10 @@ pub type GuardList<'a, T> = &'a [fn() -> Option<Guard<T>>];
 
 /// A ThenFunc takes a list of Guards and a TxTmplIt generator.  Each TxTmpl returned from the
 /// ThenFunc is Covenant Permitted only if the AND of all guards is satisfied.
-pub struct ThenFunc<'a, ContractSelf: 'a>(
-    pub GuardList<'a, ContractSelf>,
-    pub fn(&ContractSelf) -> TxTmplIt,
-);
+pub struct ThenFunc<'a, ContractSelf: 'a> {
+    pub guard: GuardList<'a, ContractSelf>,
+    pub func: fn(&ContractSelf) -> TxTmplIt,
+}
 
 /// A function which by default finishes, but may receive some context object which can induce the
 /// generation of additional transactions (as a suggestion)
@@ -30,20 +30,20 @@ pub struct FinishOrFunc<'a, ContractSelf: 'a, Extra> {
 
 /// Workaround of const_fn not accepting arguments that are fns, otherwise this would be inlined
 /// inside of FinishOrFunc.
-pub struct FinishOrFuncNew<'a, ContractSelf: 'a, Extra>(
-    pub GuardList<'a, ContractSelf>,
-    pub fn(&'a ContractSelf, Option<&'a Extra>) -> TxTmplIt<'a>,
-);
+pub struct FinishOrFuncNew<'a, ContractSelf: 'a, Extra> {
+    pub guard: GuardList<'a, ContractSelf>,
+    pub func: fn(&'a ContractSelf, Option<&'a Extra>) -> TxTmplIt<'a>,
+}
 
 impl<'a, ContractSelf: 'a, Extra> FinishOrFunc<'a, ContractSelf, Extra> {
     /// Accessor to get the function of a FinishOrFunc
     pub fn fun(&self) -> fn(&'a ContractSelf, Option<&'a Extra>) -> TxTmplIt<'a> {
-        self.ffn.1
+        self.ffn.func
     }
 
     /// Accessor to get the guards of a FinishOrFunc
     pub fn guards(&self) -> &'a [fn() -> Option<Guard<ContractSelf>>] {
-        self.ffn.0
+        self.ffn.guard
     }
 }
 

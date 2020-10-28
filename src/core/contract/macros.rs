@@ -33,7 +33,7 @@ macro_rules! declare {
 #[macro_export]
 macro_rules! then {
     {$name:ident $a:tt |$s:ident| $b:block } => {
-        fn $name() -> Option<$crate::contract::actions::ThenFunc<'a, Self>> { Some($crate::contract::actions::ThenFunc(&$a, |$s: &Self| $b)) }
+        fn $name() -> Option<$crate::contract::actions::ThenFunc<'a, Self>> { Some($crate::contract::actions::ThenFunc{guard: &$a, func:|$s: &Self| $b})}
     };
     {$name:ident |$s:ident| $b:block } => { then!{$name [] |$s| $b } };
 
@@ -47,7 +47,7 @@ macro_rules! then {
 macro_rules! finish {
     {$name:ident $a:tt |$s:ident, $o:ident| $b:block } => {
         fn $name() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, Args>>{
-            Some($crate::contract::actions::FinishOrFuncNew(&$a, |$s: &Self, $o: Option<&_>| $b) .into())
+            Some($crate::contract::actions::FinishOrFuncNew{guard: &$a, func: |$s: &Self, $o: Option<&_>| $b} .into())
         }
     };
     {$name:ident $a:tt} => {

@@ -102,7 +102,7 @@ where
             .then_fns()
             .iter()
             .filter_map(|x| x())
-            .map(|x| (UsesCTV::Yes, x.0, x.1(self_ref)));
+            .map(|x| (UsesCTV::Yes, x.guard, (x.func)(self_ref)));
         let finish_or_fns = self.finish_or_fns().iter().filter_map(|x| x()).map(|x| {
             (
                 UsesCTV::No,
