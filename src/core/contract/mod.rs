@@ -152,6 +152,23 @@ where
     declare! {finish}
 }
 
+struct DynamicContract<'a, T, S> {
+    then: Vec<fn() -> Option<actions::ThenFunc<'a, S>>>,
+    finish_or: Vec<fn() -> Option<actions::FinishOrFunc<'a, S, T>>>,
+    finish: Vec<fn() -> Option<actions::Guard<S>>>,
+    data: S,
+}
+
+impl<'a, T, S> From<&'a DynamicContract<'a, T, S>> for DynamicContractRef<'a, T, S> {
+    fn from(d: &'a DynamicContract<'a, T, S>) -> Self {
+        DynamicContractRef {
+            then: &d.then[..],
+            finish_or: &d.finish_or[..],
+            finish: &d.finish[..],
+            data: &d.data,
+        }
+    }
+}
 struct DynamicContractRef<'a, T, S> {
     then: &'a [fn() -> Option<actions::ThenFunc<'a, S>>],
     finish_or: &'a [fn() -> Option<actions::FinishOrFunc<'a, S, T>>],
