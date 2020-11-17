@@ -66,6 +66,10 @@ impl TemplateBuilder {
         self.sequences.push(s);
         self
     }
+    pub fn set_sequence(mut self, i:usize, s: u32) -> Self {
+        self.sequences[i] = s;
+        self
+    }
     /// TODO: Logic to validate that changes are not breaking
     pub fn set_lock_time(mut self, lt: u32) -> Self {
         self.lock_time = lt;

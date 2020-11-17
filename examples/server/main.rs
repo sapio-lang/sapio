@@ -63,6 +63,11 @@ lazy_static::lazy_static! {
         m.register_as::<contracts::ExampleB<contracts::Start>>("ExampleB".to_string().into());
         m.register_as::<contracts::treepay::TreePay>("TreePay".to_string().into());
         m.register_as::<contracts::hodl_chicken::HodlChickenInner>("HodlChicken".to_string().into());
+        // Readme Contracts
+        m.register_as::<contracts::readme_contracts::PayToPublicKey>("P2PK".to_string().into());
+        m.register_as::<contracts::readme_contracts::BasicEscrow>("BasicEscrow".to_string().into());
+        m.register_as::<contracts::readme_contracts::BasicEscrow2>("BasicEscrow2".to_string().into());
+        m.register_as::<contracts::readme_contracts::TrustlessEscrow>("TrustlessEscrow".to_string().into());
         m.into()
     };
 }

@@ -25,7 +25,7 @@ multi-transaction and multi-party use cases.
 
 Sapio in particular focuses on transactions using BIP-119
 `OP_CHECKTEMPLATEVERIFY`. `OP_CHECKTEMPLATEVERIFY` enables Bitcoin Script to support
-complex multi-step smart contracts without a trusted setup. 
+complex multi-step smart contracts without a trusted setup.
 
 Sapio is a tool for defining such smart contracts in an easy way and exporting
 easy to integrate APIs for managing open contracts. With Sapio you can turn what
@@ -41,55 +41,131 @@ for Bitcoin with OP_CTV](https://www.youtube.com/watch?v=4vDuttlImPc) and
 [slides](https://docs.google.com/presentation/d/1X4AGNXJ5yCeHRrf5sa9DarWfDyEkm6fFUlrcIRQtUw4).
 
 ### Show Me The Money! Sapio Crash Course:
+
+#### Installation QuickStart
+
+Clone the project:
+
+```bash
+git clone https://github.com/sapio-lang/sapio
+```
+
+Install Rust (https://www.rust-lang.org/learn/get-started):
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+Now you can run:
+
+```bash
+cargo run --example server  --features ws
+```
+
+This starts a websocket server that can compile and run Sapio contracts! You can connect the server
+to [tux](https://github.com/sapio-lang/tux) to run an interactive session.
+
+#### Learning Sapio
+
+
 Let's look at some example Sapio contracts (see
-[sapio_zoo/](https://github.com/JeremyRubin/sapio/tree/master/sapio_zoo/sapio_zoo) for more
+[the example contracts](https://github.com/JeremyRubin/sapio/tree/master/examples/server/contracts/) for more
 examples).
+
+All contracts have 3 basic parts: a struct definition, some set of methods, and a Contract trait
+impl.
+
+```rust
+/// deriving these on Something let it interface with external
+/// interfaces easily
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct Something {
+    /* omitted */
+}
+
+/// Something's methods. Note 'a required for macros
+impl<'a> Something {
+    /* omitted */
+}
+
+/// Something's Contract trait binding
+impl<'a> Contract<'a> for Something {
+    /// [Optional] declares the unlocking conditions
+    declare! {finish, /*omitted*/}
+    /// [Optional] declares the CTV next steps
+    declare! {then, /*omitted*/}
+    /// [Optional] declares the updatable next steps and ArgType
+    declare! {updatable<ArgType>, /*omitted*/}
+    /// note:
+    /// If no updatable, this is explicitly required if not using a nightly
+    /// compiler.
+    declare! {non updatable}
+}
+```
+
+Let's look at some examples:
 
 
 A Basic Pay to Public Key contract can be generated as follows:
 
-```python
-@contract
-class PayToPublicKey:
-    key: PubKey
+```rust
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct PayToPublicKey {
+    key: bitcoin::PublicKey
+}
 
+impl<'a> PayToPublicKey {
+    /// a guard is a definition of a unlocking condition
+    guard!(with_key |s| {Clause::Key(s.key)});
+}
 
-@PayToPublicKey.finish
-def with_key(self):
-    return SignedBy(self.key)
+impl<'a> Contract<'a> for PayToPublicKey {
+    /// the unlocking condition must be declared as a finish to be active
+    declare! {finish, Self::with_key}
+    declare! {non updatable}
+}
 ```
 
 Now let's look at an Escrow Contract. Here either Alice and Escrow, Bob and
-Escrow, or Alice and Bob can spend the funds. Note that we use logic notation
-where (|) is OR and (&) is and. These can also be written as `Or(a,b)` and
-`And(a,b)`.
+Escrow, or Alice and Bob can spend the funds. Clauses are defined via (a patched
+version of) [rust-miniscript](https://github.com/rust-bitcoin/rust-miniscript/).
 
-```python
-@contract
-class BasicEscrow:
-    alice: PubKey
-    bob: PubKey
-    escrow: PubKey
+```rust
+impl<'a> BasicEscrow {
+    guard!(redeem |s| {
+            Clause::Threshold(1, vec![
+                Clause::Threshold(2, vec![Clause::Key(s.alice), Clause::Key(s.bob)]),
+                Clause::And(vec![Clause::Key(s.escrow), Clause::Threshold(1, vec![Clause::Key(s.alice), Clause::Key(s.bob)])])
+            ])
+        }
+    );
+}
 
-
-@BasicEscrow.finish
-def redeem(self):
-    return SignedBy(self.escrow) & (SignedBy(self.alice) | SignedBy(self.bob)) | (
-        SignedBy(self.alice) & SignedBy(self.bob)
-    )
+impl<'a> Contract<'a> for BasicEscrow {
+    declare! {finish, Self::redeem}
+    declare! {non updatable}
+}
 ```
 
 We can also write this a bit more clearly as:
 
-```python
-@BasicEscrow2.finish
-def use_escrow(self):
-    return SignedBy(self.escrow) & (SignedBy(self.alice) | SignedBy(self.bob))
+```rust
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct BasicEscrow2 {
+    alice: bitcoin::PublicKey,
+    bob: bitcoin::PublicKey,
+    escrow: bitcoin::PublicKey
+}
 
+impl<'a> BasicEscrow2 {
+    guard!(use_escrow |s| {Clause::And(vec![Clause::Key(s.escrow), Clause::Threshold(2, vec![Clause::Key(s.alice), Clause::Key(s.bob)])]) });
+    guard!(cooperate |s| {Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)])});
+}
 
-@BasicEscrow2.finish
-def cooperate_(self):
-    return SignedBy(self.alice) & SignedBy(self.bob)
+impl<'a> Contract<'a> for BasicEscrow2 {
+    declare! {finish, Self::use_escrow, Self::cooperate}
+    declare! {non updatable}
+}
 ```
 
 Until this point, we haven't made use of any of the `CheckTemplateVerify`
@@ -99,31 +175,48 @@ But Sapio lets us go further. What if we wanted to protect from Alice and the
 escrow or Bob and the escrow from cheating?
 
 
-```python
-@contract
-class TrustlessEscrow:
-    alice: PubKey
-    bob: PubKey
-    alice_escrow: Tuple[Amount, Contract]
-    bob_escrow: Tuple[Amount, Contract]
+```rust
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct TrustlessEscrow {
+    alice: bitcoin::PublicKey,
+    bob: bitcoin::PublicKey,
+    alice_escrow: (CoinAmount, bitcoin::Address),
+    bob_escrow: (CoinAmount, bitcoin::Address)
+}
 
+impl<'a> TrustlessEscrow {
+    guard!(cooperate |s| {Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)])});
+    /// then! macro defines a function to create a list of transactions options
+    /// to be required.
+    /// The iterator is boxed to permit arbitrary inner types.
+    then! {use_escrow |s| {
+        let o1 = txn::Output::new(
+            s.alice_escrow.0,
+            Compiled::from_address(s.alice_escrow.1.clone(), None),
+            None,
+        )?;
+        let o2 = txn::Output::new(
+            s.bob_escrow.0,
+            Compiled::from_address(s.bob_escrow.1.clone(), None),
+            None,
+        )?;
+        let mut tb = txn::TemplateBuilder::new().add_output(o1).add_output(o2).set_sequence(0, 1700 /*roughly 10 days*/);
+        Ok(Box::new(std::iter::once(
+            tb.into(),
+        )))
+    }}
+}
 
-@TrustlessEscrow.then
-def use_escrow_(self) -> TransactionTemplate:
-    tx = TransactionTemplate()
-    tx.add_output(*self.alice_escrow)
-    tx.add_output(*self.bob_escrow)
-    tx.set_sequence(Days(10))
-    return tx
-
-
-@TrustlessEscrow.finish
-def cooperate(self):
-    return SignedBy(self.alice) & SignedBy(self.bob)
+impl<'a> Contract<'a> for TrustlessEscrow {
+    declare! {finish, Self::cooperate}
+    /// we must declare in order for it to be active
+    declare! {then, Self::use_escrow}
+    declare! {non updatable}
+}
 ```
 
 
-Now with `TrustlessEscrow`, we've done a few things differently. A `@<T>.then`
+Now with `TrustlessEscrow`, we've done a few things differently. A `then!`
 designator tells the contract compiler to add a branch which *must* create the
 returned transaction if that branch is taken. We've also passed in a
 sub-contract for both Alice and Bob to allow us to specify at a higher layer
@@ -131,121 +224,20 @@ what kind of pay out they receive. Lastly, we used a call to `set_sequence` to
 specify that we should have to wait 10 days before using the escrow (we could
 pass this as a parameter if we wanted though).
 
-Thus we could construct an instance of this contract as follows:
-
-```python
-key_alice = random_k()
-key_bob = random_k()
-t = TrustlessEscrow.create(alice=key_alice,
-                    bob=key_bob,
-                    alice_escrow=(Bitcoin(1), PayToPublicKey.create(key=key_alice)),
-                    bob_escrow=(Sats(10000), PayToPublicKey.create(key=key_bob)))
-```
-
-The power of Sapio becomes apparent when you look at the composability of the
-framework. We can also put an escrow inside an escrow:
-
-
-```python
-t = TrustlessEscrow.create(
-    alice=key_alice,
-    bob=key_bob,
-    alice_escrow=(Bitcoin(1), PayToPublicKey.create(key=key_alice)),
-    bob_escrow=(Sats(10000), PayToPublicKey.create(key=key_bob)),
-)
-
-t1 = TrustlessEscrow.create(
-    alice=key_alice,
-    bob=key_bob,
-    alice_escrow=(Bitcoin(1), PayToPublicKey.create(key=key_alice)),
-    bob_escrow=(Sats(10000), PayToPublicKey.create(key=key_bob)),
-)
-t2 = TrustlessEscrow.create(
-    alice=key_alice,
-    bob=key_bob,
-    alice_escrow=(Bitcoin(1), PayToPublicKey.create(key=key_alice)),
-    bob_escrow=(Sats(10000) + Bitcoin(1), t1),
-)
-
-# t3 throws an error because we would lose value
-try:
-    t3 = TrustlessEscrow.create(
-        alice=key_alice,
-        bob=key_bob,
-        alice_escrow=(Bitcoin(1), PayToPublicKey.create(key=key_alice)),
-        bob_escrow=(Sats(10000), t1),
-    )
-except ValueError:
-    pass
-```
-
 Sapio will look to make sure that all paths of our contract are sufficiently
 funded, only losing an amount for fees (user configurable).
 
 
-If you wanted to fund this contract from an exchange, all you need to do is request a withdrawal of the form:
 
-```python
->>> print(t2.amount_range[1]/100e6, t2.witness_manager.get_p2wsh_address())
-2.0001 bcrt1qh4ddpny622fcjf5m02nmdare7wgsuys5sau3jh5tdhm2kzwg9rzqw2sk00
+## Helpful Hints
+
+### Debugging Macros
+
+First, you need to be on the nightly compiler via `rustup default nightly`.
+
+Then, you can run (for example):
+```bash
+cargo rustc --example=server --features="ws" -- -Zunstable-options --pretty=expanded
 ```
 
-
-# Getting Started With Sapio
-
-Clone the project:
-
-```
-git clone https://github.com/sapio-lang/sapio
-cd sapio/
-git submodule update --init
-```
-
-Install Rust (https://www.rust-lang.org/learn/get-started):
-
-```
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-Install Python 3.8 and create a separate Python virtual environment:
-
-```
-pyenv update
-pyenv install 3.8.3
-echo 3.8.3 > .python-version
-python3 --version
-# Python 3.8.3
-pyenv virtualenv sapio
-pyenv activate sapio
-```
-
-Install the Sapio Python modules:
-
-```
-for MODULE in sapio_bitcoinlib bitcoin_script_compiler sapio_compiler sapio_stdlib sapio_zoo sapio_server rust_miniscript; do
-    echo "Building ${MODULE}"
-    cd $MODULE && make && python3 setup.py build && python3 setup.py install && cd ..
-    echo
-done
-```
-
-Run the unit tests:
-
-```
-make test
-```
-
-#### TODO
-
-#####  Managing Smart Contracts
-
-The wallet manager can be configured to save and watch a contract you create.
-
-```
-with Wallet() as w:
-    w.watch(t2)
-```
-
-The wallet will automatically watch for payments to
-`bcrt1qh4ddpny622fcjf5m02nmdare7wgsuys5sau3jh5tdhm2kzwg9rzqw2sk00` and bind an
-instance of the contract to the output.
+Which will expand all of the macros in the example "server".

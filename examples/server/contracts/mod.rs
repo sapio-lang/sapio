@@ -7,6 +7,7 @@ use schemars::*;
 use serde::*;
 pub mod hodl_chicken;
 pub mod treepay;
+pub mod readme_contracts;
 
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct ExampleA {
