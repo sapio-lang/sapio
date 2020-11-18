@@ -11,9 +11,10 @@ use std::marker::PhantomData;
 use std::convert::TryFrom;
 
 
-#[derive(JsonSchema, Deserialize)]
+#[derive(JsonSchema)]
 pub struct Vault {
-    cold_storage: bitcoin::Address,
+    #[serde(skip)]
+    cold_storage: Rc<dyn Fn(CoinAmount) -> Compiled>,
     hot_storage: bitcoin::Address,
     n_steps: u64,
     amount_step: CoinAmount,
@@ -21,12 +22,14 @@ pub struct Vault {
     mature: u32,
 }
 
+
+
 impl<'a> Vault {
     then! {step |s| {
         let mut builder = txn::TemplateBuilder::new()
         .add_output(txn::Output::new(s.amount_step.into(),
                 UndoSendInternal {
-                    from_contract: Compiled::from_address(s.cold_storage.clone(), None),
+                    from_contract: (s.cold_storage)(s.amount_step),
                     to_contract: Compiled::from_address(s.hot_storage.clone(), None),
                     timeout: s.mature,
                     amount: s.amount_step.into(),
@@ -54,7 +57,7 @@ impl<'a> Vault {
     then!{to_cold |s| {
         let amount = bitcoin::Amount::try_from(s.amount_step).map_err(|e| contract::CompilationError::TerminateCompilation)?.checked_mul(s.n_steps).ok_or(contract::CompilationError::TerminateCompilation)?;
         let mut builder = txn::TemplateBuilder::new()
-            .add_output(txn::Output::new(amount.into(), Compiled::from_address(s.cold_storage.clone(), None), None)?);
+            .add_output(txn::Output::new(amount.into(), (s.cold_storage)(amount.into()), None)?);
         Ok(Box::new(std::iter::once(builder.into())))
 
     }}
@@ -65,3 +68,29 @@ impl<'a> Contract<'a> for Vault {
     declare! {non updatable}
 }
 
+
+#[derive(JsonSchema, Deserialize)]
+pub struct VaultAddress {
+    cold_storage: bitcoin::Address,
+    hot_storage: bitcoin::Address,
+    n_steps: u64,
+    amount_step: CoinAmount,
+    timeout: u32,
+    mature: u32,
+}
+
+impl From<VaultAddress> for Vault {
+    fn from(v:VaultAddress) -> Self {
+        Vault {
+            cold_storage: Rc::new({
+                let cs = v.cold_storage.clone();
+                move |a| Compiled::from_address(cs.clone(), None)
+            }),
+            hot_storage: v.hot_storage,
+            n_steps: v.n_steps,
+            amount_step: v.amount_step,
+            timeout: v.timeout,
+            mature: v.mature,
+        }
+    }
+}
