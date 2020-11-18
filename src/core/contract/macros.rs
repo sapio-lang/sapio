@@ -92,6 +92,11 @@ macro_rules! finish {
 /// ```
 #[macro_export]
 macro_rules! guard {
+    {$name:ident} => {
+            fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
+                None
+            }
+     };
     {$name:ident |$s:ident| $b:block} => {
             fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
                 Some($crate::contract::actions::Guard::Fresh( |$s: &Self| $b))
