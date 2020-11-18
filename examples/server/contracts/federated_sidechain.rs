@@ -8,39 +8,44 @@ use serde::*;
 use std::marker::PhantomData;
 
 #[derive(JsonSchema, Deserialize, Default)]
-pub struct Start;
+pub struct CanBeginRecovery;
 #[derive(JsonSchema, Deserialize, Default)]
-pub struct Stop;
+pub struct CanFinishRecovery;
 
-pub trait State {}
+pub trait RecoveryState {}
 
-impl State for Stop{}
-impl State for Start{}
+impl RecoveryState for CanFinishRecovery {}
+impl RecoveryState for CanBeginRecovery {}
 
 #[derive(JsonSchema, Deserialize)]
-pub struct FederatedPegIn<T:State> {
+pub struct FederatedPegIn<T: RecoveryState> {
     keys: Vec<bitcoin::PublicKey>,
-    thresh_all: usize,
-    keys_backup: Vec<bitcoin::PublicKey>,
-    thresh_backup: usize,
+    thresh_normal: usize,
+    keys_recovery: Vec<bitcoin::PublicKey>,
+    thresh_recovery: usize,
     amount: CoinAmount,
     #[serde(skip)]
-    _pd: PhantomData<T>
+    _pd: PhantomData<T>,
 }
 
-trait CloseableLo<'a> where Self : Sized {
-    guard! {finish_backup}
-    then! {begin_backup}
+trait StateDependentActions<'a>
+where
+    Self: Sized,
+{
+    /* Should only be defined when RecoveryState is in CanFinishRecovery */
+    guard! {finish_recovery}
+    /* Should only be defined when RecoveryState is in CanBeginRecovery */
+    then! {begin_recovery}
 }
-impl<'a> CloseableLo<'a> for FederatedPegIn<Start> {
-    then! {begin_backup [Self::lo_signed] |s| {
+impl<'a> StateDependentActions<'a> for FederatedPegIn<CanBeginRecovery> {
+    then! {begin_recovery [Self::recovery_signed] |s| {
         let mut builder = txn::TemplateBuilder::new().add_output(txn::Output::new(
             s.amount,
-            FederatedPegIn::<Stop> {
+            FederatedPegIn::<CanFinishRecovery> {
                 keys: s.keys.clone(),
-                thresh_all: s.thresh_all,
-                keys_backup: s.keys_backup.clone(),
-                thresh_backup: s.thresh_backup,
+                thresh_normal: s.thresh_normal,
+                keys_recovery: s.keys_recovery.clone(),
+                thresh_recovery: s.thresh_recovery,
                 amount: s.amount,
                 _pd: PhantomData::default()
             },
@@ -49,29 +54,30 @@ impl<'a> CloseableLo<'a> for FederatedPegIn<Start> {
         Ok(Box::new(std::iter::once(builder.into())))
     }}
 }
-impl<'a> CloseableLo<'a> for FederatedPegIn<Stop> {
-    guard!{finish_backup |s| {
-        Clause::And(vec![Clause::Older(4725 /* 4 weeks? */), Clause::Threshold(s.thresh_backup, s.keys_backup.iter().cloned().map(Clause::Key).collect())])
+impl<'a> StateDependentActions<'a> for FederatedPegIn<CanFinishRecovery> {
+    guard! {finish_recovery |s| {
+        Clause::And(vec![Clause::Older(4725 /* 4 weeks? */), Clause::Threshold(s.thresh_recovery, s.keys_recovery.iter().cloned().map(Clause::Key).collect())])
     }}
 }
 
 use std::convert::TryInto;
-impl<'a, T: State> FederatedPegIn<T> {
-    guard!{lo_signed |s| {
-        Clause::Threshold(s.thresh_backup, s.keys_backup.iter().cloned().map(Clause::Key).collect())
+impl<'a, T: RecoveryState> FederatedPegIn<T> {
+    guard! {recovery_signed |s| {
+        Clause::Threshold(s.thresh_recovery, s.keys_recovery.iter().cloned().map(Clause::Key).collect())
     }}
 
-    guard!{hi_signed |s| {
-        Clause::Threshold(s.thresh_all, s.keys.iter().cloned().map(Clause::Key).collect())
+    guard! {normal_signed |s| {
+        Clause::Threshold(s.thresh_normal, s.keys.iter().cloned().map(Clause::Key).collect())
     }}
 }
 
-impl<'a, T:State + 'a> Contract<'a> for FederatedPegIn<T>
-where FederatedPegIn<T> : CloseableLo<'a> {
-    declare! {then, Self::begin_backup}
-    declare! {finish, Self::hi_signed, Self::finish_backup}
+impl<'a, T: RecoveryState + 'a> Contract<'a> for FederatedPegIn<T>
+where
+    FederatedPegIn<T>: StateDependentActions<'a>,
+{
+    declare! {then, Self::begin_recovery}
+    declare! {finish, Self::normal_signed, Self::finish_recovery}
     declare! {non updatable}
 }
 
-
-pub type PegIn = FederatedPegIn<Start>;
+pub type PegIn = FederatedPegIn<CanBeginRecovery>;
