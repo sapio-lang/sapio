@@ -6,16 +6,16 @@ use sapio::*;
 use schemars::*;
 use serde::*;
 #[derive(JsonSchema, Serialize, Deserialize, Clone)]
-struct Payment {
-    amount: bitcoin::util::amount::CoinAmount,
+pub struct Payment {
+    pub amount: bitcoin::util::amount::CoinAmount,
     /// # Address
     /// The Address to send to
-    address: bitcoin::Address,
+    pub address: bitcoin::Address,
 }
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct TreePay {
-    participants: Vec<Payment>,
-    radix: usize,
+    pub participants: Vec<Payment>,
+    pub radix: usize,
 }
 
 use std::convert::TryInto;
