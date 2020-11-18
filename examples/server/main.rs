@@ -71,6 +71,8 @@ lazy_static::lazy_static! {
 
         m.register_as_from::<contracts::vault::VaultAddress, contracts::vault::Vault, _>("Vault->Address".to_string().into());
         m.register_as_from::<contracts::vault::VaultTree, contracts::vault::Vault, _>("Vault->TreePay".to_string().into());
+
+        m.register_as::<contracts::federated_sidechain::PegIn>("FederatedPegIn".to_string().into());
         m.into()
     };
 }

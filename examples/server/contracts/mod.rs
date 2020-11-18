@@ -10,6 +10,7 @@ pub mod readme_contracts;
 pub mod treepay;
 pub mod undo_send;
 pub mod vault;
+pub mod federated_sidechain;
 
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct ExampleA {
