@@ -56,6 +56,8 @@ where
     declare! {finish}
 }
 
+/// DynamicContract wraps a struct S with a set of methods (that can be constructed dynamically)
+/// to form a contract. DynamicContract owns all its methods.
 struct DynamicContract<'a, T, S> {
     then: Vec<fn() -> Option<actions::ThenFunc<'a, S>>>,
     finish_or: Vec<fn() -> Option<actions::FinishOrFunc<'a, S, T>>>,
@@ -63,6 +65,7 @@ struct DynamicContract<'a, T, S> {
     data: S,
 }
 
+/// Coerce DynamicContract into a DynamicContractRef, which does not own its methods.
 impl<'a, T, S> From<&'a DynamicContract<'a, T, S>> for DynamicContractRef<'a, T, S> {
     fn from(d: &'a DynamicContract<'a, T, S>) -> Self {
         DynamicContractRef {
@@ -92,6 +95,7 @@ impl<'a, T, S> AnyContract<'a> for DynamicContract<'a, T, S> {
         &self.data
     }
 }
+/// Like DynamicContract, but without owning the methods slice or underlying data.
 struct DynamicContractRef<'a, T, S> {
     then: &'a [fn() -> Option<actions::ThenFunc<'a, S>>],
     finish_or: &'a [fn() -> Option<actions::FinishOrFunc<'a, S, T>>],
@@ -117,6 +121,10 @@ impl<'a, T, S> AnyContract<'a> for DynamicContractRef<'a, T, S> {
     }
 }
 
+/// AnyContract is a generic API for types which can be compiled, encapsulating default static
+/// Contracts as well as DynamicContracts/DynamicContractRefs.
+///
+/// This assists in abstracting the layout/internals away from something that can be compiled.
 pub trait AnyContract<'a>
 where
     Self: Sized + 'a,

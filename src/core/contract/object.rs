@@ -40,6 +40,8 @@ impl Object {
         }
     }
 
+    /// Creates an object from a given address. The optional AmountRange argument determines the
+    /// safe bounds the contract can receive, otherwise it is set to any.
     pub fn from_address(address: bitcoin::Address, a: Option<AmountRange>) -> Object {
         Object {
             ctv_to_tx: HashMap::new(),
@@ -56,6 +58,8 @@ impl Object {
         }
     }
 
+    /// bind attaches an Object to a specific UTXO and returns a vec of transactions and
+    /// transaction metadata.
     pub fn bind(
         &self,
         out_in: bitcoin::OutPoint,

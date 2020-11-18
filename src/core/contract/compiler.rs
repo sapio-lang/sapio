@@ -15,6 +15,8 @@ enum CacheEntry<T> {
     Fresh(fn(&T) -> Clause),
 }
 
+/// GuardCache assists with caching the computation of guard functions
+/// during compilation.
 struct GuardCache<T> {
     cache: HashMap<usize, CacheEntry<T>>,
 }
