@@ -16,13 +16,13 @@ pub enum SessionError {
 }
 
 impl From<std::convert::Infallible> for SessionError {
-    fn from(v:std::convert::Infallible) -> Self {
+    fn from(v: std::convert::Infallible) -> Self {
         panic!("Inhabited Never")
     }
 }
 
 impl From<CompilationError> for SessionError {
-    fn from(v:CompilationError) -> Self {
+    fn from(v: CompilationError) -> Self {
         SessionError::Compiler(v)
     }
 }
@@ -39,11 +39,14 @@ where
 pub fn from_json_convert<C, T, E>(s: serde_json::Value) -> Result<Compiled, SessionError>
 where
     C: for<'a> Deserialize<'a>,
-    T: TryFrom<C, Error=E> + Compilable,
-    SessionError: From<E>
+    T: TryFrom<C, Error = E> + Compilable,
+    SessionError: From<E>,
 {
     let t: C = serde_json::from_value(s).map_err(SessionError::Json)?;
-    let c = T::try_from(t).map_err(SessionError::from)?.compile().map_err(SessionError::Compiler);
+    let c = T::try_from(t)
+        .map_err(SessionError::from)?
+        .compile()
+        .map_err(SessionError::Compiler);
     c
 }
 
@@ -150,11 +153,15 @@ impl MenuBuilder {
         self.menu.push(s);
     }
 
-    pub fn register_as_from<C: JsonSchema + for<'a> Deserialize<'a>, T: Compilable + TryFrom<C, Error=E>, E>(
+    pub fn register_as_from<
+        C: JsonSchema + for<'a> Deserialize<'a>,
+        T: Compilable + TryFrom<C, Error = E>,
+        E,
+    >(
         &mut self,
         name: Option<String>,
-    )
-    where SessionError: From<E>
+    ) where
+        SessionError: From<E>,
     {
         let mut s = self.gen.root_schema_for::<C>();
         let title: &mut Option<String> = &mut s.schema.metadata().title;
@@ -162,8 +169,7 @@ impl MenuBuilder {
             *title = name;
         }
         self.internal_menu
-            .insert(title.clone().unwrap(), from_json_convert::<C, T, E>
-            );
+            .insert(title.clone().unwrap(), from_json_convert::<C, T, E>);
         self.menu.push(s);
     }
     fn gen_menu(&self) -> Value {

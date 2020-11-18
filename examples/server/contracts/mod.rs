@@ -6,8 +6,8 @@ use sapio::*;
 use schemars::*;
 use serde::*;
 pub mod hodl_chicken;
-pub mod treepay;
 pub mod readme_contracts;
+pub mod treepay;
 pub mod undo_send;
 pub mod vault;
 

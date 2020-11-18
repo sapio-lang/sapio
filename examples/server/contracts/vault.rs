@@ -1,3 +1,4 @@
+use super::undo_send::UndoSendInternal;
 use bitcoin::util::amount::CoinAmount;
 use sapio::clause::Clause;
 use sapio::contract::macros::*;
@@ -5,11 +6,9 @@ use sapio::contract::*;
 use sapio::*;
 use schemars::*;
 use serde::*;
-use super::undo_send::UndoSendInternal;
-use std::rc::Rc;
-use std::marker::PhantomData;
 use std::convert::TryFrom;
-
+use std::marker::PhantomData;
+use std::rc::Rc;
 
 pub struct Vault {
     cold_storage: Rc<dyn Fn(CoinAmount) -> Result<Compiled, CompilationError>>,
@@ -19,8 +18,6 @@ pub struct Vault {
     timeout: u32,
     mature: u32,
 }
-
-
 
 impl<'a> Vault {
     then! {step |s| {
@@ -52,7 +49,7 @@ impl<'a> Vault {
         )))
 
     }}
-    then!{to_cold |s| {
+    then! {to_cold |s| {
         let amount = bitcoin::Amount::try_from(s.amount_step).map_err(|e| contract::CompilationError::TerminateCompilation)?.checked_mul(s.n_steps).ok_or(contract::CompilationError::TerminateCompilation)?;
         let mut builder = txn::TemplateBuilder::new()
             .add_output(txn::Output::new(amount.into(), (s.cold_storage)(amount.into())?, None)?);
@@ -66,7 +63,6 @@ impl<'a> Contract<'a> for Vault {
     declare! {non updatable}
 }
 
-
 #[derive(JsonSchema, Deserialize)]
 pub struct VaultAddress {
     cold_storage: bitcoin::Address,
@@ -78,7 +74,7 @@ pub struct VaultAddress {
 }
 
 impl From<VaultAddress> for Vault {
-    fn from(v:VaultAddress) -> Self {
+    fn from(v: VaultAddress) -> Self {
         Vault {
             cold_storage: Rc::new({
                 let cs = v.cold_storage.clone();
@@ -107,23 +103,35 @@ pub struct VaultTree {
 
 impl TryFrom<VaultTree> for Vault {
     type Error = CompilationError;
-    fn try_from(v:VaultTree) -> Result<Self, CompilationError> {
+    fn try_from(v: VaultTree) -> Result<Self, CompilationError> {
         Ok(Vault {
             cold_storage: Rc::new({
                 let cs = v.cold_storage.clone();
-                let max : bitcoin::Amount = bitcoin::Amount::try_from(v.max_per_address).map_err(|_| CompilationError::TerminateCompilation)?;
+                let max: bitcoin::Amount = bitcoin::Amount::try_from(v.max_per_address)
+                    .map_err(|_| CompilationError::TerminateCompilation)?;
                 let rad = v.radix;
                 move |a| {
-                    let mut amt : bitcoin::Amount = bitcoin::Amount::try_from(a).map_err(|_| CompilationError::TerminateCompilation)?;
+                    let mut amt: bitcoin::Amount = bitcoin::Amount::try_from(a)
+                        .map_err(|_| CompilationError::TerminateCompilation)?;
                     let mut pmts = vec![];
                     while amt > max {
-                        pmts.push(super::treepay::Payment{amount: max.into(), address: cs.clone()});
+                        pmts.push(super::treepay::Payment {
+                            amount: max.into(),
+                            address: cs.clone(),
+                        });
                         amt -= max;
                     }
                     if amt > bitcoin::Amount::from_sat(0) {
-                        pmts.push(super::treepay::Payment{amount: max.into(), address: cs.clone()});
+                        pmts.push(super::treepay::Payment {
+                            amount: max.into(),
+                            address: cs.clone(),
+                        });
                     }
-                    super::treepay::TreePay {participants: pmts, radix:rad}.compile()
+                    super::treepay::TreePay {
+                        participants: pmts,
+                        radix: rad,
+                    }
+                    .compile()
                 }
             }),
             hot_storage: v.hot_storage,

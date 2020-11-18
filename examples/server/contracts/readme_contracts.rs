@@ -6,15 +6,14 @@ use sapio::*;
 use schemars::*;
 use serde::*;
 
-
 /// Pay To Public Key Sapio Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct PayToPublicKey {
-    key: bitcoin::PublicKey
+    key: bitcoin::PublicKey,
 }
 
 impl<'a> PayToPublicKey {
-    guard!(with_key |s| {Clause::Key(s.key)});
+    guard!(with_key | s | { Clause::Key(s.key) });
 }
 
 impl<'a> Contract<'a> for PayToPublicKey {
@@ -22,21 +21,27 @@ impl<'a> Contract<'a> for PayToPublicKey {
     declare! {non updatable}
 }
 
-
 /// Basic Escrowing Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct BasicEscrow {
     alice: bitcoin::PublicKey,
     bob: bitcoin::PublicKey,
-    escrow: bitcoin::PublicKey
+    escrow: bitcoin::PublicKey,
 }
 
 impl<'a> BasicEscrow {
-    guard!(redeem |s| {
-            Clause::Threshold(1, vec![
-                Clause::Threshold(2, vec![Clause::Key(s.alice), Clause::Key(s.bob)]),
-                Clause::And(vec![Clause::Key(s.escrow), Clause::Threshold(1, vec![Clause::Key(s.alice), Clause::Key(s.bob)])])
-            ])
+    guard!(
+        redeem | s | {
+            Clause::Threshold(
+                1,
+                vec![
+                    Clause::Threshold(2, vec![Clause::Key(s.alice), Clause::Key(s.bob)]),
+                    Clause::And(vec![
+                        Clause::Key(s.escrow),
+                        Clause::Threshold(1, vec![Clause::Key(s.alice), Clause::Key(s.bob)]),
+                    ]),
+                ],
+            )
         }
     );
 }
@@ -51,12 +56,19 @@ impl<'a> Contract<'a> for BasicEscrow {
 pub struct BasicEscrow2 {
     alice: bitcoin::PublicKey,
     bob: bitcoin::PublicKey,
-    escrow: bitcoin::PublicKey
+    escrow: bitcoin::PublicKey,
 }
 
 impl<'a> BasicEscrow2 {
-    guard!(use_escrow |s| {Clause::And(vec![Clause::Key(s.escrow), Clause::Threshold(2, vec![Clause::Key(s.alice), Clause::Key(s.bob)])]) });
-    guard!(cooperate |s| {Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)])});
+    guard!(
+        use_escrow | s | {
+            Clause::And(vec![
+                Clause::Key(s.escrow),
+                Clause::Threshold(2, vec![Clause::Key(s.alice), Clause::Key(s.bob)]),
+            ])
+        }
+    );
+    guard!(cooperate | s | { Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)]) });
 }
 
 impl<'a> Contract<'a> for BasicEscrow2 {
@@ -64,18 +76,17 @@ impl<'a> Contract<'a> for BasicEscrow2 {
     declare! {non updatable}
 }
 
-
 /// Trustless Escrowing Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct TrustlessEscrow {
     alice: bitcoin::PublicKey,
     bob: bitcoin::PublicKey,
     alice_escrow: (CoinAmount, bitcoin::Address),
-    bob_escrow: (CoinAmount, bitcoin::Address)
+    bob_escrow: (CoinAmount, bitcoin::Address),
 }
 
 impl<'a> TrustlessEscrow {
-    guard!(cooperate |s| {Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)])});
+    guard!(cooperate | s | { Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)]) });
     then! {use_escrow |s| {
         let o1 = txn::Output::new(
             s.alice_escrow.0,
@@ -99,4 +110,3 @@ impl<'a> Contract<'a> for TrustlessEscrow {
     declare! {then, Self::use_escrow}
     declare! {non updatable}
 }
-

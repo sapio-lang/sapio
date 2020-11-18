@@ -66,7 +66,7 @@ impl TemplateBuilder {
         self.sequences.push(s);
         self
     }
-    pub fn set_sequence(mut self, i:usize, s: u32) -> Self {
+    pub fn set_sequence(mut self, i: usize, s: u32) -> Self {
         self.sequences[i] = s;
         self
     }
