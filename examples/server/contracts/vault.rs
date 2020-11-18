@@ -11,9 +11,7 @@ use std::marker::PhantomData;
 use std::convert::TryFrom;
 
 
-#[derive(JsonSchema)]
 pub struct Vault {
-    #[serde(skip)]
     cold_storage: Rc<dyn Fn(CoinAmount) -> Compiled>,
     hot_storage: bitcoin::Address,
     n_steps: u64,
