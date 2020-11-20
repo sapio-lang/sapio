@@ -28,7 +28,7 @@ pub struct FederatedPegIn<T: RecoveryState> {
     _pd: PhantomData<T>,
 }
 
-trait StateDependentActions<'a>
+trait StateDependentActions
 where
     Self: Sized,
 {
@@ -37,7 +37,7 @@ where
     /* Should only be defined when RecoveryState is in CanBeginRecovery */
     then! {begin_recovery}
 }
-impl<'a> StateDependentActions<'a> for FederatedPegIn<CanBeginRecovery> {
+impl StateDependentActions for FederatedPegIn<CanBeginRecovery> {
     then! {begin_recovery [Self::recovery_signed] |s| {
         let mut builder = txn::TemplateBuilder::new().add_output(txn::Output::new(
             s.amount,
@@ -54,14 +54,14 @@ impl<'a> StateDependentActions<'a> for FederatedPegIn<CanBeginRecovery> {
         Ok(Box::new(std::iter::once(builder.into())))
     }}
 }
-impl<'a> StateDependentActions<'a> for FederatedPegIn<CanFinishRecovery> {
+impl StateDependentActions for FederatedPegIn<CanFinishRecovery> {
     guard! {finish_recovery |s| {
         Clause::And(vec![Clause::Older(4725 /* 4 weeks? */), Clause::Threshold(s.thresh_recovery, s.keys_recovery.iter().cloned().map(Clause::Key).collect())])
     }}
 }
 
 use std::convert::TryInto;
-impl<'a, T: RecoveryState> FederatedPegIn<T> {
+impl<T: RecoveryState> FederatedPegIn<T> {
     guard! {recovery_signed |s| {
         Clause::Threshold(s.thresh_recovery, s.keys_recovery.iter().cloned().map(Clause::Key).collect())
     }}
@@ -71,9 +71,9 @@ impl<'a, T: RecoveryState> FederatedPegIn<T> {
     }}
 }
 
-impl<'a, T: RecoveryState + 'a> Contract<'a> for FederatedPegIn<T>
+impl<T: RecoveryState> Contract for FederatedPegIn<T>
 where
-    FederatedPegIn<T>: StateDependentActions<'a>,
+    FederatedPegIn<T>: StateDependentActions + 'static,
 {
     declare! {then, Self::begin_recovery}
     declare! {finish, Self::normal_signed, Self::finish_recovery}

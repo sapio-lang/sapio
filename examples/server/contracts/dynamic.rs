@@ -3,7 +3,7 @@ use bitcoin::util::amount::CoinAmount;
 use sapio::clause::Clause;
 use sapio::contract::macros::*;
 use sapio::contract::*;
-use sapio::contract::{DynamicContract, DynamicContractRef};
+use sapio::contract::{DynamicContract};
 use sapio::*;
 use schemars::*;
 use serde::*;
@@ -23,43 +23,50 @@ pub struct DynamicExample {
     mature: u32,
 }
 
-struct D<'a> {
-    v: Vec<fn() -> Option<actions::ThenFunc<'a, D<'a>>>>
+struct D {
+    v: Vec<fn() -> Option<actions::ThenFunc<D>>>
 }
 
-impl<'a> AnyContract<'a> for D<'a> {
+impl AnyContract for D {
     type StatefulArguments = ();
     type Ref = Self;
-    fn then_fns(&'a self) -> &'a [fn() -> Option<actions::ThenFunc<'a, Self>>] {
+    fn then_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::ThenFunc<Self>>] {
         &self.v
     }
-    fn finish_or_fns(
+    fn finish_or_fns<'a>(
         &'a self,
-    ) -> &'a [fn() -> Option<actions::FinishOrFunc<'a, Self, Self::StatefulArguments>>] {
+    ) -> &'a [fn() -> Option<actions::FinishOrFunc<Self, Self::StatefulArguments>>] {
         &[]
     }
-    fn finish_fns(&'a self) -> &'a [fn() -> Option<actions::Guard<Self>>] {
+    fn finish_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::Guard<Self>>] {
         &[]
     }
-    fn get_inner_ref(&self) -> &Self {
+    fn get_inner_ref<'a>(&'a self) -> &Self {
         self
     }
 }
-impl<'a> DynamicExample {
+impl DynamicExample {
     then! {next |s| {
         let v:
-            Vec<fn() -> Option<actions::ThenFunc<'a, D<'a>>>>
+            Vec<fn() -> Option<actions::ThenFunc<D>>>
             = vec![];
-        let d : D<'a> = D{v};
+        let d : D = D{v};
+
+        let d2 = DynamicContract::<(), String> {
+            then: vec![|| None, || Some(sapio::contract::actions::ThenFunc{guard: &[], func: |s| Err(CompilationError::TerminateCompilation)})],
+            finish: vec![],
+            finish_or: vec![],
+            data: "E.g., Create a Vault".into(),
+        };
         let mut builder = txn::TemplateBuilder::new()
-        .add_output(txn::Output::new(s.amount_step.into(),
-        <D<'a> as Compilable>::compile(&d), None)?);
+        .add_output(txn::Output::new(s.amount_step.into(), d, None)?)
+        .add_output(txn::Output::new(s.amount_step.into(), d2, None)?);
 
         Ok(Box::new(std::iter::once(builder.into())))
     }}
 }
 
-impl<'a> Contract<'a> for DynamicExample {
+impl Contract for DynamicExample {
     declare! {then, Self::next}
     declare! {non updatable}
 }
