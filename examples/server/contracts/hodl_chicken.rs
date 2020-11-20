@@ -76,7 +76,7 @@ impl TryFrom<HodlChickenChecks> for HodlChickenInner {
     }
 }
 
-impl<'a> HodlChickenInner {
+impl HodlChickenInner {
     guard! {alice_is_a_chicken |s| {Clause::Key(s.alice_key)}}
     guard! {bob_is_a_chicken |s| {Clause::Key(s.bob_key)}}
     then! {alice_redeem [Self::alice_is_a_chicken] |s| {
@@ -110,7 +110,7 @@ impl<'a> HodlChickenInner {
     }}
 }
 
-impl<'a> Contract<'a> for HodlChickenInner {
+impl Contract for HodlChickenInner {
     declare! {then, Self::alice_redeem, Self::bob_redeem}
     declare! {non updatable}
 }

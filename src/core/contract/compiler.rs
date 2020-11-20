@@ -52,7 +52,7 @@ mod private {
 
     /// Allow Contract to implement Compile
     impl ImplSeal for super::Compiled {}
-    impl<'a, C> ImplSeal for C where C: super::AnyContract<'a> {}
+    impl<'a, C> ImplSeal for C where C: super::AnyContract {}
 }
 /// Compilable is a trait for anything which can be compiled
 pub trait Compilable: private::ImplSeal {
@@ -66,9 +66,9 @@ impl Compilable for Compiled {
     }
 }
 
-impl<T> Compilable for T
+impl<'a, T> Compilable for T
 where
-    T: for<'a> AnyContract<'a>,
+    T: AnyContract + 'static,
 {
     /// The main Compilation Logic for a Contract.
     /// TODO: Better Document Semantics

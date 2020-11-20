@@ -14,7 +14,7 @@ pub struct UndoSendInternal {
     pub timeout: u32,
 }
 
-impl<'a> UndoSendInternal {
+impl UndoSendInternal {
     then!(
         complete | s | {
             Ok(Box::new(iter::once(
@@ -36,7 +36,7 @@ impl<'a> UndoSendInternal {
     );
 }
 
-impl<'a> Contract<'a> for UndoSendInternal {
+impl Contract for UndoSendInternal {
     declare! {then, Self::undo, Self::complete}
     declare! {non updatable}
 }

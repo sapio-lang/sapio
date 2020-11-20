@@ -12,11 +12,11 @@ pub struct PayToPublicKey {
     key: bitcoin::PublicKey,
 }
 
-impl<'a> PayToPublicKey {
+impl PayToPublicKey {
     guard!(with_key | s | { Clause::Key(s.key) });
 }
 
-impl<'a> Contract<'a> for PayToPublicKey {
+impl Contract for PayToPublicKey {
     declare! {finish, Self::with_key}
     declare! {non updatable}
 }
@@ -29,7 +29,7 @@ pub struct BasicEscrow {
     escrow: bitcoin::PublicKey,
 }
 
-impl<'a> BasicEscrow {
+impl BasicEscrow {
     guard!(
         redeem | s | {
             Clause::Threshold(
@@ -46,7 +46,7 @@ impl<'a> BasicEscrow {
     );
 }
 
-impl<'a> Contract<'a> for BasicEscrow {
+impl Contract for BasicEscrow {
     declare! {finish, Self::redeem}
     declare! {non updatable}
 }
@@ -59,7 +59,7 @@ pub struct BasicEscrow2 {
     escrow: bitcoin::PublicKey,
 }
 
-impl<'a> BasicEscrow2 {
+impl BasicEscrow2 {
     guard!(
         use_escrow | s | {
             Clause::And(vec![
@@ -71,7 +71,7 @@ impl<'a> BasicEscrow2 {
     guard!(cooperate | s | { Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)]) });
 }
 
-impl<'a> Contract<'a> for BasicEscrow2 {
+impl Contract for BasicEscrow2 {
     declare! {finish, Self::use_escrow, Self::cooperate}
     declare! {non updatable}
 }
@@ -85,7 +85,7 @@ pub struct TrustlessEscrow {
     bob_escrow: (CoinAmount, bitcoin::Address),
 }
 
-impl<'a> TrustlessEscrow {
+impl TrustlessEscrow {
     guard!(cooperate | s | { Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)]) });
     then! {use_escrow |s| {
         let o1 = txn::Output::new(
@@ -105,7 +105,7 @@ impl<'a> TrustlessEscrow {
     }}
 }
 
-impl<'a> Contract<'a> for TrustlessEscrow {
+impl Contract for TrustlessEscrow {
     declare! {finish, Self::cooperate}
     declare! {then, Self::use_escrow}
     declare! {non updatable}

@@ -19,7 +19,7 @@ pub struct TreePay {
 }
 
 use std::convert::TryInto;
-impl<'a> TreePay {
+impl TreePay {
     then! {expand |s| {
         let mut builder = txn::TemplateBuilder::new();
         if s.participants.len() > s.radix {
@@ -40,7 +40,7 @@ impl<'a> TreePay {
     }}
 }
 
-impl<'a> Contract<'a> for TreePay {
+impl Contract for TreePay {
     declare! {then, Self::expand}
     declare! {non updatable}
 }

@@ -156,7 +156,7 @@ struct Channel<T: State> {
 }
 
 /// Functionality Available for a channel regardless of state
-impl<'a, T: State + 'a> Channel<T> {
+impl<T: State> Channel<T> {
     guard!(timeout | s | { Clause::Older(100) });
     guard!(cached signed |s| {Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)])});
 
@@ -179,20 +179,20 @@ impl<'a, T: State + 'a> Channel<T> {
 }
 
 /// Functionality that differs depending on current State
-trait FunctionalityAtState<'a>
+trait FunctionalityAtState
 where
-    Self: Sized + 'a,
+    Self: Sized,
 {
-    fn begin_contest() -> Option<ThenFunc<'a, Self>> {
+    fn begin_contest() -> Option<ThenFunc<Self>> {
         None
     }
-    fn finish_contest() -> Option<ThenFunc<'a, Self>> {
+    fn finish_contest() -> Option<ThenFunc<Self>> {
         None
     }
 }
 
 /// Override begin_contest when state = Start
-impl<'a> FunctionalityAtState<'a> for Channel<Start> {
+impl FunctionalityAtState for Channel<Start> {
     then! {begin_contest |s| {
         let o = txn::Output::new(
             s.amount,
@@ -213,7 +213,7 @@ impl<'a> FunctionalityAtState<'a> for Channel<Start> {
 }
 
 /// Override finish_contest when state = Start
-impl<'a> FunctionalityAtState<'a> for Channel<Stop> {
+impl FunctionalityAtState for Channel<Stop> {
     then! {finish_contest [Self::timeout] |s| {
         let o = txn::Output::new(s.amount, s.resolution.clone(), None)?;
         Ok(Box::new(std::iter::once(
@@ -224,9 +224,9 @@ impl<'a> FunctionalityAtState<'a> for Channel<Stop> {
 
 /// Implement Contract for Channel<T> and functionality will be correctly assembled for different
 /// States.
-impl<'a, T: State + 'a> Contract<'a> for Channel<T>
+impl<T: State > Contract for Channel<T>
 where
-    Channel<T>: FunctionalityAtState<'a>,
+    Channel<T>: FunctionalityAtState + 'static,
 {
     declare! {then, Self::begin_contest, Self::finish_contest}
     declare! {updatable<Args>, Self::update_state_a, Self::update_state_b }

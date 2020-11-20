@@ -19,7 +19,7 @@ pub struct Vault {
     mature: u32,
 }
 
-impl<'a> Vault {
+impl Vault {
     then! {step |s| {
         let mut builder = txn::TemplateBuilder::new()
         .add_output(txn::Output::new(s.amount_step.into(),
@@ -58,7 +58,7 @@ impl<'a> Vault {
     }}
 }
 
-impl<'a> Contract<'a> for Vault {
+impl Contract for Vault {
     declare! {then, Self::step, Self::to_cold}
     declare! {non updatable}
 }

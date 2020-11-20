@@ -11,6 +11,7 @@ pub mod readme_contracts;
 pub mod treepay;
 pub mod undo_send;
 pub mod vault;
+pub mod dynamic;
 
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct ExampleA {
@@ -20,12 +21,12 @@ pub struct ExampleA {
     resolution: Compiled,
 }
 
-impl<'a> ExampleA {
+impl ExampleA {
     guard!(timeout | s | { Clause::Older(100) });
     guard!(cached signed |s| {Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)])});
 }
 
-impl<'a> Contract<'a> for ExampleA {
+impl Contract for ExampleA {
     declare! {finish, Self::signed, Self::timeout}
     declare! {non updatable}
 }
@@ -47,9 +48,9 @@ impl BState for Finish {
     }
 }
 
-trait ExampleBThen<'a>
+trait ExampleBThen
 where
-    Self: Sized + 'a,
+    Self: Sized,
 {
     then! {begin_contest}
 }
@@ -63,13 +64,13 @@ pub struct ExampleB<T: BState> {
     pd: PhantomData<T>,
 }
 
-impl<'a, T: BState> ExampleB<T> {
+impl<T: BState> ExampleB<T> {
     guard!(timeout | s | { Clause::Older(100) });
     guard!(cached all_signed |s| {Clause::Threshold(T::get_n(s.threshold, s.participants.len()as u8) as usize, s.participants.iter().map(|k| Clause::Key(*k)).collect())});
 }
 
-impl<'a> ExampleBThen<'a> for ExampleB<Finish> {}
-impl<'a> ExampleBThen<'a> for ExampleB<Start> {
+impl ExampleBThen for ExampleB<Finish> {}
+impl ExampleBThen for ExampleB<Start> {
     then! {begin_contest |s| {
         let o = txn::Output::new(
             s.amount,
@@ -87,9 +88,9 @@ impl<'a> ExampleBThen<'a> for ExampleB<Start> {
     }}
 }
 
-impl<'a, T: BState + 'a> Contract<'a> for ExampleB<T>
+impl<T: BState> Contract for ExampleB<T>
 where
-    ExampleB<T>: ExampleBThen<'a>,
+    ExampleB<T>: ExampleBThen + 'static,
 {
     declare! {then, Self::begin_contest}
     declare! {finish, Self::all_signed}
