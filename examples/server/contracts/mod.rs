@@ -11,6 +11,7 @@ pub mod readme_contracts;
 pub mod treepay;
 pub mod undo_send;
 pub mod vault;
+pub mod dynamic;
 
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct ExampleA {

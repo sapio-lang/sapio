@@ -2,6 +2,7 @@ use actix::{Actor, StreamHandler};
 use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws;
 use sapio::frontend::session;
+use sapio::contract::DynamicContract;
 mod contracts;
 
 /// Define HTTP actor
@@ -73,6 +74,7 @@ lazy_static::lazy_static! {
         m.register_as_from::<contracts::vault::VaultTree, contracts::vault::Vault, _>("Vault->TreePay".to_string().into());
 
         m.register_as::<contracts::federated_sidechain::PegIn>("FederatedPegIn".to_string().into());
+
         m.into()
     };
 }

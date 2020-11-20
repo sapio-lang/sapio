@@ -13,7 +13,7 @@
 #[macro_export]
 macro_rules! declare {
     {then $(,$a:expr)*} => {
-        const THEN_FNS: &'a [fn() -> Option<$crate::contract::actions::ThenFunc<'a, Self>>] = &[$($a,)*];
+        const THEN_FNS: &'static [fn() -> Option<$crate::contract::actions::ThenFunc<Self>>] = &[$($a,)*];
     };
     [state $i:ty]  => {
         type StatefulArguments = $i;
@@ -26,7 +26,7 @@ macro_rules! declare {
         type StatefulArguments;
     };
     {updatable<$($i:ty)?> $(,$a:expr)*} => {
-        const FINISH_OR_FUNCS: &'a [fn() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, Self::StatefulArguments>>] = &[$($a,)*];
+        const FINISH_OR_FUNCS: &'static [fn() -> Option<$crate::contract::actions::FinishOrFunc<Self, Self::StatefulArguments>>] = &[$($a,)*];
         declare![state $($i)?];
     };
     {non updatable} => {
@@ -34,7 +34,7 @@ macro_rules! declare {
         declare![state ()];
     };
     {finish $(,$a:expr)*} => {
-        const FINISH_FNS: &'a [fn() -> Option<$crate::contract::actions::Guard<Self>>] = &[$($a,)*];
+        const FINISH_FNS: &'static [fn() -> Option<$crate::contract::actions::Guard<Self>>] = &[$($a,)*];
     };
 
 
@@ -53,12 +53,12 @@ macro_rules! declare {
 #[macro_export]
 macro_rules! then {
     {$name:ident $a:tt |$s:ident| $b:block } => {
-        fn $name() -> Option<$crate::contract::actions::ThenFunc<'a, Self>> { Some($crate::contract::actions::ThenFunc{guard: &$a, func:|$s: &Self| $b})}
+        fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<'a, Self>> { Some($crate::contract::actions::ThenFunc{guard: &$a, func:|$s: &Self| $b})}
     };
     {$name:ident |$s:ident| $b:block } => { then!{$name [] |$s| $b } };
 
     {$name:ident} => {
-        fn $name() -> Option<$crate::contract::actions::ThenFunc<'a, Self>> {None}
+        fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<'a, Self>> {None}
     };
 }
 
@@ -74,7 +74,7 @@ macro_rules! then {
 #[macro_export]
 macro_rules! finish {
     {$name:ident $a:tt |$s:ident, $o:ident| $b:block } => {
-        fn $name() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, Args>>{
+        fn $name<'a>() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, Args>>{
             Some($crate::contract::actions::FinishOrFunc{guard: &$a, func: |$s: &Self, $o: Option<&_>| $b} .into())
         }
     };
