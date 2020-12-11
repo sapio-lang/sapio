@@ -214,9 +214,9 @@ pub struct Session {
     menu: &'static Menu,
 }
 
-pub enum Msg {
-    Bytes(actix_web::web::Bytes),
-    Text(String),
+pub enum Msg<'a> {
+    Bytes(&'a [u8]),
+    Text(&'a String),
 }
 
 impl Session {

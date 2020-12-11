@@ -21,9 +21,10 @@ impl Actor for MyWs {
 /// Handler for ws::Message message
 impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for MyWs {
     fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
-        let m = match msg {
-            Ok(ws::Message::Text(text)) => Ok(session::Msg::Text(text)),
-            Ok(ws::Message::Binary(bin)) => Ok(session::Msg::Bytes(bin)),
+        let bm = &msg;
+        let m = match bm {
+            Ok(ws::Message::Text(text)) => Ok(session::Msg::Text(&text)),
+            Ok(ws::Message::Binary(bin)) => Ok(session::Msg::Bytes(&bin)),
             _ => Err(()),
         };
         if let Ok(m) = m {
