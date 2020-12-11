@@ -28,7 +28,8 @@ impl Vault {
                     to_contract: Compiled::from_address(s.hot_storage.clone(), None),
                     timeout: s.mature,
                     amount: s.amount_step.into(),
-                }, None)?);
+                }, None)?)
+       .set_sequence(0, s.timeout);
 
         Ok(Box::new(std::iter::once(
         if s.n_steps > 1 {
