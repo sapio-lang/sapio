@@ -58,13 +58,15 @@ where
 
 /// DynamicContract wraps a struct S with a set of methods (that can be constructed dynamically)
 /// to form a contract. DynamicContract owns all its methods.
-pub struct DynamicContract<T, S> where S: 'static{
+pub struct DynamicContract<T, S>
+where
+    S: 'static,
+{
     pub then: Vec<fn() -> Option<actions::ThenFunc<S>>>,
     pub finish_or: Vec<fn() -> Option<actions::FinishOrFunc<S, T>>>,
     pub finish: Vec<fn() -> Option<actions::Guard<S>>>,
     pub data: S,
 }
-
 
 impl<T, S> AnyContract for DynamicContract<T, S> {
     type StatefulArguments = T;

@@ -21,6 +21,7 @@ features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 ws = ["actix-web", "actix", "actix-web-actors"]
 # used to enable some niceties if compiling on a nightly compiler
 nightly = []
+examples = []
 
 [dependencies]
 lazy_static = "*"
@@ -46,9 +47,5 @@ version = "3.0.0"
 optional= true
 
 [[example]]
-name = "channel"
-doc = true
-
-[[example]]
 name = "server"
-required-features = ["ws"]
+required-features = ["ws", "examples"]

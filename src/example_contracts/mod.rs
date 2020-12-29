@@ -1,17 +1,18 @@
+use crate::clause::Clause;
+use crate::contract::macros::*;
+use crate::contract::*;
+use crate::*;
 use bitcoin::util::amount::CoinAmount;
-use sapio::clause::Clause;
-use sapio::contract::macros::*;
-use sapio::contract::*;
-use sapio::*;
 use schemars::*;
 use serde::*;
+pub mod derivatives;
+pub mod dynamic;
 pub mod federated_sidechain;
 pub mod hodl_chicken;
 pub mod readme_contracts;
 pub mod treepay;
 pub mod undo_send;
 pub mod vault;
-pub mod dynamic;
 
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct ExampleA {

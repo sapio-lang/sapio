@@ -1,9 +1,9 @@
 use super::undo_send::UndoSendInternal;
+use crate::clause::Clause;
+use crate::contract::macros::*;
+use crate::contract::*;
+use crate::*;
 use bitcoin::util::amount::CoinAmount;
-use sapio::clause::Clause;
-use sapio::contract::macros::*;
-use sapio::contract::*;
-use sapio::*;
 use schemars::*;
 use serde::*;
 use std::convert::TryFrom;

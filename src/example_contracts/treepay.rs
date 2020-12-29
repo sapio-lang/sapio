@@ -1,8 +1,8 @@
+use crate::clause::Clause;
+use crate::contract::macros::*;
+use crate::contract::*;
+use crate::*;
 use bitcoin::util::amount::CoinAmount;
-use sapio::clause::Clause;
-use sapio::contract::macros::*;
-use sapio::contract::*;
-use sapio::*;
 use schemars::*;
 use serde::*;
 #[derive(JsonSchema, Serialize, Deserialize, Clone)]
@@ -27,7 +27,7 @@ impl TreePay {
             for c in s.participants.chunks(s.participants.len()/s.radix) {
                 let mut amt =  bitcoin::util::amount::Amount::from_sat(0);
                 for Payment{amount, ..}  in c {
-                    amt += amount.clone().try_into().map_err(|_| sapio::contract::CompilationError::TerminateCompilation)?;
+                    amt += amount.clone().try_into().map_err(|_| crate::contract::CompilationError::TerminateCompilation)?;
                 }
                 builder = builder.add_output(txn::Output::new(amt.into(), TreePay {participants: c.to_vec(), radix: s.radix}, None)?);
             }
