@@ -113,15 +113,15 @@ impl<'a> TryFrom<RiskReversal<'a>> for GenericBetArguments<'a> {
 
             outcomes.push((
                 strike as i64,
-                TemplateBuilder::new()
+                Builder::new()
                     .add_output(Output::new(
                         pay_user.into(),
-                        v.user_api.receive_payment(pay_user),
+                        &v.user_api.receive_payment(pay_user),
                         None,
                     )?)
                     .add_output(Output::new(
                         refund_operator.into(),
-                        v.operator_api.receive_payment(refund_operator),
+                        &v.operator_api.receive_payment(refund_operator),
                         None,
                     )?)
                     .into(),

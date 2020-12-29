@@ -1,6 +1,6 @@
 use crate::clause::Clause;
-use crate::core::txn::Output;
-use crate::core::txn::{Template, TemplateBuilder};
+use crate::core::template::Output;
+use crate::core::template::{Builder, Template};
 use crate::*;
 use contract::actions::*;
 use contract::*;
@@ -25,9 +25,9 @@ pub mod oracle;
 pub use oracle::{Oracle, Symbol};
 
 pub mod apis;
+pub mod call;
 pub mod exploding;
 pub mod put;
-pub mod call;
 pub mod risk_reversal;
 
 /// To setup a GenericBet select an amount, a list of outcomes, and an oracle.
@@ -87,16 +87,15 @@ impl GenericBet {
             [] => return Ok(None),
             [(_, a)] => Ok(Some(a.clone())),
             sl => Ok(Some(
-                txn::TemplateBuilder::new()
+                template::Builder::new()
                     .add_output(Output::new(
                         self.amount.into(),
-                        GenericBet {
+                        &GenericBet {
                             amount: self.amount,
                             outcomes: sl.into(),
                             oracle: self.oracle.clone(),
                             cooperate: self.cooperate.clone(),
-                        }
-                        .compile()?,
+                        },
                         None,
                     )?)
                     .into(),

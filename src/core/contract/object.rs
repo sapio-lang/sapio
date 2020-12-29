@@ -1,5 +1,5 @@
 use crate::clause::Clause;
-use crate::txn::Template;
+use crate::template::Template;
 use crate::util::amountrange::AmountRange;
 use ::miniscript::*;
 use bitcoin::hashes::sha256;

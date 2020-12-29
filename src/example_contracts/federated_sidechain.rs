@@ -39,9 +39,9 @@ where
 }
 impl StateDependentActions for FederatedPegIn<CanBeginRecovery> {
     then! {begin_recovery [Self::recovery_signed] |s| {
-        let mut builder = txn::TemplateBuilder::new().add_output(txn::Output::new(
+        template::Builder::new().add_output(template::Output::new(
             s.amount,
-            FederatedPegIn::<CanFinishRecovery> {
+            &FederatedPegIn::<CanFinishRecovery> {
                 keys: s.keys.clone(),
                 thresh_normal: s.thresh_normal,
                 keys_recovery: s.keys_recovery.clone(),
@@ -50,8 +50,7 @@ impl StateDependentActions for FederatedPegIn<CanBeginRecovery> {
                 _pd: PhantomData::default()
             },
             None
-        )?);
-        Ok(Box::new(std::iter::once(builder.into())))
+        )?).into()
     }}
 }
 impl StateDependentActions for FederatedPegIn<CanFinishRecovery> {

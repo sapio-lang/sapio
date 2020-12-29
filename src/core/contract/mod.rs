@@ -1,4 +1,4 @@
-use crate::txn::Template as TransactionTemplate;
+use crate::template::Template as TransactionTemplate;
 
 #[macro_use]
 pub mod macros;

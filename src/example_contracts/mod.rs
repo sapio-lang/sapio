@@ -73,9 +73,9 @@ impl<T: BState> ExampleB<T> {
 impl ExampleBThen for ExampleB<Finish> {}
 impl ExampleBThen for ExampleB<Start> {
     then! {begin_contest |s| {
-        let o = txn::Output::new(
+        let o = template::Output::new(
             s.amount,
-            ExampleB::<Finish> {
+            &ExampleB::<Finish> {
                 participants: s.participants.clone(),
                 threshold: s.threshold,
                 amount: s.amount,
@@ -83,9 +83,7 @@ impl ExampleBThen for ExampleB<Start> {
             },
             None,
         )?;
-        Ok(Box::new(std::iter::once(
-            txn::TemplateBuilder::new().add_output(o).into(),
-        )))
+        template::Builder::new().add_output(o).into()
     }}
 }
 

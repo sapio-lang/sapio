@@ -199,9 +199,9 @@ where
 /// Override begin_contest when state = Start
 impl FunctionalityAtState for Channel<Start> {
     then! {begin_contest |s| {
-        let o = txn::Output::new(
+        let o = template::Output::new(
             s.amount,
-            Channel::<Stop> {
+            &Channel::<Stop> {
                 pd: Default::default(),
                 alice: s.alice,
                 bob: s.bob,
@@ -211,19 +211,15 @@ impl FunctionalityAtState for Channel<Start> {
             },
             None,
         )?;
-        Ok(Box::new(std::iter::once(
-            txn::TemplateBuilder::new().add_output(o).into(),
-        )))
+        template::Builder::new().add_output(o).into()
     }}
 }
 
 /// Override finish_contest when state = Start
 impl FunctionalityAtState for Channel<Stop> {
     then! {finish_contest [Self::timeout] |s| {
-        let o = txn::Output::new(s.amount, s.resolution.clone(), None)?;
-        Ok(Box::new(std::iter::once(
-            txn::TemplateBuilder::new().add_output(o).into(),
-        )))
+        let o = template::Output::new(s.amount, &s.resolution, None)?;
+        template::Builder::new().add_output(o).into()
     }}
 }
 
