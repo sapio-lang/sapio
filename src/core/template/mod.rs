@@ -111,6 +111,16 @@ impl From<Builder> for Result<Template, CompilationError> {
     }
 }
 
+impl From<Builder> for crate::core::contract::TxTmplIt {
+    fn from(t: Builder) -> Self {
+        // t.into() // works too, but prefer the explicit form so we know what we get concretely
+        Ok(Box::new(std::iter::once(Result::<
+            Template,
+            CompilationError,
+        >::from(t))))
+    }
+}
+
 /// Template holds the data needed to construct a Transaction for CTV Purposes, along with relevant
 /// metadata
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]

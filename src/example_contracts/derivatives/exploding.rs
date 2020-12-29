@@ -16,36 +16,32 @@ where
 {
     then!(
         explodes | s | {
-            Ok(Box::new(std::iter::once(
-                Builder::new()
-                    .add_output(Output::new(
-                        s.party_one.into(),
-                        Compiled::from_address(s.key_p1.clone(), None),
-                        None,
-                    )?)
-                    .add_output(Output::new(
-                        s.party_two.into(),
-                        Compiled::from_address(s.key_p2.clone(), None),
-                        None,
-                    )?)
-                    .set_lock_time(s.timeout)
-                    .into(),
-            )))
+            Builder::new()
+                .add_output(Output::new(
+                    s.party_one.into(),
+                    Compiled::from_address(s.key_p1.clone(), None),
+                    None,
+                )?)
+                .add_output(Output::new(
+                    s.party_two.into(),
+                    Compiled::from_address(s.key_p2.clone(), None),
+                    None,
+                )?)
+                .set_lock_time(s.timeout)
+                .into()
         }
     );
 
     guard!(signed | s | { s.key_p2_pk.clone() });
     then!(
         stikes[Self::signed] | s | {
-            Ok(Box::new(std::iter::once(
-                Builder::new()
-                    .add_output(Output::new(
-                        (s.party_one + s.party_two).into(),
-                        GenericBet::try_from(s.opt.clone())?,
-                        None,
-                    )?)
-                    .into(),
-            )))
+            Builder::new()
+                .add_output(Output::new(
+                    (s.party_one + s.party_two).into(),
+                    GenericBet::try_from(s.opt.clone())?,
+                    None,
+                )?)
+                .into()
         }
     );
 }
@@ -81,17 +77,15 @@ where
 
     then!(
         stikes | s | {
-            Ok(Box::new(std::iter::once(
-                Builder::new()
-                    .add_amount(s.party_two)
-                    .add_sequence(0)
-                    .add_output(Output::new(
-                        (s.party_one + s.party_two).into(),
-                        GenericBet::try_from(s.opt.clone())?,
-                        None,
-                    )?)
-                    .into(),
-            )))
+            Builder::new()
+                .add_amount(s.party_two)
+                .add_sequence(0)
+                .add_output(Output::new(
+                    (s.party_one + s.party_two).into(),
+                    GenericBet::try_from(s.opt.clone())?,
+                    None,
+                )?)
+                .into()
         }
     );
 }

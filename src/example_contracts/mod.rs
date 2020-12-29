@@ -83,9 +83,7 @@ impl ExampleBThen for ExampleB<Start> {
             },
             None,
         )?;
-        Ok(Box::new(std::iter::once(
-            template::Builder::new().add_output(o).into(),
-        )))
+        template::Builder::new().add_output(o).into()
     }}
 }
 

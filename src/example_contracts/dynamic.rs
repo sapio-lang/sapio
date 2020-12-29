@@ -62,7 +62,7 @@ impl DynamicExample {
         .add_output(template::Output::new(s.amount_step.into(), d, None)?)
         .add_output(template::Output::new(s.amount_step.into(), d2, None)?);
 
-        Ok(Box::new(std::iter::once(builder.into())))
+        builder.into()
     }}
 }
 

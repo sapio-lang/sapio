@@ -36,7 +36,7 @@ impl TreePay {
                 builder = builder.add_output(template::Output::new(*amount, Compiled::from_address(address.clone(), None), None)?);
             }
         }
-        Ok(Box::new(std::iter::once(builder.into())))
+        builder.into()
     }}
 }
 
