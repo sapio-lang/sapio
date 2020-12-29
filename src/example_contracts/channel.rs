@@ -1,6 +1,6 @@
 use contract::actions::*;
 use contract::*;
-use sapio::*;
+use crate::*;
 
 use crate::clause::Clause;
 
@@ -18,43 +18,48 @@ use std::sync::{Arc, Mutex};
 
 use std::convert::TryInto;
 
-fn main() {
-    db_serde::register_db("mock".to_string(), |_s| Arc::new(Mutex::new(MockDB {})));
-    let full = Secp256k1::new();
-    let mut rng = OsRng::new().expect("OsRng");
-    let public_keys: Vec<_> = (0..3)
-        .map(|_| bitcoin::PublicKey {
-            compressed: true,
-            key: full.generate_keypair(&mut rng).1,
-        })
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {
+        db_serde::register_db("mock".to_string(), |_s| Arc::new(Mutex::new(MockDB {})));
+        let full = Secp256k1::new();
+        let mut rng = OsRng::new().expect("OsRng");
+        let public_keys: Vec<_> = (0..3)
+            .map(|_| bitcoin::PublicKey {
+                compressed: true,
+                key: full.generate_keypair(&mut rng).1,
+            })
         .collect();
-    let resolution =
-        Compiled::from_descriptor(Descriptor::<bitcoin::PublicKey>::Pkh(public_keys[2]), None);
+        let resolution =
+            Compiled::from_descriptor(Descriptor::<bitcoin::PublicKey>::Pkh(public_keys[2]), None);
 
-    let db = Arc::new(Mutex::new(MockDB {}));
-    let x: Channel<Start> = Channel {
-        pd: PhantomData,
-        alice: public_keys[0],
-        bob: public_keys[1],
-        amount: Amount::from_sat(1).into(),
-        resolution: resolution.clone(),
-        db: db.clone(),
-    };
-    let y: Channel<Stop> = Channel {
-        pd: PhantomData,
-        alice: public_keys[0],
-        bob: public_keys[1],
-        amount: Amount::from_sat(1).into(),
-        resolution,
-        db: db.clone(),
-    };
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&schema_for!(Channel<Stop>)).unwrap()
-    );
-    println!("{}", serde_json::to_string_pretty(&y).unwrap());
-    Compilable::compile(&x);
-    Compilable::compile(&y);
+        let db = Arc::new(Mutex::new(MockDB {}));
+        let x: Channel<Start> = Channel {
+            pd: PhantomData,
+            alice: public_keys[0],
+            bob: public_keys[1],
+            amount: Amount::from_sat(1).into(),
+            resolution: resolution.clone(),
+            db: db.clone(),
+        };
+        let y: Channel<Stop> = Channel {
+            pd: PhantomData,
+            alice: public_keys[0],
+            bob: public_keys[1],
+            amount: Amount::from_sat(1).into(),
+            resolution,
+            db: db.clone(),
+        };
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&schema_for!(Channel<Stop>)).unwrap()
+        );
+        println!("{}", serde_json::to_string_pretty(&y).unwrap());
+        Compilable::compile(&x);
+        Compilable::compile(&y);
+    }
+
 }
 
 /// Args are some messages that can be passed to a Channel instance

@@ -24,10 +24,10 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 **/
 use bitcoin::util::amount::CoinAmount;
-use sapio::clause::Clause;
-use sapio::contract::macros::*;
-use sapio::contract::*;
-use sapio::*;
+use crate::clause::Clause;
+use crate::contract::macros::*;
+use crate::contract::*;
+use crate::*;
 use schemars::*;
 use serde::*;
 use std::collections::HashMap;

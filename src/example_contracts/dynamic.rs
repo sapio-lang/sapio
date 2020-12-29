@@ -1,10 +1,10 @@
 use super::undo_send::UndoSendInternal;
 use bitcoin::util::amount::CoinAmount;
-use sapio::clause::Clause;
-use sapio::contract::macros::*;
-use sapio::contract::*;
-use sapio::contract::{DynamicContract};
-use sapio::*;
+use crate::clause::Clause;
+use crate::contract::macros::*;
+use crate::contract::*;
+use crate::contract::{DynamicContract};
+use crate::*;
 use schemars::*;
 use serde::*;
 use std::convert::TryFrom;
@@ -53,7 +53,7 @@ impl DynamicExample {
         let d : D = D{v};
 
         let d2 = DynamicContract::<(), String> {
-            then: vec![|| None, || Some(sapio::contract::actions::ThenFunc{guard: &[], func: |s| Err(CompilationError::TerminateCompilation)})],
+            then: vec![|| None, || Some(crate::contract::actions::ThenFunc{guard: &[], func: |s| Err(CompilationError::TerminateCompilation)})],
             finish: vec![],
             finish_or: vec![],
             data: "E.g., Create a Vault".into(),
