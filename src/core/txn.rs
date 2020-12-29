@@ -37,28 +37,33 @@ impl Output {
 /// TemplateBuilder can be used to interactively put together a transaction template before
 /// finalizing into a Template.
 pub struct TemplateBuilder {
-    n_inputs: usize,
     sequences: Vec<u32>,
     outputs: Vec<Output>,
     version: i32,
     lock_time: u32,
     label: String,
+    amount: Amount,
 }
 
 impl TemplateBuilder {
     /// Creates a new transaction template with 1 input and no outputs.
     pub fn new() -> TemplateBuilder {
         TemplateBuilder {
-            n_inputs: 1,
             sequences: vec![0],
             outputs: vec![],
             version: 2,
             lock_time: 0,
             label: String::new(),
+            amount: Amount::from_sat(0),
         }
     }
     pub fn add_output(mut self, o: Output) -> Self {
         self.outputs.push(o);
+        self
+    }
+
+    pub fn add_amount(mut self, a: Amount) -> Self {
+        self.amount += a;
         self
     }
 

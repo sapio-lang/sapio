@@ -1,10 +1,10 @@
 use super::undo_send::UndoSendInternal;
-use bitcoin::util::amount::CoinAmount;
 use crate::clause::Clause;
 use crate::contract::macros::*;
+use crate::contract::DynamicContract;
 use crate::contract::*;
-use crate::contract::{DynamicContract};
 use crate::*;
+use bitcoin::util::amount::CoinAmount;
 use schemars::*;
 use serde::*;
 use std::convert::TryFrom;
@@ -24,7 +24,7 @@ pub struct DynamicExample {
 }
 
 struct D {
-    v: Vec<fn() -> Option<actions::ThenFunc<D>>>
+    v: Vec<fn() -> Option<actions::ThenFunc<D>>>,
 }
 
 impl AnyContract for D {

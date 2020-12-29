@@ -1,8 +1,8 @@
-use bitcoin::util::amount::CoinAmount;
 use crate::clause::Clause;
 use crate::contract::macros::*;
 use crate::contract::*;
 use crate::*;
+use bitcoin::util::amount::CoinAmount;
 use schemars::*;
 use serde::*;
 #[derive(JsonSchema, Serialize, Deserialize, Clone)]
