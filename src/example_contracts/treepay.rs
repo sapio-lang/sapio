@@ -29,11 +29,11 @@ impl TreePay {
                 for Payment{amount, ..}  in c {
                     amt += amount.clone().try_into().map_err(|_| crate::contract::CompilationError::TerminateCompilation)?;
                 }
-                builder = builder.add_output(template::Output::new(amt.into(), TreePay {participants: c.to_vec(), radix: s.radix}, None)?);
+                builder = builder.add_output(template::Output::new(amt.into(), &TreePay {participants: c.to_vec(), radix: s.radix}, None)?);
             }
         } else {
             for Payment{amount, address} in s.participants.iter() {
-                builder = builder.add_output(template::Output::new(*amount, Compiled::from_address(address.clone(), None), None)?);
+                builder = builder.add_output(template::Output::new(*amount, &Compiled::from_address(address.clone(), None), None)?);
             }
         }
         builder.into()

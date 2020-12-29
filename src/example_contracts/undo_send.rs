@@ -18,11 +18,7 @@ impl UndoSendInternal {
     then!(
         complete | s | {
             template::Builder::new()
-                .add_output(template::Output::new(
-                    s.amount,
-                    s.to_contract.clone(),
-                    None,
-                )?)
+                .add_output(template::Output::new(s.amount, &s.to_contract, None)?)
                 .set_sequence(0, s.timeout)
                 .into()
         }
@@ -30,11 +26,7 @@ impl UndoSendInternal {
     then!(
         undo | s | {
             template::Builder::new()
-                .add_output(template::Output::new(
-                    s.amount,
-                    s.from_contract.clone(),
-                    None,
-                )?)
+                .add_output(template::Output::new(s.amount, &s.from_contract, None)?)
                 .into()
         }
     );

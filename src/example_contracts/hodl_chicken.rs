@@ -83,12 +83,12 @@ impl HodlChickenInner {
         template::Builder::new()
             .add_output(template::Output::new(
                 CoinAmount::Sats(s.winner_gets),
-                s.bob_contract.winner.clone(),
+                &s.bob_contract.winner,
                 None,
             )?)
             .add_output(template::Output::new(
                 CoinAmount::Sats(s.chicken_gets),
-                s.alice_contract.loser.clone(),
+                &s.alice_contract.loser,
                 None,
             )?)
             .into()
@@ -98,12 +98,12 @@ impl HodlChickenInner {
         template::Builder::new()
             .add_output(template::Output::new(
                 CoinAmount::Sats(s.winner_gets),
-                s.alice_contract.winner.clone(),
+                &s.alice_contract.winner,
                 None,
             )?)
             .add_output(template::Output::new(
                 CoinAmount::Sats(s.chicken_gets),
-                s.bob_contract.loser.clone(),
+                &s.bob_contract.loser,
                 None,
             )?)
             .into()

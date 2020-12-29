@@ -201,7 +201,7 @@ impl FunctionalityAtState for Channel<Start> {
     then! {begin_contest |s| {
         let o = template::Output::new(
             s.amount,
-            Channel::<Stop> {
+            &Channel::<Stop> {
                 pd: Default::default(),
                 alice: s.alice,
                 bob: s.bob,
@@ -218,7 +218,7 @@ impl FunctionalityAtState for Channel<Start> {
 /// Override finish_contest when state = Start
 impl FunctionalityAtState for Channel<Stop> {
     then! {finish_contest [Self::timeout] |s| {
-        let o = template::Output::new(s.amount, s.resolution.clone(), None)?;
+        let o = template::Output::new(s.amount, &s.resolution, None)?;
         template::Builder::new().add_output(o).into()
     }}
 }

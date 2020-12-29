@@ -15,7 +15,7 @@ impl Output {
     /// metadata if not provided to blank.
     pub fn new<T: crate::contract::Compilable>(
         amount: CoinAmount,
-        contract: T,
+        contract: &T,
         metadata: Option<OutputMeta>,
     ) -> Result<Output, CompilationError> {
         Ok(Output {

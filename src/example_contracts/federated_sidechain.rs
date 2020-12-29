@@ -41,7 +41,7 @@ impl StateDependentActions for FederatedPegIn<CanBeginRecovery> {
     then! {begin_recovery [Self::recovery_signed] |s| {
         template::Builder::new().add_output(template::Output::new(
             s.amount,
-            FederatedPegIn::<CanFinishRecovery> {
+            &FederatedPegIn::<CanFinishRecovery> {
                 keys: s.keys.clone(),
                 thresh_normal: s.thresh_normal,
                 keys_recovery: s.keys_recovery.clone(),

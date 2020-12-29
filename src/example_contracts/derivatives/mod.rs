@@ -90,13 +90,12 @@ impl GenericBet {
                 template::Builder::new()
                     .add_output(Output::new(
                         self.amount.into(),
-                        GenericBet {
+                        &GenericBet {
                             amount: self.amount,
                             outcomes: sl.into(),
                             oracle: self.oracle.clone(),
                             cooperate: self.cooperate.clone(),
-                        }
-                        .compile()?,
+                        },
                         None,
                     )?)
                     .into(),

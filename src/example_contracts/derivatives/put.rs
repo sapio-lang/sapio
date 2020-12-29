@@ -32,12 +32,12 @@ impl<'a> TryFrom<Put<'a>> for GenericBetArguments<'a> {
                 Builder::new()
                     .add_output(Output::new(
                         profit.into(),
-                        v.user_api.receive_payment(profit),
+                        &v.user_api.receive_payment(profit),
                         None,
                     )?)
                     .add_output(Output::new(
                         refund.into(),
-                        v.operator_api.receive_payment(refund),
+                        &v.operator_api.receive_payment(refund),
                         None,
                     )?)
                     .into(),

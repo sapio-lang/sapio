@@ -75,7 +75,7 @@ impl ExampleBThen for ExampleB<Start> {
     then! {begin_contest |s| {
         let o = template::Output::new(
             s.amount,
-            ExampleB::<Finish> {
+            &ExampleB::<Finish> {
                 participants: s.participants.clone(),
                 threshold: s.threshold,
                 amount: s.amount,
