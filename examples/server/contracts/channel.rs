@@ -224,7 +224,7 @@ impl FunctionalityAtState for Channel<Stop> {
 
 /// Implement Contract for Channel<T> and functionality will be correctly assembled for different
 /// States.
-impl<T: State > Contract for Channel<T>
+impl<T: State> Contract for Channel<T>
 where
     Channel<T>: FunctionalityAtState + 'static,
 {
