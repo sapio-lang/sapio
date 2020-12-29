@@ -98,7 +98,7 @@ impl TrustlessEscrow {
             Compiled::from_address(s.bob_escrow.1.clone(), None),
             None,
         )?;
-        let mut tb = template::TemplateBuilder::new().add_output(o1).add_output(o2).set_sequence(0, 1700 /*roughly 10 days*/);
+        let mut tb = template::Builder::new().add_output(o1).add_output(o2).set_sequence(0, 1700 /*roughly 10 days*/);
         Ok(Box::new(std::iter::once(
             tb.into(),
         )))

@@ -1,6 +1,6 @@
 use crate::clause::Clause;
 use crate::core::template::Output;
-use crate::core::template::{Template, TemplateBuilder};
+use crate::core::template::{Builder, Template};
 use crate::*;
 use contract::actions::*;
 use contract::*;
@@ -87,7 +87,7 @@ impl GenericBet {
             [] => return Ok(None),
             [(_, a)] => Ok(Some(a.clone())),
             sl => Ok(Some(
-                template::TemplateBuilder::new()
+                template::Builder::new()
                     .add_output(Output::new(
                         self.amount.into(),
                         GenericBet {

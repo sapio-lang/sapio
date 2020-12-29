@@ -58,7 +58,7 @@ impl DynamicExample {
             finish_or: vec![],
             data: "E.g., Create a Vault".into(),
         };
-        let mut builder = template::TemplateBuilder::new()
+        let mut builder = template::Builder::new()
         .add_output(template::Output::new(s.amount_step.into(), d, None)?)
         .add_output(template::Output::new(s.amount_step.into(), d2, None)?);
 

@@ -1,4 +1,3 @@
-
 use super::*;
 use bitcoin::hashes::Hash;
 /// Any type which can generate a CTVHash. Allows some decoupling in the future if some types will

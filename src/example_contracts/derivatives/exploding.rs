@@ -17,7 +17,7 @@ where
     then!(
         explodes | s | {
             Ok(Box::new(std::iter::once(
-                TemplateBuilder::new()
+                Builder::new()
                     .add_output(Output::new(
                         s.party_one.into(),
                         Compiled::from_address(s.key_p1.clone(), None),
@@ -38,7 +38,7 @@ where
     then!(
         stikes[Self::signed] | s | {
             Ok(Box::new(std::iter::once(
-                TemplateBuilder::new()
+                Builder::new()
                     .add_output(Output::new(
                         (s.party_one + s.party_two).into(),
                         GenericBet::try_from(s.opt.clone())?,
@@ -67,7 +67,7 @@ where
     then!(
         explodes | s | {
             Ok(Box::new(std::iter::once(
-                TemplateBuilder::new()
+                Builder::new()
                     .add_output(Output::new(
                         s.party_one.into(),
                         Compiled::from_address(s.key_p1.clone(), None),
@@ -82,7 +82,7 @@ where
     then!(
         stikes | s | {
             Ok(Box::new(std::iter::once(
-                TemplateBuilder::new()
+                Builder::new()
                     .add_amount(s.party_two)
                     .add_sequence(0)
                     .add_output(Output::new(

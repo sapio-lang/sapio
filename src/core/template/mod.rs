@@ -10,12 +10,12 @@ use std::convert::TryInto;
 
 pub mod output;
 mod util;
-use util::CTVHash;
 pub use output::{Output, OutputMeta};
+use util::CTVHash;
 
-/// TemplateBuilder can be used to interactively put together a transaction template before
+/// Builder can be used to interactively put together a transaction template before
 /// finalizing into a Template.
-pub struct TemplateBuilder {
+pub struct Builder {
     sequences: Vec<u32>,
     outputs: Vec<Output>,
     version: i32,
@@ -24,10 +24,10 @@ pub struct TemplateBuilder {
     amount: Amount,
 }
 
-impl TemplateBuilder {
+impl Builder {
     /// Creates a new transaction template with 1 input and no outputs.
-    pub fn new() -> TemplateBuilder {
-        TemplateBuilder {
+    pub fn new() -> Builder {
+        Builder {
             sequences: vec![0],
             outputs: vec![],
             version: 2,
@@ -65,7 +65,7 @@ impl TemplateBuilder {
         self
     }
 
-    /// Creates a transaction from a TemplateBuilder.
+    /// Creates a transaction from a Builder.
     /// Generally, should not be called directly.
     pub fn get_tx(&self) -> bitcoin::Transaction {
         bitcoin::Transaction {
@@ -93,8 +93,8 @@ impl TemplateBuilder {
     }
 }
 
-impl From<TemplateBuilder> for Template {
-    fn from(t: TemplateBuilder) -> Template {
+impl From<Builder> for Template {
+    fn from(t: Builder) -> Template {
         let tx = t.get_tx();
         Template {
             outputs: t.outputs,
@@ -105,12 +105,11 @@ impl From<TemplateBuilder> for Template {
         }
     }
 }
-impl From<TemplateBuilder> for Result<Template, CompilationError> {
-    fn from(t: TemplateBuilder) -> Self {
+impl From<Builder> for Result<Template, CompilationError> {
+    fn from(t: Builder) -> Self {
         Ok(t.into())
     }
 }
-
 
 /// Template holds the data needed to construct a Transaction for CTV Purposes, along with relevant
 /// metadata
@@ -127,8 +126,8 @@ impl Template {
     pub fn hash(&self) -> sha256::Hash {
         self.ctv
     }
-    pub fn new() -> TemplateBuilder {
-        TemplateBuilder::new()
+    pub fn new() -> Builder {
+        Builder::new()
     }
 
     pub fn total_amount(&self) -> Amount {

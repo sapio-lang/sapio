@@ -33,7 +33,7 @@ impl<'a> TryFrom<Call<'a>> for GenericBetArguments<'a> {
             }
             outcomes.push((
                 price as i64,
-                TemplateBuilder::new()
+                Builder::new()
                     .add_output(Output::new(
                         profit.into(),
                         v.user_api.receive_payment(profit),

@@ -21,7 +21,7 @@ pub struct TreePay {
 use std::convert::TryInto;
 impl TreePay {
     then! {expand |s| {
-        let mut builder = template::TemplateBuilder::new();
+        let mut builder = template::Builder::new();
         if s.participants.len() > s.radix {
 
             for c in s.participants.chunks(s.participants.len()/s.radix) {

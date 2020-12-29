@@ -21,7 +21,7 @@ pub struct Vault {
 
 impl Vault {
     then! {step |s| {
-        let mut builder = template::TemplateBuilder::new()
+        let mut builder = template::Builder::new()
         .add_output(template::Output::new(s.amount_step.into(),
                 UndoSendInternal {
                     from_contract: (s.cold_storage)(s.amount_step)?,
@@ -52,7 +52,7 @@ impl Vault {
     }}
     then! {to_cold |s| {
         let amount = bitcoin::Amount::try_from(s.amount_step).map_err(|e| contract::CompilationError::TerminateCompilation)?.checked_mul(s.n_steps).ok_or(contract::CompilationError::TerminateCompilation)?;
-        let mut builder = template::TemplateBuilder::new()
+        let mut builder = template::Builder::new()
             .add_output(template::Output::new(amount.into(), (s.cold_storage)(amount.into())?, None)?);
         Ok(Box::new(std::iter::once(builder.into())))
 

@@ -18,7 +18,7 @@ impl UndoSendInternal {
     then!(
         complete | s | {
             Ok(Box::new(iter::once(
-                template::TemplateBuilder::new()
+                template::Builder::new()
                     .add_output(template::Output::new(
                         s.amount,
                         s.to_contract.clone(),
@@ -32,7 +32,7 @@ impl UndoSendInternal {
     then!(
         undo | s | {
             Ok(Box::new(iter::once(
-                template::TemplateBuilder::new()
+                template::Builder::new()
                     .add_output(template::Output::new(
                         s.amount,
                         s.from_contract.clone(),

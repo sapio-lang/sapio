@@ -212,7 +212,7 @@ impl FunctionalityAtState for Channel<Start> {
             None,
         )?;
         Ok(Box::new(std::iter::once(
-            template::TemplateBuilder::new().add_output(o).into(),
+            template::Builder::new().add_output(o).into(),
         )))
     }}
 }
@@ -222,7 +222,7 @@ impl FunctionalityAtState for Channel<Stop> {
     then! {finish_contest [Self::timeout] |s| {
         let o = template::Output::new(s.amount, s.resolution.clone(), None)?;
         Ok(Box::new(std::iter::once(
-            template::TemplateBuilder::new().add_output(o).into(),
+            template::Builder::new().add_output(o).into(),
         )))
     }}
 }

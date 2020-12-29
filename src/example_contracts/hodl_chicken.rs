@@ -80,7 +80,7 @@ impl HodlChickenInner {
     guard! {alice_is_a_chicken |s| {Clause::Key(s.alice_key)}}
     guard! {bob_is_a_chicken |s| {Clause::Key(s.bob_key)}}
     then! {alice_redeem [Self::alice_is_a_chicken] |s| {
-        Ok(Box::new(std::iter::once(Ok(template::TemplateBuilder::new()
+        Ok(Box::new(std::iter::once(Ok(template::Builder::new()
             .add_output(template::Output::new(
                 CoinAmount::Sats(s.winner_gets),
                 s.bob_contract.winner.clone(),
@@ -95,7 +95,7 @@ impl HodlChickenInner {
     }}
 
     then! {bob_redeem [Self::bob_is_a_chicken] |s| {
-        Ok(Box::new(std::iter::once(Ok(template::TemplateBuilder::new()
+        Ok(Box::new(std::iter::once(Ok(template::Builder::new()
             .add_output(template::Output::new(
                 CoinAmount::Sats(s.winner_gets),
                 s.alice_contract.winner.clone(),
