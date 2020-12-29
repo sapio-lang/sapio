@@ -7,32 +7,11 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::convert::TryInto;
-/// Metadata for outputs, arbitrary KV set.
-pub type OutputMeta = HashMap<String, String>;
 
-/// An Output is not a literal Bitcoin Output, but contains data needed to construct one, and
-/// metadata for linking & ABI building
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
-pub struct Output {
-    pub amount: CoinAmount,
-    pub contract: crate::contract::Compiled,
-    pub metadata: OutputMeta,
-}
-impl Output {
-    /// Creates a new Output, forcing the compilation of the compilable object and defaulting
-    /// metadata if not provided to blank.
-    pub fn new<T: crate::contract::Compilable>(
-        amount: CoinAmount,
-        contract: T,
-        metadata: Option<OutputMeta>,
-    ) -> Result<Output, CompilationError> {
-        Ok(Output {
-            amount,
-            contract: contract.compile()?,
-            metadata: metadata.unwrap_or_else(HashMap::new),
-        })
-    }
-}
+pub mod output;
+mod util;
+use util::CTVHash;
+pub use output::{Output, OutputMeta};
 
 /// TemplateBuilder can be used to interactively put together a transaction template before
 /// finalizing into a Template.
@@ -132,54 +111,6 @@ impl From<TemplateBuilder> for Result<Template, CompilationError> {
     }
 }
 
-/// Any type which can generate a CTVHash. Allows some decoupling in the future if some types will
-/// not be literal transactions.
-trait CTVHash {
-    fn get_ctv_hash(&self, input_index: u32) -> sha256::Hash;
-    fn total_amount(&self) -> Amount;
-}
-impl CTVHash for bitcoin::Transaction {
-    /// Uses BIP-119 Logic to compute a CTV Hash
-    fn get_ctv_hash(&self, input_index: u32) -> sha256::Hash {
-        let mut ctv_hash = sha256::Hash::engine();
-        self.version.consensus_encode(&mut ctv_hash).unwrap();
-        self.lock_time.consensus_encode(&mut ctv_hash).unwrap();
-        (self.input.len() as u32)
-            .consensus_encode(&mut ctv_hash)
-            .unwrap();
-        {
-            let mut enc = sha256::Hash::engine();
-            for seq in self.input.iter().map(|i| i.sequence) {
-                seq.consensus_encode(&mut enc).unwrap();
-            }
-            sha256::Hash::from_engine(enc)
-                .into_inner()
-                .consensus_encode(&mut ctv_hash)
-                .unwrap();
-        }
-
-        (self.output.len() as u32)
-            .consensus_encode(&mut ctv_hash)
-            .unwrap();
-
-        {
-            let mut enc = sha256::Hash::engine();
-            for out in self.output.iter() {
-                out.consensus_encode(&mut enc).unwrap();
-            }
-            sha256::Hash::from_engine(enc)
-                .into_inner()
-                .consensus_encode(&mut ctv_hash)
-                .unwrap();
-        }
-        input_index.consensus_encode(&mut ctv_hash).unwrap();
-        sha256::Hash::from_engine(ctv_hash)
-    }
-
-    fn total_amount(&self) -> Amount {
-        Amount::from_sat(self.output.iter().fold(0, |a, b| a + b.value))
-    }
-}
 
 /// Template holds the data needed to construct a Transaction for CTV Purposes, along with relevant
 /// metadata
@@ -192,7 +123,6 @@ pub struct Template {
     pub label: String,
 }
 
-use bitcoin::hashes::Hash;
 impl Template {
     pub fn hash(&self) -> sha256::Hash {
         self.ctv
