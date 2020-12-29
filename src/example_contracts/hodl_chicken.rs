@@ -80,13 +80,13 @@ impl HodlChickenInner {
     guard! {alice_is_a_chicken |s| {Clause::Key(s.alice_key)}}
     guard! {bob_is_a_chicken |s| {Clause::Key(s.bob_key)}}
     then! {alice_redeem [Self::alice_is_a_chicken] |s| {
-        Ok(Box::new(std::iter::once(Ok(txn::TemplateBuilder::new()
-            .add_output(txn::Output::new(
+        Ok(Box::new(std::iter::once(Ok(template::TemplateBuilder::new()
+            .add_output(template::Output::new(
                 CoinAmount::Sats(s.winner_gets),
                 s.bob_contract.winner.clone(),
                 None,
             )?)
-            .add_output(txn::Output::new(
+            .add_output(template::Output::new(
                 CoinAmount::Sats(s.chicken_gets),
                 s.alice_contract.loser.clone(),
                 None,
@@ -95,13 +95,13 @@ impl HodlChickenInner {
     }}
 
     then! {bob_redeem [Self::bob_is_a_chicken] |s| {
-        Ok(Box::new(std::iter::once(Ok(txn::TemplateBuilder::new()
-            .add_output(txn::Output::new(
+        Ok(Box::new(std::iter::once(Ok(template::TemplateBuilder::new()
+            .add_output(template::Output::new(
                 CoinAmount::Sats(s.winner_gets),
                 s.alice_contract.winner.clone(),
                 None,
             )?)
-            .add_output(txn::Output::new(
+            .add_output(template::Output::new(
                 CoinAmount::Sats(s.chicken_gets),
                 s.bob_contract.loser.clone(),
                 None,

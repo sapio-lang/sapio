@@ -18,8 +18,12 @@ impl UndoSendInternal {
     then!(
         complete | s | {
             Ok(Box::new(iter::once(
-                txn::TemplateBuilder::new()
-                    .add_output(txn::Output::new(s.amount, s.to_contract.clone(), None)?)
+                template::TemplateBuilder::new()
+                    .add_output(template::Output::new(
+                        s.amount,
+                        s.to_contract.clone(),
+                        None,
+                    )?)
                     .set_sequence(0, s.timeout)
                     .into(),
             )))
@@ -28,8 +32,12 @@ impl UndoSendInternal {
     then!(
         undo | s | {
             Ok(Box::new(iter::once(
-                txn::TemplateBuilder::new()
-                    .add_output(txn::Output::new(s.amount, s.from_contract.clone(), None)?)
+                template::TemplateBuilder::new()
+                    .add_output(template::Output::new(
+                        s.amount,
+                        s.from_contract.clone(),
+                        None,
+                    )?)
                     .into(),
             )))
         }

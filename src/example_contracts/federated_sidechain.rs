@@ -39,7 +39,7 @@ where
 }
 impl StateDependentActions for FederatedPegIn<CanBeginRecovery> {
     then! {begin_recovery [Self::recovery_signed] |s| {
-        let mut builder = txn::TemplateBuilder::new().add_output(txn::Output::new(
+        let mut builder = template::TemplateBuilder::new().add_output(template::Output::new(
             s.amount,
             FederatedPegIn::<CanFinishRecovery> {
                 keys: s.keys.clone(),

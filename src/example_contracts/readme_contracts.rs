@@ -88,17 +88,17 @@ pub struct TrustlessEscrow {
 impl TrustlessEscrow {
     guard!(cooperate | s | { Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)]) });
     then! {use_escrow |s| {
-        let o1 = txn::Output::new(
+        let o1 = template::Output::new(
             s.alice_escrow.0,
             Compiled::from_address(s.alice_escrow.1.clone(), None),
             None,
         )?;
-        let o2 = txn::Output::new(
+        let o2 = template::Output::new(
             s.bob_escrow.0,
             Compiled::from_address(s.bob_escrow.1.clone(), None),
             None,
         )?;
-        let mut tb = txn::TemplateBuilder::new().add_output(o1).add_output(o2).set_sequence(0, 1700 /*roughly 10 days*/);
+        let mut tb = template::TemplateBuilder::new().add_output(o1).add_output(o2).set_sequence(0, 1700 /*roughly 10 days*/);
         Ok(Box::new(std::iter::once(
             tb.into(),
         )))

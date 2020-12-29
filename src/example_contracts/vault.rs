@@ -21,8 +21,8 @@ pub struct Vault {
 
 impl Vault {
     then! {step |s| {
-        let mut builder = txn::TemplateBuilder::new()
-        .add_output(txn::Output::new(s.amount_step.into(),
+        let mut builder = template::TemplateBuilder::new()
+        .add_output(template::Output::new(s.amount_step.into(),
                 UndoSendInternal {
                     from_contract: (s.cold_storage)(s.amount_step)?,
                     to_contract: Compiled::from_address(s.hot_storage.clone(), None),
@@ -43,7 +43,7 @@ impl Vault {
                 mature: s.mature,
 
             }.compile()?;
-            builder.add_output(txn::Output::new(sub_amount.into(), sub_vault, None)?)
+            builder.add_output(template::Output::new(sub_amount.into(), sub_vault, None)?)
         } else {
             builder
         }.into()
@@ -52,8 +52,8 @@ impl Vault {
     }}
     then! {to_cold |s| {
         let amount = bitcoin::Amount::try_from(s.amount_step).map_err(|e| contract::CompilationError::TerminateCompilation)?.checked_mul(s.n_steps).ok_or(contract::CompilationError::TerminateCompilation)?;
-        let mut builder = txn::TemplateBuilder::new()
-            .add_output(txn::Output::new(amount.into(), (s.cold_storage)(amount.into())?, None)?);
+        let mut builder = template::TemplateBuilder::new()
+            .add_output(template::Output::new(amount.into(), (s.cold_storage)(amount.into())?, None)?);
         Ok(Box::new(std::iter::once(builder.into())))
 
     }}

@@ -58,9 +58,9 @@ impl DynamicExample {
             finish_or: vec![],
             data: "E.g., Create a Vault".into(),
         };
-        let mut builder = txn::TemplateBuilder::new()
-        .add_output(txn::Output::new(s.amount_step.into(), d, None)?)
-        .add_output(txn::Output::new(s.amount_step.into(), d2, None)?);
+        let mut builder = template::TemplateBuilder::new()
+        .add_output(template::Output::new(s.amount_step.into(), d, None)?)
+        .add_output(template::Output::new(s.amount_step.into(), d2, None)?);
 
         Ok(Box::new(std::iter::once(builder.into())))
     }}
