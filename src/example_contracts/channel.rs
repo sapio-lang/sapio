@@ -199,7 +199,7 @@ where
 /// Override begin_contest when state = Start
 impl FunctionalityAtState for Channel<Start> {
     then! {begin_contest |s, ctx| {
-        let o = ctx.output(
+        ctx.template().add_output(
             s.amount,
             &Channel::<Stop> {
                 pd: Default::default(),
@@ -210,16 +210,14 @@ impl FunctionalityAtState for Channel<Start> {
                 db: s.db.clone(),
             },
             None,
-        )?;
-        ctx.template().add_output(o).into()
+        )?.into()
     }}
 }
 
 /// Override finish_contest when state = Start
 impl FunctionalityAtState for Channel<Stop> {
     then! {finish_contest [Self::timeout] |s, ctx| {
-        let o = ctx.output(s.amount, &s.resolution, None)?;
-        ctx.template().add_output(o).into()
+        ctx.template().add_output(s.amount, &s.resolution, None)?.into()
     }}
 }
 

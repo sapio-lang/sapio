@@ -18,16 +18,16 @@ where
         explodes | s,
         ctx | {
             ctx.template()
-                .add_output(ctx.output(
+                .add_output(
                     s.party_one.into(),
                     &Compiled::from_address(s.key_p1.clone(), None),
                     None,
-                )?)
-                .add_output(ctx.output(
+                )?
+                .add_output(
                     s.party_two.into(),
                     &Compiled::from_address(s.key_p2.clone(), None),
                     None,
-                )?)
+                )?
                 .set_lock_time(s.timeout)
                 .into()
         }
@@ -38,11 +38,11 @@ where
         stikes[Self::signed] | s,
         ctx | {
             ctx.template()
-                .add_output(ctx.output(
+                .add_output(
                     (s.party_one + s.party_two).into(),
                     &GenericBet::try_from(s.opt.clone())?,
                     None,
-                )?)
+                )?
                 .into()
         }
     );
@@ -67,11 +67,11 @@ where
         ctx | {
             Ok(Box::new(std::iter::once(
                 ctx.template()
-                    .add_output(ctx.output(
+                    .add_output(
                         s.party_one.into(),
                         &Compiled::from_address(s.key_p1.clone(), None),
                         None,
-                    )?)
+                    )?
                     .set_lock_time(s.timeout)
                     .into(),
             )))
@@ -84,11 +84,11 @@ where
             ctx.template()
                 .add_amount(s.party_two)
                 .add_sequence(0)
-                .add_output(ctx.output(
+                .add_output(
                     (s.party_one + s.party_two).into(),
                     &GenericBet::try_from(s.opt.clone())?,
                     None,
-                )?)
+                )?
                 .into()
         }
     );

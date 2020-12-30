@@ -36,16 +36,8 @@ impl<'a> TryFrom<Call<'a>> for GenericBetArguments<'a> {
                 price as i64,
                 v.ctx
                     .template()
-                    .add_output(v.ctx.output(
-                        profit.into(),
-                        &v.user_api.receive_payment(profit),
-                        None,
-                    )?)
-                    .add_output(v.ctx.output(
-                        refund.into(),
-                        &v.operator_api.receive_payment(refund),
-                        None,
-                    )?)
+                    .add_output(profit, &v.user_api.receive_payment(profit), None)?
+                    .add_output(refund, &v.operator_api.receive_payment(refund), None)?
                     .into(),
             ));
         }

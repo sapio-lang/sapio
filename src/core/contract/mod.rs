@@ -7,7 +7,7 @@ pub mod compiler;
 pub mod object;
 
 use super::template::*;
-use bitcoin::util::amount::CoinAmount;
+use bitcoin::util::amount::{Amount, CoinAmount};
 pub use compiler::Compilable;
 pub use object::Object as Compiled;
 use std::collections::HashMap;
@@ -19,9 +19,16 @@ pub enum CompilationError {
     TerminateCompilation,
     MissingTemplates,
     EmptyPolicy,
+    OutOfFunds,
+    ParseAmountError(bitcoin::util::amount::ParseAmountError),
     Miniscript(miniscript::policy::compiler::CompilerError),
 }
 
+impl From<bitcoin::util::amount::ParseAmountError> for CompilationError {
+    fn from(b: bitcoin::util::amount::ParseAmountError) -> Self {
+        CompilationError::ParseAmountError(b)
+    }
+}
 impl From<miniscript::policy::compiler::CompilerError> for CompilationError {
     fn from(v: miniscript::policy::compiler::CompilerError) -> Self {
         CompilationError::Miniscript(v)
@@ -130,33 +137,45 @@ where
 }
 
 #[derive(Clone)]
-pub struct Context {}
+pub struct Context {
+    /* TODO: Add Context Fields! */
+    available_funds: Amount,
+}
 
 impl Context {
+    pub fn new(amount: Amount) -> Self {
+        Context {
+            available_funds: amount,
+        }
+    }
     pub fn compile<A: Compilable>(&self, a: A) -> Result<Compiled, CompilationError> {
         a.compile(&self)
     }
     // TODO: Fix
-    fn with_amount(&self, amount: CoinAmount) -> Self {
-        self.clone()
+    pub fn with_amount(&self, amount: Amount) -> Result<Self, CompilationError> {
+        if self.available_funds < amount {
+            Err(CompilationError::OutOfFunds)
+        } else {
+            Ok(Context {
+                available_funds: amount,
+                ..self.clone()
+            })
+        }
+    }
+    pub fn spend_amount(&mut self, amount: Amount) -> Result<(), CompilationError> {
+        if self.available_funds < amount {
+            Err(CompilationError::OutOfFunds)
+        } else {
+            self.available_funds -= amount;
+            Ok(())
+        }
     }
 
-    /// Creates a new Output, forcing the compilation of the compilable object and defaulting
-    /// metadata if not provided to blank.
-    pub fn output<T: crate::contract::Compilable>(
-        &self,
-        amount: CoinAmount,
-        contract: &T,
-        metadata: Option<OutputMeta>,
-    ) -> Result<Output, CompilationError> {
-        Ok(Output {
-            amount,
-            contract: contract.compile(&self.with_amount(amount))?,
-            metadata: metadata.unwrap_or_else(HashMap::new),
-        })
+    pub fn add_amount(&mut self, amount: Amount) {
+        self.available_funds += amount;
     }
 
     pub fn template(&self) -> crate::template::Builder {
-        crate::template::Builder::new()
+        crate::template::Builder::new(self.clone())
     }
 }

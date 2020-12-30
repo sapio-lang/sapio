@@ -5,6 +5,7 @@ use crate::*;
 use bitcoin::util::amount::CoinAmount;
 use schemars::*;
 use serde::*;
+use std::convert::TryInto;
 pub mod derivatives;
 pub mod dynamic;
 pub mod federated_sidechain;
@@ -73,8 +74,8 @@ impl<T: BState> ExampleB<T> {
 impl ExampleBThen for ExampleB<Finish> {}
 impl ExampleBThen for ExampleB<Start> {
     then! {begin_contest |s, ctx| {
-        let o = ctx.output(
-            s.amount,
+        ctx.template().add_output(
+            s.amount.try_into()?,
             &ExampleB::<Finish> {
                 participants: s.participants.clone(),
                 threshold: s.threshold,
@@ -82,8 +83,7 @@ impl ExampleBThen for ExampleB<Start> {
                 pd: Default::default(),
             },
             None,
-        )?;
-        ctx.template().add_output(o).into()
+        )?.into()
     }}
 }
 

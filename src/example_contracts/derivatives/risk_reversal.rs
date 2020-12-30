@@ -109,23 +109,15 @@ impl<'a> TryFrom<RiskReversal<'a>> for GenericBetArguments<'a> {
             // strike * (amount + delta)  == amount * current price
             // strike * (pay to user)  == amount * current price
             // pay to user  == amount * current price / strike
-            let pay_user = (v.amount * current_price) / strike;
-            let refund_operator = max_amount_bitcoin - pay_user;
+            let profit = (v.amount * current_price) / strike;
+            let refund = max_amount_bitcoin - profit;
 
             outcomes.push((
                 strike as i64,
                 v.ctx
                     .template()
-                    .add_output(v.ctx.output(
-                        pay_user.into(),
-                        &v.user_api.receive_payment(pay_user),
-                        None,
-                    )?)
-                    .add_output(v.ctx.output(
-                        refund_operator.into(),
-                        &v.operator_api.receive_payment(refund_operator),
-                        None,
-                    )?)
+                    .add_output(profit, &v.user_api.receive_payment(profit), None)?
+                    .add_output(refund, &v.operator_api.receive_payment(refund), None)?
                     .into(),
             ));
         }

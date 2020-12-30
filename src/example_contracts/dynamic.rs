@@ -7,7 +7,7 @@ use crate::*;
 use bitcoin::util::amount::CoinAmount;
 use schemars::*;
 use serde::*;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::marker::PhantomData;
 use std::rc::Rc;
 
@@ -58,11 +58,10 @@ impl DynamicExample {
             finish_or: vec![],
             data: "E.g., Create a Vault".into(),
         };
-        let mut builder = ctx.template()
-        .add_output(ctx.output(s.amount_step.into(), &d, None)?)
-        .add_output(ctx.output(s.amount_step.into(), &d2, None)?);
-
-        builder.into()
+        ctx.template()
+        .add_output(s.amount_step.try_into()?, &d, None)?
+        .add_output(s.amount_step.try_into()?, &d2, None)?
+        .into()
     }}
 }
 

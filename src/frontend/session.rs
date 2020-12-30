@@ -1,7 +1,7 @@
 type Key = bitcoin::hashes::sha256::Hash;
 use crate::contract::{Compilable, CompilationError, Compiled, Context, Contract};
 use bitcoin::hashes::hex::ToHex;
-use bitcoin::util::amount::CoinAmount;
+use bitcoin::util::amount::{Amount, CoinAmount};
 use schemars::schema::{RootSchema, Schema, SchemaObject};
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Serialize};
@@ -233,7 +233,8 @@ impl Session {
         }
     }
     pub fn get_context(&self) -> Context {
-        Context {}
+        /// Todo: Make Create specify the amount to send.
+        Context::new(Amount::from_sat(100_000_000_000))
     }
 
     pub fn handle(&mut self, m: Msg) -> Result<Option<Reaction>, serde_json::Error> {

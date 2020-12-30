@@ -5,6 +5,7 @@ use crate::*;
 use bitcoin::util::amount::CoinAmount;
 use schemars::*;
 use serde::*;
+use std::convert::TryInto;
 use std::marker::PhantomData;
 
 #[derive(JsonSchema, Deserialize, Default)]
@@ -39,8 +40,8 @@ where
 }
 impl StateDependentActions for FederatedPegIn<CanBeginRecovery> {
     then! {begin_recovery [Self::recovery_signed] |s, ctx| {
-        ctx.template().add_output(ctx.output(
-            s.amount,
+        ctx.template().add_output(
+            s.amount.try_into()?,
             &FederatedPegIn::<CanFinishRecovery> {
                 keys: s.keys.clone(),
                 thresh_normal: s.thresh_normal,
@@ -50,7 +51,7 @@ impl StateDependentActions for FederatedPegIn<CanBeginRecovery> {
                 _pd: PhantomData::default()
             },
             None
-        )?).into()
+        )?.into()
     }}
 }
 impl StateDependentActions for FederatedPegIn<CanFinishRecovery> {
@@ -59,7 +60,6 @@ impl StateDependentActions for FederatedPegIn<CanFinishRecovery> {
     }}
 }
 
-use std::convert::TryInto;
 impl<T: RecoveryState> FederatedPegIn<T> {
     guard! {recovery_signed |s, ctx| {
         Clause::Threshold(s.thresh_recovery, s.keys_recovery.iter().cloned().map(Clause::Key).collect())

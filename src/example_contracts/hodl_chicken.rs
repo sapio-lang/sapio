@@ -27,7 +27,7 @@ use crate::*;
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 **/
-use bitcoin::util::amount::CoinAmount;
+use bitcoin::util::amount::Amount;
 use schemars::*;
 use serde::*;
 use std::collections::HashMap;
@@ -81,31 +81,31 @@ impl HodlChickenInner {
     guard! {bob_is_a_chicken |s, ctx| {Clause::Key(s.bob_key)}}
     then! {alice_redeem [Self::alice_is_a_chicken] |s, ctx| {
         ctx.template()
-            .add_output(ctx.output(
-                CoinAmount::Sats(s.winner_gets),
+            .add_output(
+                Amount::from_sat(s.winner_gets),
                 &s.bob_contract.winner,
                 None,
-            )?)
-            .add_output(ctx.output(
-                CoinAmount::Sats(s.chicken_gets),
+            )?
+            .add_output(
+                Amount::from_sat(s.chicken_gets),
                 &s.alice_contract.loser,
                 None,
-            )?)
+            )?
             .into()
     }}
 
     then! {bob_redeem [Self::bob_is_a_chicken] |s, ctx| {
         ctx.template()
-            .add_output(ctx.output(
-                CoinAmount::Sats(s.winner_gets),
+            .add_output(
+                Amount::from_sat(s.winner_gets),
                 &s.alice_contract.winner,
                 None,
-            )?)
-            .add_output(ctx.output(
-                CoinAmount::Sats(s.chicken_gets),
+            )?
+            .add_output(
+                Amount::from_sat(s.chicken_gets),
                 &s.bob_contract.loser,
                 None,
-            )?)
+            )?
             .into()
     }}
 }

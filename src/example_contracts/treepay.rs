@@ -5,6 +5,7 @@ use crate::*;
 use bitcoin::util::amount::CoinAmount;
 use schemars::*;
 use serde::*;
+use std::convert::TryInto;
 #[derive(JsonSchema, Serialize, Deserialize, Clone)]
 pub struct Payment {
     pub amount: bitcoin::util::amount::CoinAmount,
@@ -18,7 +19,6 @@ pub struct TreePay {
     pub radix: usize,
 }
 
-use std::convert::TryInto;
 impl TreePay {
     then! {expand |s, ctx| {
         let mut builder = ctx.template();
@@ -27,13 +27,13 @@ impl TreePay {
             for c in s.participants.chunks(s.participants.len()/s.radix) {
                 let mut amt =  bitcoin::util::amount::Amount::from_sat(0);
                 for Payment{amount, ..}  in c {
-                    amt += amount.clone().try_into().map_err(|_| crate::contract::CompilationError::TerminateCompilation)?;
+                    amt += amount.clone().try_into()?;
                 }
-                builder = builder.add_output(ctx.output(amt.into(), &TreePay {participants: c.to_vec(), radix: s.radix}, None)?);
+                builder = builder.add_output(amt, &TreePay {participants: c.to_vec(), radix: s.radix}, None)?;
             }
         } else {
             for Payment{amount, address} in s.participants.iter() {
-                builder = builder.add_output(ctx.output(*amount, &Compiled::from_address(address.clone(), None), None)?);
+                builder = builder.add_output((*amount).try_into()?, &Compiled::from_address(address.clone(), None), None)?;
             }
         }
         builder.into()

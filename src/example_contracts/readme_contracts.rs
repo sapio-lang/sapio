@@ -5,6 +5,7 @@ use crate::*;
 use bitcoin::util::amount::CoinAmount;
 use schemars::*;
 use serde::*;
+use std::convert::TryInto;
 
 /// Pay To Public Key Sapio Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
@@ -96,17 +97,16 @@ impl TrustlessEscrow {
         ctx | { Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)]) }
     );
     then! {use_escrow |s, ctx| {
-        let o1 = ctx.output(
-            s.alice_escrow.0,
-            &Compiled::from_address(s.alice_escrow.1.clone(), None),
-            None,
-        )?;
-        let o2 = ctx.output(
-            s.bob_escrow.0,
-            &Compiled::from_address(s.bob_escrow.1.clone(), None),
-            None,
-        )?;
-        ctx.template().add_output(o1).add_output(o2).set_sequence(0, 1700 /*roughly 10 days*/).into()
+        ctx.template()
+            .add_output(
+                s.alice_escrow.0.try_into()?,
+                &Compiled::from_address(s.alice_escrow.1.clone(), None),
+                None)?
+            .add_output(
+                s.bob_escrow.0.try_into()?,
+                &Compiled::from_address(s.bob_escrow.1.clone(), None),
+                None)?
+            .set_sequence(0, 1700 /*roughly 10 days*/).into()
     }}
 }
 
