@@ -9,6 +9,7 @@ struct Put<'a> {
     symbol: Symbol,
     /// whether we are buying or selling the put
     buying: bool,
+    ctx: Context,
 }
 
 const ONE_UNIT: u64 = 10_000;
@@ -29,13 +30,14 @@ impl<'a> TryFrom<Put<'a>> for GenericBetArguments<'a> {
             }
             outcomes.push((
                 price as i64,
-                Builder::new()
-                    .add_output(Output::new(
+                v.ctx
+                    .template()
+                    .add_output(v.ctx.output(
                         profit.into(),
                         &v.user_api.receive_payment(profit),
                         None,
                     )?)
-                    .add_output(Output::new(
+                    .add_output(v.ctx.output(
                         refund.into(),
                         &v.operator_api.receive_payment(refund),
                         None,

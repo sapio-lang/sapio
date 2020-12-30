@@ -16,17 +16,19 @@ pub struct UndoSendInternal {
 
 impl UndoSendInternal {
     then!(
-        complete | s | {
-            template::Builder::new()
-                .add_output(template::Output::new(s.amount, &s.to_contract, None)?)
+        complete | s,
+        ctx | {
+            ctx.template()
+                .add_output(ctx.output(s.amount, &s.to_contract, None)?)
                 .set_sequence(0, s.timeout)
                 .into()
         }
     );
     then!(
-        undo | s | {
-            template::Builder::new()
-                .add_output(template::Output::new(s.amount, &s.from_contract, None)?)
+        undo | s,
+        ctx | {
+            ctx.template()
+                .add_output(ctx.output(s.amount, &s.from_contract, None)?)
                 .into()
         }
     );

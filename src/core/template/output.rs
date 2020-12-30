@@ -10,18 +10,3 @@ pub struct Output {
     pub contract: crate::contract::Compiled,
     pub metadata: OutputMeta,
 }
-impl Output {
-    /// Creates a new Output, forcing the compilation of the compilable object and defaulting
-    /// metadata if not provided to blank.
-    pub fn new<T: crate::contract::Compilable>(
-        amount: CoinAmount,
-        contract: &T,
-        metadata: Option<OutputMeta>,
-    ) -> Result<Output, CompilationError> {
-        Ok(Output {
-            amount,
-            contract: contract.compile()?,
-            metadata: metadata.unwrap_or_else(HashMap::new),
-        })
-    }
-}

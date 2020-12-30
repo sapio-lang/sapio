@@ -1,5 +1,5 @@
 type Key = bitcoin::hashes::sha256::Hash;
-use crate::contract::{Compilable, CompilationError, Compiled, Contract};
+use crate::contract::{Compilable, CompilationError, Compiled, Context, Contract};
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::util::amount::CoinAmount;
 use schemars::schema::{RootSchema, Schema, SchemaObject};
@@ -27,25 +27,27 @@ impl From<CompilationError> for SessionError {
     }
 }
 
-pub fn from_json<T>(s: serde_json::Value) -> Result<Compiled, SessionError>
+pub fn from_json<T>(s: serde_json::Value, ctx: &Context) -> Result<Compiled, SessionError>
 where
     T: for<'a> Deserialize<'a> + Compilable,
 {
     let t: T = serde_json::from_value(s).map_err(SessionError::Json)?;
-    let c = t.compile().map_err(SessionError::Compiler);
+    let c = ctx.compile(t).map_err(SessionError::Compiler);
     c
 }
 
-pub fn from_json_convert<C, T, E>(s: serde_json::Value) -> Result<Compiled, SessionError>
+pub fn from_json_convert<C, T, E>(
+    s: serde_json::Value,
+    ctx: &Context,
+) -> Result<Compiled, SessionError>
 where
     C: for<'a> Deserialize<'a>,
     T: TryFrom<C, Error = E> + Compilable,
     SessionError: From<E>,
 {
     let t: C = serde_json::from_value(s).map_err(SessionError::Json)?;
-    let c = T::try_from(t)
-        .map_err(SessionError::from)?
-        .compile()
+    let c = ctx
+        .compile(T::try_from(t).map_err(SessionError::from)?)
         .map_err(SessionError::Compiler);
     c
 }
@@ -101,7 +103,10 @@ impl Action {
         match self {
             Action::Close => None,
             Action::Create { type_, args } => {
-                let c = session.menu.compile(type_, args).ok()?;
+                let c = session
+                    .menu
+                    .compile(type_, args, &session.get_context())
+                    .ok()?;
                 let a = c.address.clone();
                 // todo amount
                 let (txns, metadata) = c.bind(create_mock_output());
@@ -129,7 +134,7 @@ impl Action {
 pub struct MenuBuilder {
     menu: Vec<RootSchema>,
     gen: schemars::gen::SchemaGenerator,
-    internal_menu: HashMap<String, fn(Value) -> Result<Compiled, SessionError>>,
+    internal_menu: HashMap<String, fn(Value, &Context) -> Result<Compiled, SessionError>>,
 }
 impl MenuBuilder {
     pub fn new() -> MenuBuilder {
@@ -196,15 +201,15 @@ impl From<MenuBuilder> for Menu {
 
 pub struct Menu {
     menu: String,
-    internal_menu: HashMap<String, fn(Value) -> Result<Compiled, SessionError>>,
+    internal_menu: HashMap<String, fn(Value, &Context) -> Result<Compiled, SessionError>>,
 }
 impl Menu {
-    fn compile(&self, name: String, args: Value) -> Result<Compiled, SessionError> {
+    fn compile(&self, name: String, args: Value, ctx: &Context) -> Result<Compiled, SessionError> {
         let f = self
             .internal_menu
             .get(&name)
             .ok_or(SessionError::ContractNotRegistered)?;
-        f(args)
+        f(args, ctx)
     }
 }
 
@@ -226,6 +231,9 @@ impl Session {
             example_msg: None,
             menu: m,
         }
+    }
+    pub fn get_context(&self) -> Context {
+        Context {}
     }
 
     pub fn handle(&mut self, m: Msg) -> Result<Option<Reaction>, serde_json::Error> {

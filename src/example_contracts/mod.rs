@@ -23,8 +23,8 @@ pub struct ExampleA {
 }
 
 impl ExampleA {
-    guard!(timeout | s | { Clause::Older(100) });
-    guard!(cached signed |s| {Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)])});
+    guard!(timeout | s, ctx | { Clause::Older(100) });
+    guard!(cached signed |s, ctx| {Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)])});
 }
 
 impl Contract for ExampleA {
@@ -66,14 +66,14 @@ pub struct ExampleB<T: BState> {
 }
 
 impl<T: BState> ExampleB<T> {
-    guard!(timeout | s | { Clause::Older(100) });
-    guard!(cached all_signed |s| {Clause::Threshold(T::get_n(s.threshold, s.participants.len()as u8) as usize, s.participants.iter().map(|k| Clause::Key(*k)).collect())});
+    guard!(timeout | s, ctx | { Clause::Older(100) });
+    guard!(cached all_signed |s, ctx| {Clause::Threshold(T::get_n(s.threshold, s.participants.len()as u8) as usize, s.participants.iter().map(|k| Clause::Key(*k)).collect())});
 }
 
 impl ExampleBThen for ExampleB<Finish> {}
 impl ExampleBThen for ExampleB<Start> {
-    then! {begin_contest |s| {
-        let o = template::Output::new(
+    then! {begin_contest |s, ctx| {
+        let o = ctx.output(
             s.amount,
             &ExampleB::<Finish> {
                 participants: s.participants.clone(),
@@ -83,7 +83,7 @@ impl ExampleBThen for ExampleB<Start> {
             },
             None,
         )?;
-        template::Builder::new().add_output(o).into()
+        ctx.template().add_output(o).into()
     }}
 }
 

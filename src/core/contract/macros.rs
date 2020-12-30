@@ -52,10 +52,10 @@ macro_rules! declare {
 /// ```
 #[macro_export]
 macro_rules! then {
-    {$name:ident $a:tt |$s:ident| $b:block } => {
-        fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<Self>> { Some($crate::contract::actions::ThenFunc{guard: &$a, func:|$s: &Self| $b})}
+    {$name:ident $a:tt |$s:ident, $ctx:ident| $b:block } => {
+        fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<Self>> { Some($crate::contract::actions::ThenFunc{guard: &$a, func:|$s: &Self, $ctx:&$crate::contract::Context| $b})}
     };
-    {$name:ident |$s:ident| $b:block } => { then!{$name [] |$s| $b } };
+    {$name:ident |$s:ident, $ctx:ident| $b:block } => { then!{$name [] |$s, $ctx| $b } };
 
     {$name:ident} => {
         fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<Self>> {None}
@@ -73,9 +73,9 @@ macro_rules! then {
 /// Unlike a `then!`, `finish!` must always have guards.
 #[macro_export]
 macro_rules! finish {
-    {$name:ident $a:tt |$s:ident, $o:ident| $b:block } => {
+    {$name:ident $a:tt |$s:ident, $ctx:ident, $o:ident| $b:block } => {
         fn $name<'a>() -> Option<$crate::contract::actions::FinishOrFunc<Self, Args>>{
-            Some($crate::contract::actions::FinishOrFunc{guard: &$a, func: |$s: &Self, $o: Option<&_>| $b} .into())
+            Some($crate::contract::actions::FinishOrFunc{guard: &$a, func: |$s: &Self, $ctx:&$crate::contract::Context, $o: Option<&_>| $b} .into())
         }
     };
     {$name:ident $a:tt} => {
@@ -97,14 +97,14 @@ macro_rules! guard {
                 None
             }
      };
-    {$name:ident |$s:ident| $b:block} => {
+    {$name:ident |$s:ident, $ctx:ident| $b:block} => {
             fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
-                Some($crate::contract::actions::Guard::Fresh( |$s: &Self| $b))
+                Some($crate::contract::actions::Guard::Fresh( |$s: &Self, $ctx: &$crate::contract::Context| $b))
             }
         };
-    {cached $name:ident |$s:ident| $b:block} => {
+    {cached $name:ident |$s:ident, $ctx:ident| $b:block} => {
             fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
-                Some($crate::contract::actions::Guard::Cache( |$s: &Self| $b))
+                Some($crate::contract::actions::Guard::Cache( |$s: &Self, $ctx:&$crate::contract::Context| $b))
             }
         };
 }

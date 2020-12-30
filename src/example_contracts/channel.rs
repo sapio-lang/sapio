@@ -162,18 +162,18 @@ struct Channel<T: State> {
 
 /// Functionality Available for a channel regardless of state
 impl<T: State> Channel<T> {
-    guard!(timeout | s | { Clause::Older(100) });
-    guard!(cached signed |s| {Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)])});
+    guard!(timeout |s, ctx| { Clause::Older(100) });
+    guard!(cached signed |s, ctx| {Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)])});
 
     finish! {
         update_state_a [Self::signed]
-            |s, o| {
+            |s, ctx, o| {
                 Ok(Box::new(std::iter::empty()))
             }
     }
     finish! {
         update_state_b [Self::signed]
-            |s, o| {
+            |s, ctx, o| {
                 Ok(Box::new(std::iter::empty()))
             }
     }
@@ -198,8 +198,8 @@ where
 
 /// Override begin_contest when state = Start
 impl FunctionalityAtState for Channel<Start> {
-    then! {begin_contest |s| {
-        let o = template::Output::new(
+    then! {begin_contest |s, ctx| {
+        let o = ctx.output(
             s.amount,
             &Channel::<Stop> {
                 pd: Default::default(),
@@ -211,15 +211,15 @@ impl FunctionalityAtState for Channel<Start> {
             },
             None,
         )?;
-        template::Builder::new().add_output(o).into()
+        ctx.template().add_output(o).into()
     }}
 }
 
 /// Override finish_contest when state = Start
 impl FunctionalityAtState for Channel<Stop> {
-    then! {finish_contest [Self::timeout] |s| {
-        let o = template::Output::new(s.amount, &s.resolution, None)?;
-        template::Builder::new().add_output(o).into()
+    then! {finish_contest [Self::timeout] |s, ctx| {
+        let o = ctx.output(s.amount, &s.resolution, None)?;
+        ctx.template().add_output(o).into()
     }}
 }
 

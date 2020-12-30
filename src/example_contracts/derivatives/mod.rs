@@ -7,9 +7,7 @@ use contract::*;
 
 use ::miniscript::*;
 use bitcoin;
-use bitcoin::secp256k1::*;
 use bitcoin::util::amount::{Amount, CoinAmount};
-use rand::rngs::OsRng;
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
@@ -82,13 +80,14 @@ impl GenericBet {
     fn recurse_over(
         &self,
         range: std::ops::Range<usize>,
+        ctx: &crate::contract::Context,
     ) -> Result<Option<Template>, CompilationError> {
         match &self.outcomes[range] {
             [] => return Ok(None),
             [(_, a)] => Ok(Some(a.clone())),
             sl => Ok(Some(
-                template::Builder::new()
-                    .add_output(Output::new(
+                ctx.template()
+                    .add_output(ctx.output(
                         self.amount.into(),
                         &GenericBet {
                             amount: self.amount,
@@ -103,10 +102,11 @@ impl GenericBet {
         }
     }
     /// Action when the price is greater than or equal to the price in the middle
-    guard!(gte | s | { s.price(true) });
+    guard!(gte | s, ctx | { s.price(true) });
     then!(
-        pay_gte[Self::gte] | s | {
-            if let Some(tmpl) = s.recurse_over(s.outcomes.len() / 2..s.outcomes.len())? {
+        pay_gte[Self::gte] | s,
+        ctx | {
+            if let Some(tmpl) = s.recurse_over(s.outcomes.len() / 2..s.outcomes.len(), ctx)? {
                 Ok(Box::new(std::iter::once(Ok(tmpl))))
             } else {
                 Ok(Box::new(std::iter::empty()))
@@ -115,10 +115,11 @@ impl GenericBet {
     );
 
     /// Action when the price is less than or equal to the price in the middle
-    guard!(lt | s | { s.price(false) });
+    guard!(lt | s, ctx | { s.price(false) });
     then!(
-        pay_lt[Self::lt] | s | {
-            if let Some(tmpl) = s.recurse_over(0..s.outcomes.len() / 2)? {
+        pay_lt[Self::lt] | s,
+        ctx | {
+            if let Some(tmpl) = s.recurse_over(0..s.outcomes.len() / 2, ctx)? {
                 Ok(Box::new(std::iter::once(Ok(tmpl))))
             } else {
                 Ok(Box::new(std::iter::empty()))
@@ -126,7 +127,7 @@ impl GenericBet {
         }
     );
     /// Allow for both parties to cooperative close
-    guard!(cooperate | s | { s.cooperate.clone() });
+    guard!(cooperate | s, ctx | { s.cooperate.clone() });
 
     // elided: unilateral close initiation after certain relative delay
 }

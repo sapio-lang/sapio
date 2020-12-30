@@ -1,6 +1,7 @@
 use super::AnyContract;
 use super::CompilationError;
 use super::Compiled;
+use super::Context;
 use crate::util::amountrange::AmountRange;
 use serde::Deserialize;
 
@@ -12,7 +13,7 @@ use std::collections::HashMap;
 enum CacheEntry<T> {
     Nothing,
     Cached(Clause),
-    Fresh(fn(&T) -> Clause),
+    Fresh(fn(&T, &Context) -> Clause),
 }
 
 /// GuardCache assists with caching the computation of guard functions
@@ -26,22 +27,22 @@ impl<T> GuardCache<T> {
             cache: HashMap::new(),
         }
     }
-    fn create_entry(g: Option<Guard<T>>, t: &T) -> CacheEntry<T> {
+    fn create_entry(g: Option<Guard<T>>, t: &T, ctx: &Context) -> CacheEntry<T> {
         match g {
-            Some(Guard::Cache(f)) => CacheEntry::Cached(f(t)),
+            Some(Guard::Cache(f)) => CacheEntry::Cached(f(t, ctx)),
             Some(Guard::Fresh(f)) => CacheEntry::Fresh(f),
             None => CacheEntry::Nothing,
         }
     }
-    fn get(&mut self, t: &T, f: fn() -> Option<Guard<T>>) -> Option<Clause> {
+    fn get(&mut self, t: &T, f: fn() -> Option<Guard<T>>, ctx: &Context) -> Option<Clause> {
         match self
             .cache
             .entry(f as usize)
-            .or_insert_with(|| Self::create_entry(f(), t))
+            .or_insert_with(|| Self::create_entry(f(), t, ctx))
         {
             CacheEntry::Nothing => None,
             CacheEntry::Cached(s) => Some(s.clone()),
-            CacheEntry::Fresh(f) => Some(f(t)),
+            CacheEntry::Fresh(f) => Some(f(t, ctx)),
         }
     }
 }
@@ -56,12 +57,12 @@ mod private {
 }
 /// Compilable is a trait for anything which can be compiled
 pub trait Compilable: private::ImplSeal {
-    fn compile(&self) -> Result<Compiled, CompilationError>;
+    fn compile(&self, ctx: &Context) -> Result<Compiled, CompilationError>;
 }
 
 /// Implements a basic identity
 impl Compilable for Compiled {
-    fn compile(&self) -> Result<Compiled, CompilationError> {
+    fn compile(&self, ctx: &Context) -> Result<Compiled, CompilationError> {
         Ok(self.clone())
     }
 }
@@ -72,7 +73,7 @@ where
 {
     /// The main Compilation Logic for a Contract.
     /// TODO: Better Document Semantics
-    fn compile(&self) -> Result<Compiled, CompilationError> {
+    fn compile(&self, ctx: &Context) -> Result<Compiled, CompilationError> {
         #[derive(PartialEq, Eq)]
         enum UsesCTV {
             Yes,
@@ -87,7 +88,7 @@ where
         let finish_fns: Vec<_> = self
             .finish_fns()
             .iter()
-            .filter_map(|x| guard_clauses.get(self_ref, *x))
+            .filter_map(|x| guard_clauses.get(self_ref, *x, ctx))
             .collect();
         if finish_fns.len() > 0 {
             clause_accumulator.push(Clause::Threshold(1, finish_fns))
@@ -97,12 +98,14 @@ where
             .then_fns()
             .iter()
             .filter_map(|x| x())
-            .map(|x| (UsesCTV::Yes, x.guard, (x.func)(self_ref)));
-        let finish_or_fns = self
-            .finish_or_fns()
-            .iter()
-            .filter_map(|x| x())
-            .map(|x| (UsesCTV::No, x.guard, (x.func)(self_ref, Default::default())));
+            .map(|x| (UsesCTV::Yes, x.guard, (x.func)(self_ref, ctx)));
+        let finish_or_fns = self.finish_or_fns().iter().filter_map(|x| x()).map(|x| {
+            (
+                UsesCTV::No,
+                x.guard,
+                (x.func)(self_ref, ctx, Default::default()),
+            )
+        });
 
         let mut amount_range = AmountRange::new();
 
@@ -117,7 +120,7 @@ where
             // And for again.
             let mut option_guard = guards
                 .iter()
-                .filter_map(|x| guard_clauses.get(self_ref, *x))
+                .filter_map(|x| guard_clauses.get(self_ref, *x, ctx))
                 .fold(None, |option_guard, guard| {
                     Some(match option_guard {
                         None => guard,

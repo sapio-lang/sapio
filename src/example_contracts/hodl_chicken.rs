@@ -77,16 +77,16 @@ impl TryFrom<HodlChickenChecks> for HodlChickenInner {
 }
 
 impl HodlChickenInner {
-    guard! {alice_is_a_chicken |s| {Clause::Key(s.alice_key)}}
-    guard! {bob_is_a_chicken |s| {Clause::Key(s.bob_key)}}
-    then! {alice_redeem [Self::alice_is_a_chicken] |s| {
-        template::Builder::new()
-            .add_output(template::Output::new(
+    guard! {alice_is_a_chicken |s, ctx| {Clause::Key(s.alice_key)}}
+    guard! {bob_is_a_chicken |s, ctx| {Clause::Key(s.bob_key)}}
+    then! {alice_redeem [Self::alice_is_a_chicken] |s, ctx| {
+        ctx.template()
+            .add_output(ctx.output(
                 CoinAmount::Sats(s.winner_gets),
                 &s.bob_contract.winner,
                 None,
             )?)
-            .add_output(template::Output::new(
+            .add_output(ctx.output(
                 CoinAmount::Sats(s.chicken_gets),
                 &s.alice_contract.loser,
                 None,
@@ -94,14 +94,14 @@ impl HodlChickenInner {
             .into()
     }}
 
-    then! {bob_redeem [Self::bob_is_a_chicken] |s| {
-        template::Builder::new()
-            .add_output(template::Output::new(
+    then! {bob_redeem [Self::bob_is_a_chicken] |s, ctx| {
+        ctx.template()
+            .add_output(ctx.output(
                 CoinAmount::Sats(s.winner_gets),
                 &s.alice_contract.winner,
                 None,
             )?)
-            .add_output(template::Output::new(
+            .add_output(ctx.output(
                 CoinAmount::Sats(s.chicken_gets),
                 &s.bob_contract.loser,
                 None,

@@ -38,8 +38,8 @@ where
     then! {begin_recovery}
 }
 impl StateDependentActions for FederatedPegIn<CanBeginRecovery> {
-    then! {begin_recovery [Self::recovery_signed] |s| {
-        template::Builder::new().add_output(template::Output::new(
+    then! {begin_recovery [Self::recovery_signed] |s, ctx| {
+        ctx.template().add_output(ctx.output(
             s.amount,
             &FederatedPegIn::<CanFinishRecovery> {
                 keys: s.keys.clone(),
@@ -54,18 +54,18 @@ impl StateDependentActions for FederatedPegIn<CanBeginRecovery> {
     }}
 }
 impl StateDependentActions for FederatedPegIn<CanFinishRecovery> {
-    guard! {finish_recovery |s| {
+    guard! {finish_recovery |s, ctx| {
         Clause::And(vec![Clause::Older(4725 /* 4 weeks? */), Clause::Threshold(s.thresh_recovery, s.keys_recovery.iter().cloned().map(Clause::Key).collect())])
     }}
 }
 
 use std::convert::TryInto;
 impl<T: RecoveryState> FederatedPegIn<T> {
-    guard! {recovery_signed |s| {
+    guard! {recovery_signed |s, ctx| {
         Clause::Threshold(s.thresh_recovery, s.keys_recovery.iter().cloned().map(Clause::Key).collect())
     }}
 
-    guard! {normal_signed |s| {
+    guard! {normal_signed |s, ctx| {
         Clause::Threshold(s.thresh_normal, s.keys.iter().cloned().map(Clause::Key).collect())
     }}
 }
