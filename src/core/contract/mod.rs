@@ -6,11 +6,9 @@ pub mod actions;
 pub mod compiler;
 pub mod object;
 
-use super::template::*;
-use bitcoin::util::amount::{Amount, CoinAmount};
+use bitcoin::util::amount::Amount;
 pub use compiler::Compilable;
 pub use object::Object as Compiled;
-use std::collections::HashMap;
 
 use std::error::Error;
 use std::fmt;

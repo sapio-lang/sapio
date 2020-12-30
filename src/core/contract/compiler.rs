@@ -3,7 +3,6 @@ use super::CompilationError;
 use super::Compiled;
 use super::Context;
 use crate::util::amountrange::AmountRange;
-use serde::Deserialize;
 
 use super::actions::Guard;
 use crate::clause::Clause;
@@ -62,7 +61,7 @@ pub trait Compilable: private::ImplSeal {
 
 /// Implements a basic identity
 impl Compilable for Compiled {
-    fn compile(&self, ctx: &Context) -> Result<Compiled, CompilationError> {
+    fn compile(&self, _ctx: &Context) -> Result<Compiled, CompilationError> {
         Ok(self.clone())
     }
 }
@@ -152,7 +151,7 @@ where
                         1 => txtmpl_clauses
                             .pop()
                             .expect("Length of txtmpl_clauses must be at least 1"),
-                        n => Clause::Threshold(1, txtmpl_clauses),
+                        _n => Clause::Threshold(1, txtmpl_clauses),
                     };
                     option_guard = Some(if let Some(guard) = option_guard {
                         Clause::And(vec![guard, hashes])
