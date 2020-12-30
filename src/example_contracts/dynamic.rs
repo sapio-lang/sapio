@@ -46,21 +46,21 @@ impl AnyContract for D {
     }
 }
 impl DynamicExample {
-    then! {next |s| {
+    then! {next |s, ctx| {
         let v:
             Vec<fn() -> Option<actions::ThenFunc<D>>>
             = vec![];
         let d : D = D{v};
 
         let d2 = DynamicContract::<(), String> {
-            then: vec![|| None, || Some(crate::contract::actions::ThenFunc{guard: &[], func: |s| Err(CompilationError::TerminateCompilation)})],
+            then: vec![|| None, || Some(crate::contract::actions::ThenFunc{guard: &[], func: |s, ctx| Err(CompilationError::TerminateCompilation)})],
             finish: vec![],
             finish_or: vec![],
             data: "E.g., Create a Vault".into(),
         };
-        let mut builder = template::Builder::new()
-        .add_output(template::Output::new(s.amount_step.into(), &d, None)?)
-        .add_output(template::Output::new(s.amount_step.into(), &d2, None)?);
+        let mut builder = ctx.template()
+        .add_output(ctx.output(s.amount_step.into(), &d, None)?)
+        .add_output(ctx.output(s.amount_step.into(), &d2, None)?);
 
         builder.into()
     }}

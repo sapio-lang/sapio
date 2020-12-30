@@ -6,8 +6,11 @@ pub mod actions;
 pub mod compiler;
 pub mod object;
 
+use super::template::*;
+use bitcoin::util::amount::CoinAmount;
 pub use compiler::Compilable;
 pub use object::Object as Compiled;
+use std::collections::HashMap;
 
 use std::error::Error;
 use std::fmt;
@@ -123,5 +126,37 @@ where
     }
     fn get_inner_ref<'a>(&'a self) -> &Self::Ref {
         self
+    }
+}
+
+#[derive(Clone)]
+pub struct Context {}
+
+impl Context {
+    pub fn compile<A: Compilable>(&self, a: A) -> Result<Compiled, CompilationError> {
+        a.compile(&self)
+    }
+    // TODO: Fix
+    fn with_amount(&self, amount: CoinAmount) -> Self {
+        self.clone()
+    }
+
+    /// Creates a new Output, forcing the compilation of the compilable object and defaulting
+    /// metadata if not provided to blank.
+    pub fn output<T: crate::contract::Compilable>(
+        &self,
+        amount: CoinAmount,
+        contract: &T,
+        metadata: Option<OutputMeta>,
+    ) -> Result<Output, CompilationError> {
+        Ok(Output {
+            amount,
+            contract: contract.compile(&self.with_amount(amount))?,
+            metadata: metadata.unwrap_or_else(HashMap::new),
+        })
+    }
+
+    pub fn template(&self) -> crate::template::Builder {
+        crate::template::Builder::new()
     }
 }

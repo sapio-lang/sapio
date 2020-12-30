@@ -13,7 +13,7 @@ pub struct PayToPublicKey {
 }
 
 impl PayToPublicKey {
-    guard!(with_key | s | { Clause::Key(s.key) });
+    guard!(with_key | s, ctx | { Clause::Key(s.key) });
 }
 
 impl Contract for PayToPublicKey {
@@ -31,7 +31,8 @@ pub struct BasicEscrow {
 
 impl BasicEscrow {
     guard!(
-        redeem | s | {
+        redeem | s,
+        ctx | {
             Clause::Threshold(
                 1,
                 vec![
@@ -61,14 +62,18 @@ pub struct BasicEscrow2 {
 
 impl BasicEscrow2 {
     guard!(
-        use_escrow | s | {
+        use_escrow | s,
+        ctx | {
             Clause::And(vec![
                 Clause::Key(s.escrow),
                 Clause::Threshold(2, vec![Clause::Key(s.alice), Clause::Key(s.bob)]),
             ])
         }
     );
-    guard!(cooperate | s | { Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)]) });
+    guard!(
+        cooperate | s,
+        ctx | { Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)]) }
+    );
 }
 
 impl Contract for BasicEscrow2 {
@@ -86,19 +91,22 @@ pub struct TrustlessEscrow {
 }
 
 impl TrustlessEscrow {
-    guard!(cooperate | s | { Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)]) });
-    then! {use_escrow |s| {
-        let o1 = template::Output::new(
+    guard!(
+        cooperate | s,
+        ctx | { Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)]) }
+    );
+    then! {use_escrow |s, ctx| {
+        let o1 = ctx.output(
             s.alice_escrow.0,
             &Compiled::from_address(s.alice_escrow.1.clone(), None),
             None,
         )?;
-        let o2 = template::Output::new(
+        let o2 = ctx.output(
             s.bob_escrow.0,
             &Compiled::from_address(s.bob_escrow.1.clone(), None),
             None,
         )?;
-        template::Builder::new().add_output(o1).add_output(o2).set_sequence(0, 1700 /*roughly 10 days*/).into()
+        ctx.template().add_output(o1).add_output(o2).set_sequence(0, 1700 /*roughly 10 days*/).into()
     }}
 }
 

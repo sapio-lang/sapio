@@ -15,14 +15,15 @@ where
     T: Clone,
 {
     then!(
-        explodes | s | {
-            Builder::new()
-                .add_output(Output::new(
+        explodes | s,
+        ctx | {
+            ctx.template()
+                .add_output(ctx.output(
                     s.party_one.into(),
                     &Compiled::from_address(s.key_p1.clone(), None),
                     None,
                 )?)
-                .add_output(Output::new(
+                .add_output(ctx.output(
                     s.party_two.into(),
                     &Compiled::from_address(s.key_p2.clone(), None),
                     None,
@@ -32,11 +33,12 @@ where
         }
     );
 
-    guard!(signed | s | { s.key_p2_pk.clone() });
+    guard!(signed | s, ctx | { s.key_p2_pk.clone() });
     then!(
-        stikes[Self::signed] | s | {
-            Builder::new()
-                .add_output(Output::new(
+        stikes[Self::signed] | s,
+        ctx | {
+            ctx.template()
+                .add_output(ctx.output(
                     (s.party_one + s.party_two).into(),
                     &GenericBet::try_from(s.opt.clone())?,
                     None,
@@ -61,10 +63,11 @@ where
     T: Clone,
 {
     then!(
-        explodes | s | {
+        explodes | s,
+        ctx | {
             Ok(Box::new(std::iter::once(
-                Builder::new()
-                    .add_output(Output::new(
+                ctx.template()
+                    .add_output(ctx.output(
                         s.party_one.into(),
                         &Compiled::from_address(s.key_p1.clone(), None),
                         None,
@@ -76,11 +79,12 @@ where
     );
 
     then!(
-        stikes | s | {
-            Builder::new()
+        stikes | s,
+        ctx | {
+            ctx.template()
                 .add_amount(s.party_two)
                 .add_sequence(0)
-                .add_output(Output::new(
+                .add_output(ctx.output(
                     (s.party_one + s.party_two).into(),
                     &GenericBet::try_from(s.opt.clone())?,
                     None,

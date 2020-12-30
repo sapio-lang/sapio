@@ -76,6 +76,7 @@ struct RiskReversal<'a> {
     operator_api: &'a dyn apis::OperatorApi,
     user_api: &'a dyn apis::UserApi,
     symbol: Symbol,
+    ctx: Context,
 }
 
 const ONE_UNIT: u64 = 10_000;
@@ -113,13 +114,14 @@ impl<'a> TryFrom<RiskReversal<'a>> for GenericBetArguments<'a> {
 
             outcomes.push((
                 strike as i64,
-                Builder::new()
-                    .add_output(Output::new(
+                v.ctx
+                    .template()
+                    .add_output(v.ctx.output(
                         pay_user.into(),
                         &v.user_api.receive_payment(pay_user),
                         None,
                     )?)
-                    .add_output(Output::new(
+                    .add_output(v.ctx.output(
                         refund_operator.into(),
                         &v.operator_api.receive_payment(refund_operator),
                         None,
