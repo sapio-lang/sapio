@@ -1,9 +1,9 @@
 type Key = bitcoin::hashes::sha256::Hash;
-use crate::contract::{Compilable, CompilationError, Compiled, Context, Contract};
+use crate::contract::{Compilable, CompilationError, Compiled, Context};
 use bitcoin::hashes::hex::ToHex;
-use bitcoin::util::amount::CoinAmount;
-use schemars::schema::{RootSchema, Schema, SchemaObject};
-use schemars::{schema_for, JsonSchema};
+use bitcoin::util::amount::{Amount, CoinAmount};
+use schemars::schema::RootSchema;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -16,7 +16,7 @@ pub enum SessionError {
 }
 
 impl From<std::convert::Infallible> for SessionError {
-    fn from(v: std::convert::Infallible) -> Self {
+    fn from(_v: std::convert::Infallible) -> Self {
         panic!("Inhabited Never")
     }
 }
@@ -125,8 +125,8 @@ impl Action {
                 println!("{:?}", program);
                 Some(Reaction::Created(c.amount_range.max(), a, program))
             }
-            Action::Save(address) => Some(Reaction::Saved(true)),
-            Action::Bind(out, address) => Some(Reaction::Bound(vec![])),
+            Action::Save(_address) => Some(Reaction::Saved(true)),
+            Action::Bind(_out, _address) => Some(Reaction::Bound(vec![])),
         }
     }
 }
@@ -180,7 +180,7 @@ impl MenuBuilder {
     fn gen_menu(&self) -> Value {
         json!({
             "$schema": "http://json-schema.org/draft-07/schema#",
-            "oneOf": self.menu.iter().cloned().map(|mut x| {
+            "oneOf": self.menu.iter().cloned().map(|x| {
             x
         }).collect::<Vec<RootSchema>>(),
 
@@ -233,7 +233,8 @@ impl Session {
         }
     }
     pub fn get_context(&self) -> Context {
-        Context {}
+        /// Todo: Make Create specify the amount to send.
+        Context::new(Amount::from_sat(100_000_000_000))
     }
 
     pub fn handle(&mut self, m: Msg) -> Result<Option<Reaction>, serde_json::Error> {

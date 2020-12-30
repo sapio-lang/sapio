@@ -5,6 +5,7 @@ use crate::*;
 use bitcoin::util::amount::CoinAmount;
 use schemars::*;
 use serde::*;
+use std::convert::TryInto;
 use std::iter;
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct UndoSendInternal {
@@ -19,7 +20,7 @@ impl UndoSendInternal {
         complete | s,
         ctx | {
             ctx.template()
-                .add_output(ctx.output(s.amount, &s.to_contract, None)?)
+                .add_output(s.amount.try_into()?, &s.to_contract, None)?
                 .set_sequence(0, s.timeout)
                 .into()
         }
@@ -28,7 +29,7 @@ impl UndoSendInternal {
         undo | s,
         ctx | {
             ctx.template()
-                .add_output(ctx.output(s.amount, &s.from_contract, None)?)
+                .add_output(s.amount.try_into()?, &s.from_contract, None)?
                 .into()
         }
     );

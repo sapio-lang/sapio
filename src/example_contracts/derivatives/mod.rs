@@ -87,7 +87,7 @@ impl GenericBet {
             [(_, a)] => Ok(Some(a.clone())),
             sl => Ok(Some(
                 ctx.template()
-                    .add_output(ctx.output(
+                    .add_output(
                         self.amount.into(),
                         &GenericBet {
                             amount: self.amount,
@@ -96,7 +96,7 @@ impl GenericBet {
                             cooperate: self.cooperate.clone(),
                         },
                         None,
-                    )?)
+                    )?
                     .into(),
             )),
         }

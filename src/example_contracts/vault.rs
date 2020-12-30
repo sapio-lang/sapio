@@ -6,7 +6,7 @@ use crate::*;
 use bitcoin::util::amount::CoinAmount;
 use schemars::*;
 use serde::*;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::marker::PhantomData;
 use std::rc::Rc;
 
@@ -22,13 +22,13 @@ pub struct Vault {
 impl Vault {
     then! {step |s, ctx| {
         let mut builder = ctx.template()
-        .add_output(ctx.output(s.amount_step.into(),
+        .add_output(s.amount_step.try_into()?,
                 &UndoSendInternal {
                     from_contract: (s.cold_storage)(s.amount_step, ctx)?,
                     to_contract: Compiled::from_address(s.hot_storage.clone(), None),
                     timeout: s.mature,
                     amount: s.amount_step.into(),
-                }, None)?)
+                }, None)?
        .set_sequence(0, s.timeout);
 
         if s.n_steps > 1 {
@@ -42,7 +42,7 @@ impl Vault {
                 mature: s.mature,
 
             };
-            builder.add_output(ctx.output(sub_amount.into(), &sub_vault, None)?)
+            builder.add_output(sub_amount, &sub_vault, None)?
         } else {
             builder
         }.into()
@@ -50,7 +50,7 @@ impl Vault {
     then! {to_cold |s, ctx| {
         let amount = bitcoin::Amount::try_from(s.amount_step).map_err(|e| contract::CompilationError::TerminateCompilation)?.checked_mul(s.n_steps).ok_or(contract::CompilationError::TerminateCompilation)?;
         ctx.template()
-            .add_output(ctx.output(amount.into(), &(s.cold_storage)(amount.into(), ctx)?, None)?)
+            .add_output(amount, &(s.cold_storage)(amount.into(), ctx)?, None)?
             .into()
     }}
 }

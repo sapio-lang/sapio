@@ -1,7 +1,7 @@
 use bitcoin::consensus::encode::*;
-use bitcoin::util::amount::{Amount, CoinAmount};
+use bitcoin::util::amount::Amount;
 
-use crate::contract::CompilationError;
+use crate::contract::{CompilationError, Context};
 use bitcoin::hashes::sha256;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -22,11 +22,12 @@ pub struct Builder {
     lock_time: u32,
     label: String,
     amount: Amount,
+    ctx: Context,
 }
 
 impl Builder {
     /// Creates a new transaction template with 1 input and no outputs.
-    pub fn new() -> Builder {
+    pub fn new(ctx: Context) -> Builder {
         Builder {
             sequences: vec![0],
             outputs: vec![],
@@ -34,15 +35,33 @@ impl Builder {
             lock_time: 0,
             label: String::new(),
             amount: Amount::from_sat(0),
+            ctx,
         }
     }
-    pub fn add_output(mut self, o: Output) -> Self {
-        self.outputs.push(o);
-        self
+    pub fn spend_amount(mut self, amount: Amount) -> Result<Self, CompilationError> {
+        self.ctx.spend_amount(amount)?;
+        Ok(self)
     }
 
+    /// Creates a new Output, forcing the compilation of the compilable object and defaulting
+    /// metadata if not provided to blank.
+    pub fn add_output<T: crate::contract::Compilable>(
+        mut self,
+        amount: Amount,
+        contract: &T,
+        metadata: Option<OutputMeta>,
+    ) -> Result<Self, CompilationError> {
+        self.outputs.push(Output {
+            amount: amount,
+            contract: contract.compile(&self.ctx.with_amount(amount)?)?,
+            metadata: metadata.unwrap_or_else(HashMap::new),
+        });
+        self.spend_amount(amount)
+    }
+
+    // TODO: Make guarantee there is some external input?
     pub fn add_amount(mut self, a: Amount) -> Self {
-        self.amount += a;
+        self.ctx.add_amount(a);
         self
     }
 
@@ -128,16 +147,15 @@ pub struct Template {
     pub outputs: Vec<Output>,
     pub tx: bitcoin::Transaction,
     pub ctv: sha256::Hash,
-    pub max: CoinAmount,
+    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    #[schemars(with = "i64")]
+    pub max: Amount,
     pub label: String,
 }
 
 impl Template {
     pub fn hash(&self) -> sha256::Hash {
         self.ctv
-    }
-    pub fn new() -> Builder {
-        Builder::new()
     }
 
     pub fn total_amount(&self) -> Amount {
