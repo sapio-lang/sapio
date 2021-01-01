@@ -5,41 +5,13 @@ pub mod macros;
 pub mod actions;
 pub mod compiler;
 pub mod object;
+pub mod error;
+pub use error::CompilationError;
 
 use bitcoin::util::amount::Amount;
 pub use compiler::Compilable;
 pub use object::Object as Compiled;
 
-use std::error::Error;
-use std::fmt;
-#[derive(Debug)]
-pub enum CompilationError {
-    TerminateCompilation,
-    MissingTemplates,
-    EmptyPolicy,
-    OutOfFunds,
-    ParseAmountError(bitcoin::util::amount::ParseAmountError),
-    Miniscript(miniscript::policy::compiler::CompilerError),
-}
-
-impl From<bitcoin::util::amount::ParseAmountError> for CompilationError {
-    fn from(b: bitcoin::util::amount::ParseAmountError) -> Self {
-        CompilationError::ParseAmountError(b)
-    }
-}
-impl From<miniscript::policy::compiler::CompilerError> for CompilationError {
-    fn from(v: miniscript::policy::compiler::CompilerError) -> Self {
-        CompilationError::Miniscript(v)
-    }
-}
-
-impl fmt::Display for CompilationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl Error for CompilationError {}
 /// An Iterator which yields TransactionTemplates.
 /// It is boxed to permit flexibility when returning.
 pub type TxTmplIt = Result<
