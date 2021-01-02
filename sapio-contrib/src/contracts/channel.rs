@@ -1,8 +1,8 @@
 use contract::actions::*;
 use contract::*;
-use crate::*;
+use sapio::*;
 
-use crate::clause::Clause;
+use sapio::clause::Clause;
 
 use ::miniscript::*;
 use bitcoin;

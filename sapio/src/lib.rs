@@ -1,9 +1,8 @@
 #![cfg_attr(feature = "nightly", feature(associated_type_defaults))]
 extern crate serde;
 
-pub mod core;
-pub mod frontend;
-pub use crate::core::*;
-
-#[cfg(feature = "examples")]
-pub mod example_contracts;
+pub mod clause;
+#[macro_use]
+pub mod contract;
+pub mod template;
+pub mod util;

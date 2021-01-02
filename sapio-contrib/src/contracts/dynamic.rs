@@ -1,15 +1,11 @@
-use super::undo_send::UndoSendInternal;
-use crate::clause::Clause;
-use crate::contract::macros::*;
-use crate::contract::DynamicContract;
-use crate::contract::*;
-use crate::*;
 use bitcoin::util::amount::CoinAmount;
+
+use sapio::contract::DynamicContract;
+use sapio::contract::*;
+use sapio::*;
 use schemars::*;
 use serde::*;
-use std::convert::{TryFrom, TryInto};
-use std::marker::PhantomData;
-use std::rc::Rc;
+use std::convert::TryInto;
 
 #[derive(JsonSchema, Deserialize)]
 pub struct DynamicExample {
@@ -53,7 +49,7 @@ impl DynamicExample {
         let d : D = D{v};
 
         let d2 = DynamicContract::<(), String> {
-            then: vec![|| None, || Some(crate::contract::actions::ThenFunc{guard: &[], func: |s, ctx| Err(CompilationError::TerminateCompilation)})],
+            then: vec![|| None, || Some(sapio::contract::actions::ThenFunc{guard: &[], func: |_s, _ctx| Err(CompilationError::TerminateCompilation)})],
             finish: vec![],
             finish_or: vec![],
             data: "E.g., Create a Vault".into(),
