@@ -5,7 +5,10 @@ use bitcoin::util::bip32::*;
 use sapio::clause::Clause;
 use sapio::contract::emulator::CTVEmulator;
 use sapio::contract::error::CompilationError;
+use std::net::{SocketAddr, TcpStream};
 
+use bitcoin::consensus::encode::{Decodable, Encodable};
+use bitcoin::util::psbt::PartiallySignedTransaction;
 use sapio::template::CTVHash;
 struct HDOracleEmulator {
     root: ExtendedPrivKey,
@@ -50,8 +53,18 @@ impl HDOracleEmulator {
         }
         b
     }
+    fn handle(&self, t: &TcpStream) {
+        let m: Vec<u8> = Decodable::consensus_decode(t).unwrap();
+        let psbt: PartiallySignedTransaction = Decodable::consensus_decode(&m[..]).unwrap();
+        let b = self.sign(psbt);
+        let mut out: Vec<u8> = Vec::with_capacity(m.len());
+        b.consensus_encode(&mut out);
+        let _r = out.consensus_encode(t);
+    }
 }
 struct HDOracleEmulatorConnection {
+    address: SocketAddr,
+    connection: TcpStream,
     root: ExtendedPubKey,
     secp: Box<bitcoin::secp256k1::Secp256k1<bitcoin::secp256k1::All>>,
 }
@@ -68,6 +81,7 @@ impl HDOracleEmulatorConnection {
         self.root.derive_pub(&self.secp, &c)
     }
 }
+
 impl CTVEmulator for HDOracleEmulatorConnection {
     fn get_signer_for(
         &self,
@@ -81,7 +95,12 @@ impl CTVEmulator for HDOracleEmulatorConnection {
         &self,
         b: bitcoin::util::psbt::PartiallySignedTransaction,
     ) -> bitcoin::util::psbt::PartiallySignedTransaction {
-        b
+        let mut out = vec![];
+        b.consensus_encode(&mut out);
+        out.consensus_encode(&self.connection);
+
+        let inp: Vec<u8> = Decodable::consensus_decode(&self.connection).unwrap();
+        Decodable::consensus_decode(&inp[..]).unwrap()
     }
 }
 fn main() {
