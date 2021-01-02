@@ -3,7 +3,7 @@ use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws;
 
 use sapio::example_contracts as contracts;
-use sapio::frontend::session;
+use sapio_front::session;
 
 /// Define HTTP actor
 struct MyWs {

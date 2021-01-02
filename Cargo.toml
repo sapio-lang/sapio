@@ -1,5 +1,5 @@
 [workspace]
-members = ["sapio", "sapio-ws"]
+members = ["sapio", "sapio-ws", "sapio-front"]
 
 [patch.crates-io]
 miniscript = {git="https://github.com/sapio-lang/rust-miniscript.git", branch="sapio-lang"}

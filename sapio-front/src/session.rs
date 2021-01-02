@@ -1,5 +1,5 @@
 type Key = bitcoin::hashes::sha256::Hash;
-use crate::contract::{Compilable, CompilationError, Compiled, Context};
+use sapio::contract::{Compilable, CompilationError, Compiled, Context};
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::util::amount::{Amount, CoinAmount};
 use schemars::schema::RootSchema;
