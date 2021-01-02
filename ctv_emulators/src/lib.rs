@@ -8,17 +8,39 @@ use sapio::contract::error::CompilationError;
 use std::io::Read;
 use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
+use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 
 use bitcoin::consensus::encode::{Decodable, Encodable};
+use bitcoin::secp256k1::{All, Secp256k1};
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use sapio::template::CTVHash;
+tokio::task_local! {
+    pub static SECP: Secp256k1<All>;
+}
+#[derive(Clone)]
 struct HDOracleEmulator {
     root: ExtendedPrivKey,
-    secp: Box<bitcoin::secp256k1::Secp256k1<bitcoin::secp256k1::All>>,
 }
 impl HDOracleEmulator {
-    fn derive(&self, h: Sha256) -> Result<ExtendedPrivKey, Error> {
+    async fn bind<A: ToSocketAddrs>(self, a: A) -> std::io::Result<()> {
+        let listener = TcpListener::bind(a).await?;
+        SECP.scope(Secp256k1::new(), async {
+            loop {
+                let (mut socket, _) = listener.accept().await?;
+                {
+                    let this = self.clone();
+                    tokio::spawn(async move {
+                        loop {
+                            this.handle(&mut socket).await;
+                        }
+                    });
+                }
+            }
+            Ok(())
+        })
+        .await
+    }
+    fn derive(&self, h: Sha256, secp: &Secp256k1<All>) -> Result<ExtendedPrivKey, Error> {
         let a: [u8; 32] = h.into_inner();
         let b: [[u8; 4]; 8] = unsafe { std::mem::transmute(a) };
         let c: Vec<ChildNumber> = b
@@ -26,25 +48,25 @@ impl HDOracleEmulator {
             .map(|x| u32::from_be_bytes(*x))
             .map(ChildNumber::from)
             .collect();
-        self.root.derive_priv(&self.secp, &c)
+        self.root.derive_priv(secp, &c)
     }
 
     fn sign(
         &self,
         mut b: bitcoin::util::psbt::PartiallySignedTransaction,
+        secp: &Secp256k1<All>,
     ) -> bitcoin::util::psbt::PartiallySignedTransaction {
         let tx = b.clone().extract_tx();
         let h = tx.get_ctv_hash(0);
-        if let Ok(key) = self.derive(h) {
-            let pk = key.private_key.public_key(&self.secp);
+        if let Ok(key) = self.derive(h, secp) {
+            let pk = key.private_key.public_key(secp);
             let sighash = bitcoin::util::bip143::SighashComponents::new(&tx);
 
             if let Some(scriptcode) = &b.inputs[0].witness_script {
                 if let Some(utxo) = &b.inputs[0].witness_utxo {
                     let sighash = sighash.sighash_all(&tx.input[0], &scriptcode, utxo.value);
                     let msg = bitcoin::secp256k1::Message::from_slice(&sighash[..]).unwrap();
-                    let mut signature: Vec<u8> = self
-                        .secp
+                    let mut signature: Vec<u8> = secp
                         .sign(&msg, &key.private_key.key)
                         .serialize_compact()
                         .into();
@@ -75,8 +97,8 @@ impl HDOracleEmulator {
         }
 
         let psbt: PartiallySignedTransaction = Decodable::consensus_decode(&m[..]).unwrap();
-        let b = self.sign(psbt);
         m.clear();
+        let b = SECP.with(|secp| self.sign(psbt, secp));
         b.consensus_encode(&mut m);
         t.write_u32(m.len() as u32).await?;
         t.write_all(&m[..]).await?;
@@ -132,11 +154,8 @@ impl CTVEmulator for HDOracleEmulatorConnection {
                 ));
             }
             Decodable::consensus_decode(&inp[..])
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid PSBT"))
+                .map_err(|_e| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid PSBT"))
         });
-        res.unwrap_or_else(|e| b)
+        res.unwrap_or_else(|_e| b)
     }
-}
-fn main() {
-    println!("Hello, world!");
 }
