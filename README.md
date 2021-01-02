@@ -7,8 +7,10 @@ Sapio is a framework for creating composable multi-transaction Bitcoin Smart Con
 
 This crate is a workspace for various Sapio Components such as:
 
-1) [Sapio Language](sapio/README.md)
-2) [Sapio Compiler Server](sapio-ws/README.md)
+1. [Sapio Language](sapio/README.md): Base Specification for Sapio Language and Contract Generation
+1. [Sapio Contrib](sapio-contrib/README.md): Contract modules / functionality made available for general use
+1. [Sapio Front](sapio-front/README.md): Protocols for interacting with a compilation session
+1. [Sapio Compiler Server](sapio-ws/README.md): Binary for a websocket server running sapio-front
 
 ### Why is Sapio Different?
 Sapio helps you build payment protocol specifiers that oblivious third parties
