@@ -1,3 +1,4 @@
+![](https://github.com/sapio-lang/sapio/workflows/Continuous%20integration/badge.svg)
 # Sapio Workspace
 
 Welcome!

@@ -1,6 +1,6 @@
 /// The declare macro is used to declare the list of pathways in a Contract trait impl.
 /// formats for calling are:
-/// ```
+/// ```ignore
 /// declare!{then, a,...}
 /// declare!{finish, a,...}
 /// declare!{updatable<X>, a,...}
@@ -42,7 +42,7 @@ macro_rules! declare {
 
 /// The then macro is used to define a `ThenFunc`
 /// formats for calling are:
-/// ```
+/// ```ignore
 /// /// A Guarded CTV Function
 /// then!(name [guard_1, ... guard_n] |s| {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
 /// /// An Unguarded CTV Function
@@ -64,7 +64,7 @@ macro_rules! then {
 
 /// The then macro is used to define a `FinishFunc` or a `FinishOrFunc`
 /// formats for calling are:
-/// ```
+/// ```ignore
 /// /// A Guarded CTV Function
 /// finish!(name [guard_1, ... guard_n] |s| {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
 /// /// Null Implementation
@@ -85,7 +85,7 @@ macro_rules! finish {
 
 /// The guard macro is used to define a `Guard`. Guards may be cached or uncached.
 /// formats for calling are:
-/// ```
+/// ```ignore
 /// guard!(name |s| {/*Clause*/})
 /// /// The guard should only be invoked once
 /// guard!(cached name |s| {/*Clause*/})
