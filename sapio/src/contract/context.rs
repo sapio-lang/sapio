@@ -1,5 +1,5 @@
-use super::{Amount, Compilable, CompilationError, Compiled};
 use super::emulator::{CTVEmulator, NullEmulator};
+use super::{Amount, Compilable, CompilationError, Compiled};
 use std::rc::Rc;
 /// Context type is not copyable/clonable externally
 pub struct Context {
@@ -15,7 +15,10 @@ impl Context {
             emulator: NullEmulator(emulator),
         }
     }
-    pub fn ctv_emulator(&self, b: bitcoin::hashes::sha256::Hash) -> Result<crate::clause::Clause, CompilationError> {
+    pub fn ctv_emulator(
+        &self,
+        b: bitcoin::hashes::sha256::Hash,
+    ) -> Result<crate::clause::Clause, CompilationError> {
         self.emulator.get_signer_for(b)
     }
     pub fn compile<A: Compilable>(&self, a: A) -> Result<Compiled, CompilationError> {

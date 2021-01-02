@@ -8,6 +8,12 @@ pub enum CompilationError {
     OutOfFunds,
     ParseAmountError(bitcoin::util::amount::ParseAmountError),
     Miniscript(miniscript::policy::compiler::CompilerError),
+    Custom(Box<dyn std::error::Error>),
+}
+impl CompilationError {
+    pub fn custom<E: std::error::Error + 'static>(e: E) -> Self {
+        CompilationError::Custom(Box::new(e))
+    }
 }
 
 impl From<bitcoin::util::amount::ParseAmountError> for CompilationError {
