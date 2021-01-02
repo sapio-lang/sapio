@@ -1,6 +1,6 @@
 use crate::clause::Clause;
-use crate::core::template::Output;
-use crate::core::template::{Builder, Template};
+use crate::template::Output;
+use crate::template::{Builder, Template};
 use crate::*;
 use contract::actions::*;
 use contract::*;
