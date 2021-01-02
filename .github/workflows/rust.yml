@@ -59,7 +59,7 @@ jobs:
     strategy:
       matrix:
         rust:
-          - 1.29.0
+          - 1.48.0
           - beta
           - stable
     steps:
@@ -71,8 +71,8 @@ jobs:
           profile: minimal
           toolchain: ${{ matrix.rust }}
           override: true
-      - name: Pin cc if rust 1.29
-        if: matrix.rust == '1.29.0'
+      - name: Pin cc if rust 1.48
+        if: matrix.rust == '1.48.0'
         run: cargo generate-lockfile && cargo update -p serde_json --precise "1.0.39"
       - name: Running cargo
         env:
