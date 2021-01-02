@@ -4,8 +4,8 @@ use crate::template::Template as TransactionTemplate;
 pub mod macros;
 pub mod actions;
 pub mod compiler;
-pub mod object;
 pub mod error;
+pub mod object;
 pub use error::CompilationError;
 pub mod context;
 pub use context::Context;
@@ -107,4 +107,3 @@ where
         self
     }
 }
-
