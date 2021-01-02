@@ -1,7 +1,3 @@
-use sapio::clause::Clause;
-use sapio::contract::macros::*;
-use sapio::contract::*;
-use sapio::*;
 /**
 * This License applies solely to the file hodl_chicken.rs.
 * Copyright (c) 2020, Pyskell and Judica, Inc
@@ -28,9 +24,13 @@ use sapio::*;
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 **/
 use bitcoin::util::amount::Amount;
+use sapio::clause::Clause;
+
+use sapio::contract::*;
+use sapio::*;
 use schemars::*;
 use serde::*;
-use std::collections::HashMap;
+
 use std::convert::TryFrom;
 
 pub type Payout = Compiled;

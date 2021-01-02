@@ -1,13 +1,12 @@
 use super::undo_send::UndoSendInternal;
-use sapio::clause::Clause;
-use sapio::contract::macros::*;
+use bitcoin::util::amount::CoinAmount;
+
 use sapio::contract::*;
 use sapio::*;
-use bitcoin::util::amount::CoinAmount;
 use schemars::*;
 use serde::*;
 use std::convert::{TryFrom, TryInto};
-use std::marker::PhantomData;
+
 use std::rc::Rc;
 
 pub struct Vault {
@@ -21,7 +20,7 @@ pub struct Vault {
 
 impl Vault {
     then! {step |s, ctx| {
-        let mut builder = ctx.template()
+        let builder = ctx.template()
         .add_output(s.amount_step.try_into()?,
                 &UndoSendInternal {
                     from_contract: (s.cold_storage)(s.amount_step, ctx)?,
@@ -32,7 +31,7 @@ impl Vault {
        .set_sequence(0, s.timeout);
 
         if s.n_steps > 1 {
-            let sub_amount = bitcoin::Amount::try_from(s.amount_step).map_err(|e| contract::CompilationError::TerminateCompilation)?.checked_mul(s.n_steps - 1).ok_or(contract::CompilationError::TerminateCompilation)?;
+            let sub_amount = bitcoin::Amount::try_from(s.amount_step).map_err(|_e| contract::CompilationError::TerminateCompilation)?.checked_mul(s.n_steps - 1).ok_or(contract::CompilationError::TerminateCompilation)?;
             let sub_vault = Vault {
                 cold_storage: s.cold_storage.clone(),
                 hot_storage: s.hot_storage.clone(),
@@ -48,7 +47,7 @@ impl Vault {
         }.into()
     }}
     then! {to_cold |s, ctx| {
-        let amount = bitcoin::Amount::try_from(s.amount_step).map_err(|e| contract::CompilationError::TerminateCompilation)?.checked_mul(s.n_steps).ok_or(contract::CompilationError::TerminateCompilation)?;
+        let amount = bitcoin::Amount::try_from(s.amount_step).map_err(|_e| contract::CompilationError::TerminateCompilation)?.checked_mul(s.n_steps).ok_or(contract::CompilationError::TerminateCompilation)?;
         ctx.template()
             .add_output(amount, &(s.cold_storage)(amount.into(), ctx)?, None)?
             .into()
@@ -75,7 +74,7 @@ impl From<VaultAddress> for Vault {
         Vault {
             cold_storage: Rc::new({
                 let cs = v.cold_storage.clone();
-                move |a, ctx| Ok(Compiled::from_address(cs.clone(), None))
+                move |_a, _ctx| Ok(Compiled::from_address(cs.clone(), None))
             }),
             hot_storage: v.hot_storage,
             n_steps: v.n_steps,

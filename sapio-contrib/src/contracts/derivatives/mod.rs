@@ -1,20 +1,15 @@
-use sapio::clause::Clause;
-use sapio::template::Output;
-use sapio::template::{Builder, Template};
-use sapio::*;
-use contract::actions::*;
 use contract::*;
+use sapio::clause::Clause;
+
+use sapio::template::Template;
+use sapio::*;
 
 use bitcoin;
-use bitcoin::util::amount::{Amount, CoinAmount};
-use schemars::{schema_for, JsonSchema};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use bitcoin::util::amount::Amount;
+
 use std::collections::HashMap;
 
-use std::marker::PhantomData;
-
 use std::convert::TryFrom;
-use std::convert::TryInto;
 
 use std::rc::Rc;
 

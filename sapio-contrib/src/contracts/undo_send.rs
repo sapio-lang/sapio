@@ -1,12 +1,11 @@
-use sapio::clause::Clause;
-use sapio::contract::macros::*;
+use bitcoin::util::amount::CoinAmount;
+
 use sapio::contract::*;
 use sapio::*;
-use bitcoin::util::amount::CoinAmount;
 use schemars::*;
 use serde::*;
 use std::convert::TryInto;
-use std::iter;
+
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct UndoSendInternal {
     pub from_contract: Compiled,

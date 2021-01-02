@@ -1,8 +1,8 @@
+use bitcoin::util::amount::CoinAmount;
 use sapio::clause::Clause;
-use sapio::contract::macros::*;
+
 use sapio::contract::*;
 use sapio::*;
-use bitcoin::util::amount::CoinAmount;
 use schemars::*;
 use serde::*;
 use std::convert::TryInto;
@@ -35,7 +35,7 @@ impl Contract for ExampleA {
 
 use std::marker::PhantomData;
 pub trait BState: JsonSchema {
-    fn get_n(n: u8, max: u8) -> u8 {
+    fn get_n(_n: u8, max: u8) -> u8 {
         return max;
     }
 }
@@ -45,7 +45,7 @@ impl BState for Start {}
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct Finish;
 impl BState for Finish {
-    fn get_n(n: u8, max: u8) -> u8 {
+    fn get_n(n: u8, _max: u8) -> u8 {
         return n;
     }
 }
