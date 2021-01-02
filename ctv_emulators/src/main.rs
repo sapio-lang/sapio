@@ -5,7 +5,10 @@ use bitcoin::util::bip32::*;
 use sapio::clause::Clause;
 use sapio::contract::emulator::CTVEmulator;
 use sapio::contract::error::CompilationError;
-use std::net::{SocketAddr, TcpStream};
+use std::io::Read;
+use std::net::SocketAddr;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
 
 use bitcoin::consensus::encode::{Decodable, Encodable};
 use bitcoin::util::psbt::PartiallySignedTransaction;
@@ -53,18 +56,36 @@ impl HDOracleEmulator {
         }
         b
     }
-    fn handle(&self, t: &TcpStream) {
-        let m: Vec<u8> = Decodable::consensus_decode(t).unwrap();
+    const MAX_MSG: usize = 1_000_000;
+    async fn handle(&self, t: &mut TcpStream) -> Result<(), std::io::Error> {
+        let len = t.read_u32().await? as usize;
+        if len > Self::MAX_MSG {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Invalid Length",
+            ));
+        }
+        let mut m = vec![0; len];
+        let read = t.read_exact(&mut m[..]).await?;
+        if read != len {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Invalid Length",
+            ));
+        }
+
         let psbt: PartiallySignedTransaction = Decodable::consensus_decode(&m[..]).unwrap();
         let b = self.sign(psbt);
-        let mut out: Vec<u8> = Vec::with_capacity(m.len());
-        b.consensus_encode(&mut out);
-        let _r = out.consensus_encode(t);
+        m.clear();
+        b.consensus_encode(&mut m);
+        t.write_u32(m.len() as u32).await?;
+        t.write_all(&m[..]).await?;
+        Ok(())
     }
 }
 struct HDOracleEmulatorConnection {
     address: SocketAddr,
-    connection: TcpStream,
+    connection: Mutex<TcpStream>,
     root: ExtendedPubKey,
     secp: Box<bitcoin::secp256k1::Secp256k1<bitcoin::secp256k1::All>>,
 }
@@ -81,7 +102,7 @@ impl HDOracleEmulatorConnection {
         self.root.derive_pub(&self.secp, &c)
     }
 }
-
+use tokio::sync::Mutex;
 impl CTVEmulator for HDOracleEmulatorConnection {
     fn get_signer_for(
         &self,
@@ -97,10 +118,23 @@ impl CTVEmulator for HDOracleEmulatorConnection {
     ) -> bitcoin::util::psbt::PartiallySignedTransaction {
         let mut out = vec![];
         b.consensus_encode(&mut out);
-        out.consensus_encode(&self.connection);
-
-        let inp: Vec<u8> = Decodable::consensus_decode(&self.connection).unwrap();
-        Decodable::consensus_decode(&inp[..]).unwrap()
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let res: Result<PartiallySignedTransaction, _> = rt.block_on(async {
+            let mut conn = self.connection.lock().await;
+            conn.write_u32(out.len() as u32).await?;
+            conn.write_all(&out[..]).await?;
+            let len = conn.read_u32().await? as usize;
+            let mut inp = vec![0; len];
+            if len != conn.read_exact(&mut inp[..]).await? {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "Invalid Length",
+                ));
+            }
+            Decodable::consensus_decode(&inp[..])
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid PSBT"))
+        });
+        res.unwrap_or_else(|e| b)
     }
 }
 fn main() {
