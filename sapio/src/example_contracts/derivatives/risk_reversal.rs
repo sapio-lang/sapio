@@ -46,25 +46,25 @@ use super::*;
 ///     |    
 ///     --------------------------------------------------- price of BTC in Asset
 ///
-///     In this case, Operator would be providing enough Bitcoin (Y) for a user's funds (X) such that:
+/// In this case, Operator would be providing enough Bitcoin (Y) for a user's funds (X) such that:
 ///
-///     (current - a)*(X+Y) = current * X
-///     or
-///     Y * current = a * (X + Y)
+/// (current - a)*(X+Y) = current * X
+/// or
+/// Y * current = a * (X + Y)
 ///
-///     and would be seeing a potential bitcoin gain (Z) of
+/// and would be seeing a potential bitcoin gain (Z) of
 ///
-///     (current + b) * (X - Z) = current * X
-///     or
-///     Z = b * X / (b + current)
+/// (current + b) * (X - Z) = current * X
+/// or
+/// Z = b * X / (b + current)
 ///
-///     or Z (current + b) dollars.
+/// or Z (current + b) dollars.
 ///
-///     Operator can profit on the contract by:
+/// Operator can profit on the contract by:
 ///
-///     1) selecting carefully parameters a and b
-///     2) charging a premium
-///     3) charging a fee (& rehypothecating the position)
+/// 1. selecting carefully parameters a and b
+/// 2. charging a premium
+/// 3. charging a fee (& rehypothecating the position)
 ///
 struct RiskReversal<'a> {
     amount: Amount,

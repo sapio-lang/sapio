@@ -1,7 +1,7 @@
 use actix::{Actor, StreamHandler};
 use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws;
-use sapio::contract::DynamicContract;
+
 use sapio::example_contracts as contracts;
 use sapio::frontend::session;
 

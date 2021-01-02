@@ -4,42 +4,16 @@ use crate::template::Template as TransactionTemplate;
 pub mod macros;
 pub mod actions;
 pub mod compiler;
+pub mod error;
 pub mod object;
+pub use error::CompilationError;
+pub mod context;
+pub use context::Context;
 
 use bitcoin::util::amount::Amount;
 pub use compiler::Compilable;
 pub use object::Object as Compiled;
 
-use std::error::Error;
-use std::fmt;
-#[derive(Debug)]
-pub enum CompilationError {
-    TerminateCompilation,
-    MissingTemplates,
-    EmptyPolicy,
-    OutOfFunds,
-    ParseAmountError(bitcoin::util::amount::ParseAmountError),
-    Miniscript(miniscript::policy::compiler::CompilerError),
-}
-
-impl From<bitcoin::util::amount::ParseAmountError> for CompilationError {
-    fn from(b: bitcoin::util::amount::ParseAmountError) -> Self {
-        CompilationError::ParseAmountError(b)
-    }
-}
-impl From<miniscript::policy::compiler::CompilerError> for CompilationError {
-    fn from(v: miniscript::policy::compiler::CompilerError) -> Self {
-        CompilationError::Miniscript(v)
-    }
-}
-
-impl fmt::Display for CompilationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl Error for CompilationError {}
 /// An Iterator which yields TransactionTemplates.
 /// It is boxed to permit flexibility when returning.
 pub type TxTmplIt = Result<
@@ -131,49 +105,5 @@ where
     }
     fn get_inner_ref<'a>(&'a self) -> &Self::Ref {
         self
-    }
-}
-
-#[derive(Clone)]
-pub struct Context {
-    /* TODO: Add Context Fields! */
-    available_funds: Amount,
-}
-
-impl Context {
-    pub fn new(amount: Amount) -> Self {
-        Context {
-            available_funds: amount,
-        }
-    }
-    pub fn compile<A: Compilable>(&self, a: A) -> Result<Compiled, CompilationError> {
-        a.compile(&self)
-    }
-    // TODO: Fix
-    pub fn with_amount(&self, amount: Amount) -> Result<Self, CompilationError> {
-        if self.available_funds < amount {
-            Err(CompilationError::OutOfFunds)
-        } else {
-            Ok(Context {
-                available_funds: amount,
-                ..self.clone()
-            })
-        }
-    }
-    pub fn spend_amount(&mut self, amount: Amount) -> Result<(), CompilationError> {
-        if self.available_funds < amount {
-            Err(CompilationError::OutOfFunds)
-        } else {
-            self.available_funds -= amount;
-            Ok(())
-        }
-    }
-
-    pub fn add_amount(&mut self, amount: Amount) {
-        self.available_funds += amount;
-    }
-
-    pub fn template(&self) -> crate::template::Builder {
-        crate::template::Builder::new(self.clone())
     }
 }

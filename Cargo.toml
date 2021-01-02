@@ -1,51 +1,7 @@
-[package]
-name = "sapio"
-version = "0.1.0"
-authors = ["Jeremy Rubin <j@rubin.io>"]
-edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[workspace]
+members = ["sapio", "sapio-ws"]
 
 [patch.crates-io]
 miniscript = {git="https://github.com/sapio-lang/rust-miniscript.git", branch="sapio-lang"}
 bitcoin = {git="https://github.com/sapio-lang/rust-bitcoin.git", branch="sapio-lang"}
 secp256k1 = {git="https://github.com/sapio-lang/rust-secp256k1.git", branch="sapio-lang"}
-
-
-
-[dependencies.miniscript]
-version = "2.0.1"
-features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
-
-[features]
-ws = ["actix-web", "actix", "actix-web-actors"]
-# used to enable some niceties if compiling on a nightly compiler
-nightly = []
-examples = []
-
-[dependencies]
-lazy_static = "*"
-schemars = "0.8.0"
-serde_json = "1.0"
-serde = "1.0"
-serde_derive = "1.0"
-
-[dependencies.bitcoin]
-version = "0.25"
-features = ['use-serde', 'rand']
-
-
-[dependencies.actix-web]
-version= "3"
-optional= true
-
-[dependencies.actix]
-version = "0.10.0"
-optional= true
-[dependencies.actix-web-actors]
-version = "3.0.0"
-optional= true
-
-[[example]]
-name = "server"
-required-features = ["ws", "examples"]
