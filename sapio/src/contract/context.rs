@@ -1,15 +1,22 @@
 use super::{Amount, Compilable, CompilationError, Compiled};
-#[derive(Clone)]
+use super::emulator::{CTVEmulator, NullEmulator};
+use std::rc::Rc;
+/// Context type is not copyable/clonable externally
 pub struct Context {
     /* TODO: Add Context Fields! */
     available_funds: Amount,
+    emulator: NullEmulator,
 }
 
 impl Context {
-    pub fn new(amount: Amount) -> Self {
+    pub fn new(amount: Amount, emulator: Option<Rc<dyn CTVEmulator>>) -> Self {
         Context {
             available_funds: amount,
+            emulator: NullEmulator(emulator),
         }
+    }
+    pub fn ctv_emulator(&self, b: bitcoin::hashes::sha256::Hash) -> Result<crate::clause::Clause, CompilationError> {
+        self.emulator.get_signer_for(b)
     }
     pub fn compile<A: Compilable>(&self, a: A) -> Result<Compiled, CompilationError> {
         a.compile(&self)
@@ -21,7 +28,7 @@ impl Context {
         } else {
             Ok(Context {
                 available_funds: amount,
-                ..self.clone()
+                emulator: self.emulator.clone(),
             })
         }
     }
@@ -39,6 +46,9 @@ impl Context {
     }
 
     pub fn template(&self) -> crate::template::Builder {
-        crate::template::Builder::new(self.clone())
+        crate::template::Builder::new(Context {
+            emulator: self.emulator.clone(),
+            ..*self
+        })
     }
 }

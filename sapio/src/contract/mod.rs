@@ -4,6 +4,7 @@ use crate::template::Template as TransactionTemplate;
 pub mod macros;
 pub mod actions;
 pub mod compiler;
+pub mod emulator;
 pub mod error;
 pub mod object;
 pub use error::CompilationError;
