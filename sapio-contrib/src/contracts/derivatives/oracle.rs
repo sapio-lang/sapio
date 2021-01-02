@@ -1,4 +1,4 @@
-use crate::clause::Clause;
+use sapio::clause::Clause;
 /// Placeholder type for a standard way of looking up a stock symbol; can be defined more
 /// concretely but should have a human readable string representation.
 pub type Symbol = String;

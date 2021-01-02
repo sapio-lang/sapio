@@ -1,11 +1,10 @@
-use crate::clause::Clause;
-use crate::template::Output;
-use crate::template::{Builder, Template};
-use crate::*;
+use sapio::clause::Clause;
+use sapio::template::Output;
+use sapio::template::{Builder, Template};
+use sapio::*;
 use contract::actions::*;
 use contract::*;
 
-use ::miniscript::*;
 use bitcoin;
 use bitcoin::util::amount::{Amount, CoinAmount};
 use schemars::{schema_for, JsonSchema};
@@ -80,7 +79,7 @@ impl GenericBet {
     fn recurse_over(
         &self,
         range: std::ops::Range<usize>,
-        ctx: &crate::contract::Context,
+        ctx: &sapio::contract::Context,
     ) -> Result<Option<Template>, CompilationError> {
         match &self.outcomes[range] {
             [] => return Ok(None),

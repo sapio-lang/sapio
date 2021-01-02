@@ -2,7 +2,7 @@ use actix::{Actor, StreamHandler};
 use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use actix_web_actors::ws;
 
-use sapio::example_contracts as contracts;
+use sapio_contrib::contracts;
 use sapio_front::session;
 
 /// Define HTTP actor

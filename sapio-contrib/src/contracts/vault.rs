@@ -1,8 +1,8 @@
 use super::undo_send::UndoSendInternal;
-use crate::clause::Clause;
-use crate::contract::macros::*;
-use crate::contract::*;
-use crate::*;
+use sapio::clause::Clause;
+use sapio::contract::macros::*;
+use sapio::contract::*;
+use sapio::*;
 use bitcoin::util::amount::CoinAmount;
 use schemars::*;
 use serde::*;

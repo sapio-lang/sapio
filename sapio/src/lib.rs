@@ -7,5 +7,3 @@ pub mod contract;
 pub mod template;
 pub mod util;
 
-#[cfg(feature = "examples")]
-pub mod example_contracts;
