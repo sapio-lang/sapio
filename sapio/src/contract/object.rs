@@ -1,13 +1,47 @@
 use crate::clause::Clause;
+use crate::contract::emulator::CTVEmulator;
+use crate::contract::emulator::NullEmulator;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
 use ::miniscript::*;
 use bitcoin::hashes::sha256;
+use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::amount::Amount;
+use bitcoin::util::psbt::{self, PartiallySignedTransaction};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
+use std::rc::Rc;
+use std::sync::Mutex;
+pub trait TxIndex {
+    fn lookup_output(&self, b: &bitcoin::OutPoint) -> Option<bitcoin::TxOut>;
+    fn add_output(&self, h: Txid, tx: bitcoin::Transaction);
+}
+use bitcoin::hash_types::*;
+pub struct BadTxIndex {
+    map: Mutex<HashMap<Txid, bitcoin::Transaction>>,
+}
+impl BadTxIndex {
+    pub fn new() -> BadTxIndex {
+        BadTxIndex {
+            map: Mutex::new(HashMap::new()),
+        }
+    }
+}
+impl TxIndex for BadTxIndex {
+    fn lookup_output(&self, b: &bitcoin::OutPoint) -> Option<bitcoin::TxOut> {
+        self.map
+            .lock()
+            .unwrap()
+            .get(&b.txid)
+            .and_then(|tx| tx.output.get(b.vout as usize))
+            .cloned()
+    }
+    fn add_output(&self, h: Txid, tx: bitcoin::Transaction) {
+        self.map.lock().unwrap().insert(h, tx);
+    }
+}
 /// Object holds a contract's complete context required post-compilation
 /// There is no guarantee that Object is properly constructed presently.
 //TODO: Make type immutable and correct by construction...
@@ -60,10 +94,29 @@ impl Object {
 
     /// bind attaches an Object to a specific UTXO and returns a vec of transactions and
     /// transaction metadata.
+    ///
     pub fn bind(
         &self,
         out_in: bitcoin::OutPoint,
     ) -> (Vec<bitcoin::Transaction>, Vec<serde_json::Value>) {
+        let (a, b) = self.bind_psbt(
+            out_in,
+            HashMap::new(),
+            Rc::new(BadTxIndex::new()),
+            Rc::new(NullEmulator(None)),
+        );
+        (a.into_iter().map(|x| x.extract_tx()).collect(), b)
+    }
+    pub fn bind_psbt(
+        &self,
+        out_in: bitcoin::OutPoint,
+        output_map: HashMap<Sha256, Vec<Option<bitcoin::OutPoint>>>,
+        blockdata: Rc<dyn TxIndex>,
+        emulator: Rc<dyn CTVEmulator>,
+    ) -> (
+        Vec<bitcoin::util::psbt::PartiallySignedTransaction>,
+        Vec<serde_json::Value>,
+    ) {
         let mut txns = vec![];
         let mut metadata_out = vec![];
         // Could use a queue instead to do BFS linking, but order doesn't matter and stack is
@@ -83,7 +136,7 @@ impl Object {
             txns.reserve(ctv_to_tx.len() + suggested_txs.len());
             metadata_out.reserve(ctv_to_tx.len() + suggested_txs.len());
             for (
-                _ctv_hash,
+                ctv_hash,
                 Template {
                     label, outputs, tx, ..
                 },
@@ -91,12 +144,28 @@ impl Object {
             {
                 let mut tx = tx.clone();
                 tx.input[0].previous_output = out;
+                if let Some(outputs) = output_map.get(ctv_hash) {
+                    for (i, inp) in tx.input.iter_mut().enumerate().skip(1) {
+                        if let Some(out) = outputs[i] {
+                            inp.previous_output = out;
+                        }
+                    }
+                }
+                let mut psbtx = PartiallySignedTransaction::from_unsigned_tx(tx.clone()).unwrap();
+                for (psbt_in, tx_in) in psbtx.inputs.iter_mut().zip(tx.input.iter()) {
+                    println!("{:?}", tx_in.previous_output);
+                    psbt_in.witness_utxo = blockdata.lookup_output(&tx_in.previous_output);
+                    psbt_in.sighash_type = Some(bitcoin::blockdata::transaction::SigHashType::All);
+                }
                 // Missing other Witness Info.
                 if let Some(d) = descriptor {
-                    tx.input[0].witness = vec![d.witness_script().into_bytes()];
+                    psbtx.inputs[0].witness_script = Some(d.witness_script());
                 }
-                let txid = tx.txid();
-                txns.push(tx);
+                psbtx = emulator.sign(psbtx);
+                let final_tx = psbtx.clone().extract_tx();
+                let txid = final_tx.txid();
+                blockdata.add_output(txid, final_tx);
+                txns.push(psbtx);
                 metadata_out.push(json!({
                     "color" : "green",
                     "label" : label,

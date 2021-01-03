@@ -234,7 +234,7 @@ impl Session {
     }
     pub fn get_context(&self) -> Context {
         /// Todo: Make Create specify the amount to send.
-        Context::new(Amount::from_sat(100_000_000_000))
+        Context::new(Amount::from_sat(100_000_000_000), None)
     }
 
     pub fn handle(&mut self, m: Msg) -> Result<Option<Reaction>, serde_json::Error> {

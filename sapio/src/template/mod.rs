@@ -11,7 +11,7 @@ use std::convert::TryInto;
 pub mod output;
 mod util;
 pub use output::{Output, OutputMeta};
-use util::CTVHash;
+pub use util::CTVHash;
 
 /// Builder can be used to interactively put together a transaction template before
 /// finalizing into a Template.

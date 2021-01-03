@@ -138,7 +138,7 @@ where
                     .entry(h)
                     .or_insert(txtmpl);
                     amount_range.update_range(txtmpl.total_amount());
-                    Ok(Clause::TxTemplate(h))
+                    ctx.ctv_emulator(h)
                 })
                 // Forces any error to abort the whole thing
                 .collect::<Result<Vec<_>, CompilationError>>()?;
