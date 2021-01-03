@@ -42,12 +42,15 @@ fn hash_to_child_vec(h: Sha256) -> Vec<ChildNumber> {
     c
 }
 #[derive(Clone)]
-struct HDOracleEmulator {
+pub struct HDOracleEmulator {
     root: ExtendedPrivKey,
 }
 
 impl HDOracleEmulator {
-    async fn bind<A: ToSocketAddrs>(self, a: A) -> std::io::Result<()> {
+    pub fn new(root: ExtendedPrivKey) -> Self {
+        HDOracleEmulator { root }
+    }
+    pub async fn bind<A: ToSocketAddrs>(self, a: A) -> std::io::Result<()> {
         let listener = TcpListener::bind(a).await?;
         loop {
             let (mut socket, _) = listener.accept().await?;
