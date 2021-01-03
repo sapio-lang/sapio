@@ -1,5 +1,7 @@
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::Hash;
+use sapio::contract::object::BadTxIndex;
+use std::collections::HashMap;
 
 use bitcoin::util::bip32::*;
 use sapio::clause::Clause;
@@ -14,8 +16,9 @@ use bitcoin::consensus::encode::{Decodable, Encodable};
 use bitcoin::secp256k1::{All, Secp256k1};
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use sapio::template::CTVHash;
-tokio::task_local! {
-    pub static SECP: Secp256k1<All>;
+use std::thread;
+thread_local! {
+    pub static SECP: Secp256k1<All> = Secp256k1::new();
 }
 
 fn hash_to_child_vec(h: Sha256) -> Vec<ChildNumber> {
@@ -46,21 +49,18 @@ struct HDOracleEmulator {
 impl HDOracleEmulator {
     async fn bind<A: ToSocketAddrs>(self, a: A) -> std::io::Result<()> {
         let listener = TcpListener::bind(a).await?;
-        SECP.scope(Secp256k1::new(), async {
-            loop {
-                let (mut socket, _) = listener.accept().await?;
-                {
-                    let this = self.clone();
-                    tokio::spawn(async move {
-                        loop {
-                            this.handle(&mut socket).await;
-                        }
-                    });
-                }
+        loop {
+            let (mut socket, _) = listener.accept().await?;
+            {
+                let this = self.clone();
+                tokio::spawn(async move {
+                    loop {
+                        this.handle(&mut socket).await;
+                    }
+                });
             }
-            Ok(())
-        })
-        .await
+        }
+        Ok(())
     }
     fn derive(&self, h: Sha256, secp: &Secp256k1<All>) -> Result<ExtendedPrivKey, Error> {
         let c = hash_to_child_vec(h);
@@ -69,9 +69,9 @@ impl HDOracleEmulator {
 
     fn sign(
         &self,
-        mut b: bitcoin::util::psbt::PartiallySignedTransaction,
+        mut b: PartiallySignedTransaction,
         secp: &Secp256k1<All>,
-    ) -> bitcoin::util::psbt::PartiallySignedTransaction {
+    ) -> PartiallySignedTransaction {
         let tx = b.clone().extract_tx();
         let h = tx.get_ctv_hash(0);
         if let Ok(key) = self.derive(h, secp) {
@@ -161,10 +161,7 @@ impl CTVEmulator for HDOracleEmulatorConnection {
             self.derive(h).map_err(CompilationError::custom)?.public_key,
         ))
     }
-    fn sign(
-        &self,
-        b: bitcoin::util::psbt::PartiallySignedTransaction,
-    ) -> bitcoin::util::psbt::PartiallySignedTransaction {
+    fn sign(&self, mut b: PartiallySignedTransaction) -> PartiallySignedTransaction {
         let mut out = vec![];
         b.consensus_encode(&mut out);
         let res: Result<PartiallySignedTransaction, _> = self.runtime.block_on(async {
@@ -186,7 +183,13 @@ impl CTVEmulator for HDOracleEmulatorConnection {
             Decodable::consensus_decode(&inp[..])
                 .map_err(|_e| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid PSBT"))
         });
-        res.unwrap_or_else(|_e| b)
+        match res {
+            Ok(pb) => {
+                b.merge(pb);
+                b
+            }
+            Err(_) => b,
+        }
     }
 }
 
@@ -201,13 +204,16 @@ mod tests {
     use sapio::contract::*;
     use sapio::*;
 
-    pub struct TestEmulation {
-        pub to_contract: Compiled,
+    pub struct TestEmulation<T> {
+        pub to_contract: T,
         pub amount: Amount,
         pub timeout: u32,
     }
 
-    impl TestEmulation {
+    impl<T> TestEmulation<T>
+    where
+        T: Compilable,
+    {
         then!(
             complete | s,
             ctx | {
@@ -219,49 +225,60 @@ mod tests {
         );
     }
 
-    impl Contract for TestEmulation {
+    impl<T: Compilable + 'static> Contract for TestEmulation<T> {
         declare! {then, Self::complete}
         declare! {non updatable}
     }
 
     #[test]
     fn test_connect() {
-        let RT = Arc::new(tokio::runtime::Runtime::new().unwrap());
-        RT.clone().block_on(async {
-            let oracle = HDOracleEmulator {
-                root: ExtendedPrivKey::new_master(
-                    bitcoin::network::constants::Network::Regtest,
-                    &[44u8; 32],
-                )
-                .unwrap(),
-            };
-            let connecter = HDOracleEmulatorConnection::new(
-                "localhost:8080",
-                ExtendedPubKey::from_private(&Secp256k1::new(), &oracle.root),
-                RT.clone(),
-            )
-            .await
-            .unwrap();
-            let server = tokio::task::spawn(oracle.bind("localhost:8080"));
-            let contract = TestEmulation {
-                to_contract: Compiled::from_address(
-                    bitcoin::Address::from_str("bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh")
-                        .unwrap(),
-                    None,
-                ),
-                amount: Amount::from_btc(1.0).unwrap(),
-                timeout: 6,
-            };
-            contract
-                .compile(&Context::new(
-                    Amount::from_btc(1.0).unwrap(),
-                    Some(Rc::new(connecter)),
-                ))
+        let root =
+            ExtendedPrivKey::new_master(bitcoin::network::constants::Network::Regtest, &[44u8; 32])
                 .unwrap();
+        let pk_root = ExtendedPubKey::from_private(&Secp256k1::new(), &root);
+        {
+            let RT = Arc::new(tokio::runtime::Runtime::new().unwrap());
+            std::thread::spawn(move || {
+                RT.block_on(async {
+                    let oracle = HDOracleEmulator { root };
+                    oracle.bind("127.0.0.1:8080").await;
+                })
+            });
+        }
 
-            server.abort();
-
-            tokio::join!(server);
+        let contract_1 = TestEmulation {
+            to_contract: Compiled::from_address(
+                bitcoin::Address::from_str("bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh").unwrap(),
+                None,
+            ),
+            amount: Amount::from_btc(1.0).unwrap(),
+            timeout: 6,
+        };
+        let contract = TestEmulation {
+            to_contract: contract_1,
+            amount: Amount::from_btc(1.0).unwrap(),
+            timeout: 4,
+        };
+        let RT2 = Arc::new(tokio::runtime::Runtime::new().unwrap());
+        let connecter = RT2.block_on(async {
+            HDOracleEmulatorConnection::new("127.0.0.1:8080", pk_root, RT2.clone())
+                .await
+                .unwrap()
         });
+        let rc_conn = (Rc::new(connecter));
+        let compiled = contract
+            .compile(&Context::new(
+                Amount::from_btc(1.0).unwrap(),
+                Some(rc_conn.clone()),
+            ))
+            .unwrap();
+        let psbts = compiled.bind_psbt(
+            bitcoin::OutPoint::default(),
+            HashMap::new(),
+            Rc::new(BadTxIndex::new()),
+            rc_conn,
+        );
+
+        // TODO: Test PSBT result
     }
 }
