@@ -7,7 +7,7 @@ use ::miniscript::*;
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::amount::Amount;
-use bitcoin::util::psbt::{self, PartiallySignedTransaction};
+use bitcoin::util::psbt::PartiallySignedTransaction;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;

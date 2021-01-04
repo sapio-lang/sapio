@@ -1,12 +1,10 @@
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::Hash;
-use sapio::contract::object::BadTxIndex;
-use std::collections::HashMap;
-
 use bitcoin::util::bip32::*;
 use sapio::clause::Clause;
 use sapio::contract::emulator::CTVEmulator;
 use sapio::contract::error::CompilationError;
+
 use std::io::Read;
 use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -16,9 +14,13 @@ use bitcoin::consensus::encode::{Decodable, Encodable};
 use bitcoin::secp256k1::{All, Secp256k1};
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use sapio::template::CTVHash;
-use std::thread;
+
 thread_local! {
     pub static SECP: Secp256k1<All> = Secp256k1::new();
+}
+
+fn input_error<T>(s: &str) -> Result<T, std::io::Error> {
+    Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, s))
 }
 
 fn hash_to_child_vec(h: Sha256) -> Vec<ChildNumber> {
@@ -72,9 +74,9 @@ impl HDOracleEmulator {
 
     fn sign(
         &self,
-        mut b: PartiallySignedTransaction,
+        b: &mut PartiallySignedTransaction,
         secp: &Secp256k1<All>,
-    ) -> PartiallySignedTransaction {
+    ) -> Result<(), std::io::Error> {
         let tx = b.clone().extract_tx();
         let h = tx.get_ctv_hash(0);
         if let Ok(key) = self.derive(h, secp) {
@@ -84,41 +86,39 @@ impl HDOracleEmulator {
             if let Some(scriptcode) = &b.inputs[0].witness_script {
                 if let Some(utxo) = &b.inputs[0].witness_utxo {
                     let sighash = sighash.sighash_all(&tx.input[0], &scriptcode, utxo.value);
-                    let msg = bitcoin::secp256k1::Message::from_slice(&sighash[..]).unwrap();
+                    let msg = bitcoin::secp256k1::Message::from_slice(&sighash[..])
+                        .or_else(|_e| input_error("Message hash not valid (impossible?)"))?;
                     let mut signature: Vec<u8> = secp
                         .sign(&msg, &key.private_key.key)
                         .serialize_compact()
                         .into();
                     signature.push(0x01);
                     b.inputs[0].partial_sigs.insert(pk, signature);
-                    return b;
+                    return Ok(());
                 }
             }
         }
-        b
+        input_error("Unknown Failure to Sign")
     }
     const MAX_MSG: usize = 1_000_000;
     async fn handle(&self, t: &mut TcpStream) -> Result<(), std::io::Error> {
         let len = t.read_u32().await? as usize;
         if len > Self::MAX_MSG {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "Invalid Length",
-            ));
+            return input_error("Invalid Length");
         }
         let mut m = vec![0; len];
         let read = t.read_exact(&mut m[..]).await?;
         if read != len {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "Invalid Length",
-            ));
+            return input_error("Invalid Length");
         }
 
-        let psbt: PartiallySignedTransaction = Decodable::consensus_decode(&m[..]).unwrap();
+        let mut psbt: PartiallySignedTransaction = Decodable::consensus_decode(&m[..])
+            .or_else(|_e| input_error("Invalid PSBT Received"))?;
         m.clear();
-        let b = SECP.with(|secp| self.sign(psbt, secp));
-        b.consensus_encode(&mut m);
+        SECP.with(|secp| {
+            self.sign(&mut psbt, secp);
+        });
+        psbt.consensus_encode(&mut m);
         t.write_u32(m.len() as u32).await?;
         t.write_all(&m[..]).await?;
         Ok(())
@@ -138,16 +138,20 @@ impl HDOracleEmulatorConnection {
         let c = hash_to_child_vec(h);
         self.root.derive_pub(&self.secp, &c)
     }
-    async fn new<A: ToSocketAddrs>(
+    async fn new<A: ToSocketAddrs + std::fmt::Display + Clone>(
         address: A,
         root: ExtendedPubKey,
         runtime: Arc<tokio::runtime::Runtime>,
     ) -> Result<Self, std::io::Error> {
         Ok(HDOracleEmulatorConnection {
             connection: Mutex::new(None),
-            reconnect: tokio::net::lookup_host(address).await?.next().ok_or(
-                std::io::Error::new(std::io::ErrorKind::InvalidInput, "Bad Lookup"),
-            )?,
+            reconnect: tokio::net::lookup_host(address.clone())
+                .await?
+                .next()
+                .ok_or_else(|| {
+                    input_error::<()>(&format!("Bad Lookup Could Not Resolve Address {}", address))
+                        .unwrap_err()
+                })?,
             runtime,
             root,
             secp: Secp256k1::new(),
@@ -165,42 +169,42 @@ impl CTVEmulator for HDOracleEmulatorConnection {
         ))
     }
     fn sign(&self, mut b: PartiallySignedTransaction) -> PartiallySignedTransaction {
+        let unsigned = b.clone();
         let mut out = vec![];
-        b.consensus_encode(&mut out);
         let res: Result<PartiallySignedTransaction, _> = self.runtime.block_on(async {
-            let mut mconn = self.connection.lock().await;
-            if let None = *mconn {
-                *mconn = Some(TcpStream::connect(&self.reconnect).await?);
-            }
-            let conn: &mut TcpStream = &mut mconn.as_mut().unwrap();
-            conn.write_u32(out.len() as u32).await?;
-            conn.write_all(&out[..]).await?;
-            let len = conn.read_u32().await? as usize;
-            let mut inp = vec![0; len];
-            if len != conn.read_exact(&mut inp[..]).await? {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "Invalid Length",
-                ));
-            }
-            Decodable::consensus_decode(&inp[..])
-                .map_err(|_e| std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid PSBT"))
+            b.consensus_encode(&mut out)
+                .or_else(|_e| input_error("Could not encode provided PSBT"))?;
+            let inp = {
+                let mut mconn = self.connection.lock().await;
+                if let None = &*mconn {
+                    *mconn = Some(TcpStream::connect(&self.reconnect).await?);
+                }
+                let conn = mconn.as_mut().unwrap();
+                conn.write_u32(out.len() as u32).await?;
+                conn.write_all(&out[..]).await?;
+                let len = conn.read_u32().await? as usize;
+                let mut inp = vec![0; len];
+                if len != conn.read_exact(&mut inp[..]).await? {
+                    return input_error("Invalid Length");
+                }
+                inp
+            };
+            let res =
+                Decodable::consensus_decode(&inp[..]).or_else(|_e| input_error("Invalid PSBT"))?;
+            b.merge(res)
+                .or_else(|_e| input_error("Fault Signed PSBT"))?;
+            Ok(b)
         });
-        match res {
-            Ok(pb) => {
-                b.merge(pb);
-                b
-            }
-            Err(_) => b,
-        }
+        res.unwrap_or(unsigned)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
     use bitcoin::util::amount::Amount;
+    use sapio::contract::object::BadTxIndex;
+    use std::collections::HashMap;
     use std::rc::Rc;
     use std::str::FromStr;
 
@@ -268,14 +272,14 @@ mod tests {
                 .await
                 .unwrap()
         });
-        let rc_conn = (Rc::new(connecter));
+        let rc_conn = Rc::new(connecter);
         let compiled = contract
             .compile(&Context::new(
                 Amount::from_btc(1.0).unwrap(),
                 Some(rc_conn.clone()),
             ))
             .unwrap();
-        let psbts = compiled.bind_psbt(
+        let _psbts = compiled.bind_psbt(
             bitcoin::OutPoint::default(),
             HashMap::new(),
             Rc::new(BadTxIndex::new()),
