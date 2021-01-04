@@ -7,20 +7,11 @@ use std::str::FromStr;
 use sapio::contract::*;
 use sapio::*;
 
-use bitcoin::hashes::sha256::Hash as Sha256;
-use bitcoin::hashes::Hash;
 use bitcoin::util::bip32::*;
 use emulator_connect::HDOracleEmulatorConnection;
 use emulator_connect::*;
 
-use std::net::SocketAddr;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
-
-use bitcoin::consensus::encode::{Decodable, Encodable};
-use bitcoin::secp256k1::{All, Secp256k1};
-use bitcoin::util::psbt::PartiallySignedTransaction;
-use sapio_base::CTVHash;
+use bitcoin::secp256k1::Secp256k1;
 
 use std::sync::Arc;
 pub struct TestEmulation<T> {
@@ -88,7 +79,7 @@ fn test_connect() {
             .await
             .unwrap()
     });
-    let rc_conn: Rc<CTVEmulator> = Rc::new(connecter);
+    let rc_conn: Rc<dyn CTVEmulator> = Rc::new(connecter);
     let compiled = contract
         .compile(&Context::new(
             Amount::from_btc(1.0).unwrap(),

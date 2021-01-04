@@ -2,6 +2,7 @@ use super::*;
 /// RiskReversal represents a specific contract where we specify a set of price ranges that we
 /// want to keep purchasing power flat within. e.g.
 ///
+/// ```text
 ///  Value of BTC in Asset
 ///     |            
 ///     |                                 /
@@ -14,7 +15,9 @@ use super::*;
 ///     |     /        current price
 ///     |    /
 ///     --------------------------------------------------- price of BTC in Asset
+/// ```
 ///
+/// ```text
 ///  Amount of BTC
 ///     |            
 ///     |-------
@@ -45,6 +48,7 @@ use super::*;
 ///     |                               --------------
 ///     |    
 ///     --------------------------------------------------- price of BTC in Asset
+/// ```
 ///
 /// In this case, Operator would be providing enough Bitcoin (Y) for a user's funds (X) such that:
 ///
@@ -66,10 +70,10 @@ use super::*;
 /// 2. charging a premium
 /// 3. charging a fee (& rehypothecating the position)
 ///
-struct RiskReversal<'a> {
+pub struct RiskReversal<'a> {
     amount: Amount,
-    /// The current price in dollars with ONE_UNIT precision
-    current_price_x_ONE_UNIT: u64,
+    /// the current price in dollars with one_unit precision
+    current_price_x_one_unit: u64,
     /// price multipliers rationals (lo, hi) and (a,b) = a/b
     /// e.g. ((7, 91), (1, 10)) computes from price - price*7/91 to price + price*1/10
     range: ((u64, u64), (u64, u64)),
@@ -86,19 +90,19 @@ impl<'a> TryFrom<RiskReversal<'a>> for GenericBetArguments<'a> {
         let key = v.operator_api.get_key();
         let user = v.user_api.get_key();
         let mut outcomes = vec![];
-        let current_price = v.current_price_x_ONE_UNIT;
+        let current_price = v.current_price_x_one_unit;
         // TODO: Can Customize this logic to for arbitrary curves or grids
-        /// bottom and top are floor/ceil for where our contract operates
+        // bottom and top are floor/ceil for where our contract operates
         let bottom =
             ((current_price - (current_price * v.range.0 .0) / v.range.0 .1) / ONE_UNIT) * ONE_UNIT;
         let top = (((current_price + (current_price * v.range.1 .0) / v.range.1 .1) + ONE_UNIT
             - 1)
             / ONE_UNIT)
             * ONE_UNIT;
-        /// The max amount of BTC the contract needs to meet obligations
+        // The max amount of BTC the contract needs to meet obligations
         let max_amount_bitcoin = (v.amount * current_price) / bottom;
 
-        /// represents an overflow
+        // represents an overflow
         if bottom > current_price || top < current_price {
             return Err(CompilationError::TerminateCompilation);
         }

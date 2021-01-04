@@ -59,17 +59,15 @@ impl HDOracleEmulator {
             let (mut socket, _) = listener.accept().await?;
             {
                 let this = self.clone();
-                let t: tokio::task::JoinHandle<Result<(), std::io::Error>> =
+                let _: tokio::task::JoinHandle<Result<(), std::io::Error>> =
                     tokio::spawn(async move {
                         loop {
-                            socket.readable().await;
-                            let x: () = this.handle(&mut socket).await?;
+                            socket.readable().await?;
+                            this.handle(&mut socket).await?;
                         }
-                        Ok(())
                     });
             }
         }
-        Ok(())
     }
     fn derive(&self, h: Sha256, secp: &Secp256k1<All>) -> Result<ExtendedPrivKey, Error> {
         let c = hash_to_child_vec(h);
@@ -85,11 +83,15 @@ impl HDOracleEmulator {
         let h = tx.get_ctv_hash(0);
         if let Ok(key) = self.derive(h, secp) {
             let pk = key.private_key.public_key(secp);
-            let sighash = bitcoin::util::bip143::SighashComponents::new(&tx);
-
             if let Some(scriptcode) = &b.inputs[0].witness_script {
                 if let Some(utxo) = &b.inputs[0].witness_utxo {
-                    let sighash = sighash.sighash_all(&tx.input[0], &scriptcode, utxo.value);
+                    let mut sighash = bitcoin::util::bip143::SigHashCache::new(&tx);
+                    let sighash = sighash.signature_hash(
+                        0,
+                        &scriptcode,
+                        utxo.value,
+                        bitcoin::blockdata::transaction::SigHashType::All,
+                    );
                     let msg = bitcoin::secp256k1::Message::from_slice(&sighash[..])
                         .or_else(|_e| input_error("Message hash not valid (impossible?)"))?;
                     let mut signature: Vec<u8> = secp
@@ -119,7 +121,7 @@ impl HDOracleEmulator {
             // clear so we can reuse it!
             m.clear();
             psbt.consensus_encode(&mut m)
-                .or_else(|_e| input_error("Invalid PSBT After Signing"));
+                .or_else(|_e| input_error("Invalid PSBT After Signing"))?;
             t.write_u32(m.len() as u32).await?;
             t.write_all(&m[..]).await?;
             t.flush().await?;

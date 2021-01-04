@@ -1,13 +1,13 @@
 use super::*;
-struct Call<'a> {
+pub struct Call<'a> {
     /// The # of units
     amount: Amount,
     /// The strike with ONE_UNIT precision (bitcoin per symbol)
-    strike_x_ONE_UNIT: u64,
+    strike_x_one_unit: u64,
     /// The max price with ONE_UNIT precision (bitcoin per symbol)
     /// Because these are fully collateralized contracts, we can't do an
     /// actual call.
-    max_price_x_ONE_UNIT: u64,
+    max_price_x_one_unit: u64,
     operator_api: &'a dyn apis::OperatorApi,
     user_api: &'a dyn apis::UserApi,
     symbol: Symbol,
@@ -23,10 +23,10 @@ impl<'a> TryFrom<Call<'a>> for GenericBetArguments<'a> {
         let key = v.operator_api.get_key();
         let user = v.user_api.get_key();
         let mut outcomes = vec![];
-        let strike = v.strike_x_ONE_UNIT;
-        let max_amount_bitcoin = v.amount * v.max_price_x_ONE_UNIT;
+        let strike = v.strike_x_one_unit;
+        let max_amount_bitcoin = v.amount * v.max_price_x_one_unit;
         // Increment 1 dollar per step
-        for price in (strike..=v.max_price_x_ONE_UNIT).step_by(ONE_UNIT as usize) {
+        for price in (strike..=v.max_price_x_one_unit).step_by(ONE_UNIT as usize) {
             let mut profit = Amount::from_sat(price) - Amount::from_sat(strike);
             let mut refund = max_amount_bitcoin - profit;
             if v.buying {

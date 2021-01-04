@@ -1,5 +1,28 @@
 use super::*;
-struct ExplodingOption<T> {
+pub trait Explodes: 'static + Sized {
+    then!(explodes);
+    then!(strikes);
+}
+
+impl<T> Contract for ExplodingOption<T>
+where
+    GenericBet: TryFrom<T, Error = CompilationError>,
+    T: Clone + 'static,
+{
+    declare!(then, Self::explodes, Self::strikes);
+    declare!(non updatable);
+}
+
+impl<T> Contract for UnderFundedExplodingOption<T>
+where
+    GenericBet: TryFrom<T, Error = CompilationError>,
+    T: Clone + 'static,
+{
+    declare!(then, Self::explodes, Self::strikes);
+    declare!(non updatable);
+}
+
+pub struct ExplodingOption<T: 'static> {
     party_one: Amount,
     party_two: Amount,
     key_p1: bitcoin::Address,
@@ -9,7 +32,10 @@ struct ExplodingOption<T> {
     timeout: u32,
 }
 
-impl<T> ExplodingOption<T>
+impl<T> ExplodingOption<T> {
+    guard!(signed | s, ctx | { s.key_p2_pk.clone() });
+}
+impl<T> Explodes for ExplodingOption<T>
 where
     GenericBet: TryFrom<T, Error = CompilationError>,
     T: Clone,
@@ -33,9 +59,8 @@ where
         }
     );
 
-    guard!(signed | s, ctx | { s.key_p2_pk.clone() });
     then!(
-        stikes[Self::signed] | s,
+        strikes[Self::signed] | s,
         ctx | {
             ctx.template()
                 .add_output(
@@ -48,16 +73,15 @@ where
     );
 }
 
-struct UnderFundedExplodingOption<T> {
+pub struct UnderFundedExplodingOption<T: 'static> {
     party_one: Amount,
     party_two: Amount,
     key_p1: bitcoin::Address,
-    key_p2: bitcoin::Address,
     opt: T,
     timeout: u32,
 }
 
-impl<T> UnderFundedExplodingOption<T>
+impl<T> Explodes for UnderFundedExplodingOption<T>
 where
     GenericBet: TryFrom<T, Error = CompilationError>,
     T: Clone,
@@ -79,7 +103,7 @@ where
     );
 
     then!(
-        stikes | s,
+        strikes | s,
         ctx | {
             ctx.template()
                 .add_amount(s.party_two)

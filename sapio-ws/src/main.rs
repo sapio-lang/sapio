@@ -59,7 +59,7 @@ async fn index(
 }
 
 lazy_static::lazy_static! {
-    static ref menu : session::Menu = {
+    static ref MENU : session::Menu = {
         let mut m = session::MenuBuilder::new();
         m.register_as::<contracts::ExampleA>("ExampleA".to_string().into());
         m.register_as::<contracts::ExampleB<contracts::Start>>("ExampleB".to_string().into());
@@ -81,7 +81,7 @@ lazy_static::lazy_static! {
 }
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| App::new().route("/", web::get().to(|r, s| index(&menu, r, s))))
+    HttpServer::new(|| App::new().route("/", web::get().to(|r, s| index(&MENU, r, s))))
         .bind("127.0.0.1:8888")?
         .run()
         .await
