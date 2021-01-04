@@ -23,6 +23,6 @@ async fn main() -> Result<(), std::io::Error> {
             .expect("No Interface given (e.g., 127.0.0.1:8080"),
     );
     println!("Running Oracle With Key: {}", pk_root);
-    server.await;
+    server.await?;
     Ok(())
 }
