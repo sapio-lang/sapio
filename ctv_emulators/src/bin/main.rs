@@ -1,8 +1,8 @@
-use bitcoin::secp256k1::{All, Secp256k1};
+use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::bip32::*;
 use emulator_connect::*;
 use tokio;
-use tokio::io::{self, AsyncReadExt};
+use tokio::io::AsyncReadExt;
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
     let filename = std::env::args().nth(1).expect("No Seed File Provided");
