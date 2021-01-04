@@ -1,9 +1,9 @@
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::util::bip32::*;
-use sapio::clause::Clause;
-use sapio::contract::emulator::CTVEmulator;
-use sapio::contract::emulator::EmulatorError;
+pub mod emulator;
+use emulator::Clause;
+pub use emulator::{CTVEmulator, EmulatorError, NullEmulator};
 
 use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -12,7 +12,7 @@ use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use bitcoin::consensus::encode::{Decodable, Encodable};
 use bitcoin::secp256k1::{All, Secp256k1};
 use bitcoin::util::psbt::PartiallySignedTransaction;
-use sapio::template::CTVHash;
+use sapio_base::CTVHash;
 const MAX_MSG: usize = 1_000_000;
 
 thread_local! {
@@ -163,7 +163,7 @@ impl HDOracleEmulatorConnection {
 }
 use tokio::sync::Mutex;
 impl CTVEmulator for HDOracleEmulatorConnection {
-    fn get_signer_for(&self, h: Sha256) -> Result<sapio::clause::Clause, EmulatorError> {
+    fn get_signer_for(&self, h: Sha256) -> Result<Clause, EmulatorError> {
         Ok(Clause::Key(self.derive(h)?.public_key))
     }
     fn sign(

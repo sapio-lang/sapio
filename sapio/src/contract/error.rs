@@ -1,3 +1,4 @@
+use emulator_connect::EmulatorError;
 use std::error::Error;
 use std::fmt;
 #[derive(Debug)]
@@ -34,3 +35,9 @@ impl fmt::Display for CompilationError {
 }
 
 impl Error for CompilationError {}
+
+impl From<EmulatorError> for CompilationError {
+    fn from(e: EmulatorError) -> Self {
+        CompilationError::Custom(Box::new(e))
+    }
+}

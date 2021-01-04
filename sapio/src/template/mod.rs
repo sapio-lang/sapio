@@ -9,9 +9,8 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 
 pub mod output;
-mod util;
 pub use output::{Output, OutputMeta};
-pub use util::CTVHash;
+use sapio_base::CTVHash;
 
 /// Builder can be used to interactively put together a transaction template before
 /// finalizing into a Template.

@@ -1,6 +1,4 @@
 use crate::clause::Clause;
-use crate::contract::emulator::CTVEmulator;
-use crate::contract::emulator::NullEmulator;
 use crate::contract::CompilationError;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
@@ -9,6 +7,8 @@ use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::amount::Amount;
 use bitcoin::util::psbt::PartiallySignedTransaction;
+use emulator_connect::emulator::CTVEmulator;
+use emulator_connect::emulator::NullEmulator;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;

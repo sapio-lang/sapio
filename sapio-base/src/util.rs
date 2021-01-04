@@ -1,5 +1,9 @@
 use super::*;
+use bitcoin::consensus::encode::Encodable;
+use bitcoin::hashes::sha256;
 use bitcoin::hashes::Hash;
+use bitcoin::util::amount::Amount;
+
 /// Any type which can generate a CTVHash. Allows some decoupling in the future if some types will
 /// not be literal transactions.
 pub trait CTVHash {

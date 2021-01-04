@@ -1,5 +1,5 @@
-use super::emulator::{CTVEmulator, NullEmulator};
 use super::{Amount, Compilable, CompilationError, Compiled};
+use emulator_connect::{CTVEmulator, NullEmulator};
 use std::rc::Rc;
 /// Context type is not copyable/clonable externally
 pub struct Context {

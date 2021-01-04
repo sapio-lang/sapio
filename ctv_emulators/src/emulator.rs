@@ -1,9 +1,10 @@
-use super::CompilationError;
-use crate::clause::Clause;
 use bitcoin::hashes::sha256;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use std::fmt;
 use std::rc::Rc;
+/// Concrete Instantiation of Miniscript Policy. Because we need to be able to generate exact
+/// transactions, we only work with `bitcoin::PublicKey` types.
+pub(crate) type Clause = miniscript::policy::concrete::Policy<bitcoin::PublicKey>;
 #[derive(Debug)]
 pub enum EmulatorError {
     NetworkIssue(std::io::Error),
@@ -28,12 +29,6 @@ impl From<bitcoin::util::bip32::Error> for EmulatorError {
     }
 }
 
-impl From<EmulatorError> for CompilationError {
-    fn from(e: EmulatorError) -> Self {
-        CompilationError::Custom(Box::new(e))
-    }
-}
-
 pub trait CTVEmulator {
     fn get_signer_for(&self, h: sha256::Hash) -> Result<Clause, EmulatorError>;
     fn sign(
@@ -43,7 +38,7 @@ pub trait CTVEmulator {
 }
 
 #[derive(Clone)]
-pub(crate) struct NullEmulator(pub(crate) Option<Rc<dyn CTVEmulator>>);
+pub struct NullEmulator(pub Option<Rc<dyn CTVEmulator>>);
 
 impl CTVEmulator for NullEmulator {
     fn get_signer_for(&self, h: sha256::Hash) -> Result<Clause, EmulatorError> {
