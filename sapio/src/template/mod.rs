@@ -19,7 +19,6 @@ pub struct Builder {
     version: i32,
     lock_time: u32,
     label: String,
-    amount: Amount,
     ctx: Context,
 }
 
@@ -32,7 +31,6 @@ impl Builder {
             version: 2,
             lock_time: 0,
             label: String::new(),
-            amount: Amount::from_sat(0),
             ctx,
         }
     }

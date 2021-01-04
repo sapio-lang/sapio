@@ -50,7 +50,7 @@ impl BState for Finish {
     }
 }
 
-trait ExampleBThen
+pub trait ExampleBThen
 where
     Self: Sized,
 {

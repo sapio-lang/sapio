@@ -29,7 +29,7 @@ pub struct FederatedPegIn<T: RecoveryState> {
     _pd: PhantomData<T>,
 }
 
-trait StateDependentActions
+pub trait StateDependentActions
 where
     Self: Sized,
 {

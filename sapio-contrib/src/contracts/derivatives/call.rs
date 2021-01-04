@@ -1,5 +1,5 @@
 use super::*;
-struct Call<'a> {
+pub struct Call<'a> {
     /// The # of units
     amount: Amount,
     /// The strike with ONE_UNIT precision (bitcoin per symbol)

@@ -15,6 +15,9 @@ impl Context {
             emulator: NullEmulator(emulator),
         }
     }
+    pub fn funds(&self) -> Amount {
+        self.available_funds
+    }
     pub fn ctv_emulator(
         &self,
         b: bitcoin::hashes::sha256::Hash,

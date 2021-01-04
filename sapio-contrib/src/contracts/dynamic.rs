@@ -1,23 +1,11 @@
-use bitcoin::util::amount::CoinAmount;
-
 use sapio::contract::DynamicContract;
 use sapio::contract::*;
 use sapio::*;
 use schemars::*;
 use serde::*;
-use std::convert::TryInto;
 
 #[derive(JsonSchema, Deserialize)]
-pub struct DynamicExample {
-    cold_storage: bitcoin::Address,
-    max_per_address: CoinAmount,
-    radix: usize,
-    hot_storage: bitcoin::Address,
-    n_steps: u64,
-    amount_step: CoinAmount,
-    timeout: u32,
-    mature: u32,
-}
+pub struct DynamicExample;
 
 struct D {
     v: Vec<fn() -> Option<actions::ThenFunc<D>>>,
@@ -55,8 +43,8 @@ impl DynamicExample {
             data: "E.g., Create a Vault".into(),
         };
         ctx.template()
-        .add_output(s.amount_step.try_into()?, &d, None)?
-        .add_output(s.amount_step.try_into()?, &d2, None)?
+        .add_output(ctx.funds()/2, &d, None)?
+        .add_output(ctx.funds()/2, &d2, None)?
         .into()
     }}
 }

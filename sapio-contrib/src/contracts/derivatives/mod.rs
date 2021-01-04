@@ -24,7 +24,7 @@ pub mod risk_reversal;
 
 /// To setup a GenericBet select an amount, a list of outcomes, and an oracle.
 /// The outcomes do not need to be sorted but must be unique.
-struct GenericBetArguments<'a> {
+pub struct GenericBetArguments<'a> {
     amount: Amount,
     outcomes: Vec<(i64, Template)>,
     oracle: &'a dyn Oracle,
@@ -54,7 +54,7 @@ impl<'a> From<GenericBetArguments<'a>> for GenericBet {
 
 /// A GenericBet takes a sorted list of outcomes and a cached table of
 /// oracle lookups and assembles a binary contract tree for the GenericBet
-struct GenericBet {
+pub struct GenericBet {
     amount: Amount,
     outcomes: Vec<(i64, Template)>,
     oracle: Rc<HashMap<i64, (Clause, Clause)>>,
