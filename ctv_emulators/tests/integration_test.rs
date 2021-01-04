@@ -7,20 +7,11 @@ use std::str::FromStr;
 use sapio::contract::*;
 use sapio::*;
 
-
-
 use bitcoin::util::bip32::*;
 use emulator_connect::HDOracleEmulatorConnection;
 use emulator_connect::*;
 
-
-
-
-
-
-use bitcoin::secp256k1::{Secp256k1};
-
-
+use bitcoin::secp256k1::Secp256k1;
 
 use std::sync::Arc;
 pub struct TestEmulation<T> {

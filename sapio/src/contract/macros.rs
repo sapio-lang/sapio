@@ -52,12 +52,22 @@ macro_rules! declare {
 /// ```
 #[macro_export]
 macro_rules! then {
-    {$name:ident $a:tt |$s:ident, $ctx:ident| $b:block } => {
+    {
+        $(#[$meta:meta])*
+        $name:ident $a:tt |$s:ident, $ctx:ident| $b:block } => {
+        $(#[$meta])*
         fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<Self>> { Some($crate::contract::actions::ThenFunc{guard: &$a, func:|$s: &Self, $ctx:&$crate::contract::Context| $b})}
     };
-    {$name:ident |$s:ident, $ctx:ident| $b:block } => { then!{$name [] |$s, $ctx| $b } };
+    {
+        $(#[$meta:meta])*
+        $name:ident |$s:ident, $ctx:ident| $b:block } => { then!{
+            $(#[$meta])*
+            $name [] |$s, $ctx| $b } };
 
-    {$name:ident} => {
+    {
+        $(#[$meta:meta])*
+        $name:ident} => {
+        $(#[$meta])*
         fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<Self>> {None}
     };
 }
@@ -73,13 +83,20 @@ macro_rules! then {
 /// Unlike a `then!`, `finish!` must always have guards.
 #[macro_export]
 macro_rules! finish {
-    {$name:ident $a:tt |$s:ident, $ctx:ident, $o:ident| $b:block } => {
+    {
+        $(#[$meta:meta])*
+        $name:ident $a:tt |$s:ident, $ctx:ident, $o:ident| $b:block } => {
+        $(#[$meta])*
         fn $name<'a>() -> Option<$crate::contract::actions::FinishOrFunc<Self, Args>>{
             Some($crate::contract::actions::FinishOrFunc{guard: &$a, func: |$s: &Self, $ctx:&$crate::contract::Context, $o: Option<&_>| $b} .into())
         }
     };
-    {$name:ident $a:tt} => {
-        finish!($name $a |s, o| { Ok(Box::new(std::iter::empty()))});
+    {
+        $(#[$meta:meta])*
+        $name:ident $a:tt} => {
+        finish!(
+            $(#[$meta])*
+            $name $a |s, o| { Ok(Box::new(std::iter::empty()))});
     };
 }
 
@@ -92,17 +109,26 @@ macro_rules! finish {
 /// ```
 #[macro_export]
 macro_rules! guard {
-    {$name:ident} => {
+    {
+        $(#[$meta:meta])*
+        $name:ident} => {
+            $(#[$meta])*
             fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
                 None
             }
      };
-    {$name:ident |$s:ident, $ctx:ident| $b:block} => {
+    {
+        $(#[$meta:meta])*
+        $name:ident |$s:ident, $ctx:ident| $b:block} => {
+            $(#[$meta])*
             fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
                 Some($crate::contract::actions::Guard::Fresh( |$s: &Self, $ctx: &$crate::contract::Context| $b))
             }
         };
-    {cached $name:ident |$s:ident, $ctx:ident| $b:block} => {
+    {
+        $(#[$meta:meta])*
+        cached $name:ident |$s:ident, $ctx:ident| $b:block} => {
+            $(#[$meta])*
             fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
                 Some($crate::contract::actions::Guard::Cache( |$s: &Self, $ctx:&$crate::contract::Context| $b))
             }

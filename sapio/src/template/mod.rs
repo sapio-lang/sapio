@@ -1,4 +1,3 @@
-
 use bitcoin::util::amount::Amount;
 
 use crate::contract::{CompilationError, Context};

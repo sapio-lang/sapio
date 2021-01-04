@@ -1,4 +1,3 @@
-
 use bitcoin::consensus::encode::Encodable;
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::Hash;

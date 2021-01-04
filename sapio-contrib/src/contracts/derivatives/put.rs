@@ -3,7 +3,7 @@ struct Put<'a> {
     /// The # of units
     amount: Amount,
     /// The strike with ONE_UNIT precision (bitcoin per symbol)
-    strike_x_ONE_UNIT: u64,
+    strike_x_one_unit: u64,
     operator_api: &'a dyn apis::OperatorApi,
     user_api: &'a dyn apis::UserApi,
     symbol: Symbol,
@@ -19,7 +19,7 @@ impl<'a> TryFrom<Put<'a>> for GenericBetArguments<'a> {
         let key = v.operator_api.get_key();
         let user = v.user_api.get_key();
         let mut outcomes = vec![];
-        let strike = v.strike_x_ONE_UNIT;
+        let strike = v.strike_x_one_unit;
         let max_amount_bitcoin = v.amount * strike;
         // Increment 1 dollar per step
         for price in (0..=strike).step_by(ONE_UNIT as usize) {
