@@ -1,4 +1,4 @@
-use bitcoin::consensus::encode::*;
+
 use bitcoin::util::amount::Amount;
 
 use crate::contract::{CompilationError, Context};
