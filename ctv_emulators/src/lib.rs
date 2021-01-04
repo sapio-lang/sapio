@@ -13,6 +13,7 @@ use bitcoin::consensus::encode::{Decodable, Encodable};
 use bitcoin::secp256k1::{All, Secp256k1};
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use sapio::template::CTVHash;
+const MAX_MSG: usize = 1_000_000;
 
 thread_local! {
     pub static SECP: Secp256k1<All> = Secp256k1::new();
@@ -73,7 +74,7 @@ impl HDOracleEmulator {
 
     fn sign(
         &self,
-        b: PartiallySignedTransaction,
+        mut b: PartiallySignedTransaction,
         secp: &Secp256k1<All>,
     ) -> Result<PartiallySignedTransaction, std::io::Error> {
         let tx = b.clone().extract_tx();
@@ -93,19 +94,18 @@ impl HDOracleEmulator {
                         .into();
                     signature.push(0x01);
                     b.inputs[0].partial_sigs.insert(pk, signature);
-                    return Ok(());
+                    return Ok(b);
                 }
             }
         }
         input_error("Unknown Failure to Sign")
     }
-    const MAX_MSG: usize = 1_000_000;
     async fn handle(
         &self,
         t: &mut TcpStream,
     ) -> Result<PartiallySignedTransaction, std::io::Error> {
         let len = t.read_u32().await? as usize;
-        if len > Self::MAX_MSG {
+        if len > MAX_MSG {
             return input_error("Invalid Length");
         }
         let mut m = vec![0; len];
@@ -124,7 +124,7 @@ impl HDOracleEmulator {
         psbt.consensus_encode(&mut m);
         t.write_u32(m.len() as u32).await?;
         t.write_all(&m[..]).await?;
-        Ok(())
+        Ok(psbt)
     }
 }
 use std::sync::Arc;
@@ -180,6 +180,9 @@ impl CTVEmulator for HDOracleEmulatorConnection {
                     conn.write_u32(out.len() as u32).await?;
                     conn.write_all(&out[..]).await?;
                     let len = conn.read_u32().await? as usize;
+                    if len > MAX_MSG {
+                        return input_error("Invalid Length");
+                    }
                     let mut inp = vec![0; len];
                     if len == conn.read_exact(&mut inp[..]).await? {
                         return Ok(inp);
