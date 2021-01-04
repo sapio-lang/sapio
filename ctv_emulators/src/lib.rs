@@ -13,6 +13,7 @@ use bitcoin::consensus::encode::{Decodable, Encodable};
 use bitcoin::secp256k1::{All, Secp256k1};
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use sapio_base::CTVHash;
+use std::sync::Arc;
 const MAX_MSG: usize = 1_000_000;
 
 thread_local! {
@@ -58,11 +59,14 @@ impl HDOracleEmulator {
             let (mut socket, _) = listener.accept().await?;
             {
                 let this = self.clone();
-                tokio::spawn(async move {
-                    loop {
-                        this.handle(&mut socket).await;
-                    }
-                });
+                let t: tokio::task::JoinHandle<Result<(), std::io::Error>> =
+                    tokio::spawn(async move {
+                        loop {
+                            socket.readable().await;
+                            let x: () = this.handle(&mut socket).await?;
+                        }
+                        Ok(())
+                    });
             }
         }
         Ok(())
@@ -100,35 +104,32 @@ impl HDOracleEmulator {
         }
         input_error("Unknown Failure to Sign")
     }
-    async fn handle(
-        &self,
-        t: &mut TcpStream,
-    ) -> Result<PartiallySignedTransaction, std::io::Error> {
+    async fn handle(&self, t: &mut TcpStream) -> Result<(), std::io::Error> {
         let len = t.read_u32().await? as usize;
         if len > MAX_MSG {
             return input_error("Invalid Length");
         }
         let mut m = vec![0; len];
-        let read = t.read_exact(&mut m[..]).await?;
-        if read != len {
-            return input_error("Invalid Length");
+        if t.read_exact(&mut m[..]).await? == len {
+            let psbt: PartiallySignedTransaction = {
+                let unsigned = Decodable::consensus_decode(&m[..])
+                    .or_else(|_e| input_error("Invalid PSBT Received"))?;
+                SECP.with(|secp| self.sign(unsigned, secp))?
+            };
+            // clear so we can reuse it!
+            m.clear();
+            psbt.consensus_encode(&mut m)
+                .or_else(|_e| input_error("Invalid PSBT After Signing"));
+            t.write_u32(m.len() as u32).await?;
+            t.write_all(&m[..]).await?;
+            t.flush().await?;
+            Ok(())
+        } else {
+            input_error("Invalid Length")
         }
-
-        let psbt: PartiallySignedTransaction = {
-            let unsigned = Decodable::consensus_decode(&m[..])
-                .or_else(|_e| input_error("Invalid PSBT Received"))?;
-            SECP.with(|secp| self.sign(unsigned, secp))?
-        };
-        // clear so we can reuse it!
-        m.clear();
-        psbt.consensus_encode(&mut m);
-        t.write_u32(m.len() as u32).await?;
-        t.write_all(&m[..]).await?;
-        Ok(psbt)
     }
 }
-use std::sync::Arc;
-struct HDOracleEmulatorConnection {
+pub struct HDOracleEmulatorConnection {
     runtime: Arc<tokio::runtime::Runtime>,
     connection: Mutex<Option<TcpStream>>,
     reconnect: SocketAddr,
@@ -141,7 +142,7 @@ impl HDOracleEmulatorConnection {
         let c = hash_to_child_vec(h);
         self.root.derive_pub(&self.secp, &c)
     }
-    async fn new<A: ToSocketAddrs + std::fmt::Display + Clone>(
+    pub async fn new<A: ToSocketAddrs + std::fmt::Display + Clone>(
         address: A,
         root: ExtendedPubKey,
         runtime: Arc<tokio::runtime::Runtime>,
@@ -179,6 +180,7 @@ impl CTVEmulator for HDOracleEmulatorConnection {
                 if let Some(conn) = &mut *mconn {
                     conn.write_u32(out.len() as u32).await?;
                     conn.write_all(&out[..]).await?;
+                    conn.flush().await?;
                     let len = conn.read_u32().await? as usize;
                     if len > MAX_MSG {
                         return input_error("Invalid Length");
@@ -198,96 +200,5 @@ impl CTVEmulator for HDOracleEmulatorConnection {
         b.merge(Decodable::consensus_decode(&inp[..]).or_else(|_e| input_error("Invalid PSBT"))?)
             .or_else(|_e| input_error("Fault Signed PSBT"))?;
         Ok(b)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use bitcoin::util::amount::Amount;
-    use sapio::contract::object::BadTxIndex;
-    use std::collections::HashMap;
-    use std::rc::Rc;
-    use std::str::FromStr;
-
-    use sapio::contract::*;
-    use sapio::*;
-
-    pub struct TestEmulation<T> {
-        pub to_contract: T,
-        pub amount: Amount,
-        pub timeout: u32,
-    }
-
-    impl<T> TestEmulation<T>
-    where
-        T: Compilable,
-    {
-        then!(
-            complete | s,
-            ctx | {
-                ctx.template()
-                    .add_output(s.amount, &s.to_contract, None)?
-                    .set_sequence(0, s.timeout)
-                    .into()
-            }
-        );
-    }
-
-    impl<T: Compilable + 'static> Contract for TestEmulation<T> {
-        declare! {then, Self::complete}
-        declare! {non updatable}
-    }
-
-    #[test]
-    fn test_connect() {
-        let root =
-            ExtendedPrivKey::new_master(bitcoin::network::constants::Network::Regtest, &[44u8; 32])
-                .unwrap();
-        let pk_root = ExtendedPubKey::from_private(&Secp256k1::new(), &root);
-        {
-            let RT = Arc::new(tokio::runtime::Runtime::new().unwrap());
-            std::thread::spawn(move || {
-                RT.block_on(async {
-                    let oracle = HDOracleEmulator { root };
-                    oracle.bind("127.0.0.1:8080").await;
-                })
-            });
-        }
-
-        let contract_1 = TestEmulation {
-            to_contract: Compiled::from_address(
-                bitcoin::Address::from_str("bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh").unwrap(),
-                None,
-            ),
-            amount: Amount::from_btc(1.0).unwrap(),
-            timeout: 6,
-        };
-        let contract = TestEmulation {
-            to_contract: contract_1,
-            amount: Amount::from_btc(1.0).unwrap(),
-            timeout: 4,
-        };
-        let RT2 = Arc::new(tokio::runtime::Runtime::new().unwrap());
-        let connecter = RT2.block_on(async {
-            HDOracleEmulatorConnection::new("127.0.0.1:8080", pk_root, RT2.clone())
-                .await
-                .unwrap()
-        });
-        let rc_conn = Rc::new(connecter);
-        let compiled = contract
-            .compile(&Context::new(
-                Amount::from_btc(1.0).unwrap(),
-                Some(rc_conn.clone()),
-            ))
-            .unwrap();
-        let _psbts = compiled.bind_psbt(
-            bitcoin::OutPoint::default(),
-            HashMap::new(),
-            Rc::new(BadTxIndex::new()),
-            rc_conn,
-        );
-
-        // TODO: Test PSBT result
     }
 }
