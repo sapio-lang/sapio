@@ -73,9 +73,9 @@ impl HDOracleEmulator {
 
     fn sign(
         &self,
-        b: &mut PartiallySignedTransaction,
+        b: PartiallySignedTransaction,
         secp: &Secp256k1<All>,
-    ) -> Result<(), std::io::Error> {
+    ) -> Result<PartiallySignedTransaction, std::io::Error> {
         let tx = b.clone().extract_tx();
         let h = tx.get_ctv_hash(0);
         if let Ok(key) = self.derive(h, secp) {
@@ -100,7 +100,10 @@ impl HDOracleEmulator {
         input_error("Unknown Failure to Sign")
     }
     const MAX_MSG: usize = 1_000_000;
-    async fn handle(&self, t: &mut TcpStream) -> Result<(), std::io::Error> {
+    async fn handle(
+        &self,
+        t: &mut TcpStream,
+    ) -> Result<PartiallySignedTransaction, std::io::Error> {
         let len = t.read_u32().await? as usize;
         if len > Self::MAX_MSG {
             return input_error("Invalid Length");
@@ -111,12 +114,13 @@ impl HDOracleEmulator {
             return input_error("Invalid Length");
         }
 
-        let mut psbt: PartiallySignedTransaction = Decodable::consensus_decode(&m[..])
-            .or_else(|_e| input_error("Invalid PSBT Received"))?;
+        let psbt: PartiallySignedTransaction = {
+            let unsigned = Decodable::consensus_decode(&m[..])
+                .or_else(|_e| input_error("Invalid PSBT Received"))?;
+            SECP.with(|secp| self.sign(unsigned, secp))?
+        };
+        // clear so we can reuse it!
         m.clear();
-        SECP.with(|secp| {
-            self.sign(&mut psbt, secp);
-        });
         psbt.consensus_encode(&mut m);
         t.write_u32(m.len() as u32).await?;
         t.write_all(&m[..]).await?;
