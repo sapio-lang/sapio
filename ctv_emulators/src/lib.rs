@@ -3,6 +3,7 @@ use bitcoin::hashes::Hash;
 use bitcoin::util::bip32::*;
 use sapio::clause::Clause;
 use sapio::contract::emulator::CTVEmulator;
+use sapio::contract::emulator::EmulatorError;
 use sapio::contract::error::CompilationError;
 
 use std::io::Read;
@@ -160,18 +161,16 @@ impl HDOracleEmulatorConnection {
 }
 use tokio::sync::Mutex;
 impl CTVEmulator for HDOracleEmulatorConnection {
-    fn get_signer_for(
-        &self,
-        h: Sha256,
-    ) -> Result<sapio::clause::Clause, sapio::contract::error::CompilationError> {
-        Ok(Clause::Key(
-            self.derive(h).map_err(CompilationError::custom)?.public_key,
-        ))
+    fn get_signer_for(&self, h: Sha256) -> Result<sapio::clause::Clause, EmulatorError> {
+        Ok(Clause::Key(self.derive(h)?.public_key))
     }
-    fn sign(&self, mut b: PartiallySignedTransaction) -> PartiallySignedTransaction {
+    fn sign(
+        &self,
+        mut b: PartiallySignedTransaction,
+    ) -> Result<PartiallySignedTransaction, EmulatorError> {
         let unsigned = b.clone();
         let mut out = vec![];
-        let res: Result<PartiallySignedTransaction, _> = self.runtime.block_on(async {
+        Ok(self.runtime.block_on(async {
             b.consensus_encode(&mut out)
                 .or_else(|_e| input_error("Could not encode provided PSBT"))?;
             let inp = {
@@ -179,7 +178,7 @@ impl CTVEmulator for HDOracleEmulatorConnection {
                 if let None = &*mconn {
                     *mconn = Some(TcpStream::connect(&self.reconnect).await?);
                 }
-                let conn = mconn.as_mut().unwrap();
+                let conn = mconn.as_mut().expect("Must be Some given prior line");
                 conn.write_u32(out.len() as u32).await?;
                 conn.write_all(&out[..]).await?;
                 let len = conn.read_u32().await? as usize;
@@ -194,8 +193,7 @@ impl CTVEmulator for HDOracleEmulatorConnection {
             b.merge(res)
                 .or_else(|_e| input_error("Fault Signed PSBT"))?;
             Ok(b)
-        });
-        res.unwrap_or(unsigned)
+        })?)
     }
 }
 

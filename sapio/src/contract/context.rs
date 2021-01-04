@@ -19,7 +19,7 @@ impl Context {
         &self,
         b: bitcoin::hashes::sha256::Hash,
     ) -> Result<crate::clause::Clause, CompilationError> {
-        self.emulator.get_signer_for(b)
+        Ok(self.emulator.get_signer_for(b)?)
     }
     pub fn compile<A: Compilable>(&self, a: A) -> Result<Compiled, CompilationError> {
         a.compile(&self)

@@ -1,6 +1,7 @@
 use crate::clause::Clause;
 use crate::contract::emulator::CTVEmulator;
 use crate::contract::emulator::NullEmulator;
+use crate::contract::CompilationError;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
 use ::miniscript::*;
@@ -99,12 +100,14 @@ impl Object {
         &self,
         out_in: bitcoin::OutPoint,
     ) -> (Vec<bitcoin::Transaction>, Vec<serde_json::Value>) {
-        let (a, b) = self.bind_psbt(
-            out_in,
-            HashMap::new(),
-            Rc::new(BadTxIndex::new()),
-            Rc::new(NullEmulator(None)),
-        );
+        let (a, b) = self
+            .bind_psbt(
+                out_in,
+                HashMap::new(),
+                Rc::new(BadTxIndex::new()),
+                Rc::new(NullEmulator(None)),
+            )
+            .unwrap();
         (a.into_iter().map(|x| x.extract_tx()).collect(), b)
     }
     pub fn bind_psbt(
@@ -113,10 +116,13 @@ impl Object {
         output_map: HashMap<Sha256, Vec<Option<bitcoin::OutPoint>>>,
         blockdata: Rc<dyn TxIndex>,
         emulator: Rc<dyn CTVEmulator>,
-    ) -> (
-        Vec<bitcoin::util::psbt::PartiallySignedTransaction>,
-        Vec<serde_json::Value>,
-    ) {
+    ) -> Result<
+        (
+            Vec<bitcoin::util::psbt::PartiallySignedTransaction>,
+            Vec<serde_json::Value>,
+        ),
+        CompilationError,
+    > {
         let mut txns = vec![];
         let mut metadata_out = vec![];
         // Could use a queue instead to do BFS linking, but order doesn't matter and stack is
@@ -161,7 +167,7 @@ impl Object {
                 if let Some(d) = descriptor {
                     psbtx.inputs[0].witness_script = Some(d.witness_script());
                 }
-                psbtx = emulator.sign(psbtx);
+                psbtx = emulator.sign(psbtx)?;
                 let final_tx = psbtx.clone().extract_tx();
                 let txid = final_tx.txid();
                 blockdata.add_output(txid, final_tx);
@@ -178,6 +184,6 @@ impl Object {
                 }
             }
         }
-        (txns, metadata_out)
+        Ok((txns, metadata_out))
     }
 }
