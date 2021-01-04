@@ -4,9 +4,7 @@ use bitcoin::util::bip32::*;
 use sapio::clause::Clause;
 use sapio::contract::emulator::CTVEmulator;
 use sapio::contract::emulator::EmulatorError;
-use sapio::contract::error::CompilationError;
 
-use std::io::Read;
 use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
@@ -168,32 +166,31 @@ impl CTVEmulator for HDOracleEmulatorConnection {
         &self,
         mut b: PartiallySignedTransaction,
     ) -> Result<PartiallySignedTransaction, EmulatorError> {
-        let unsigned = b.clone();
         let mut out = vec![];
-        Ok(self.runtime.block_on(async {
-            b.consensus_encode(&mut out)
-                .or_else(|_e| input_error("Could not encode provided PSBT"))?;
-            let inp = {
-                let mut mconn = self.connection.lock().await;
-                if let None = &*mconn {
+        b.consensus_encode(&mut out)
+            .or_else(|_e| input_error("Could not encode provided PSBT"))?;
+        let inp = self.runtime.block_on(async {
+            let mut mconn = self.connection.lock().await;
+            loop {
+                if let Some(conn) = &mut *mconn {
+                    conn.write_u32(out.len() as u32).await?;
+                    conn.write_all(&out[..]).await?;
+                    let len = conn.read_u32().await? as usize;
+                    let mut inp = vec![0; len];
+                    if len == conn.read_exact(&mut inp[..]).await? {
+                        return Ok(inp);
+                    } else {
+                        return input_error("Invalid Length");
+                    }
+                } else {
                     *mconn = Some(TcpStream::connect(&self.reconnect).await?);
                 }
-                let conn = mconn.as_mut().expect("Must be Some given prior line");
-                conn.write_u32(out.len() as u32).await?;
-                conn.write_all(&out[..]).await?;
-                let len = conn.read_u32().await? as usize;
-                let mut inp = vec![0; len];
-                if len != conn.read_exact(&mut inp[..]).await? {
-                    return input_error("Invalid Length");
-                }
-                inp
-            };
-            let res =
-                Decodable::consensus_decode(&inp[..]).or_else(|_e| input_error("Invalid PSBT"))?;
-            b.merge(res)
-                .or_else(|_e| input_error("Fault Signed PSBT"))?;
-            Ok(b)
-        })?)
+            }
+        })?;
+
+        b.merge(Decodable::consensus_decode(&inp[..]).or_else(|_e| input_error("Invalid PSBT"))?)
+            .or_else(|_e| input_error("Fault Signed PSBT"))?;
+        Ok(b)
     }
 }
 
