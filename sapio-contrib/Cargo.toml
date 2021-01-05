@@ -17,3 +17,6 @@ version = "0.25"
 features = ['use-serde', 'rand']
 [dependencies.sapio]
 path = "../sapio"
+
+[dependencies.sapio-base]
+path = "../sapio-base"

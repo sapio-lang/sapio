@@ -1,10 +1,8 @@
 use bitcoin::hashes::sha256;
 use bitcoin::util::psbt::PartiallySignedTransaction;
+pub use sapio_base::Clause;
 use std::fmt;
 use std::rc::Rc;
-/// Concrete Instantiation of Miniscript Policy. Because we need to be able to generate exact
-/// transactions, we only work with `bitcoin::PublicKey` types.
-pub(crate) type Clause = miniscript::policy::concrete::Policy<bitcoin::PublicKey>;
 #[derive(Debug)]
 pub enum EmulatorError {
     NetworkIssue(std::io::Error),

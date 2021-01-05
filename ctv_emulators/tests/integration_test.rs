@@ -1,23 +1,21 @@
+use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::amount::Amount;
-use sapio::contract::object::BadTxIndex;
-use std::collections::HashMap;
-use std::rc::Rc;
-use std::str::FromStr;
-
-use sapio::contract::*;
-use sapio::*;
-
 use bitcoin::util::bip32::*;
 use emulator_connect::HDOracleEmulatorConnection;
 use emulator_connect::*;
-
-use bitcoin::secp256k1::Secp256k1;
-
+use sapio::contract::object::BadTxIndex;
+use sapio::contract::*;
+use sapio::*;
+use sapio_base::timelocks::RelTime;
+use std::collections::HashMap;
+use std::rc::Rc;
+use std::str::FromStr;
 use std::sync::Arc;
+
 pub struct TestEmulation<T> {
     pub to_contract: T,
     pub amount: Amount,
-    pub timeout: u32,
+    pub timeout: u16,
 }
 
 impl<T> TestEmulation<T>
@@ -29,7 +27,7 @@ where
         ctx | {
             ctx.template()
                 .add_output(s.amount, &s.to_contract, None)?
-                .set_sequence(0, s.timeout)
+                .set_sequence(0, RelTime::from(s.timeout).into())?
                 .into()
         }
     );
@@ -54,7 +52,7 @@ fn test_connect() {
             RT.block_on(async {
                 let oracle = HDOracleEmulator::new(root);
                 let server = tokio::spawn(oracle.bind("127.0.0.1:8080"));
-                quit.await;
+                quit.await.unwrap();
                 server.abort();
             })
         });
@@ -92,9 +90,7 @@ fn test_connect() {
         Rc::new(BadTxIndex::new()),
         rc_conn,
     );
-    println!("HELLO");
-    shutdown.send(());
-    println!("HELLO");
+    shutdown.send(()).unwrap();
 
     // TODO: Test PSBT result
 }

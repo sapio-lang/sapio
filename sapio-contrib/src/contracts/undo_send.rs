@@ -6,12 +6,14 @@ use schemars::*;
 use serde::*;
 use std::convert::TryInto;
 
+use sapio_base::timelocks::AnyRelTimeLock;
+
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct UndoSendInternal {
     pub from_contract: Compiled,
     pub to_contract: Compiled,
     pub amount: CoinAmount,
-    pub timeout: u32,
+    pub timeout: AnyRelTimeLock,
 }
 
 impl UndoSendInternal {
@@ -20,7 +22,7 @@ impl UndoSendInternal {
         ctx | {
             ctx.template()
                 .add_output(s.amount.try_into()?, &s.to_contract, None)?
-                .set_sequence(0, s.timeout)
+                .set_sequence(0, s.timeout)?
                 .into()
         }
     );
