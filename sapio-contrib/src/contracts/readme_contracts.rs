@@ -3,8 +3,10 @@ use sapio::clause::Clause;
 
 use sapio::contract::*;
 use sapio::*;
+use sapio_base::timelocks::RelTime;
 use schemars::*;
 use serde::*;
+use std::convert::TryFrom;
 use std::convert::TryInto;
 
 /// Pay To Public Key Sapio Contract
@@ -106,7 +108,7 @@ impl TrustlessEscrow {
                 s.bob_escrow.0.try_into()?,
                 &Compiled::from_address(s.bob_escrow.1.clone(), None),
                 None)?
-            .set_sequence(0, 1700 /*roughly 10 days*/).into()
+            .set_sequence(0, RelTime::try_from(std::time::Duration::from_secs(10*24*60*60))?.into()).into()
     }}
 }
 

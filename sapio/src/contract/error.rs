@@ -9,6 +9,7 @@ pub enum CompilationError {
     OutOfFunds,
     ParseAmountError(bitcoin::util::amount::ParseAmountError),
     Miniscript(miniscript::policy::compiler::CompilerError),
+    TimeLockError(sapio_base::timelocks::LockTimeError),
     Custom(Box<dyn std::error::Error>),
 }
 impl CompilationError {
@@ -20,6 +21,12 @@ impl CompilationError {
 impl From<bitcoin::util::amount::ParseAmountError> for CompilationError {
     fn from(b: bitcoin::util::amount::ParseAmountError) -> Self {
         CompilationError::ParseAmountError(b)
+    }
+}
+
+impl From<sapio_base::timelocks::LockTimeError> for CompilationError {
+    fn from(b: sapio_base::timelocks::LockTimeError) -> Self {
+        CompilationError::TimeLockError(b)
     }
 }
 impl From<miniscript::policy::compiler::CompilerError> for CompilationError {

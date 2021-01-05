@@ -1,10 +1,11 @@
-use bitcoin::util::amount::Amount;
-
 use crate::contract::{CompilationError, Context};
 use bitcoin::hashes::sha256;
+use bitcoin::util::amount::Amount;
+use sapio_base::timelocks::*;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::convert::TryInto;
 
 pub mod output;
@@ -14,10 +15,10 @@ use sapio_base::CTVHash;
 /// Builder can be used to interactively put together a transaction template before
 /// finalizing into a Template.
 pub struct Builder {
-    sequences: Vec<u32>,
+    sequences: Vec<AnyRelTimeLock>,
     outputs: Vec<Output>,
     version: i32,
-    lock_time: u32,
+    lock_time: AnyAbsTimeLock,
     label: String,
     ctx: Context,
 }
@@ -26,10 +27,10 @@ impl Builder {
     /// Creates a new transaction template with 1 input and no outputs.
     pub fn new(ctx: Context) -> Builder {
         Builder {
-            sequences: vec![0],
+            sequences: vec![RelTime::try_from(0).unwrap().into()],
             outputs: vec![],
             version: 2,
-            lock_time: 0,
+            lock_time: AbsTime::try_from(0).unwrap().into(),
             label: String::new(),
             ctx,
         }
@@ -61,16 +62,16 @@ impl Builder {
         self
     }
 
-    pub fn add_sequence(mut self, s: u32) -> Self {
+    pub fn add_sequence(mut self, s: AnyRelTimeLock) -> Self {
         self.sequences.push(s);
         self
     }
-    pub fn set_sequence(mut self, i: usize, s: u32) -> Self {
+    pub fn set_sequence(mut self, i: usize, s: AnyRelTimeLock) -> Self {
         self.sequences[i] = s;
         self
     }
     /// TODO: Logic to validate that changes are not breaking
-    pub fn set_lock_time(mut self, lt: u32) -> Self {
+    pub fn set_lock_time(mut self, lt: AnyAbsTimeLock) -> Self {
         self.lock_time = lt;
         self
     }
@@ -85,14 +86,14 @@ impl Builder {
     pub fn get_tx(&self) -> bitcoin::Transaction {
         bitcoin::Transaction {
             version: self.version,
-            lock_time: self.lock_time,
+            lock_time: self.lock_time.get(),
             input: self
                 .sequences
                 .iter()
                 .map(|sequence| bitcoin::TxIn {
                     previous_output: Default::default(),
                     script_sig: Default::default(),
-                    sequence: *sequence,
+                    sequence: sequence.get(),
                     witness: vec![],
                 })
                 .collect(),

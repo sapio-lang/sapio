@@ -7,6 +7,7 @@ use schemars::*;
 use serde::*;
 use std::convert::{TryFrom, TryInto};
 
+use sapio_base::timelocks::AnyRelTimeLock;
 use std::rc::Rc;
 
 pub struct Vault {
@@ -14,8 +15,8 @@ pub struct Vault {
     hot_storage: bitcoin::Address,
     n_steps: u64,
     amount_step: CoinAmount,
-    timeout: u32,
-    mature: u32,
+    timeout: AnyRelTimeLock,
+    mature: AnyRelTimeLock,
 }
 
 impl Vault {
@@ -65,8 +66,8 @@ pub struct VaultAddress {
     hot_storage: bitcoin::Address,
     n_steps: u64,
     amount_step: CoinAmount,
-    timeout: u32,
-    mature: u32,
+    timeout: AnyRelTimeLock,
+    mature: AnyRelTimeLock,
 }
 
 impl From<VaultAddress> for Vault {
@@ -93,8 +94,8 @@ pub struct VaultTree {
     hot_storage: bitcoin::Address,
     n_steps: u64,
     amount_step: CoinAmount,
-    timeout: u32,
-    mature: u32,
+    timeout: AnyRelTimeLock,
+    mature: AnyRelTimeLock,
 }
 
 impl TryFrom<VaultTree> for Vault {

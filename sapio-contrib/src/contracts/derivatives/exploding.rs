@@ -1,4 +1,5 @@
 use super::*;
+use sapio_base::timelocks::*;
 pub trait Explodes: 'static + Sized {
     then!(explodes);
     then!(strikes);
@@ -29,7 +30,7 @@ pub struct ExplodingOption<T: 'static> {
     key_p2: bitcoin::Address,
     key_p2_pk: Clause,
     opt: T,
-    timeout: u32,
+    timeout: AnyAbsTimeLock,
 }
 
 impl<T> ExplodingOption<T> {
@@ -78,7 +79,7 @@ pub struct UnderFundedExplodingOption<T: 'static> {
     party_two: Amount,
     key_p1: bitcoin::Address,
     opt: T,
-    timeout: u32,
+    timeout: AnyAbsTimeLock,
 }
 
 impl<T> Explodes for UnderFundedExplodingOption<T>
@@ -107,7 +108,7 @@ where
         ctx | {
             ctx.template()
                 .add_amount(s.party_two)
-                .add_sequence(0)
+                .add_sequence(RelHeight::try_from(0u16).unwrap().into())
                 .add_output(
                     (s.party_one + s.party_two).into(),
                     &GenericBet::try_from(s.opt.clone())?,
