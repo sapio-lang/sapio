@@ -27,7 +27,7 @@ where
         ctx | {
             ctx.template()
                 .add_output(s.amount, &s.to_contract, None)?
-                .set_sequence(0, RelTime::from(s.timeout).into())
+                .set_sequence(0, RelTime::from(s.timeout).into())?
                 .into()
         }
     );
@@ -52,7 +52,7 @@ fn test_connect() {
             RT.block_on(async {
                 let oracle = HDOracleEmulator::new(root);
                 let server = tokio::spawn(oracle.bind("127.0.0.1:8080"));
-                quit.await;
+                quit.await.unwrap();
                 server.abort();
             })
         });
@@ -90,9 +90,7 @@ fn test_connect() {
         Rc::new(BadTxIndex::new()),
         rc_conn,
     );
-    println!("HELLO");
-    shutdown.send(());
-    println!("HELLO");
+    shutdown.send(()).unwrap();
 
     // TODO: Test PSBT result
 }

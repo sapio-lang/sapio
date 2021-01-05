@@ -108,7 +108,7 @@ impl TrustlessEscrow {
                 s.bob_escrow.0.try_into()?,
                 &Compiled::from_address(s.bob_escrow.1.clone(), None),
                 None)?
-            .set_sequence(0, RelTime::try_from(std::time::Duration::from_secs(10*24*60*60))?.into()).into()
+            .set_sequence(0, RelTime::try_from(std::time::Duration::from_secs(10*24*60*60))?.into())?.into()
     }}
 }
 

@@ -55,7 +55,7 @@ where
                     &Compiled::from_address(s.key_p2.clone(), None),
                     None,
                 )?
-                .set_lock_time(s.timeout)
+                .set_lock_time(s.timeout)?
                 .into()
         }
     );
@@ -97,7 +97,7 @@ where
                         &Compiled::from_address(s.key_p1.clone(), None),
                         None,
                     )?
-                    .set_lock_time(s.timeout)
+                    .set_lock_time(s.timeout)?
                     .into(),
             )))
         }

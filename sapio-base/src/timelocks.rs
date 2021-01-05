@@ -25,33 +25,33 @@ pub mod type_tags {
         const IS_HEIGHT: bool;
     }
     use super::*;
-    #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone)]
+    #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
     pub struct Rel;
-    #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone)]
+    #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
     pub struct Abs;
-    #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone)]
+    #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
     pub struct Height;
-    #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone)]
+    #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
     pub struct MTP;
 }
 use type_tags::*;
 
 /// LockTime represents either a nLockTime or a Sequence field.
 /// They are represented generically in the same type
-#[derive(JsonSchema, Serialize, Deserialize, Copy, Clone)]
+#[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
 pub struct LockTime<RelOrAbs: Absolutivity, HeightOrTime: TimeType>(
     u32,
     PhantomData<(RelOrAbs, HeightOrTime)>,
 );
 /// Represents a type which can be either type of relative lock
-#[derive(JsonSchema, Serialize, Deserialize, Copy, Clone)]
+#[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
 pub enum AnyRelTimeLock {
     RH(RelHeight),
     RT(RelTime),
 }
 
 /// Represents a type which can be either type of absolute lock
-#[derive(JsonSchema, Serialize, Deserialize, Copy, Clone)]
+#[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
 pub enum AnyAbsTimeLock {
     AH(AbsHeight),
     AT(AbsTime),

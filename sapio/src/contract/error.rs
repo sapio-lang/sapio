@@ -7,6 +7,8 @@ pub enum CompilationError {
     MissingTemplates,
     EmptyPolicy,
     OutOfFunds,
+    IncompatibleSequence,
+    IncompatibleLockTime,
     ParseAmountError(bitcoin::util::amount::ParseAmountError),
     Miniscript(miniscript::policy::compiler::CompilerError),
     TimeLockError(sapio_base::timelocks::LockTimeError),

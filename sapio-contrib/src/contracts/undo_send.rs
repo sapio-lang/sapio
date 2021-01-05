@@ -22,7 +22,7 @@ impl UndoSendInternal {
         ctx | {
             ctx.template()
                 .add_output(s.amount.try_into()?, &s.to_contract, None)?
-                .set_sequence(0, s.timeout)
+                .set_sequence(0, s.timeout)?
                 .into()
         }
     );

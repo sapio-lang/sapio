@@ -15,10 +15,10 @@ use sapio_base::CTVHash;
 /// Builder can be used to interactively put together a transaction template before
 /// finalizing into a Template.
 pub struct Builder {
-    sequences: Vec<AnyRelTimeLock>,
+    sequences: Vec<Option<AnyRelTimeLock>>,
     outputs: Vec<Output>,
     version: i32,
-    lock_time: AnyAbsTimeLock,
+    lock_time: Option<AnyAbsTimeLock>,
     label: String,
     ctx: Context,
 }
@@ -27,10 +27,10 @@ impl Builder {
     /// Creates a new transaction template with 1 input and no outputs.
     pub fn new(ctx: Context) -> Builder {
         Builder {
-            sequences: vec![RelTime::try_from(0).unwrap().into()],
+            sequences: vec![None],
             outputs: vec![],
             version: 2,
-            lock_time: AbsTime::try_from(0).unwrap().into(),
+            lock_time: None,
             label: String::new(),
             ctx,
         }
@@ -63,17 +63,41 @@ impl Builder {
     }
 
     pub fn add_sequence(mut self, s: AnyRelTimeLock) -> Self {
-        self.sequences.push(s);
+        self.sequences.push(Some(s));
         self
     }
-    pub fn set_sequence(mut self, i: usize, s: AnyRelTimeLock) -> Self {
-        self.sequences[i] = s;
-        self
+    pub fn set_sequence(mut self, i: usize, s: AnyRelTimeLock) -> Result<Self, CompilationError> {
+        if let Some(seq) = self.sequences[i].as_mut() {
+            match (*seq, s) {
+                (a @ AnyRelTimeLock::RH(_), b @ AnyRelTimeLock::RH(_)) => {
+                    *seq = std::cmp::max(a, b);
+                }
+                (a @ AnyRelTimeLock::RT(_), b @ AnyRelTimeLock::RT(_)) => {
+                    *seq = std::cmp::max(a, b);
+                }
+                _ => return Err(CompilationError::IncompatibleSequence),
+            }
+        } else {
+            self.sequences[i] = Some(s);
+        }
+        Ok(self)
     }
     /// TODO: Logic to validate that changes are not breaking
-    pub fn set_lock_time(mut self, lt: AnyAbsTimeLock) -> Self {
-        self.lock_time = lt;
-        self
+    pub fn set_lock_time(mut self, lt_in: AnyAbsTimeLock) -> Result<Self, CompilationError> {
+        if let Some(lt) = self.lock_time.as_mut() {
+            match (*lt, lt_in) {
+                (a @ AnyAbsTimeLock::AH(_), b @ AnyAbsTimeLock::AH(_)) => {
+                    *lt = std::cmp::max(a, b);
+                }
+                (a @ AnyAbsTimeLock::AT(_), b @ AnyAbsTimeLock::AT(_)) => {
+                    *lt = std::cmp::max(a, b);
+                }
+                _ => return Err(CompilationError::IncompatibleSequence),
+            }
+        } else {
+            self.lock_time = Some(lt_in);
+        }
+        Ok(self)
     }
 
     pub fn set_label(mut self, label: String) -> Self {
@@ -84,16 +108,18 @@ impl Builder {
     /// Creates a transaction from a Builder.
     /// Generally, should not be called directly.
     pub fn get_tx(&self) -> bitcoin::Transaction {
+        let default_seq = RelTime::try_from(0).unwrap().into();
+        let default_nlt = AbsHeight::try_from(0).unwrap().into();
         bitcoin::Transaction {
             version: self.version,
-            lock_time: self.lock_time.get(),
+            lock_time: self.lock_time.unwrap_or(default_nlt).get(),
             input: self
                 .sequences
                 .iter()
                 .map(|sequence| bitcoin::TxIn {
                     previous_output: Default::default(),
                     script_sig: Default::default(),
-                    sequence: sequence.get(),
+                    sequence: sequence.unwrap_or(default_seq).get(),
                     witness: vec![],
                 })
                 .collect(),
