@@ -160,6 +160,8 @@ impl From<Builder> for Template {
         }
     }
 }
+/// We don't implement TryFrom because this can never actually fail!
+/// We want to be able to use this anywhere we use into
 impl From<Builder> for Result<Template, CompilationError> {
     fn from(t: Builder) -> Self {
         Ok(t.into())
