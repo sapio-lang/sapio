@@ -62,13 +62,26 @@ impl Builder {
         self
     }
 
-    pub fn add_sequence(mut self, s: AnyRelTimeLock) -> Self {
-        self.sequences.push(Some(s));
+    /// Adds another output. Follow with a call to
+    /// set_sequence(-1, ...) to fill in the back.
+    pub fn add_sequence(mut self) -> Self {
+        self.sequences.push(None);
         self
     }
-    pub fn set_sequence(mut self, i: usize, s: AnyRelTimeLock) -> Result<Self, CompilationError> {
-        if let Some(seq) = self.sequences[i].as_mut() {
-            match (*seq, s) {
+    /// set_sequence adds a height or time based relative lock time to the
+    /// template. If a lock time is already set, it will check if it is of the
+    /// same kind. Differing kinds will throw an error. Otherwise, it will merge
+    /// by taking the max of the argument.
+    ///
+    /// Negative indexing allows us to work from the back element easily
+    pub fn set_sequence(mut self, ii: isize, s: AnyRelTimeLock) -> Result<Self, CompilationError> {
+        let i = if ii >= 0 {
+            ii
+        } else {
+            self.sequences.len() as isize + ii
+        } as usize;
+        match self.sequences.get_mut(i).as_mut() {
+            Some(Some(seq)) => match (*seq, s) {
                 (a @ AnyRelTimeLock::RH(_), b @ AnyRelTimeLock::RH(_)) => {
                     *seq = std::cmp::max(a, b);
                 }
@@ -76,13 +89,18 @@ impl Builder {
                     *seq = std::cmp::max(a, b);
                 }
                 _ => return Err(CompilationError::IncompatibleSequence),
+            },
+            Some(x @ None) => {
+                x.replace(s);
             }
-        } else {
-            self.sequences[i] = Some(s);
-        }
+            None => return Err(CompilationError::NoSuchSequence),
+        };
         Ok(self)
     }
-    /// TODO: Logic to validate that changes are not breaking
+    /// set_lock_time adds a height or time based absolute lock time to the
+    /// template. If a lock time is already set, it will check if it is of the
+    /// same kind. Differing kinds will throw an error. Otherwise, it will merge
+    /// by taking the max of the argument.
     pub fn set_lock_time(mut self, lt_in: AnyAbsTimeLock) -> Result<Self, CompilationError> {
         if let Some(lt) = self.lock_time.as_mut() {
             match (*lt, lt_in) {

@@ -108,7 +108,7 @@ where
         ctx | {
             ctx.template()
                 .add_amount(s.party_two)
-                .add_sequence(RelHeight::try_from(0u16).unwrap().into())
+                .add_sequence()
                 .add_output(
                     (s.party_one + s.party_two).into(),
                     &GenericBet::try_from(s.opt.clone())?,
