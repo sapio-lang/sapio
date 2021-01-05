@@ -1,5 +1,9 @@
+/// Extra functionality for working with Bitcoin types
 pub mod util;
 pub use util::CTVHash;
+
+/// Helpers for making correct time locks
+pub mod timelocks;
 
 /// Concrete Instantiation of Miniscript Policy. Because we need to be able to generate exact
 /// transactions, we only work with `bitcoin::PublicKey` types.
