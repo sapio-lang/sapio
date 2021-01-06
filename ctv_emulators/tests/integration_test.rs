@@ -73,9 +73,14 @@ fn test_connect() {
     };
     let RT2 = Arc::new(tokio::runtime::Runtime::new().unwrap());
     let connecter = RT2.block_on(async {
-        HDOracleEmulatorConnection::new("127.0.0.1:8080", pk_root, RT2.clone(), Arc::new(Secp256k1::new()))
-            .await
-            .unwrap()
+        HDOracleEmulatorConnection::new(
+            "127.0.0.1:8080",
+            pk_root,
+            RT2.clone(),
+            Arc::new(Secp256k1::new()),
+        )
+        .await
+        .unwrap()
     });
     let rc_conn: Rc<dyn CTVEmulator> = Rc::new(connecter);
     let compiled = contract
