@@ -136,7 +136,7 @@ pub struct HDOracleEmulatorConnection {
     connection: Mutex<Option<TcpStream>>,
     reconnect: SocketAddr,
     root: ExtendedPubKey,
-    secp: bitcoin::secp256k1::Secp256k1<bitcoin::secp256k1::All>,
+    secp: Arc<bitcoin::secp256k1::Secp256k1<bitcoin::secp256k1::All>>,
 }
 
 impl HDOracleEmulatorConnection {
@@ -148,6 +148,7 @@ impl HDOracleEmulatorConnection {
         address: A,
         root: ExtendedPubKey,
         runtime: Arc<tokio::runtime::Runtime>,
+        secp: Arc<bitcoin::secp256k1::Secp256k1<bitcoin::secp256k1::All>>,
     ) -> Result<Self, std::io::Error> {
         Ok(HDOracleEmulatorConnection {
             connection: Mutex::new(None),
@@ -160,7 +161,7 @@ impl HDOracleEmulatorConnection {
                 })?,
             runtime,
             root,
-            secp: Secp256k1::new(),
+            secp
         })
     }
 }
