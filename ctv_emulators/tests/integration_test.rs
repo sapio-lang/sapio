@@ -1,9 +1,15 @@
+use bitcoin::hashes::sha256d;
+use bitcoin::hashes::Hash;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::amount::Amount;
 use bitcoin::util::bip32::*;
+use bitcoin::Script;
+use bitcoin::TxOut;
+use bitcoin::Txid;
 use emulator_connect::HDOracleEmulatorConnection;
 use emulator_connect::*;
 use sapio::contract::object::BadTxIndex;
+use sapio::contract::object::TxIndex;
 use sapio::contract::*;
 use sapio::*;
 use sapio_base::timelocks::RelTime;
@@ -44,17 +50,17 @@ fn test_connect() {
         ExtendedPrivKey::new_master(bitcoin::network::constants::Network::Regtest, &[44u8; 32])
             .unwrap();
     let pk_root = ExtendedPubKey::from_private(&Secp256k1::new(), &root);
-    let RT1 = Arc::new(tokio::runtime::Runtime::new().unwrap());
+    let rt1 = Arc::new(tokio::runtime::Runtime::new().unwrap());
     let (shutdown, quit) = tokio::sync::oneshot::channel();
     {
-        let RT = RT1.clone();
+        let rt = rt1.clone();
         std::thread::spawn(move || {
-            RT.block_on(async {
-                let oracle = HDOracleEmulator::new(root);
+            let oracle = HDOracleEmulator::new(root);
+            rt.block_on(async {
                 let server = tokio::spawn(oracle.bind("127.0.0.1:8080"));
                 quit.await.unwrap();
                 server.abort();
-            })
+            });
         });
     };
 
@@ -71,12 +77,12 @@ fn test_connect() {
         amount: Amount::from_btc(1.0).unwrap(),
         timeout: 4,
     };
-    let RT2 = Arc::new(tokio::runtime::Runtime::new().unwrap());
-    let connecter = RT2.block_on(async {
+    let rt2 = Arc::new(tokio::runtime::Runtime::new().unwrap());
+    let connecter = rt2.block_on(async {
         HDOracleEmulatorConnection::new(
             "127.0.0.1:8080",
             pk_root,
-            RT2.clone(),
+            rt2.clone(),
             Arc::new(Secp256k1::new()),
         )
         .await
@@ -89,13 +95,24 @@ fn test_connect() {
             Some(rc_conn.clone()),
         ))
         .unwrap();
+    let txindex: Rc<dyn TxIndex> = Rc::new(BadTxIndex::new());
+    let fake_txid = Txid::from_hash(sha256d::Hash::from_slice(&[0u8; 32]).unwrap());
+    let tx = bitcoin::Transaction {
+        version: 2,
+        lock_time: 0,
+        input: vec![],
+        output: vec![TxOut {
+            value: Amount::from_btc(1.0).unwrap().as_sat(),
+            script_pubkey: Script::new(),
+        }],
+    };
+    txindex.add_output(fake_txid, tx);
     let _psbts = compiled.bind_psbt(
-        bitcoin::OutPoint::default(),
+        bitcoin::OutPoint::new(fake_txid, 0),
         HashMap::new(),
-        Rc::new(BadTxIndex::new()),
+        txindex,
         rc_conn,
     );
     shutdown.send(()).unwrap();
-
     // TODO: Test PSBT result
 }
