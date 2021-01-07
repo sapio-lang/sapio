@@ -1,7 +1,7 @@
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::bip32::*;
 use emulator_connect::servers::hd::*;
-use emulator_connect::*;
+
 use tokio;
 use tokio::io::AsyncReadExt;
 #[tokio::main]

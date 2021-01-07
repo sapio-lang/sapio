@@ -68,7 +68,7 @@ impl HDOracleEmulator {
                 let psbt = SECP.with(|secp| self.sign(unsigned, secp))?;
                 Self::respond(t, &msgs::PSBT(psbt)).await
             }
-            msgs::Request::ConfirmKey(msgs::ConfirmKey(epk, s)) => {
+            msgs::Request::ConfirmKey(msgs::ConfirmKey(_epk, s)) => {
                 let ck = SECP.with(|secp| {
                     let key = self.root.private_key.key;
                     let entropy: [u8; 32] = rand::thread_rng().gen();

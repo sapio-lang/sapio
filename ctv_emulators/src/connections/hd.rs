@@ -46,7 +46,7 @@ impl HDOracleEmulatorConnection {
         Ok(t)
     }
 }
-use core::future::Future;
+
 use tokio::sync::Mutex;
 impl CTVEmulator for HDOracleEmulatorConnection {
     fn get_signer_for(&self, h: Sha256) -> Result<Clause, EmulatorError> {
