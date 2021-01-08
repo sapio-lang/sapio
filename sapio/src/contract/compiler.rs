@@ -68,7 +68,8 @@ impl Compilable for Compiled {
 
 impl<'a, T> Compilable for T
 where
-    T: AnyContract + 'static,
+    T: AnyContract + 'a,
+    T::Ref: 'a,
 {
     /// The main Compilation Logic for a Contract.
     /// TODO: Better Document Semantics

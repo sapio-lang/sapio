@@ -40,25 +40,28 @@ where
 
 /// DynamicContract wraps a struct S with a set of methods (that can be constructed dynamically)
 /// to form a contract. DynamicContract owns all its methods.
-pub struct DynamicContract<T, S>
+pub struct DynamicContract<'a, T, S>
 where
-    S: 'static,
+    S: 'a,
 {
-    pub then: Vec<fn() -> Option<actions::ThenFunc<S>>>,
-    pub finish_or: Vec<fn() -> Option<actions::FinishOrFunc<S, T>>>,
+    pub then: Vec<fn() -> Option<actions::ThenFunc<'a, S>>>,
+    pub finish_or: Vec<fn() -> Option<actions::FinishOrFunc<'a, S, T>>>,
     pub finish: Vec<fn() -> Option<actions::Guard<S>>>,
     pub data: S,
 }
 
-impl<T, S> AnyContract for DynamicContract<T, S> {
+impl<T, S> AnyContract for DynamicContract<'_, T, S> {
     type StatefulArguments = T;
     type Ref = S;
-    fn then_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::ThenFunc<S>>] {
+    fn then_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::ThenFunc<'a, S>>]
+    where
+        Self::Ref: 'a,
+    {
         &self.then[..]
     }
     fn finish_or_fns<'a>(
         &'a self,
-    ) -> &'a [fn() -> Option<actions::FinishOrFunc<S, Self::StatefulArguments>>] {
+    ) -> &'a [fn() -> Option<actions::FinishOrFunc<'a, S, Self::StatefulArguments>>] {
         &self.finish_or[..]
     }
     fn finish_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::Guard<S>>] {
@@ -78,10 +81,12 @@ where
 {
     type StatefulArguments;
     type Ref;
-    fn then_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::ThenFunc<Self::Ref>>];
+    fn then_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::ThenFunc<'a, Self::Ref>>]
+    where
+        Self::Ref: 'a;
     fn finish_or_fns<'a>(
         &'a self,
-    ) -> &'a [fn() -> Option<actions::FinishOrFunc<Self::Ref, Self::StatefulArguments>>];
+    ) -> &'a [fn() -> Option<actions::FinishOrFunc<'a, Self::Ref, Self::StatefulArguments>>];
     fn finish_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::Guard<Self::Ref>>];
     fn get_inner_ref<'a>(&'a self) -> &'a Self::Ref;
 }
@@ -92,12 +97,15 @@ where
 {
     type StatefulArguments = C::StatefulArguments;
     type Ref = Self;
-    fn then_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::ThenFunc<Self::Ref>>] {
+    fn then_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::ThenFunc<'a, Self::Ref>>]
+    where
+        Self::Ref: 'a,
+    {
         Self::THEN_FNS
     }
     fn finish_or_fns<'a>(
         &'a self,
-    ) -> &'a [fn() -> Option<actions::FinishOrFunc<Self::Ref, Self::StatefulArguments>>] {
+    ) -> &'a [fn() -> Option<actions::FinishOrFunc<'a, Self::Ref, Self::StatefulArguments>>] {
         Self::FINISH_OR_FUNCS
     }
     fn finish_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::Guard<Self::Ref>>] {
