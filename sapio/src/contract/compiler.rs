@@ -10,7 +10,6 @@ use ::miniscript::*;
 use std::collections::HashMap;
 
 enum CacheEntry<T> {
-    Nothing,
     Cached(Clause),
     Fresh(fn(&T, &Context) -> Clause),
 }
@@ -18,7 +17,7 @@ enum CacheEntry<T> {
 /// GuardCache assists with caching the computation of guard functions
 /// during compilation.
 struct GuardCache<T> {
-    cache: HashMap<usize, CacheEntry<T>>,
+    cache: HashMap<usize, Option<CacheEntry<T>>>,
 }
 impl<T> GuardCache<T> {
     fn new() -> Self {
@@ -26,23 +25,24 @@ impl<T> GuardCache<T> {
             cache: HashMap::new(),
         }
     }
-    fn create_entry(g: Option<Guard<T>>, t: &T, ctx: &Context) -> CacheEntry<T> {
-        match g {
-            Some(Guard::Cache(f)) => CacheEntry::Cached(f(t, ctx)),
-            Some(Guard::Fresh(f)) => CacheEntry::Fresh(f),
-            None => CacheEntry::Nothing,
-        }
+    fn create_entry(g: Option<Guard<T>>, t: &T, ctx: &Context) -> Option<CacheEntry<T>> {
+        Some(match g? {
+            Guard::Cache(f) => CacheEntry::Cached(f(t, ctx)),
+            Guard::Fresh(f) => CacheEntry::Fresh(f),
+        })
     }
     fn get(&mut self, t: &T, f: fn() -> Option<Guard<T>>, ctx: &Context) -> Option<Clause> {
-        match self
-            .cache
-            .entry(f as usize)
-            .or_insert_with(|| Self::create_entry(f(), t, ctx))
-        {
-            CacheEntry::Nothing => None,
-            CacheEntry::Cached(s) => Some(s.clone()),
-            CacheEntry::Fresh(f) => Some(f(t, ctx)),
-        }
+        Some(
+            match self
+                .cache
+                .entry(f as usize)
+                .or_insert_with(|| Self::create_entry(f(), t, ctx))
+                .as_ref()?
+            {
+                CacheEntry::Cached(s) => s.clone(),
+                CacheEntry::Fresh(f) => f(t, ctx),
+            },
+        )
     }
 }
 
