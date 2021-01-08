@@ -5,8 +5,8 @@ use super::Context;
 use crate::util::amountrange::AmountRange;
 
 use super::actions::Guard;
-use crate::clause::Clause;
 use ::miniscript::*;
+use sapio_base::Clause;
 use std::collections::HashMap;
 
 enum CacheEntry<T> {

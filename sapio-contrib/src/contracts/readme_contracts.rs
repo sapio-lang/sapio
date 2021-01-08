@@ -1,9 +1,8 @@
 use bitcoin::util::amount::CoinAmount;
-use sapio::clause::Clause;
-
 use sapio::contract::*;
 use sapio::*;
 use sapio_base::timelocks::RelTime;
+use sapio_base::Clause;
 use schemars::*;
 use serde::*;
 use std::convert::TryFrom;

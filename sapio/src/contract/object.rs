@@ -1,4 +1,3 @@
-use crate::clause::Clause;
 use crate::contract::CompilationError;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
@@ -9,6 +8,7 @@ use bitcoin::util::amount::Amount;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use emulator_connect::emulator::CTVEmulator;
 use emulator_connect::emulator::NullEmulator;
+use sapio_base::Clause;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;

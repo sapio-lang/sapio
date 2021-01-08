@@ -24,13 +24,11 @@
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 **/
 use bitcoin::util::amount::Amount;
-use sapio::clause::Clause;
-
 use sapio::contract::*;
 use sapio::*;
+use sapio_base::Clause;
 use schemars::*;
 use serde::*;
-
 use std::convert::TryFrom;
 
 pub type Payout = Compiled;

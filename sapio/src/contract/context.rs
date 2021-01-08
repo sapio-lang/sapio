@@ -21,7 +21,7 @@ impl Context {
     pub fn ctv_emulator(
         &self,
         b: bitcoin::hashes::sha256::Hash,
-    ) -> Result<crate::clause::Clause, CompilationError> {
+    ) -> Result<sapio_base::Clause, CompilationError> {
         Ok(self.emulator.get_signer_for(b)?)
     }
     pub fn compile<A: Compilable>(&self, a: A) -> Result<Compiled, CompilationError> {
