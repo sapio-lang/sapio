@@ -9,11 +9,10 @@ use bitcoin::Txid;
 use emulator_connect::connections::hd::HDOracleEmulatorConnection;
 use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::*;
-use sapio::contract::object::TxIndexInfiniteNonNetworkedStore;
-use sapio::contract::object::TxIndex;
 use sapio::contract::*;
 use sapio::*;
 use sapio_base::timelocks::RelTime;
+use sapio_base::txindex::{TxIndex, TxIndexLogger};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -96,7 +95,7 @@ fn test_connect() {
             Some(rc_conn.clone()),
         ))
         .unwrap();
-    let txindex: Rc<dyn TxIndex> = Rc::new(TxIndexInfiniteNonNetworkedStore::new());
+    let txindex: Rc<dyn TxIndex> = Rc::new(TxIndexLogger::new());
     let tx = bitcoin::Transaction {
         version: 2,
         lock_time: 0,
@@ -106,7 +105,7 @@ fn test_connect() {
             script_pubkey: Script::new(),
         }],
     };
-    let fake_txid = txindex.add_tx(tx);
+    let fake_txid = txindex.add_tx(std::sync::Arc::new(tx)).unwrap();
     let _psbts = compiled.bind_psbt(
         bitcoin::OutPoint::new(fake_txid, 0),
         HashMap::new(),

@@ -4,6 +4,8 @@ pub use util::CTVHash;
 
 /// Helpers for making correct time locks
 pub mod timelocks;
+/// Trait & Structs for accessing Chain Data
+pub mod txindex;
 
 /// Concrete Instantiation of Miniscript Policy. Because we need to be able to generate exact
 /// transactions, we only work with `bitcoin::PublicKey` types.
