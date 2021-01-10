@@ -17,20 +17,20 @@ use std::rc::Rc;
 use std::sync::Mutex;
 pub trait TxIndex {
     fn lookup_output(&self, b: &bitcoin::OutPoint) -> Option<bitcoin::TxOut>;
-    fn add_output(&self, h: Txid, tx: bitcoin::Transaction);
+    fn add_tx(&self, tx: bitcoin::Transaction) -> Txid;
 }
 use bitcoin::hash_types::*;
-pub struct BadTxIndex {
+pub struct TxIndexInfiniteNonNetworkedStore {
     map: Mutex<HashMap<Txid, bitcoin::Transaction>>,
 }
-impl BadTxIndex {
-    pub fn new() -> BadTxIndex {
-        BadTxIndex {
+impl TxIndexInfiniteNonNetworkedStore {
+    pub fn new() -> TxIndexInfiniteNonNetworkedStore {
+        TxIndexInfiniteNonNetworkedStore {
             map: Mutex::new(HashMap::new()),
         }
     }
 }
-impl TxIndex for BadTxIndex {
+impl TxIndex for TxIndexInfiniteNonNetworkedStore {
     fn lookup_output(&self, b: &bitcoin::OutPoint) -> Option<bitcoin::TxOut> {
         self.map
             .lock()
@@ -39,8 +39,10 @@ impl TxIndex for BadTxIndex {
             .and_then(|tx| tx.output.get(b.vout as usize))
             .cloned()
     }
-    fn add_output(&self, h: Txid, tx: bitcoin::Transaction) {
-        self.map.lock().unwrap().insert(h, tx);
+    fn add_tx(&self, tx: bitcoin::Transaction) -> Txid {
+        let txid = tx.txid();
+        self.map.lock().unwrap().insert(txid, tx);
+        txid
     }
 }
 /// Object holds a contract's complete context required post-compilation
@@ -104,7 +106,7 @@ impl Object {
             .bind_psbt(
                 out_in,
                 HashMap::new(),
-                Rc::new(BadTxIndex::new()),
+                Rc::new(TxIndexInfiniteNonNetworkedStore::new()),
                 Rc::new(NullEmulator(None)),
             )
             .unwrap();
@@ -169,8 +171,7 @@ impl Object {
                 }
                 psbtx = emulator.sign(psbtx)?;
                 let final_tx = psbtx.clone().extract_tx();
-                let txid = final_tx.txid();
-                blockdata.add_output(txid, final_tx);
+                let txid = blockdata.add_tx(final_tx);
                 txns.push(psbtx);
                 metadata_out.push(json!({
                     "color" : "green",
