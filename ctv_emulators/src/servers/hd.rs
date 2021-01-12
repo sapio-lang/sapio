@@ -37,27 +37,41 @@ impl HDOracleEmulator {
         let tx = b.clone().extract_tx();
         let h = tx.get_ctv_hash(0);
         if let Ok(key) = self.derive(h, secp) {
-            if let Some(scriptcode) = &b.inputs[0].witness_script {
-                if let Some(utxo) = &b.inputs[0].witness_utxo {
-                    let mut sighash = bitcoin::util::bip143::SigHashCache::new(&tx);
-                    let sighash = sighash.signature_hash(
-                        0,
-                        &scriptcode,
-                        utxo.value,
-                        bitcoin::blockdata::transaction::SigHashType::All,
-                    );
-                    let msg = bitcoin::secp256k1::Message::from_slice(&sighash[..])
-                        .or_else(|_e| input_error("Message hash not valid (impossible?)"))?;
-                    let mut signature: Vec<u8> = secp
-                        .sign(&msg, &key.private_key.key)
-                        .serialize_compact()
-                        .into();
-                    signature.push(0x01);
-                    let pk = key.private_key.public_key(secp);
-                    b.inputs[0].partial_sigs.insert(pk, signature);
-                    return Ok(b);
-                }
+            if let Some(utxo) = &b.inputs[0].witness_utxo {
+                // This is *funny*. In this case, we are assuming that our signature is required
+                // and if a scriptcode is not present than it must be the case that it is a p2wpkh
+                // script, so we generate a scriptcode for our key as a p2wpkh... this is a reasonable
+                // choice! We do not look at the utxo (for now) to verify this.
+
+                let scriptcode = b.inputs[0].witness_script.clone().unwrap_or_else(|| {
+                    let mut v = vec![0u8; 26];
+                    v[0..4].copy_from_slice(&[0x19, 0x76, 0xa9, 0x14]);
+                    v[4..24].copy_from_slice(&key.identifier(secp).as_hash()[..]);
+                    v[24..26].copy_from_slice(&[0x88, 0xac]);
+                    bitcoin::blockdata::script::Builder::from(v).into_script()
+                });
+                let mut sighash = bitcoin::util::bip143::SigHashCache::new(&tx);
+                let sighash = sighash.signature_hash(
+                    0,
+                    &scriptcode,
+                    utxo.value,
+                    bitcoin::blockdata::transaction::SigHashType::All,
+                );
+                let msg = bitcoin::secp256k1::Message::from_slice(&sighash[..])
+                    .or_else(|_e| input_error("Message hash not valid (impossible?)"))?;
+                let mut signature: Vec<u8> = secp
+                    .sign(&msg, &key.private_key.key)
+                    .serialize_compact()
+                    .into();
+                signature.push(0x01);
+                let pk = key.private_key.public_key(secp);
+                b.inputs[0].partial_sigs.insert(pk, signature);
+                return Ok(b);
+            } else {
+                input_error("Could not find UTXOe")?;
             }
+        } else {
+            input_error("Could Not Derive Key")?;
         }
         input_error("Unknown Failure to Sign")
     }

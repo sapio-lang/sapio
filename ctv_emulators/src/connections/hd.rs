@@ -1,10 +1,10 @@
 use super::*;
 pub struct HDOracleEmulatorConnection {
-    runtime: Arc<tokio::runtime::Runtime>,
-    connection: Mutex<Option<TcpStream>>,
-    reconnect: SocketAddr,
-    root: ExtendedPubKey,
-    secp: Arc<bitcoin::secp256k1::Secp256k1<bitcoin::secp256k1::All>>,
+    pub runtime: Arc<tokio::runtime::Runtime>,
+    pub connection: Mutex<Option<TcpStream>>,
+    pub reconnect: SocketAddr,
+    pub root: ExtendedPubKey,
+    pub secp: Arc<bitcoin::secp256k1::Secp256k1<bitcoin::secp256k1::All>>,
 }
 
 impl HDOracleEmulatorConnection {
