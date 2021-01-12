@@ -1,46 +1,50 @@
-use crate::clause::Clause;
 use crate::contract::CompilationError;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
-use ::miniscript::*;
+use ::miniscript::{self, *};
+use bitcoin::hash_types::*;
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::amount::Amount;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use emulator_connect::emulator::CTVEmulator;
 use emulator_connect::emulator::NullEmulator;
+use emulator_connect::EmulatorError;
+use sapio_base::txindex::TxIndexError;
+use sapio_base::txindex::{TxIndex, TxIndexLogger};
+use sapio_base::Clause;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::Mutex;
-pub trait TxIndex {
-    fn lookup_output(&self, b: &bitcoin::OutPoint) -> Option<bitcoin::TxOut>;
-    fn add_output(&self, h: Txid, tx: bitcoin::Transaction);
+use std::sync::Arc;
+
+#[derive(Debug)]
+pub enum ObjectError {
+    Miniscript(miniscript::policy::compiler::CompilerError),
+    Custom(Box<dyn std::error::Error>),
 }
-use bitcoin::hash_types::*;
-pub struct BadTxIndex {
-    map: Mutex<HashMap<Txid, bitcoin::Transaction>>,
-}
-impl BadTxIndex {
-    pub fn new() -> BadTxIndex {
-        BadTxIndex {
-            map: Mutex::new(HashMap::new()),
-        }
+impl From<EmulatorError> for ObjectError {
+    fn from(e: EmulatorError) -> Self {
+        ObjectError::Custom(Box::new(e))
     }
 }
-impl TxIndex for BadTxIndex {
-    fn lookup_output(&self, b: &bitcoin::OutPoint) -> Option<bitcoin::TxOut> {
-        self.map
-            .lock()
-            .unwrap()
-            .get(&b.txid)
-            .and_then(|tx| tx.output.get(b.vout as usize))
-            .cloned()
+impl From<TxIndexError> for ObjectError {
+    fn from(e: TxIndexError) -> Self {
+        ObjectError::Custom(Box::new(e))
     }
-    fn add_output(&self, h: Txid, tx: bitcoin::Transaction) {
-        self.map.lock().unwrap().insert(h, tx);
+}
+
+impl From<miniscript::policy::compiler::CompilerError> for ObjectError {
+    fn from(v: miniscript::policy::compiler::CompilerError) -> Self {
+        ObjectError::Miniscript(v)
+    }
+}
+
+impl std::fmt::Display for ObjectError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 /// Object holds a contract's complete context required post-compilation
@@ -104,7 +108,7 @@ impl Object {
             .bind_psbt(
                 out_in,
                 HashMap::new(),
-                Rc::new(BadTxIndex::new()),
+                Rc::new(TxIndexLogger::new()),
                 Rc::new(NullEmulator(None)),
             )
             .unwrap();
@@ -121,7 +125,7 @@ impl Object {
             Vec<bitcoin::util::psbt::PartiallySignedTransaction>,
             Vec<serde_json::Value>,
         ),
-        CompilationError,
+        ObjectError,
     > {
         let mut txns = vec![];
         let mut metadata_out = vec![];
@@ -160,7 +164,7 @@ impl Object {
                 let mut psbtx = PartiallySignedTransaction::from_unsigned_tx(tx.clone()).unwrap();
                 for (psbt_in, tx_in) in psbtx.inputs.iter_mut().zip(tx.input.iter()) {
                     println!("{:?}", tx_in.previous_output);
-                    psbt_in.witness_utxo = blockdata.lookup_output(&tx_in.previous_output);
+                    psbt_in.witness_utxo = blockdata.lookup_output(&tx_in.previous_output).ok();
                     psbt_in.sighash_type = Some(bitcoin::blockdata::transaction::SigHashType::All);
                 }
                 // Missing other Witness Info.
@@ -169,8 +173,7 @@ impl Object {
                 }
                 psbtx = emulator.sign(psbtx)?;
                 let final_tx = psbtx.clone().extract_tx();
-                let txid = final_tx.txid();
-                blockdata.add_output(txid, final_tx);
+                let txid = blockdata.add_tx(Arc::new(final_tx))?;
                 txns.push(psbtx);
                 metadata_out.push(json!({
                     "color" : "green",

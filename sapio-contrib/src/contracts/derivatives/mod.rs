@@ -1,16 +1,11 @@
-use contract::*;
-use sapio::clause::Clause;
-
-use sapio::template::Template;
-use sapio::*;
-
 use bitcoin;
 use bitcoin::util::amount::Amount;
-
+use contract::*;
+use sapio::template::Template;
+use sapio::*;
+use sapio_base::Clause;
 use std::collections::HashMap;
-
 use std::convert::TryFrom;
-
 use std::rc::Rc;
 
 pub mod oracle;

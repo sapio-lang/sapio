@@ -1,5 +1,5 @@
 use bitcoin::util::amount::CoinAmount;
-use sapio::clause::Clause;
+use sapio_base::Clause;
 
 use sapio::contract::*;
 use sapio::*;

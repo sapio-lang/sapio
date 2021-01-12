@@ -5,12 +5,11 @@ use super::Context;
 use crate::util::amountrange::AmountRange;
 
 use super::actions::Guard;
-use crate::clause::Clause;
 use ::miniscript::*;
+use sapio_base::Clause;
 use std::collections::HashMap;
 
 enum CacheEntry<T> {
-    Nothing,
     Cached(Clause),
     Fresh(fn(&T, &Context) -> Clause),
 }
@@ -18,7 +17,7 @@ enum CacheEntry<T> {
 /// GuardCache assists with caching the computation of guard functions
 /// during compilation.
 struct GuardCache<T> {
-    cache: HashMap<usize, CacheEntry<T>>,
+    cache: HashMap<usize, Option<CacheEntry<T>>>,
 }
 impl<T> GuardCache<T> {
     fn new() -> Self {
@@ -26,23 +25,24 @@ impl<T> GuardCache<T> {
             cache: HashMap::new(),
         }
     }
-    fn create_entry(g: Option<Guard<T>>, t: &T, ctx: &Context) -> CacheEntry<T> {
-        match g {
-            Some(Guard::Cache(f)) => CacheEntry::Cached(f(t, ctx)),
-            Some(Guard::Fresh(f)) => CacheEntry::Fresh(f),
-            None => CacheEntry::Nothing,
-        }
+    fn create_entry(g: Option<Guard<T>>, t: &T, ctx: &Context) -> Option<CacheEntry<T>> {
+        Some(match g? {
+            Guard::Cache(f) => CacheEntry::Cached(f(t, ctx)),
+            Guard::Fresh(f) => CacheEntry::Fresh(f),
+        })
     }
     fn get(&mut self, t: &T, f: fn() -> Option<Guard<T>>, ctx: &Context) -> Option<Clause> {
-        match self
-            .cache
-            .entry(f as usize)
-            .or_insert_with(|| Self::create_entry(f(), t, ctx))
-        {
-            CacheEntry::Nothing => None,
-            CacheEntry::Cached(s) => Some(s.clone()),
-            CacheEntry::Fresh(f) => Some(f(t, ctx)),
-        }
+        Some(
+            match self
+                .cache
+                .entry(f as usize)
+                .or_insert_with(|| Self::create_entry(f(), t, ctx))
+                .as_ref()?
+            {
+                CacheEntry::Cached(s) => s.clone(),
+                CacheEntry::Fresh(f) => f(t, ctx),
+            },
+        )
     }
 }
 
@@ -68,82 +68,80 @@ impl Compilable for Compiled {
 
 impl<'a, T> Compilable for T
 where
-    T: AnyContract + 'static,
+    T: AnyContract + 'a,
+    T::Ref: 'a,
+    T::StatefulArguments: Default,
 {
     /// The main Compilation Logic for a Contract.
     /// TODO: Better Document Semantics
     fn compile(&self, ctx: &Context) -> Result<Compiled, CompilationError> {
         #[derive(PartialEq, Eq)]
-        enum UsesCTV {
+        enum CTVRequired {
             Yes,
             No,
         }
-        let mut guard_clauses = GuardCache::new();
-        let mut clause_accumulator = vec![];
-        let mut ctv_to_tx = HashMap::new();
-        let mut suggested_txs = HashMap::new();
         let self_ref = self.get_inner_ref();
 
-        let finish_fns: Vec<_> = self
-            .finish_fns()
-            .iter()
-            .filter_map(|x| guard_clauses.get(self_ref, *x, ctx))
-            .collect();
-        if finish_fns.len() > 0 {
-            clause_accumulator.push(Clause::Threshold(1, finish_fns))
-        }
-
+        // The code for then_fns and finish_or_fns is very similar, differing
+        // only in that then_fns have a CTV enforcing the contract and
+        // finish_or_fns do not. We can lazily chain iterators to process them
+        // in a row.
         let then_fns = self
             .then_fns()
             .iter()
             .filter_map(|x| x())
-            .map(|x| (UsesCTV::Yes, x.guard, (x.func)(self_ref, ctx)));
-        let finish_or_fns = self.finish_or_fns().iter().filter_map(|x| x()).map(|x| {
-            (
-                UsesCTV::No,
-                x.guard,
-                (x.func)(self_ref, ctx, Default::default()),
-            )
-        });
+            .map(|x| (CTVRequired::Yes, x.guard, (x.func)(self_ref, ctx)));
+        // finish_or_fns may be used to compute additional transactions with
+        // a given argument, but for building the ABI we only precompute with
+        // the default argument.
+        let arg: Option<&T::StatefulArguments> = Default::default();
+        let finish_or_fns = self
+            .finish_or_fns()
+            .iter()
+            .filter_map(|x| x())
+            .map(|x| (CTVRequired::No, x.guard, (x.func)(self_ref, ctx, arg)));
 
+        let mut guard_clauses = GuardCache::new();
+        let mut ctv_to_tx = HashMap::new();
+        let mut suggested_txs = HashMap::new();
         let mut amount_range = AmountRange::new();
 
         // If no guards and not CTV, then nothing gets added (not interpreted as Trivial True)
         // If CTV and no guards, just CTV added.
         // If CTV and guards, CTV & guards added.
-        for (uses_ctv, guards, r_txtmpls) in then_fns.chain(finish_or_fns) {
-            // it would be an error if any of r_txtmpls is an error instead of just an empty
-            // iterator.
-            let txtmpls = r_txtmpls?;
-            // Don't use a threshold here because then miniscript will just re-compile it into the
-            // And for again.
-            let mut option_guard = guards
-                .iter()
-                .filter_map(|x| guard_clauses.get(self_ref, *x, ctx))
-                .fold(None, |option_guard, guard| {
-                    Some(match option_guard {
-                        None => guard,
-                        Some(guards) => Clause::And(vec![guards, guard]),
-                    })
-                });
+        let mut clause_accumulator = then_fns
+            .chain(finish_or_fns)
+            .map(|(uses_ctv, guards, r_txtmpls)| {
+                // Compute all guard clauses.
+                // Don't use a threshold here because then miniscript will just
+                // re-compile it into the And for again, causing extra allocations.
+                let mut guard = guards
+                    .iter()
+                    .filter_map(|x| guard_clauses.get(self_ref, *x, ctx))
+                    .filter(|x| *x != Clause::Trivial) // no point in using any Trivials
+                    .fold(Clause::Trivial, |acc, item| match acc {
+                        Clause::Trivial => item,
+                        _ => Clause::And(vec![acc, item]),
+                    });
 
-            let mut txtmpl_clauses = txtmpls
-                .map(|r_txtmpl| {
-                    let txtmpl = r_txtmpl?;
-                    let h = txtmpl.hash();
-                    let txtmpl = match uses_ctv {
-                        UsesCTV::Yes => &mut ctv_to_tx,
-                        UsesCTV::No => &mut suggested_txs,
-                    }
-                    .entry(h)
-                    .or_insert(txtmpl);
-                    amount_range.update_range(txtmpl.total_amount());
-                    ctx.ctv_emulator(h)
-                })
-                // Forces any error to abort the whole thing
-                .collect::<Result<Vec<_>, CompilationError>>()?;
-            match uses_ctv {
-                UsesCTV::Yes => {
+                // it would be an error if any of r_txtmpls is an error instead of just an empty
+                // iterator.
+                let mut txtmpl_clauses = r_txtmpls?
+                    .map(|r_txtmpl| {
+                        let txtmpl = r_txtmpl?;
+                        let h = txtmpl.hash();
+                        let txtmpl = match uses_ctv {
+                            CTVRequired::Yes => &mut ctv_to_tx,
+                            CTVRequired::No => &mut suggested_txs,
+                        }
+                        .entry(h)
+                        .or_insert(txtmpl);
+                        amount_range.update_range(txtmpl.total_amount());
+                        ctx.ctv_emulator(h)
+                    })
+                    // Forces any error to abort the whole thing
+                    .collect::<Result<Vec<_>, CompilationError>>()?;
+                if uses_ctv == CTVRequired::Yes {
                     let hashes = match txtmpl_clauses.len() {
                         0 => {
                             return Err(CompilationError::MissingTemplates);
@@ -153,17 +151,25 @@ where
                             .expect("Length of txtmpl_clauses must be at least 1"),
                         _n => Clause::Threshold(1, txtmpl_clauses),
                     };
-                    option_guard = Some(if let Some(guard) = option_guard {
-                        Clause::And(vec![guard, hashes])
-                    } else {
-                        hashes
-                    });
+                    guard = match guard {
+                        Clause::Trivial => hashes,
+                        _ => Clause::And(vec![guard, hashes]),
+                    };
                 }
-                UsesCTV::No => {}
-            }
-            if let Some(guard) = option_guard {
-                clause_accumulator.push(guard);
-            }
+                Ok(guard)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Compute all finish_functions at this level, caching if requested.
+        let finish_fns: Vec<_> = self
+            .finish_fns()
+            .iter()
+            .filter_map(|x| guard_clauses.get(self_ref, *x, ctx))
+            .collect();
+        // If any clauses are returned, use a Threshold with n = 1
+        // It compiles equivalently to a tree of ORs.
+        if finish_fns.len() > 0 {
+            clause_accumulator.push(Clause::Threshold(1, finish_fns))
         }
 
         let policy = match clause_accumulator.len() {
