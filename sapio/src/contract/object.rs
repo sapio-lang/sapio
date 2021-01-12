@@ -25,6 +25,9 @@ pub enum ObjectError {
     Miniscript(miniscript::policy::compiler::CompilerError),
     Custom(Box<dyn std::error::Error>),
 }
+impl std::error::Error for ObjectError {
+
+}
 impl From<EmulatorError> for ObjectError {
     fn from(e: EmulatorError) -> Self {
         ObjectError::Custom(Box::new(e))
