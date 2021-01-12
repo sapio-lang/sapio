@@ -8,11 +8,20 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::fmt::Display;
 
+#[derive(Debug)]
 pub enum SessionError {
     Json(serde_json::Error),
     Compiler(CompilationError),
     ContractNotRegistered,
+}
+
+impl std::error::Error for SessionError {}
+impl Display for SessionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl From<std::convert::Infallible> for SessionError {
@@ -204,12 +213,20 @@ pub struct Menu {
     internal_menu: HashMap<String, fn(Value, &Context) -> Result<Compiled, SessionError>>,
 }
 impl Menu {
-    fn compile(&self, name: String, args: Value, ctx: &Context) -> Result<Compiled, SessionError> {
+    pub fn compile(
+        &self,
+        name: String,
+        args: Value,
+        ctx: &Context,
+    ) -> Result<Compiled, SessionError> {
         let f = self
             .internal_menu
             .get(&name)
             .ok_or(SessionError::ContractNotRegistered)?;
         f(args, ctx)
+    }
+    pub fn list(&self) -> impl Iterator<Item = &String> {
+        self.internal_menu.keys()
     }
 }
 
