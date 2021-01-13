@@ -1,11 +1,9 @@
-use bitcoin::hashes::sha256d;
-use bitcoin::hashes::Hash;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::amount::Amount;
 use bitcoin::util::bip32::*;
 use bitcoin::Script;
 use bitcoin::TxOut;
-use bitcoin::Txid;
+
 use emulator_connect::connections::hd::HDOracleEmulatorConnection;
 use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::*;
