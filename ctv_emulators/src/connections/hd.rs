@@ -57,18 +57,20 @@ impl CTVEmulator for HDOracleEmulatorConnection {
         mut b: PartiallySignedTransaction,
     ) -> Result<PartiallySignedTransaction, EmulatorError> {
         let inp: Result<PartiallySignedTransaction, std::io::Error> =
-            self.runtime.block_on(async {
-                let mut mconn = self.connection.lock().await;
-                loop {
-                    if let Some(conn) = &mut *mconn {
-                        Self::request(conn, &msgs::Request::SignPSBT(msgs::PSBT(b.clone())))
-                            .await?;
-                        conn.flush().await?;
-                        return Ok(Self::response::<msgs::PSBT>(conn).await?.0);
-                    } else {
-                        *mconn = Some(TcpStream::connect(&self.reconnect).await?);
+            tokio::task::block_in_place(|| {
+                self.runtime.block_on(async {
+                    let mut mconn = self.connection.lock().await;
+                    loop {
+                        if let Some(conn) = &mut *mconn {
+                            Self::request(conn, &msgs::Request::SignPSBT(msgs::PSBT(b.clone())))
+                                .await?;
+                            conn.flush().await?;
+                            return Ok(Self::response::<msgs::PSBT>(conn).await?.0);
+                        } else {
+                            *mconn = Some(TcpStream::connect(&self.reconnect).await?);
+                        }
                     }
-                }
+                })
             });
 
         b.merge(inp?)
