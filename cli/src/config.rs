@@ -217,9 +217,16 @@ impl std::error::Error for ConfigError {}
 
 impl std::default::Default for ConfigVerifier {
     fn default() -> Self {
+        let mut b = BaseDirs::new()
+            .expect("Could Not Determine a Base Directory")
+            .home_dir()
+            .to_path_buf();
+        b.push(".bitcoin");
+        b.push("regtest");
+        b.push(".cookie");
         let regtest = NetworkConfig {
             active: true,
-            api_node: Node{url: "http://127.0.0.1:18443".into(), auth: super::rpc::Auth::CookieFile("~/.bitcoin/regtest/.cookie".into())},
+            api_node: Node{url: "http://127.0.0.1:18443".into(), auth: super::rpc::Auth::CookieFile(b.into())},
             emulator_nodes: Some(EmulatorConfig{
                 enabled: true,
                 threshold: 1u8,
