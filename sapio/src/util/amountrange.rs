@@ -1,9 +1,7 @@
-use bitcoin::util::amount;
-use bitcoin::util::amount::{Amount, CoinAmount};
-use bitcoin::SignedAmount;
+use bitcoin::util::amount::Amount;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::convert::TryInto;
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq)]
 #[serde(transparent)]

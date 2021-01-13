@@ -1,8 +1,7 @@
-use crate::contract::CompilationError;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
 use ::miniscript::{self, *};
-use bitcoin::hash_types::*;
+
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::amount::Amount;
@@ -146,7 +145,6 @@ impl Object {
                 }
                 let mut psbtx = PartiallySignedTransaction::from_unsigned_tx(tx.clone()).unwrap();
                 for (psbt_in, tx_in) in psbtx.inputs.iter_mut().zip(tx.input.iter()) {
-                    println!("{:?}", tx_in.previous_output);
                     psbt_in.witness_utxo = blockdata.lookup_output(&tx_in.previous_output).ok();
                     psbt_in.sighash_type = Some(bitcoin::blockdata::transaction::SigHashType::All);
                 }

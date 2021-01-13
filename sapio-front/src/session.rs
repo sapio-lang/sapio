@@ -1,6 +1,6 @@
 type Key = bitcoin::hashes::sha256::Hash;
 use bitcoin::hashes::hex::ToHex;
-use bitcoin::util::amount::{Amount, CoinAmount};
+use bitcoin::util::amount::Amount;
 use sapio::contract::{Compilable, CompilationError, Compiled, Context};
 use schemars::schema::RootSchema;
 use schemars::JsonSchema;
