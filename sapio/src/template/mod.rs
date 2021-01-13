@@ -29,6 +29,9 @@ impl Template {
     }
 
     pub fn total_amount(&self) -> Amount {
-        Amount::from_sat(0)
+        self.outputs
+            .iter()
+            .map(|o| o.amount)
+            .fold(Amount::from_sat(0), |b, a| b + a)
     }
 }
