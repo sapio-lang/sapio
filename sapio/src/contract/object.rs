@@ -25,6 +25,7 @@ pub enum ObjectError {
     Miniscript(miniscript::policy::compiler::CompilerError),
     Custom(Box<dyn std::error::Error>),
 }
+impl std::error::Error for ObjectError {}
 impl From<EmulatorError> for ObjectError {
     fn from(e: EmulatorError) -> Self {
         ObjectError::Custom(Box::new(e))
@@ -61,24 +62,6 @@ pub struct Object {
 }
 
 impl Object {
-    /// converts a descriptor and an optional AmountRange to a Object object.
-    /// This can be used for e.g. creating raw SegWit Scripts.
-    pub fn from_descriptor(d: Descriptor<bitcoin::PublicKey>, a: Option<AmountRange>) -> Object {
-        Object {
-            ctv_to_tx: HashMap::new(),
-            suggested_txs: HashMap::new(),
-            policy: None,
-            address: d.address(bitcoin::Network::Bitcoin).unwrap(),
-            descriptor: Some(d),
-            amount_range: a.unwrap_or_else(|| {
-                let mut a = AmountRange::new();
-                a.update_range(Amount::min_value());
-                a.update_range(Amount::max_value());
-                a
-            }),
-        }
-    }
-
     /// Creates an object from a given address. The optional AmountRange argument determines the
     /// safe bounds the contract can receive, otherwise it is set to any.
     pub fn from_address(address: bitcoin::Address, a: Option<AmountRange>) -> Object {
@@ -109,7 +92,7 @@ impl Object {
                 out_in,
                 HashMap::new(),
                 Rc::new(TxIndexLogger::new()),
-                Rc::new(NullEmulator(None)),
+                &NullEmulator(None),
             )
             .unwrap();
         (a.into_iter().map(|x| x.extract_tx()).collect(), b)
@@ -119,7 +102,7 @@ impl Object {
         out_in: bitcoin::OutPoint,
         output_map: HashMap<Sha256, Vec<Option<bitcoin::OutPoint>>>,
         blockdata: Rc<dyn TxIndex>,
-        emulator: Rc<dyn CTVEmulator>,
+        emulator: &dyn CTVEmulator,
     ) -> Result<
         (
             Vec<bitcoin::util::psbt::PartiallySignedTransaction>,

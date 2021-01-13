@@ -67,7 +67,6 @@ pub struct ExampleB<T: BState> {
 }
 
 impl<T: BState> ExampleB<T> {
-    guard!(timeout | s, ctx | { Clause::Older(100) });
     guard!(cached all_signed |s, ctx| {Clause::Threshold(T::get_n(s.threshold, s.participants.len()as u8) as usize, s.participants.iter().map(|k| Clause::Key(*k)).collect())});
 }
 

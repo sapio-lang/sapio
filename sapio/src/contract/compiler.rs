@@ -181,7 +181,7 @@ where
         };
 
         let miniscript = policy.compile().map_err(Into::<CompilationError>::into)?;
-        let address = bitcoin::Address::p2wsh(&miniscript.encode(), bitcoin::Network::Bitcoin);
+        let address = bitcoin::Address::p2wsh(&miniscript.encode(), ctx.network);
         let descriptor = Some(Descriptor::Wsh(miniscript));
 
         Ok(Compiled {

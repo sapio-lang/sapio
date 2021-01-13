@@ -1,11 +1,11 @@
 use super::*;
 pub struct FederatedEmulatorConnection {
-    emulators: Vec<Box<dyn CTVEmulator>>,
+    emulators: Vec<Arc<dyn CTVEmulator>>,
     threshold: u8,
 }
 
 impl FederatedEmulatorConnection {
-    pub fn new(emulators: Vec<Box<dyn CTVEmulator>>, threshold: u8) -> Self {
+    pub fn new(emulators: Vec<Arc<dyn CTVEmulator>>, threshold: u8) -> Self {
         FederatedEmulatorConnection {
             emulators,
             threshold,

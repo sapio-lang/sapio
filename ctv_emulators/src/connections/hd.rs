@@ -1,10 +1,10 @@
 use super::*;
 pub struct HDOracleEmulatorConnection {
-    runtime: Arc<tokio::runtime::Runtime>,
-    connection: Mutex<Option<TcpStream>>,
-    reconnect: SocketAddr,
-    root: ExtendedPubKey,
-    secp: Arc<bitcoin::secp256k1::Secp256k1<bitcoin::secp256k1::All>>,
+    pub runtime: Arc<tokio::runtime::Runtime>,
+    pub connection: Mutex<Option<TcpStream>>,
+    pub reconnect: SocketAddr,
+    pub root: ExtendedPubKey,
+    pub secp: Arc<bitcoin::secp256k1::Secp256k1<bitcoin::secp256k1::All>>,
 }
 
 impl HDOracleEmulatorConnection {
@@ -57,18 +57,20 @@ impl CTVEmulator for HDOracleEmulatorConnection {
         mut b: PartiallySignedTransaction,
     ) -> Result<PartiallySignedTransaction, EmulatorError> {
         let inp: Result<PartiallySignedTransaction, std::io::Error> =
-            self.runtime.block_on(async {
-                let mut mconn = self.connection.lock().await;
-                loop {
-                    if let Some(conn) = &mut *mconn {
-                        Self::request(conn, &msgs::Request::SignPSBT(msgs::PSBT(b.clone())))
-                            .await?;
-                        conn.flush().await?;
-                        return Ok(Self::response::<msgs::PSBT>(conn).await?.0);
-                    } else {
-                        *mconn = Some(TcpStream::connect(&self.reconnect).await?);
+            tokio::task::block_in_place(|| {
+                self.runtime.block_on(async {
+                    let mut mconn = self.connection.lock().await;
+                    loop {
+                        if let Some(conn) = &mut *mconn {
+                            Self::request(conn, &msgs::Request::SignPSBT(msgs::PSBT(b.clone())))
+                                .await?;
+                            conn.flush().await?;
+                            return Ok(Self::response::<msgs::PSBT>(conn).await?.0);
+                        } else {
+                            *mconn = Some(TcpStream::connect(&self.reconnect).await?);
+                        }
                     }
-                }
+                })
             });
 
         b.merge(inp?)

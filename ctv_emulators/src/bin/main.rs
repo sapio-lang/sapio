@@ -17,7 +17,7 @@ async fn main() -> Result<(), std::io::Error> {
         ExtendedPrivKey::new_master(bitcoin::network::constants::Network::Regtest, &contents[..])
             .unwrap();
     let pk_root = ExtendedPubKey::from_private(&Secp256k1::new(), &root);
-    let oracle = HDOracleEmulator::new(root);
+    let oracle = HDOracleEmulator::new(root, true);
     let server = oracle.bind(
         std::env::args()
             .nth(2)

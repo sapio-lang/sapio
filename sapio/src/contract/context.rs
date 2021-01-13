@@ -1,18 +1,24 @@
 use super::{Amount, Compilable, CompilationError, Compiled};
+use crate::util::amountrange::AmountRange;
+use bitcoin::Network;
 use emulator_connect::{CTVEmulator, NullEmulator};
-use std::rc::Rc;
+use miniscript::Descriptor;
+use std::collections::HashMap;
+use std::sync::Arc;
 /// Context type is not copyable/clonable externally
 pub struct Context {
     /* TODO: Add Context Fields! */
     available_funds: Amount,
     emulator: NullEmulator,
+    pub network: Network,
 }
 
 impl Context {
-    pub fn new(amount: Amount, emulator: Option<Rc<dyn CTVEmulator>>) -> Self {
+    pub fn new(network: Network, amount: Amount, emulator: Option<Arc<dyn CTVEmulator>>) -> Self {
         Context {
             available_funds: amount,
             emulator: NullEmulator(emulator),
+            network,
         }
     }
     pub fn funds(&self) -> Amount {
@@ -35,6 +41,7 @@ impl Context {
             Ok(Context {
                 available_funds: amount,
                 emulator: self.emulator.clone(),
+                ..*self
             })
         }
     }
@@ -56,5 +63,26 @@ impl Context {
             emulator: self.emulator.clone(),
             ..*self
         })
+    }
+
+    /// converts a descriptor and an optional AmountRange to a Object object.
+    /// This can be used for e.g. creating raw SegWit Scripts.
+    pub fn compiled_from_descriptor(
+        d: Descriptor<bitcoin::PublicKey>,
+        a: Option<AmountRange>,
+    ) -> Compiled {
+        Compiled {
+            ctv_to_tx: HashMap::new(),
+            suggested_txs: HashMap::new(),
+            policy: None,
+            address: d.address(bitcoin::Network::Bitcoin).unwrap(),
+            descriptor: Some(d),
+            amount_range: a.unwrap_or_else(|| {
+                let mut a = AmountRange::new();
+                a.update_range(Amount::min_value());
+                a.update_range(Amount::max_value());
+                a
+            }),
+        }
     }
 }

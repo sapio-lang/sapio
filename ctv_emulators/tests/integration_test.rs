@@ -55,7 +55,7 @@ fn test_connect() {
     {
         let rt = rt1.clone();
         std::thread::spawn(move || {
-            let oracle = HDOracleEmulator::new(root);
+            let oracle = HDOracleEmulator::new(root, true);
             rt.block_on(async {
                 let server = tokio::spawn(oracle.bind("127.0.0.1:8080"));
                 quit.await.unwrap();
@@ -88,9 +88,10 @@ fn test_connect() {
         .await
         .unwrap()
     });
-    let rc_conn: Rc<dyn CTVEmulator> = Rc::new(connecter);
+    let rc_conn: Arc<dyn CTVEmulator> = Arc::new(connecter);
     let compiled = contract
         .compile(&Context::new(
+            bitcoin::Network::Regtest,
             Amount::from_btc(1.0).unwrap(),
             Some(rc_conn.clone()),
         ))
@@ -110,7 +111,7 @@ fn test_connect() {
         bitcoin::OutPoint::new(fake_txid, 0),
         HashMap::new(),
         txindex,
-        rc_conn,
+        rc_conn.as_ref(),
     );
     shutdown.send(()).unwrap();
     // TODO: Test PSBT result
