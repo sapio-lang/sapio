@@ -49,7 +49,7 @@ async fn index(
 ) -> Result<HttpResponse, Error> {
     let resp = ws::start(
         MyWs {
-            sesh: session::Session::new(m),
+            sesh: session::Session::new(m, bitcoin::Network::Regtest),
         },
         &req,
         stream,

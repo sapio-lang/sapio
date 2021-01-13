@@ -2,11 +2,12 @@ use super::*;
 #[derive(Clone)]
 pub struct HDOracleEmulator {
     root: ExtendedPrivKey,
+    debug: bool,
 }
 
 impl HDOracleEmulator {
-    pub fn new(root: ExtendedPrivKey) -> Self {
-        HDOracleEmulator { root }
+    pub fn new(root: ExtendedPrivKey, debug: bool) -> Self {
+        HDOracleEmulator { root, debug }
     }
     pub async fn bind<A: ToSocketAddrs>(self, a: A) -> std::io::Result<()> {
         let listener = TcpListener::bind(a).await?;
@@ -14,13 +15,16 @@ impl HDOracleEmulator {
             let (mut socket, _) = listener.accept().await?;
             {
                 let this = self.clone();
-                let _: tokio::task::JoinHandle<Result<(), std::io::Error>> =
+                let j: tokio::task::JoinHandle<Result<(), std::io::Error>> =
                     tokio::spawn(async move {
                         loop {
                             socket.readable().await?;
                             this.handle(&mut socket).await?;
                         }
                     });
+                if self.debug {
+                    tokio::join!(j).0??;
+                }
             }
         }
     }

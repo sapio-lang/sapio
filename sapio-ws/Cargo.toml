@@ -30,3 +30,7 @@ version = "0.10.0"
 [dependencies.actix-web-actors]
 version = "3.0.0"
 
+
+[dependencies.bitcoin]
+version = "0.25"
+features = ['use-serde', 'rand']

@@ -2,7 +2,7 @@ use bitcoin::hashes::sha256;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 pub use sapio_base::Clause;
 use std::fmt;
-use std::rc::Rc;
+use std::sync::Arc;
 #[derive(Debug)]
 pub enum EmulatorError {
     NetworkIssue(std::io::Error),
@@ -27,7 +27,7 @@ impl From<bitcoin::util::bip32::Error> for EmulatorError {
     }
 }
 
-pub trait CTVEmulator {
+pub trait CTVEmulator: Sync + Send {
     fn get_signer_for(&self, h: sha256::Hash) -> Result<Clause, EmulatorError>;
     fn sign(
         &self,
@@ -36,7 +36,7 @@ pub trait CTVEmulator {
 }
 
 #[derive(Clone)]
-pub struct NullEmulator(pub Option<Rc<dyn CTVEmulator>>);
+pub struct NullEmulator(pub Option<Arc<dyn CTVEmulator>>);
 
 impl CTVEmulator for NullEmulator {
     fn get_signer_for(&self, h: sha256::Hash) -> Result<Clause, EmulatorError> {

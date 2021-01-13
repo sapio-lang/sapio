@@ -90,7 +90,11 @@ pub enum Reaction {
     #[serde(rename = "session_id")]
     Session(bool, String),
     #[serde(rename = "created")]
-    Created(CoinAmount, bitcoin::Address, Program),
+    Created(
+        #[serde(with = "bitcoin::util::amount::serde::as_sat")] Amount,
+        bitcoin::Address,
+        Program,
+    ),
     #[serde(rename = "saved")]
     Saved(bool),
     #[serde(rename = "bound")]
@@ -234,6 +238,7 @@ pub struct Session {
     contracts: HashMap<Key, Compiled>,
     example_msg: Option<String>,
     menu: &'static Menu,
+    network: bitcoin::Network,
 }
 
 pub enum Msg<'a> {
@@ -242,16 +247,17 @@ pub enum Msg<'a> {
 }
 
 impl Session {
-    pub fn new(m: &'static Menu) -> Session {
+    pub fn new(menu: &'static Menu, network: bitcoin::Network) -> Session {
         Session {
             contracts: HashMap::new(),
             example_msg: None,
-            menu: m,
+            menu,
+            network,
         }
     }
     pub fn get_context(&self) -> Context {
         // Todo: Make Create specify the amount to send.
-        Context::new(Amount::from_sat(100_000_000_000), None)
+        Context::new(self.network, Amount::from_sat(100_000_000_000), None)
     }
 
     pub fn handle(&mut self, m: Msg) -> Result<Option<Reaction>, serde_json::Error> {
