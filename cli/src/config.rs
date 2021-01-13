@@ -1,4 +1,5 @@
 use bitcoin::util::bip32::ExtendedPubKey;
+use directories::BaseDirs;
 use emulator_connect::connections::federated::FederatedEmulatorConnection;
 use emulator_connect::connections::hd::HDOracleEmulatorConnection;
 use emulator_connect::CTVEmulator;
