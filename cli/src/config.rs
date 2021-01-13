@@ -128,9 +128,9 @@ impl Config {
             if let Ok(txt) = tokio::fs::read(&pb).await {
                 Ok(serde_json::from_slice(&txt[..])?)
             } else {
-                let cfg = Config::try_from(ConfigVerifier::default())?;
+                let cfg = ConfigVerifier::default();
                 tokio::fs::write(&pb, &serde_json::to_string_pretty(&cfg)?).await?;
-                Ok(cfg)
+                Ok(Config::try_from(cfg)?)
             }
         }
     }
