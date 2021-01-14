@@ -1,4 +1,4 @@
-use emulator_connect::EmulatorError;
+use sapio_ctv_emulator_trait::EmulatorError;
 use std::error::Error;
 use std::fmt;
 #[derive(Debug)]

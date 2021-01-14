@@ -1,19 +1,10 @@
 [package]
-name = "sapio"
+name = "sapio-ctv-emulator-trait"
 version = "0.1.0"
 authors = ["Jeremy Rubin <j@rubin.io>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-
-[dependencies.miniscript]
-version = "2.0.1"
-features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
-
-[features]
-# used to enable some niceties if compiling on a nightly compiler
-nightly = []
 
 [dependencies]
 schemars = "0.8.0"
@@ -21,13 +12,18 @@ serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
 
+
 [dependencies.bitcoin]
 version = "0.25"
 features = ['use-serde', 'rand']
 
+[dependencies.miniscript]
+version = "2.0.1"
+features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 
 [dependencies.sapio-base]
-path = "../sapio-base"
+path="../sapio-base"
 
-[dependencies.sapio-ctv-emulator-trait]
-path ="../emulator-trait"
+
+[dev-dependencies.sapio]
+path = "../sapio"

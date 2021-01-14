@@ -1,7 +1,7 @@
 use super::{Amount, Compilable, CompilationError, Compiled};
 use crate::util::amountrange::AmountRange;
 use bitcoin::Network;
-use emulator_connect::{CTVEmulator, NullEmulator};
+use sapio_ctv_emulator_trait::{CTVEmulator, NullEmulator};
 use miniscript::Descriptor;
 use std::collections::HashMap;
 use std::sync::Arc;

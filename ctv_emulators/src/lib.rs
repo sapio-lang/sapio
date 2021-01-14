@@ -1,11 +1,10 @@
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::{Hash, HashEngine};
 use bitcoin::util::bip32::*;
+use sapio_ctv_emulator_trait::Clause;
+pub use sapio_ctv_emulator_trait::{CTVEmulator, EmulatorError, NullEmulator};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-pub mod emulator;
-use emulator::Clause;
-pub use emulator::{CTVEmulator, EmulatorError, NullEmulator};
 
 use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
