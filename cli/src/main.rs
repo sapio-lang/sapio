@@ -74,6 +74,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             (@subcommand list =>
                 (about: "list available contracts")
             )
+            (@subcommand schema =>
+                (about: "show the jsonschema for this contract")
+                (@arg name: +required "Which Contract to show")
+            )
         )
     )
     .get_matches();
@@ -173,6 +177,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     &ctx,
                 )?;
                 println!("{}", serde_json::to_string_pretty(&contract)?);
+            }
+            Some(("schema", args)) => {
+                println!(
+                    "{}",
+                    prixfixe::MENU
+                        .schema_for(args.value_of("name").unwrap())
+                        .ok_or("No Such Contract")?
+                );
             }
             _ => unreachable!(),
         },
