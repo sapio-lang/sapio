@@ -12,6 +12,7 @@ pub enum CompilationError {
     NoSuchSequence,
     ParseAmountError(bitcoin::util::amount::ParseAmountError),
     Miniscript(miniscript::policy::compiler::CompilerError),
+    MiniscriptE(miniscript::Error),
     TimeLockError(sapio_base::timelocks::LockTimeError),
     Custom(Box<dyn std::error::Error>),
 }
@@ -35,6 +36,11 @@ impl From<sapio_base::timelocks::LockTimeError> for CompilationError {
 impl From<miniscript::policy::compiler::CompilerError> for CompilationError {
     fn from(v: miniscript::policy::compiler::CompilerError) -> Self {
         CompilationError::Miniscript(v)
+    }
+}
+impl From<miniscript::Error> for CompilationError {
+    fn from(v: miniscript::Error) -> Self {
+        CompilationError::MiniscriptE(v)
     }
 }
 

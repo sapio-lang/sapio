@@ -3,6 +3,7 @@ use crate::util::amountrange::AmountRange;
 use bitcoin::Network;
 use sapio_ctv_emulator_trait::{CTVEmulator, NullEmulator};
 use miniscript::Descriptor;
+use miniscript::DescriptorTrait;
 use std::collections::HashMap;
 use std::sync::Arc;
 /// Context type is not copyable/clonable externally

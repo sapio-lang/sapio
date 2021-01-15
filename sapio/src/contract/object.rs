@@ -148,7 +148,7 @@ impl Object {
                 }
                 // Missing other Witness Info.
                 if let Some(d) = descriptor {
-                    psbtx.inputs[0].witness_script = Some(d.witness_script());
+                    psbtx.inputs[0].witness_script = Some(d.explicit_script());
                 }
                 psbtx = emulator.sign(psbtx)?;
                 let final_tx = psbtx.clone().extract_tx();

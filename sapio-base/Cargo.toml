@@ -14,9 +14,9 @@ serde = "1.0"
 serde_derive = "1.0"
 
 [dependencies.miniscript]
-version = "2.0.1"
+version = "5.0.1"
 features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 
 [dependencies.bitcoin]
-version = "0.25"
+version = "^0.26.0"
 features = ['use-serde', 'rand']

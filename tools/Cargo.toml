@@ -13,11 +13,11 @@ tokio = { version = "1", features = ["full"] }
 bitcoincore-rpc-async = "2.12.0"
 
 [dependencies.miniscript]
-version = "2.0.1"
+version = "5.0.1"
 features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 
 [dependencies.bitcoin]
-version = "0.25"
+version = "^0.26.0"
 features = ['use-serde', 'rand']
 
 [dependencies.sapio-base]
