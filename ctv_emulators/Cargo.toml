@@ -14,12 +14,14 @@ serde_derive = "1.0"
 rand = "0.8.1"
 
 
+[dependencies.sapio-ctv-emulator-trait]
+path="../emulator-trait"
 [dependencies.bitcoin]
-version = "0.25"
+version = "^0.26.0"
 features = ['use-serde', 'rand']
 
 [dependencies.miniscript]
-version = "2.0.1"
+version = "5.0.1"
 features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 
 [dependencies.sapio-base]

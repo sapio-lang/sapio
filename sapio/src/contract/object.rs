@@ -6,12 +6,10 @@ use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::amount::Amount;
 use bitcoin::util::psbt::PartiallySignedTransaction;
-use emulator_connect::emulator::CTVEmulator;
-use emulator_connect::emulator::NullEmulator;
-use emulator_connect::EmulatorError;
 use sapio_base::txindex::TxIndexError;
 use sapio_base::txindex::{TxIndex, TxIndexLogger};
 use sapio_base::Clause;
+use sapio_ctv_emulator_trait::{CTVEmulator, EmulatorError, NullEmulator};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -150,7 +148,7 @@ impl Object {
                 }
                 // Missing other Witness Info.
                 if let Some(d) = descriptor {
-                    psbtx.inputs[0].witness_script = Some(d.witness_script());
+                    psbtx.inputs[0].witness_script = Some(d.explicit_script());
                 }
                 psbtx = emulator.sign(psbtx)?;
                 let final_tx = psbtx.clone().extract_tx();

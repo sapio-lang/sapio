@@ -1,8 +1,9 @@
 use super::{Amount, Compilable, CompilationError, Compiled};
 use crate::util::amountrange::AmountRange;
 use bitcoin::Network;
-use emulator_connect::{CTVEmulator, NullEmulator};
 use miniscript::Descriptor;
+use miniscript::DescriptorTrait;
+use sapio_ctv_emulator_trait::{CTVEmulator, NullEmulator};
 use std::collections::HashMap;
 use std::sync::Arc;
 /// Context type is not copyable/clonable externally

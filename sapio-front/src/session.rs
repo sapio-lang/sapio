@@ -148,6 +148,7 @@ pub struct MenuBuilder {
     menu: Vec<RootSchema>,
     gen: schemars::gen::SchemaGenerator,
     internal_menu: HashMap<String, fn(Value, &Context) -> Result<Compiled, SessionError>>,
+    schemas: HashMap<String, String>,
 }
 impl MenuBuilder {
     pub fn new() -> MenuBuilder {
@@ -155,6 +156,7 @@ impl MenuBuilder {
             menu: Vec::new(),
             gen: schemars::gen::SchemaGenerator::default(),
             internal_menu: HashMap::new(),
+            schemas: HashMap::new(),
         }
     }
     pub fn register_as<T: JsonSchema + for<'a> Deserialize<'a> + Compilable>(
@@ -168,6 +170,10 @@ impl MenuBuilder {
         }
         self.internal_menu
             .insert(title.clone().unwrap(), from_json::<T>);
+        self.schemas.insert(
+            title.clone().unwrap(),
+            serde_json::to_string_pretty(&s).unwrap(),
+        );
         self.menu.push(s);
     }
 
@@ -188,6 +194,10 @@ impl MenuBuilder {
         }
         self.internal_menu
             .insert(title.clone().unwrap(), from_json_convert::<C, T, E>);
+        self.schemas.insert(
+            title.clone().unwrap(),
+            serde_json::to_string_pretty(&s).unwrap(),
+        );
         self.menu.push(s);
     }
     fn gen_menu(&self) -> Value {
@@ -206,8 +216,9 @@ impl MenuBuilder {
 impl From<MenuBuilder> for Menu {
     fn from(m: MenuBuilder) -> Self {
         Menu {
-            menu: serde_json::to_string(&m.open()).unwrap(),
+            menu: serde_json::to_string_pretty(&m.open()).unwrap(),
             internal_menu: m.internal_menu,
+            schemas: m.schemas,
         }
     }
 }
@@ -215,6 +226,7 @@ impl From<MenuBuilder> for Menu {
 pub struct Menu {
     menu: String,
     internal_menu: HashMap<String, fn(Value, &Context) -> Result<Compiled, SessionError>>,
+    schemas: HashMap<String, String>,
 }
 impl Menu {
     pub fn compile(
@@ -231,6 +243,9 @@ impl Menu {
     }
     pub fn list(&self) -> impl Iterator<Item = &String> {
         self.internal_menu.keys()
+    }
+    pub fn schema_for(&self, name: &str) -> Option<&String> {
+        self.schemas.get(name)
     }
 }
 
