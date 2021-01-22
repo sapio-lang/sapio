@@ -71,7 +71,7 @@ impl Object {
             amount_range: a.unwrap_or_else(|| {
                 let mut a = AmountRange::new();
                 a.update_range(Amount::min_value());
-                a.update_range(Amount::max_value());
+                a.update_range(Amount::from_sat(21_000_000 * 100_000_000));
                 a
             }),
         }
