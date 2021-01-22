@@ -17,7 +17,8 @@ where
 pub struct CreateArgs<S: for<'t> Deserialize<'t>>(
     /// We use json_wrapped_string to encode S to allow for a client to pass in
     /// CreateArgs without knowing the underlying type S.
-    #[serde(deserialize_with = "json_wrapped_string")] pub S,
+    #[serde(deserialize_with = "json_wrapped_string")]
+    pub S,
     pub bitcoin::Network,
     #[serde(with = "bitcoin::util::amount::serde::as_sat")] pub bitcoin::util::amount::Amount,
 );
@@ -47,12 +48,12 @@ fn encode_json<S: Serialize>(s: &S) -> *mut c_char {
 
 #[cfg(feature = "host")]
 pub mod host {
-    use bitcoin::consensus::{Decodable, Encodable};
+
     use bitcoin::hashes::sha256;
     use bitcoin::hashes::Hash;
     use bitcoin::util::psbt::PartiallySignedTransaction;
     use sapio_ctv_emulator_trait::{CTVEmulator, NullEmulator};
-    use serde::{Deserialize, Serialize};
+
     use std::cell::Cell;
     use std::io::Write;
     use std::sync::{Arc, Mutex};

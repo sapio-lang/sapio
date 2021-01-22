@@ -3,11 +3,10 @@ use sapio::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
-use std::collections::HashMap;
+
 use std::convert::TryInto;
-use std::ffi::CString;
+
 use std::os::raw::c_char;
-use std::sync::Arc;
 
 #[derive(JsonSchema, Serialize, Deserialize, Clone)]
 pub struct Payment {

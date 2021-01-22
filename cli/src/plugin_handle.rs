@@ -4,12 +4,12 @@ use sapio::contract::Compiled;
 use sapio_wasm_plugin::CreateArgs;
 use std::cell::Cell;
 use std::ffi::OsStr;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use wasmer::{
     imports, Function, ImportObject, Instance, LazyInit, MemoryView, Module, NativeFunc, Store,
 };
 use wasmer_cache::Hash as WASMCacheID;
-use std::str::FromStr;
 
 pub struct SapioPluginHandle {
     store: Store,
