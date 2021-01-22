@@ -127,7 +127,7 @@ impl SapioPluginHandle {
     pub fn get_api(&self) -> Result<serde_json::value::Value, Box<dyn Error>> {
         let p = self.get_api.call()?;
         let v = self.read_to_vec(p)?;
-        self.forget(p);
+        self.forget(p)?;
         Ok(serde_json::from_slice(&v)?)
     }
     fn forget(&self, p: i32) -> Result<(), Box<dyn Error>> {
@@ -159,7 +159,7 @@ impl SapioPluginHandle {
         let offset = self.pass_string(&arg_str)?;
         let offset = self.create.call(offset)?;
         let buf = self.read_to_vec(offset)?;
-        self.forget(offset);
+        self.forget(offset)?;
         let c: Result<String, String> = serde_json::from_slice(&buf)?;
         let v: Compiled = serde_json::from_str(&c?)?;
         Ok(v)
