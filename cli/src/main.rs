@@ -14,23 +14,33 @@ use config::*;
 use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::CTVEmulator;
 use emulator_connect::NullEmulator;
+use plugin_handle::SapioPluginHandle;
 use sapio::contract::Compiled;
 use sapio_base::txindex::TxIndex;
 use sapio_base::txindex::TxIndexLogger;
 use sapio_base::util::CTVHash;
+use sapio_wasm_plugin::CreateArgs;
+use schemars::JsonSchema;
+use std::cell::Cell;
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::rc::Rc;
+use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 use util::*;
+use wasmer::*;
 
 pub mod config;
+pub mod plugin_handle;
 pub mod prixfixe;
 mod util;
+pub mod wasm_cache;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let matches = clap_app!("sapio-cli" =>
+    let app = clap_app!("sapio-cli" =>
         (@setting SubcommandRequiredElseHelp)
         (version: "0.1.0 Beta")
         (author: "Jeremy Rubin <j@rubin.io>")
@@ -71,6 +81,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 (@arg params: +required "JSON of args")
                 (about: "create a contract to a specific UTXO")
             )
+            (@subcommand wasm =>
+                (@subcommand create =>
+                    (about: "create a contract to a specific UTXO")
+                    (@arg amount: +required "Amount to Send in BTC")
+                    (@group from +required =>
+                        (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
+                        (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
+                    )
+                    (@arg params: +required "JSON of args")
+                )
+                (@subcommand load =>
+                    (about: "Load a wasm contract module, returns the hex sha3 hash key")
+                    (@arg file: -f --file +required +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
+                )
+                (@subcommand schema =>
+                    (about: "View the API for a plugin")
+                    (@group from +required =>
+                        (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
+                        (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
+                    )
+                )
+            )
             (@subcommand list =>
                 (about: "list available contracts")
             )
@@ -79,8 +111,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 (@arg name: +required "Which Contract to show")
             )
         )
-    )
-    .get_matches();
+    );
+    let matches = app.get_matches();
 
     let config = Config::setup(&matches, "org", "judica", "sapio-cli").await?;
 
@@ -178,6 +210,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )?;
                 println!("{}", serde_json::to_string_pretty(&contract)?);
             }
+            Some(("wasm", args)) => match args.subcommand() {
+                Some(("create", args)) => {
+                    let amt = Amount::from_str_in(
+                        args.value_of("amount").unwrap(),
+                        Denomination::Bitcoin,
+                    )?;
+                    let sph = SapioPluginHandle::new(
+                        emulator,
+                        args.value_of("key"),
+                        args.value_of_os("file"),
+                    )
+                    .await?;
+                    let params = args.value_of("params").unwrap();
+                    let create_args =
+                        sapio_wasm_plugin::CreateArgs(params.to_string(), config.network, amt);
+                    let v = sph.create(&create_args)?;
+                    println!("{:?}", v);
+                }
+                Some(("schema", args)) => {
+                    let sph = SapioPluginHandle::new(
+                        emulator,
+                        args.value_of("key"),
+                        args.value_of_os("file"),
+                    )
+                    .await?;
+                    println!("{}", sph.get_api()?);
+                }
+                Some(("load", args)) => {
+                    let sph =
+                        SapioPluginHandle::new(emulator, None, args.value_of_os("file")).await?;
+                    println!("{}", sph.id().to_string());
+                }
+                _ => unreachable!(),
+            },
             Some(("schema", args)) => {
                 println!(
                     "{}",
