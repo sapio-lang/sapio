@@ -1,7 +1,7 @@
 use super::wasm_cache;
-use emulator_connect::NullEmulator;
+use sapio_ctv_emulator_trait::NullEmulator;
 use sapio::contract::Compiled;
-use sapio_wasm_plugin::CreateArgs;
+use crate::CreateArgs;
 use std::cell::Cell;
 use std::ffi::OsStr;
 use std::str::FromStr;
@@ -13,7 +13,7 @@ use wasmer_cache::Hash as WASMCacheID;
 
 pub struct SapioPluginHandle {
     store: Store,
-    env: sapio_wasm_plugin::host::EmulatorEnv,
+    env: super::EmulatorEnv,
     import_object: ImportObject,
     module: Module,
     instance: Instance,
@@ -38,7 +38,7 @@ impl SapioPluginHandle {
         key.xor(file.and(Some("")))
             .ok_or("Passed Both Key and File or Neither")?;
         let store = Store::default();
-        let wasm_ctv_emulator = sapio_wasm_plugin::host::EmulatorEnv {
+        let wasm_ctv_emulator = super::EmulatorEnv {
             emulator: Arc::new(Mutex::new(emulator)),
             memory: LazyInit::new(),
             allocate_wasm_bytes: LazyInit::new(),
@@ -46,17 +46,17 @@ impl SapioPluginHandle {
         let f = Function::new_native_with_env(
             &store,
             wasm_ctv_emulator.clone(),
-            sapio_wasm_plugin::host::wasm_emulator_signer_for,
+            super::wasm_emulator_signer_for,
         );
         let g = Function::new_native_with_env(
             &store,
             wasm_ctv_emulator.clone(),
-            sapio_wasm_plugin::host::wasm_emulator_sign,
+            super::wasm_emulator_sign,
         );
         let log = Function::new_native_with_env(
             &store,
             wasm_ctv_emulator.clone(),
-            sapio_wasm_plugin::host::host_log,
+            super::host_log,
         );
 
         let import_object = imports! {

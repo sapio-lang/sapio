@@ -14,7 +14,7 @@ use config::*;
 use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::CTVEmulator;
 use emulator_connect::NullEmulator;
-use plugin_handle::SapioPluginHandle;
+use sapio_wasm_plugin::host::SapioPluginHandle;
 use sapio::contract::Compiled;
 use sapio_base::txindex::TxIndex;
 use sapio_base::txindex::TxIndexLogger;
@@ -27,10 +27,8 @@ use util::*;
 use wasmer::*;
 
 pub mod config;
-pub mod plugin_handle;
 pub mod prixfixe;
 mod util;
-pub mod wasm_cache;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
