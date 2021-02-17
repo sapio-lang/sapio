@@ -10,7 +10,9 @@ use std::os::raw::c_char;
 
 #[derive(JsonSchema, Serialize, Deserialize, Clone)]
 pub struct Payment {
-    pub amount: bitcoin::util::amount::CoinAmount,
+    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    #[schemars(with = "f64")]
+    pub amount: bitcoin::util::amount::Amount,
     /// # Address
     /// The Address to send to
     pub address: bitcoin::Address,
@@ -29,13 +31,13 @@ impl TreePay {
             for c in s.participants.chunks(s.participants.len()/s.radix) {
                 let mut amt =  bitcoin::util::amount::Amount::from_sat(0);
                 for Payment{amount, ..}  in c {
-                    amt += amount.clone().try_into()?;
+                    amt += *amount;
                 }
                 builder = builder.add_output(amt, &TreePay {participants: c.to_vec(), radix: s.radix}, None)?;
             }
         } else {
             for Payment{amount, address} in s.participants.iter() {
-                builder = builder.add_output((*amount).try_into()?, &Compiled::from_address(address.clone(), None), None)?;
+                builder = builder.add_output(*amount, &Compiled::from_address(address.clone(), None), None)?;
             }
         }
         builder.into()
