@@ -14,11 +14,11 @@ use config::*;
 use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::CTVEmulator;
 use emulator_connect::NullEmulator;
-use sapio_wasm_plugin::host::SapioPluginHandle;
 use sapio::contract::Compiled;
 use sapio_base::txindex::TxIndex;
 use sapio_base::txindex::TxIndexLogger;
 use sapio_base::util::CTVHash;
+use sapio_wasm_plugin::host::SapioPluginHandle;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -212,10 +212,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         emulator,
                         args.value_of("key"),
                         args.value_of_os("file"),
+                        config.network,
                     )
                     .await?;
-                    let api= sph.get_api()?;
-                    let validator = jsonschema_valid::Config::from_schema(&api, Some(jsonschema_valid::schemas::Draft::Draft6))?;
+                    let api = sph.get_api()?;
+                    let validator = jsonschema_valid::Config::from_schema(
+                        &api,
+                        Some(jsonschema_valid::schemas::Draft::Draft6),
+                    )?;
                     let params = args.value_of("params").unwrap();
                     if let Err(it) = validator.validate(&serde_json::from_str(params)?) {
                         for err in it {
@@ -233,13 +237,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         emulator,
                         args.value_of("key"),
                         args.value_of_os("file"),
+                        config.network,
                     )
                     .await?;
                     println!("{}", sph.get_api()?);
                 }
                 Some(("load", args)) => {
-                    let sph =
-                        SapioPluginHandle::new(emulator, None, args.value_of_os("file")).await?;
+                    let sph = SapioPluginHandle::new(
+                        emulator,
+                        None,
+                        args.value_of_os("file"),
+                        config.network,
+                    )
+                    .await?;
                     println!("{}", sph.id().to_string());
                 }
                 _ => unreachable!(),

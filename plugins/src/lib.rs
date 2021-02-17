@@ -51,7 +51,10 @@ pub mod host;
 
 #[cfg(feature = "client")]
 pub mod client {
-    use super::*;
+    use serde_json::Value;
+use sapio::contract::Compiled;
+use bitcoin::Amount;
+use super::*;
     use bitcoin::hashes::Hash;
     use sapio_ctv_emulator_trait::CTVEmulator;
     use std::error::Error;
@@ -59,11 +62,26 @@ pub mod client {
         fn wasm_emulator_sign(psbt: i32, len: u32) -> i32;
         fn wasm_emulator_signer_for(hash: i32) -> i32;
         fn host_log(a: i32, len: i32);
+        fn host_remote_call(key: i32, json: i32, json_len: i32, amt: u32) -> i32;
     }
 
     pub fn log(s: &str) {
         unsafe {
             host_log(s.as_ptr() as i32, s.len() as i32);
+        }
+    }
+
+    pub fn remote_call(key: &[u8; 32],  args: Value, amt: Amount) -> Option<Compiled> {
+        unsafe {
+            let s = args.to_string();
+            let l = s.len();
+            let p = host_remote_call(key.as_ptr() as i32, s.as_ptr() as i32, l as i32,  amt.as_sat() as u32);
+            if p != 0 {
+                let cs = CString::from_raw(p as *mut c_char);
+                serde_json::from_slice(cs.as_bytes()).ok()
+            } else {
+                None
+            }
         }
     }
 

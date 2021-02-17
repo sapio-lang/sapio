@@ -1,8 +1,11 @@
-
+use crate::host::wasm_cache::load_module_key;
+use crate::CreateArgs;
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::util::psbt::PartiallySignedTransaction;
+use bitcoin::Amount;
 use sapio_ctv_emulator_trait::{CTVEmulator, NullEmulator};
+use tokio::runtime::Runtime;
 
 use std::cell::Cell;
 use std::io::Write;
@@ -15,11 +18,76 @@ pub mod wasm_cache;
 
 #[derive(WasmerEnv, Clone)]
 pub struct EmulatorEnv {
+    pub typ: String,
+    pub org: String,
+    pub proj: String,
+    pub store: Arc<Mutex<Store>>,
+    pub net: bitcoin::Network,
     pub emulator: Arc<Mutex<NullEmulator>>,
     #[wasmer(export)]
     pub memory: LazyInit<Memory>,
     #[wasmer(export)]
     pub allocate_wasm_bytes: LazyInit<NativeFunc<i32, i32>>,
+}
+
+pub fn remote_call(env: &EmulatorEnv, key: i32, json: i32, json_len: i32, amt: u32) -> i32 {
+    const KEY_LEN: usize = 32;
+    let key = key as usize;
+    let h = wasmer_cache::Hash::new({
+        let mut buf = [0u8; KEY_LEN];
+        for (src, dst) in env.memory_ref().unwrap().view()[key..key + KEY_LEN]
+            .iter()
+            .map(Cell::get)
+            .zip(buf.iter_mut())
+        {
+            *dst = src;
+        }
+        buf
+    })
+    .to_string();
+    let rt = Runtime::new().unwrap();
+    let res : Result<i32, Box<dyn std::error::Error>>= rt.block_on(async {
+        let sph = SapioPluginHandle::new(
+            env.emulator.lock().unwrap().clone(),
+            Some(&h),
+            None,
+            env.net,
+        )
+        .await?;
+        let mut v = vec![0u8; json_len as usize];
+        for (src, dst) in env.memory_ref().unwrap().view()
+            [json as usize..(json + json_len) as usize]
+            .iter()
+            .map(Cell::get)
+            .zip(v.iter_mut())
+        {
+            *dst = src;
+        }
+        let comp = sph.create(&CreateArgs(
+            String::from_utf8_lossy(&v).to_owned().to_string(),
+            env.net,
+            Amount::from_sat(amt as u64),
+        ))?;
+        let comp_s = serde_json::to_string(&comp)?;
+
+        let bytes = env
+            .allocate_wasm_bytes_ref()
+            .unwrap()
+            .call(comp_s.len() as i32)
+            .unwrap();
+        for (byte, c) in env.memory_ref().unwrap().view::<u8>()[bytes as usize..]
+            .iter()
+            .zip(comp_s.as_bytes())
+        {
+            byte.set(*c);
+        }
+        Ok(bytes)
+    });
+    if let Ok(allocated) = res {
+        allocated
+    } else {
+        0
+    }
 }
 
 pub fn host_log(env: &EmulatorEnv, a: i32, len: i32) {
@@ -57,7 +125,8 @@ pub fn wasm_emulator_signer_for(env: &EmulatorEnv, hash: i32) -> i32 {
         .zip(s.as_bytes())
     {
         byte.set(*c);
-    }    bytes
+    }
+    bytes
 }
 
 pub fn wasm_emulator_sign(env: &EmulatorEnv, psbt: i32, len: u32) -> i32 {
