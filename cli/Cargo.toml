@@ -19,6 +19,7 @@ tokio = { version = "1", features = ["full"] }
 directories = "3.0.1"
 wasmer= "1.0"
 wasmer-cache = "1.0"
+jsonschema-valid = "0.4.0"
 
 [dependencies.bitcoin]
 version = "^0.26.0"

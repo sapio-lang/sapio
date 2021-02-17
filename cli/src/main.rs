@@ -216,7 +216,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         args.value_of_os("file"),
                     )
                     .await?;
+                    let api= sph.get_api()?;
+                    let validator = jsonschema_valid::Config::from_schema(&api, Some(jsonschema_valid::schemas::Draft::Draft6))?;
                     let params = args.value_of("params").unwrap();
+                    if let Err(it) = validator.validate(&serde_json::from_str(params)?) {
+                        for err in it {
+                            println!("Error: {}", err);
+                        }
+                        return Ok(());
+                    }
                     let create_args =
                         sapio_wasm_plugin::CreateArgs(params.to_string(), config.network, amt);
                     let v = sph.create(&create_args)?;
