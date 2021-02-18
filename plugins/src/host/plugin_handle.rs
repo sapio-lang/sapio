@@ -1,8 +1,9 @@
 use super::wasm_cache;
-use sapio_ctv_emulator_trait::NullEmulator;
-use sapio::contract::Compiled;
 use crate::CreateArgs;
+use sapio::contract::Compiled;
+use sapio_ctv_emulator_trait::NullEmulator;
 use std::cell::Cell;
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -41,9 +42,10 @@ impl SapioPluginHandle {
             .ok_or("Passed Both Key and File or Neither")?;
         let store = Store::default();
         let wasm_ctv_emulator = super::EmulatorEnv {
-            typ:"org".into(),
-            org:"judica".into(),
-            proj:"sapio-cli".into(),
+            typ: "org".into(),
+            org: "judica".into(),
+            proj: "sapio-cli".into(),
+            module_map: HashMap::new(),
             store: Arc::new(Mutex::new(store.clone())),
             net,
             emulator: Arc::new(Mutex::new(emulator)),
@@ -60,15 +62,13 @@ impl SapioPluginHandle {
             wasm_ctv_emulator.clone(),
             super::wasm_emulator_sign,
         );
-        let log = Function::new_native_with_env(
+        let log = Function::new_native_with_env(&store, wasm_ctv_emulator.clone(), super::host_log);
+        let remote_call =
+            Function::new_native_with_env(&store, wasm_ctv_emulator.clone(), super::remote_call);
+        let lookup_module_name = Function::new_native_with_env(
             &store,
             wasm_ctv_emulator.clone(),
-            super::host_log,
-        );
-        let remote_call = Function::new_native_with_env(
-            &store,
-            wasm_ctv_emulator.clone(),
-            super::remote_call,
+            super::host_lookup_module_name,
         );
 
         let import_object = imports! {
@@ -77,6 +77,7 @@ impl SapioPluginHandle {
                 "wasm_emulator_sign" => g,
                 "host_log" => log,
                 "host_remote_call" => remote_call,
+                "host_lookup_module_name" => lookup_module_name,
             }
         };
 

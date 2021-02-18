@@ -5,6 +5,7 @@ use bitcoin::hashes::Hash;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use bitcoin::Amount;
 use sapio_ctv_emulator_trait::{CTVEmulator, NullEmulator};
+use std::collections::HashMap;
 use tokio::runtime::Runtime;
 
 use std::cell::Cell;
@@ -21,6 +22,7 @@ pub struct EmulatorEnv {
     pub typ: String,
     pub org: String,
     pub proj: String,
+    pub module_map: HashMap<Vec<u8>, [u8; 32]>,
     pub store: Arc<Mutex<Store>>,
     pub net: bitcoin::Network,
     pub emulator: Arc<Mutex<NullEmulator>>,
@@ -28,6 +30,31 @@ pub struct EmulatorEnv {
     pub memory: LazyInit<Memory>,
     #[wasmer(export)]
     pub allocate_wasm_bytes: LazyInit<NativeFunc<i32, i32>>,
+}
+
+pub fn host_lookup_module_name(env: &EmulatorEnv, key: i32, len: i32, out: i32, ok: i32) {
+    let mut buf = vec![0u8; len as usize];
+    for (src, dst) in env.memory_ref().unwrap().view()[key as usize..(key + len) as usize]
+        .iter()
+        .map(Cell::get)
+        .zip(buf.iter_mut())
+    {
+        *dst = src;
+    }
+    env.memory_ref().unwrap().view::<u8>()[ok as usize].set(
+        if let Some(b) = env.module_map.get(&buf) {
+            let out = out as usize;
+            for (src, dst) in b
+                .iter()
+                .zip(env.memory_ref().unwrap().view::<u8>()[out..out + 32].iter())
+            {
+                dst.set(*src);
+            }
+            1
+        } else {
+            0
+        },
+    );
 }
 
 pub fn remote_call(env: &EmulatorEnv, key: i32, json: i32, json_len: i32, amt: u32) -> i32 {
@@ -46,7 +73,7 @@ pub fn remote_call(env: &EmulatorEnv, key: i32, json: i32, json_len: i32, amt: u
     })
     .to_string();
     let rt = Runtime::new().unwrap();
-    let res : Result<i32, Box<dyn std::error::Error>>= rt.block_on(async {
+    let res: Result<i32, Box<dyn std::error::Error>> = rt.block_on(async {
         let sph = SapioPluginHandle::new(
             env.emulator.lock().unwrap().clone(),
             Some(&h),

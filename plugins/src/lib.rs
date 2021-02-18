@@ -51,18 +51,19 @@ pub mod host;
 
 #[cfg(feature = "client")]
 pub mod client {
-    use serde_json::Value;
-use sapio::contract::Compiled;
-use bitcoin::Amount;
-use super::*;
+    use super::*;
     use bitcoin::hashes::Hash;
+    use bitcoin::Amount;
+    use sapio::contract::Compiled;
     use sapio_ctv_emulator_trait::CTVEmulator;
+    use serde_json::Value;
     use std::error::Error;
     extern "C" {
         fn wasm_emulator_sign(psbt: i32, len: u32) -> i32;
         fn wasm_emulator_signer_for(hash: i32) -> i32;
         fn host_log(a: i32, len: i32);
         fn host_remote_call(key: i32, json: i32, json_len: i32, amt: u32) -> i32;
+        fn host_lookup_module_name(key: i32, len: i32, out: i32, ok: i32);
     }
 
     pub fn log(s: &str) {
@@ -71,11 +72,16 @@ use super::*;
         }
     }
 
-    pub fn remote_call(key: &[u8; 32],  args: Value, amt: Amount) -> Option<Compiled> {
+    pub fn remote_call_by_key(key: &[u8; 32], args: Value, amt: Amount) -> Option<Compiled> {
         unsafe {
             let s = args.to_string();
             let l = s.len();
-            let p = host_remote_call(key.as_ptr() as i32, s.as_ptr() as i32, l as i32,  amt.as_sat() as u32);
+            let p = host_remote_call(
+                key.as_ptr() as i32,
+                s.as_ptr() as i32,
+                l as i32,
+                amt.as_sat() as u32,
+            );
             if p != 0 {
                 let cs = CString::from_raw(p as *mut c_char);
                 serde_json::from_slice(cs.as_bytes()).ok()
@@ -83,6 +89,29 @@ use super::*;
                 None
             }
         }
+    }
+
+    pub fn lookup_module_name(key: &str) -> Option<[u8; 32]> {
+        unsafe {
+            let mut res = [0u8; 32];
+            let mut ok = 0u8;
+            host_lookup_module_name(
+                key.as_ptr() as i32,
+                key.len() as i32,
+                &mut res as *mut [u8; 32] as i32,
+                &mut ok as *mut u8 as i32,
+            );
+            if ok == 0 {
+                None
+            } else {
+                Some(res)
+            }
+        }
+    }
+
+    pub fn remote_call(key: &str, args: Value, amt: Amount) -> Option<Compiled> {
+        let key = lookup_module_name(key)?;
+        remote_call_by_key(&key, args, amt)
     }
 
     pub struct WasmHostEmulator;
