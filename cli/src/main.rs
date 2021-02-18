@@ -118,7 +118,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         None
     });
-
+    let plugin_map = cfg.plugin_map.map(|x| {
+        x.into_iter()
+            .map(|(x, y)| (x.into_bytes().into(), y.into()))
+            .collect()
+    });
     {
         let mut emulator = emulator.clone();
         // Drop Emulator from own thread...
@@ -213,6 +217,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         args.value_of("key"),
                         args.value_of_os("file"),
                         config.network,
+                        plugin_map,
                     )
                     .await?;
                     let api = sph.get_api()?;
@@ -238,6 +243,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         args.value_of("key"),
                         args.value_of_os("file"),
                         config.network,
+                        plugin_map,
                     )
                     .await?;
                     println!("{}", sph.get_api()?);
@@ -248,6 +254,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         None,
                         args.value_of_os("file"),
                         config.network,
+                        plugin_map,
                     )
                     .await?;
                     println!("{}", sph.id().to_string());

@@ -79,6 +79,7 @@ pub fn remote_call(env: &EmulatorEnv, key: i32, json: i32, json_len: i32, amt: u
             Some(&h),
             None,
             env.net,
+            Some(env.module_map.clone()),
         )
         .await?;
         let mut v = vec![0u8; json_len as usize];

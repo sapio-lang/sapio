@@ -36,6 +36,7 @@ impl SapioPluginHandle {
         key: Option<&str>,
         file: Option<&OsStr>,
         net: bitcoin::Network,
+        plugin_map: Option<HashMap<Vec<u8>, [u8;32]>>,
     ) -> Result<Self, Box<dyn Error>> {
         // ensures that either key or file is passed
         key.xor(file.and(Some("")))
@@ -45,7 +46,7 @@ impl SapioPluginHandle {
             typ: "org".into(),
             org: "judica".into(),
             proj: "sapio-cli".into(),
-            module_map: HashMap::new(),
+            module_map: plugin_map.unwrap_or_else(HashMap::new).into(),
             store: Arc::new(Mutex::new(store.clone())),
             net,
             emulator: Arc::new(Mutex::new(emulator)),
