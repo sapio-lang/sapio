@@ -47,111 +47,71 @@ fn encode_json<S: Serialize>(s: &S) -> *mut c_char {
 }
 
 #[cfg(feature = "host")]
-pub mod host {
-
-    use bitcoin::hashes::sha256;
-    use bitcoin::hashes::Hash;
-    use bitcoin::util::psbt::PartiallySignedTransaction;
-    use sapio_ctv_emulator_trait::{CTVEmulator, NullEmulator};
-
-    use std::cell::Cell;
-    use std::io::Write;
-    use std::sync::{Arc, Mutex};
-    use wasmer::*;
-
-    #[derive(WasmerEnv, Clone)]
-    pub struct EmulatorEnv {
-        pub emulator: Arc<Mutex<NullEmulator>>,
-        #[wasmer(export)]
-        pub memory: LazyInit<Memory>,
-        #[wasmer(export)]
-        pub allocate_wasm_bytes: LazyInit<NativeFunc<i32, i32>>,
-    }
-
-    pub fn host_log(env: &EmulatorEnv, a: i32, len: i32) {
-        let stdout = std::io::stdout();
-        let lock = stdout.lock();
-        let mut w = std::io::BufWriter::new(lock);
-        let mem = env.memory_ref().unwrap().view::<u8>();
-        for byte in mem[a as usize..(a + len) as usize].iter().map(Cell::get) {
-            w.write(&[byte]).unwrap();
-        }
-        w.write("\n".as_bytes()).unwrap();
-    }
-    pub fn wasm_emulator_signer_for(env: &EmulatorEnv, hash: i32) -> i32 {
-        let hash = hash as usize;
-        let h = sha256::Hash::from_inner({
-            let mut buf = [0u8; 32];
-            for (src, dst) in env.memory_ref().unwrap().view()[hash..hash + 32]
-                .iter()
-                .map(Cell::get)
-                .zip(buf.iter_mut())
-            {
-                *dst = src;
-            }
-            buf
-        });
-        let clause = env.emulator.lock().unwrap().get_signer_for(h).unwrap();
-        let s = serde_json::to_string_pretty(&clause).unwrap();
-        let bytes = env
-            .allocate_wasm_bytes_ref()
-            .unwrap()
-            .call(s.len() as i32)
-            .unwrap();
-        for (byte, c) in env.memory_ref().unwrap().view::<u8>()[bytes as usize..]
-            .iter()
-            .zip(s.as_bytes())
-        {
-            byte.set(*c);
-        }
-        bytes
-    }
-
-    pub fn wasm_emulator_sign(env: &EmulatorEnv, psbt: i32, len: u32) -> i32 {
-        let mut buf = vec![0u8; len as usize];
-        let psbt = psbt as usize;
-        for (src, dst) in env.memory_ref().unwrap().view()[psbt..]
-            .iter()
-            .map(Cell::get)
-            .zip(buf.iter_mut())
-        {
-            *dst = src;
-        }
-        let psbt: PartiallySignedTransaction = serde_json::from_slice(&buf[..]).unwrap();
-        let psbt = env.emulator.lock().unwrap().sign(psbt).unwrap();
-        buf.clear();
-        let s = serde_json::to_string_pretty(&psbt).unwrap();
-        let bytes = env
-            .allocate_wasm_bytes_ref()
-            .unwrap()
-            .call(s.len() as i32)
-            .unwrap();
-        for (byte, c) in env.memory_ref().unwrap().view::<u8>()[bytes as usize..]
-            .iter()
-            .zip(s.as_bytes())
-        {
-            byte.set(*c);
-        }
-        bytes
-    }
-}
+pub mod host;
 
 #[cfg(feature = "client")]
 pub mod client {
     use super::*;
     use bitcoin::hashes::Hash;
+    use bitcoin::Amount;
+    use sapio::contract::Compiled;
     use sapio_ctv_emulator_trait::CTVEmulator;
+    use serde_json::Value;
     use std::error::Error;
     extern "C" {
         fn wasm_emulator_sign(psbt: i32, len: u32) -> i32;
         fn wasm_emulator_signer_for(hash: i32) -> i32;
         fn host_log(a: i32, len: i32);
+        fn host_remote_call(key: i32, json: i32, json_len: i32, amt: u32) -> i32;
+        fn host_lookup_module_name(key: i32, len: i32, out: i32, ok: i32);
     }
 
     pub fn log(s: &str) {
         unsafe {
             host_log(s.as_ptr() as i32, s.len() as i32);
         }
+    }
+
+    pub fn remote_call_by_key(key: &[u8; 32], args: Value, amt: Amount) -> Option<Compiled> {
+        unsafe {
+            let s = args.to_string();
+            let l = s.len();
+            let p = host_remote_call(
+                key.as_ptr() as i32,
+                s.as_ptr() as i32,
+                l as i32,
+                amt.as_sat() as u32,
+            );
+            if p != 0 {
+                let cs = CString::from_raw(p as *mut c_char);
+                serde_json::from_slice(cs.as_bytes()).ok()
+            } else {
+                None
+            }
+        }
+    }
+
+    pub fn lookup_module_name(key: &str) -> Option<[u8; 32]> {
+        unsafe {
+            let mut res = [0u8; 32];
+            let mut ok = 0u8;
+            host_lookup_module_name(
+                key.as_ptr() as i32,
+                key.len() as i32,
+                &mut res as *mut [u8; 32] as i32,
+                &mut ok as *mut u8 as i32,
+            );
+            if ok == 0 {
+                None
+            } else {
+                Some(res)
+            }
+        }
+    }
+
+    pub fn remote_call(key: &str, args: Value, amt: Amount) -> Option<Compiled> {
+        let key = lookup_module_name(key)?;
+        remote_call_by_key(&key, args, amt)
     }
 
     pub struct WasmHostEmulator;

@@ -1,8 +1,9 @@
 use super::wasm_cache;
-use emulator_connect::NullEmulator;
+use crate::CreateArgs;
 use sapio::contract::Compiled;
-use sapio_wasm_plugin::CreateArgs;
+use sapio_ctv_emulator_trait::NullEmulator;
 use std::cell::Cell;
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -13,7 +14,7 @@ use wasmer_cache::Hash as WASMCacheID;
 
 pub struct SapioPluginHandle {
     store: Store,
-    env: sapio_wasm_plugin::host::EmulatorEnv,
+    env: super::EmulatorEnv,
     import_object: ImportObject,
     module: Module,
     instance: Instance,
@@ -23,6 +24,7 @@ pub struct SapioPluginHandle {
     allocate: NativeFunc<i32, i32>,
     create: NativeFunc<i32, i32>,
     key: wasmer_cache::Hash,
+    net: bitcoin::Network,
 }
 use std::error::Error;
 impl SapioPluginHandle {
@@ -33,12 +35,19 @@ impl SapioPluginHandle {
         emulator: NullEmulator,
         key: Option<&str>,
         file: Option<&OsStr>,
+        net: bitcoin::Network,
     ) -> Result<Self, Box<dyn Error>> {
         // ensures that either key or file is passed
         key.xor(file.and(Some("")))
             .ok_or("Passed Both Key and File or Neither")?;
         let store = Store::default();
-        let wasm_ctv_emulator = sapio_wasm_plugin::host::EmulatorEnv {
+        let wasm_ctv_emulator = super::EmulatorEnv {
+            typ: "org".into(),
+            org: "judica".into(),
+            proj: "sapio-cli".into(),
+            module_map: HashMap::new(),
+            store: Arc::new(Mutex::new(store.clone())),
+            net,
             emulator: Arc::new(Mutex::new(emulator)),
             memory: LazyInit::new(),
             allocate_wasm_bytes: LazyInit::new(),
@@ -46,17 +55,20 @@ impl SapioPluginHandle {
         let f = Function::new_native_with_env(
             &store,
             wasm_ctv_emulator.clone(),
-            sapio_wasm_plugin::host::wasm_emulator_signer_for,
+            super::wasm_emulator_signer_for,
         );
         let g = Function::new_native_with_env(
             &store,
             wasm_ctv_emulator.clone(),
-            sapio_wasm_plugin::host::wasm_emulator_sign,
+            super::wasm_emulator_sign,
         );
-        let log = Function::new_native_with_env(
+        let log = Function::new_native_with_env(&store, wasm_ctv_emulator.clone(), super::host_log);
+        let remote_call =
+            Function::new_native_with_env(&store, wasm_ctv_emulator.clone(), super::remote_call);
+        let lookup_module_name = Function::new_native_with_env(
             &store,
             wasm_ctv_emulator.clone(),
-            sapio_wasm_plugin::host::host_log,
+            super::host_lookup_module_name,
         );
 
         let import_object = imports! {
@@ -64,6 +76,8 @@ impl SapioPluginHandle {
                 "wasm_emulator_signer_for" => f,
                 "wasm_emulator_sign" => g,
                 "host_log" => log,
+                "host_remote_call" => remote_call,
+                "host_lookup_module_name" => lookup_module_name,
             }
         };
 
@@ -113,6 +127,7 @@ impl SapioPluginHandle {
         Ok(SapioPluginHandle {
             store,
             env: wasm_ctv_emulator,
+            net,
             import_object,
             module,
             instance,
@@ -130,13 +145,13 @@ impl SapioPluginHandle {
         self.forget(p)?;
         Ok(serde_json::from_slice(&v)?)
     }
-    fn forget(&self, p: i32) -> Result<(), Box<dyn Error>> {
+    pub fn forget(&self, p: i32) -> Result<(), Box<dyn Error>> {
         Ok(self.forget.call(p)?)
     }
-    fn allocate(&self, len: i32) -> Result<i32, Box<dyn Error>> {
+    pub fn allocate(&self, len: i32) -> Result<i32, Box<dyn Error>> {
         Ok(self.allocate.call(len)?)
     }
-    fn pass_string(&self, s: &str) -> Result<i32, Box<dyn Error>> {
+    pub fn pass_string(&self, s: &str) -> Result<i32, Box<dyn Error>> {
         let offset = self.allocate(s.len() as i32)?;
         match self.pass_string_inner(s, offset) {
             Ok(_) => Ok(offset),
