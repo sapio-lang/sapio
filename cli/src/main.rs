@@ -130,7 +130,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if let Some(_) = emulator.0.as_mut().and_then(|e| Arc::get_mut(e)) {
                 break;
             }
-            std::thread::sleep(Duration::from_millis(10));
         });
     }
     match matches.subcommand() {
