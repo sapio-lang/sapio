@@ -72,16 +72,6 @@ impl SapioPluginHandle {
             super::host_lookup_module_name,
         );
 
-        let import_object = imports! {
-            "env" => {
-                "wasm_emulator_signer_for" => f,
-                "wasm_emulator_sign" => g,
-                "host_log" => log,
-                "host_remote_call" => remote_call,
-                "host_lookup_module_name" => lookup_module_name,
-            }
-        };
-
         let (module, key) = match (file, key) {
             (Some(file), _) => {
                 let wasm_bytes = tokio::fs::read(file).await?;
@@ -107,6 +97,17 @@ impl SapioPluginHandle {
             }
             _ => unreachable!(),
         };
+
+        let import_object = imports! {
+            "env" => {
+                "wasm_emulator_signer_for" => f,
+                "wasm_emulator_sign" => g,
+                "host_log" => log,
+                "host_remote_call" => remote_call,
+                "host_lookup_module_name" => lookup_module_name,
+            }
+        };
+
         let instance = Instance::new(&module, &import_object)?;
 
         let get_api = instance

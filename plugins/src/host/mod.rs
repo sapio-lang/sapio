@@ -4,13 +4,13 @@ use bitcoin::hashes::sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use bitcoin::Amount;
+use sapio::contract::Compiled;
 use sapio_ctv_emulator_trait::{CTVEmulator, NullEmulator};
-use std::collections::HashMap;
-use tokio::runtime::Runtime;
-
 use std::cell::Cell;
+use std::collections::HashMap;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
+use tokio::runtime::Runtime;
 use wasmer::*;
 
 pub mod plugin_handle;
@@ -72,50 +72,59 @@ pub fn remote_call(env: &EmulatorEnv, key: i32, json: i32, json_len: i32, amt: u
         buf
     })
     .to_string();
-    let rt = Runtime::new().unwrap();
-    let res: Result<i32, Box<dyn std::error::Error>> = rt.block_on(async {
-        let sph = SapioPluginHandle::new(
-            env.emulator.lock().unwrap().clone(),
-            Some(&h),
-            None,
-            env.net,
-            Some(env.module_map.clone()),
-        )
-        .await?;
-        let mut v = vec![0u8; json_len as usize];
-        for (src, dst) in env.memory_ref().unwrap().view()
-            [json as usize..(json + json_len) as usize]
-            .iter()
-            .map(Cell::get)
-            .zip(v.iter_mut())
-        {
-            *dst = src;
-        }
-        let comp = sph.create(&CreateArgs(
-            String::from_utf8_lossy(&v).to_owned().to_string(),
-            env.net,
-            Amount::from_sat(amt as u64),
-        ))?;
-        let comp_s = serde_json::to_string(&comp)?;
 
-        let bytes = env
-            .allocate_wasm_bytes_ref()
-            .unwrap()
-            .call(comp_s.len() as i32)
-            .unwrap();
-        for (byte, c) in env.memory_ref().unwrap().view::<u8>()[bytes as usize..]
-            .iter()
-            .zip(comp_s.as_bytes())
-        {
-            byte.set(*c);
-        }
-        Ok(bytes)
-    });
-    if let Ok(allocated) = res {
-        allocated
-    } else {
-        0
+    let mut v = vec![0u8; json_len as usize];
+    for (src, dst) in env.memory_ref().unwrap().view()[json as usize..(json + json_len) as usize]
+        .iter()
+        .map(Cell::get)
+        .zip(v.iter_mut())
+    {
+        *dst = src;
     }
+    let emulator = env.emulator.lock().unwrap().clone();
+    let mmap = env.module_map.clone();
+    let net = env.net;
+    let (tx, mut rx) = tokio::sync::oneshot::channel::<Compiled>();
+
+    let handle = tokio::runtime::Handle::current();
+    handle.spawn(async move {
+        SapioPluginHandle::new(emulator, Some(&h), None, net, Some(mmap))
+            .await
+            .ok()
+            .and_then(|sph| {
+                sph.create(&CreateArgs(
+                    String::from_utf8_lossy(&v).to_owned().to_string(),
+                    net,
+                    Amount::from_sat(amt as u64),
+                ))
+                .ok()
+            })
+            .map(|comp| tx.send(comp))
+    });
+
+    tokio::task::block_in_place(|| loop {
+        match rx.try_recv() {
+            Ok(comp) => {
+                return (move || -> Result<i32, Box<dyn std::error::Error>> {
+                    let comp_s = serde_json::to_string(&comp)?;
+                    let bytes: i32 = env
+                        .allocate_wasm_bytes_ref()
+                        .unwrap()
+                        .call(comp_s.len() as i32)?;
+                    for (byte, c) in env.memory_ref().unwrap().view::<u8>()[bytes as usize..]
+                        .iter()
+                        .zip(comp_s.as_bytes())
+                    {
+                        byte.set(*c);
+                    }
+                    Ok(bytes)
+                })()
+                .unwrap_or(0);
+            }
+            Err(tokio::sync::oneshot::error::TryRecvError::Closed) => return 0,
+            _ => (),
+        };
+    })
 }
 
 pub fn host_log(env: &EmulatorEnv, a: i32, len: i32) {
