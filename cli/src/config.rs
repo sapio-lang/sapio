@@ -4,6 +4,7 @@ use emulator_connect::connections::federated::FederatedEmulatorConnection;
 use emulator_connect::connections::hd::HDOracleEmulatorConnection;
 use emulator_connect::CTVEmulator;
 use serde::*;
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::net::ToSocketAddrs;
 use std::path::PathBuf;
@@ -101,6 +102,32 @@ pub struct NetworkConfig {
     pub active: bool,
     pub api_node: Node,
     pub emulator_nodes: Option<EmulatorConfig>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub plugin_map: Option<HashMap<String, WasmerCacheHash>>,
+}
+
+impl From<WasmerCacheHash> for [u8; 32] {
+    fn from(x: WasmerCacheHash) -> Self {
+        x.0.into()
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(try_from = "String", into = "String")]
+pub struct WasmerCacheHash([u8; 32]);
+
+use bitcoin::hashes::hex::{FromHex, ToHex};
+impl From<WasmerCacheHash> for String {
+    fn from(x: WasmerCacheHash) -> Self {
+        ToHex::to_hex(&x.0[..])
+    }
+}
+
+impl TryFrom<String> for WasmerCacheHash {
+    type Error = bitcoin::hashes::hex::Error;
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        FromHex::from_hex(&s).map(WasmerCacheHash)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -234,6 +261,7 @@ impl std::default::Default for ConfigVerifier {
                 emulators: vec![(ExtendedPubKey::from_str("tpubD6NzVbkrYhZ4Wf398td3H8YhWBsXx9Sxa4W3cQWkNW3N3DHSNB2qtPoUMXrA6JNaPxodQfRpoZNE5tGM9iZ4xfUEFRJEJvfs8W5paUagYCE").unwrap(),
                     "ctv.d31373.org:8367".into())],
             }),
+            plugin_map: None,
         };
         ConfigVerifier {
             main: None,

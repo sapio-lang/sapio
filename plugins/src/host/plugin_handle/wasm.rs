@@ -1,33 +1,17 @@
-use super::wasm_cache;
-use crate::CreateArgs;
-use sapio::contract::Compiled;
-use sapio_ctv_emulator_trait::NullEmulator;
-use std::cell::Cell;
-use std::collections::HashMap;
-use std::ffi::OsStr;
-use std::str::FromStr;
-use std::sync::{Arc, Mutex};
-use wasmer::{
-    imports, Function, ImportObject, Instance, LazyInit, MemoryView, Module, NativeFunc, Store,
-};
-use wasmer_cache::Hash as WASMCacheID;
-
-pub struct SapioPluginHandle {
+use super::*;
+use crate::host::exports::*;
+use crate::host::HostEnvironment;
+use std::error::Error;
+pub struct WasmPluginHandle {
     store: Store,
-    env: super::EmulatorEnv,
+    env: HostEnvironment,
     import_object: ImportObject,
     module: Module,
     instance: Instance,
-    /// Functions
-    get_api: NativeFunc<(), i32>,
-    forget: NativeFunc<i32, ()>,
-    allocate: NativeFunc<i32, i32>,
-    create: NativeFunc<i32, i32>,
     key: wasmer_cache::Hash,
     net: bitcoin::Network,
 }
-use std::error::Error;
-impl SapioPluginHandle {
+impl WasmPluginHandle {
     pub fn id(&self) -> WASMCacheID {
         self.key
     }
@@ -36,49 +20,26 @@ impl SapioPluginHandle {
         key: Option<&str>,
         file: Option<&OsStr>,
         net: bitcoin::Network,
+        plugin_map: Option<HashMap<Vec<u8>, [u8; 32]>>,
     ) -> Result<Self, Box<dyn Error>> {
         // ensures that either key or file is passed
         key.xor(file.and(Some("")))
             .ok_or("Passed Both Key and File or Neither")?;
         let store = Store::default();
-        let wasm_ctv_emulator = super::EmulatorEnv {
+        let mut wasm_ctv_emulator = HostEnvironment {
             typ: "org".into(),
             org: "judica".into(),
             proj: "sapio-cli".into(),
-            module_map: HashMap::new(),
+            module_map: plugin_map.unwrap_or_else(HashMap::new).into(),
             store: Arc::new(Mutex::new(store.clone())),
             net,
             emulator: Arc::new(Mutex::new(emulator)),
             memory: LazyInit::new(),
+            get_api: LazyInit::new(),
+            forget: LazyInit::new(),
+            create: LazyInit::new(),
+            init: LazyInit::new(),
             allocate_wasm_bytes: LazyInit::new(),
-        };
-        let f = Function::new_native_with_env(
-            &store,
-            wasm_ctv_emulator.clone(),
-            super::wasm_emulator_signer_for,
-        );
-        let g = Function::new_native_with_env(
-            &store,
-            wasm_ctv_emulator.clone(),
-            super::wasm_emulator_sign,
-        );
-        let log = Function::new_native_with_env(&store, wasm_ctv_emulator.clone(), super::host_log);
-        let remote_call =
-            Function::new_native_with_env(&store, wasm_ctv_emulator.clone(), super::remote_call);
-        let lookup_module_name = Function::new_native_with_env(
-            &store,
-            wasm_ctv_emulator.clone(),
-            super::host_lookup_module_name,
-        );
-
-        let import_object = imports! {
-            "env" => {
-                "wasm_emulator_signer_for" => f,
-                "wasm_emulator_sign" => g,
-                "host_log" => log,
-                "host_remote_call" => remote_call,
-                "host_lookup_module_name" => lookup_module_name,
-            }
         };
 
         let (module, key) = match (file, key) {
@@ -106,50 +67,56 @@ impl SapioPluginHandle {
             }
             _ => unreachable!(),
         };
-        let instance = Instance::new(&module, &import_object)?;
 
-        let get_api = instance
-            .exports
-            .get_function("get_api")?
-            .native::<(), i32>()?;
-        let forget = instance
-            .exports
-            .get_function("forget_allocated_wasm_bytes")?
-            .native::<i32, ()>()?;
-        let allocate = instance
-            .exports
-            .get_function("allocate_wasm_bytes")?
-            .native::<i32, i32>()?;
-        let create = instance
-            .exports
-            .get_function("create")?
-            .native::<i32, i32>()?;
-        Ok(SapioPluginHandle {
+        macro_rules! create_imports {
+            ($store:ident, $env:ident $(,$names:ident)*) =>
+            {
+                imports! {
+                    "env" =>  {
+                        $( std::stringify!($names) => Function::new_native_with_env( &$store, $env.clone(), $names) ,)*
+                    }
+                }
+            };
+        }
+        let import_object = create_imports!(
+            store,
+            wasm_ctv_emulator,
+            sapio_v1_wasm_plugin_ctv_emulator_signer_for,
+            sapio_v1_wasm_plugin_ctv_emulator_sign,
+            sapio_v1_wasm_plugin_debug_log_string,
+            sapio_v1_wasm_plugin_create_contract,
+            sapio_v1_wasm_plugin_lookup_module_name
+        );
+
+        let instance = Instance::new(&module, &import_object)?;
+        use wasmer::WasmerEnv;
+        wasm_ctv_emulator.init_with_instance(&instance)?;
+
+        wasm_ctv_emulator
+            .init_ref()
+            .ok_or("No Init Function Specified")?
+            .call()?;
+
+        Ok(WasmPluginHandle {
             store,
             env: wasm_ctv_emulator,
             net,
             import_object,
             module,
             instance,
-            get_api,
-            forget,
-            allocate,
-            create,
             key,
         })
     }
 
-    pub fn get_api(&self) -> Result<serde_json::value::Value, Box<dyn Error>> {
-        let p = self.get_api.call()?;
-        let v = self.read_to_vec(p)?;
-        self.forget(p)?;
-        Ok(serde_json::from_slice(&v)?)
-    }
     pub fn forget(&self, p: i32) -> Result<(), Box<dyn Error>> {
-        Ok(self.forget.call(p)?)
+        Ok(self.env.forget_ref().ok_or("Uninitialized")?.call(p)?)
     }
     pub fn allocate(&self, len: i32) -> Result<i32, Box<dyn Error>> {
-        Ok(self.allocate.call(len)?)
+        Ok(self
+            .env
+            .allocate_wasm_bytes_ref()
+            .ok_or("Uninitialized")?
+            .call(len)?)
     }
     pub fn pass_string(&self, s: &str) -> Result<i32, Box<dyn Error>> {
         let offset = self.allocate(s.len() as i32)?;
@@ -169,16 +136,6 @@ impl SapioPluginHandle {
         }
         Ok(())
     }
-    pub fn create(&self, c: &CreateArgs<String>) -> Result<Compiled, Box<dyn Error>> {
-        let arg_str = serde_json::to_string_pretty(c)?;
-        let offset = self.pass_string(&arg_str)?;
-        let offset = self.create.call(offset)?;
-        let buf = self.read_to_vec(offset)?;
-        self.forget(offset)?;
-        let c: Result<String, String> = serde_json::from_slice(&buf)?;
-        let v: Compiled = serde_json::from_str(&c?)?;
-        Ok(v)
-    }
     fn read_to_vec(&self, p: i32) -> Result<Vec<u8>, Box<dyn Error>> {
         let memory = self.instance.exports.get_memory("memory")?;
         let mem: MemoryView<u8> = memory.view();
@@ -187,5 +144,24 @@ impl SapioPluginHandle {
             .map(Cell::get)
             .take_while(|i| *i != 0)
             .collect())
+    }
+}
+
+impl PluginHandle for WasmPluginHandle {
+    fn create(&self, c: &CreateArgs<String>) -> Result<Compiled, Box<dyn Error>> {
+        let arg_str = serde_json::to_string_pretty(c)?;
+        let offset = self.pass_string(&arg_str)?;
+        let offset = self.env.create_ref().ok_or("Uninitialized")?.call(offset)?;
+        let buf = self.read_to_vec(offset)?;
+        self.forget(offset)?;
+        let c: Result<String, String> = serde_json::from_slice(&buf)?;
+        let v: Compiled = serde_json::from_str(&c?)?;
+        Ok(v)
+    }
+    fn get_api(&self) -> Result<serde_json::value::Value, Box<dyn Error>> {
+        let p = self.env.get_api_ref().ok_or("Uninitialized")?.call()?;
+        let v = self.read_to_vec(p)?;
+        self.forget(p)?;
+        Ok(serde_json::from_slice(&v)?)
     }
 }
