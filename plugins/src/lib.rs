@@ -33,9 +33,9 @@ pub trait Plugin: JsonSchema + Sized {
         encode_json(&schemars::schema_for!(Self))
     }
 
-    fn get_api() -> *mut c_char;
+    fn sapio_v1_wasm_plugin_client_get_create_arguments() -> *mut c_char;
 
-    unsafe fn create(c: *mut c_char) -> *mut c_char;
+    unsafe fn sapio_v1_wasm_plugin_client_create(c: *mut c_char) -> *mut c_char;
 }
 
 fn encode_json<S: Serialize>(s: &S) -> *mut c_char {

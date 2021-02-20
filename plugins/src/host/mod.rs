@@ -28,11 +28,23 @@ pub struct EmulatorEnv {
     pub emulator: Arc<Mutex<NullEmulator>>,
     #[wasmer(export)]
     pub memory: LazyInit<Memory>,
-    #[wasmer(export)]
+    #[wasmer(export(name = "sapio_v1_wasm_plugin_client_allocate_bytes"))]
     pub allocate_wasm_bytes: LazyInit<NativeFunc<i32, i32>>,
+    #[wasmer(export(name = "sapio_v1_wasm_plugin_client_get_create_arguments"))]
+    pub get_api: LazyInit<NativeFunc<(), i32>>,
+    #[wasmer(export(name = "sapio_v1_wasm_plugin_client_drop_allocation"))]
+    pub forget: LazyInit<NativeFunc<i32, ()>>,
+    #[wasmer(export(name = "sapio_v1_wasm_plugin_client_create"))]
+    pub create: LazyInit<NativeFunc<i32, i32>>,
 }
 
-pub fn host_lookup_module_name(env: &EmulatorEnv, key: i32, len: i32, out: i32, ok: i32) {
+pub fn sapio_v1_wasm_plugin_lookup_module_name(
+    env: &EmulatorEnv,
+    key: i32,
+    len: i32,
+    out: i32,
+    ok: i32,
+) {
     let mut buf = vec![0u8; len as usize];
     for (src, dst) in env.memory_ref().unwrap().view()[key as usize..(key + len) as usize]
         .iter()
@@ -57,7 +69,13 @@ pub fn host_lookup_module_name(env: &EmulatorEnv, key: i32, len: i32, out: i32, 
     );
 }
 
-pub fn remote_call(env: &EmulatorEnv, key: i32, json: i32, json_len: i32, amt: u32) -> i32 {
+pub fn sapio_v1_wasm_plugin_create_contract(
+    env: &EmulatorEnv,
+    key: i32,
+    json: i32,
+    json_len: i32,
+    amt: u32,
+) -> i32 {
     const KEY_LEN: usize = 32;
     let key = key as usize;
     let h = wasmer_cache::Hash::new({
@@ -127,7 +145,7 @@ pub fn remote_call(env: &EmulatorEnv, key: i32, json: i32, json_len: i32, amt: u
     })
 }
 
-pub fn host_log(env: &EmulatorEnv, a: i32, len: i32) {
+pub fn sapio_v1_wasm_plugin_debug_log_string(env: &EmulatorEnv, a: i32, len: i32) {
     let stdout = std::io::stdout();
     let lock = stdout.lock();
     let mut w = std::io::BufWriter::new(lock);
@@ -137,7 +155,7 @@ pub fn host_log(env: &EmulatorEnv, a: i32, len: i32) {
     }
     w.write("\n".as_bytes()).unwrap();
 }
-pub fn wasm_emulator_signer_for(env: &EmulatorEnv, hash: i32) -> i32 {
+pub fn sapio_v1_wasm_plugin_ctv_emulator_signer_for(env: &EmulatorEnv, hash: i32) -> i32 {
     let hash = hash as usize;
     let h = sha256::Hash::from_inner({
         let mut buf = [0u8; 32];
@@ -166,7 +184,7 @@ pub fn wasm_emulator_signer_for(env: &EmulatorEnv, hash: i32) -> i32 {
     bytes
 }
 
-pub fn wasm_emulator_sign(env: &EmulatorEnv, psbt: i32, len: u32) -> i32 {
+pub fn sapio_v1_wasm_plugin_ctv_emulator_sign(env: &EmulatorEnv, psbt: i32, len: u32) -> i32 {
     let mut buf = vec![0u8; len as usize];
     let psbt = psbt as usize;
     for (src, dst) in env.memory_ref().unwrap().view()[psbt..]
