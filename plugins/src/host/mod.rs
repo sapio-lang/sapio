@@ -36,6 +36,8 @@ pub struct EmulatorEnv {
     pub forget: LazyInit<NativeFunc<i32, ()>>,
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_create"))]
     pub create: LazyInit<NativeFunc<i32, i32>>,
+    #[wasmer(export(name = "sapio_v1_wasm_plugin_entry_point"))]
+    pub init: LazyInit<NativeFunc<(), ()>>,
 }
 
 pub fn sapio_v1_wasm_plugin_lookup_module_name(

@@ -65,6 +65,7 @@ impl SapioPluginHandle {
             get_api: LazyInit::new(),
             forget: LazyInit::new(),
             create: LazyInit::new(),
+            init: LazyInit::new(),
             allocate_wasm_bytes: LazyInit::new(),
         };
 
@@ -107,6 +108,11 @@ impl SapioPluginHandle {
         let instance = Instance::new(&module, &import_object)?;
         use wasmer::WasmerEnv;
         wasm_ctv_emulator.init_with_instance(&instance)?;
+
+        wasm_ctv_emulator
+            .init_ref()
+            .ok_or("No Init Function Specified")?
+            .call()?;
 
         Ok(SapioPluginHandle {
             store,

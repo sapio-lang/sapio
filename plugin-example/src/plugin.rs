@@ -1,5 +1,7 @@
+use bitcoin::Amount;
 use sapio::contract::*;
 use sapio::*;
+use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
@@ -47,13 +49,4 @@ impl Contract for TreePay {
     declare! {then, Self::expand}
     declare! {non updatable}
 }
-impl Plugin for TreePay {
-    #[no_mangle]
-    fn get_api() -> *mut c_char {
-        Self::get_api_inner()
-    }
-    #[no_mangle]
-    unsafe fn create(p: *mut i8) -> *mut i8 {
-        client::create::<Self>(p)
-    }
-}
+REGISTER![TreePay];

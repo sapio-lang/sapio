@@ -108,26 +108,76 @@ fn sapio_v1_wasm_plugin_client_allocate_bytes(len: u32) -> *mut c_char {
 }
 
 /// Defined here for convenient binding
-pub unsafe fn create<T>(c: *mut c_char) -> *mut c_char
-where
-    T: Serialize + for<'a> Deserialize<'a> + Compilable + 'static,
-{
-    let res = create_result_err::<T>(c);
-    encode_json(&res)
+
+#[macro_export]
+macro_rules! REGISTER {
+    [$plugin:ident] => {
+        impl Plugin for $plugin {
+        }
+        #[no_mangle]
+        unsafe fn sapio_v1_wasm_plugin_entry_point() {
+            $plugin::register();
+        }
+    };
 }
 
-pub unsafe fn create_result_err<T>(c: *mut c_char) -> Result<String, String>
-where
-    T: Serialize + for<'a> Deserialize<'a> + Compilable + 'static,
-{
-    create_result::<T>(c).map_err(|e| e.to_string())
+#[derive(Serialize, Deserialize)]
+enum PluginError {
+    EncodingError,
 }
-pub unsafe fn create_result<T>(c: *mut c_char) -> Result<String, Box<dyn Error>>
-where
-    T: Serialize + for<'a> Deserialize<'a> + Compilable + 'static,
-{
-    let s = CString::from_raw(c);
-    let CreateArgs::<T>(s, net, amt) = serde_json::from_slice(s.to_bytes())?;
-    let ctx = Context::new(net, amt, Some(Arc::new(client::WasmHostEmulator)));
-    Ok(serde_json::to_string_pretty(&s.compile(&ctx)?)?)
+
+pub trait Plugin: JsonSchema + Sized + for<'a> Deserialize<'a> + Compilable {
+    fn get_api_inner() -> *mut c_char {
+        encode_json(&schemars::schema_for!(Self))
+    }
+
+    unsafe fn create(c: *mut c_char) -> *mut c_char {
+        let res = Self::create_result_err(c);
+        encode_json(&res)
+    }
+
+    unsafe fn create_result_err(c: *mut c_char) -> Result<String, String> {
+        Self::create_result(c).map_err(|e| e.to_string())
+    }
+    unsafe fn create_result(c: *mut c_char) -> Result<String, Box<dyn Error>> {
+        let s = CString::from_raw(c);
+        let CreateArgs::<Self>(s, net, amt) = serde_json::from_slice(s.to_bytes())?;
+        let ctx = Context::new(net, amt, Some(Arc::new(client::WasmHostEmulator)));
+        Ok(serde_json::to_string_pretty(&s.compile(&ctx)?)?)
+    }
+
+    unsafe fn register() {
+        sapio_v1_wasm_plugin_client_get_create_arguments_ptr = Self::get_api_inner;
+        sapio_v1_wasm_plugin_client_create_ptr = Self::create;
+    }
+}
+
+fn sapio_v1_wasm_plugin_client_get_create_arguments_nullptr() -> *mut c_char {
+    panic!("No Function Registered");
+}
+
+unsafe fn sapio_v1_wasm_plugin_client_create_nullptr(c: *mut c_char) -> *mut c_char {
+    panic!("No Function Registered");
+}
+static mut sapio_v1_wasm_plugin_client_get_create_arguments_ptr: fn() -> *mut c_char =
+    sapio_v1_wasm_plugin_client_get_create_arguments_nullptr;
+
+static mut sapio_v1_wasm_plugin_client_create_ptr: unsafe fn(*mut c_char) -> *mut c_char =
+    sapio_v1_wasm_plugin_client_create_nullptr;
+
+#[no_mangle]
+fn sapio_v1_wasm_plugin_client_get_create_arguments() -> *mut c_char {
+    unsafe { sapio_v1_wasm_plugin_client_get_create_arguments_ptr() }
+}
+
+#[no_mangle]
+unsafe fn sapio_v1_wasm_plugin_client_create(c: *mut c_char) -> *mut c_char {
+    sapio_v1_wasm_plugin_client_create_ptr(c)
+}
+fn encode_json<S: Serialize>(s: &S) -> *mut c_char {
+    if let Ok(Ok(c)) = serde_json::to_string_pretty(s).map(CString::new) {
+        c.into_raw()
+    } else {
+        0 as *mut c_char
+    }
 }

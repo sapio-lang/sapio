@@ -23,29 +23,6 @@ pub struct CreateArgs<S: for<'t> Deserialize<'t>>(
     #[serde(with = "bitcoin::util::amount::serde::as_sat")] pub bitcoin::util::amount::Amount,
 );
 
-#[derive(Serialize, Deserialize)]
-enum PluginError {
-    EncodingError,
-}
-
-pub trait Plugin: JsonSchema + Sized {
-    fn get_api_inner() -> *mut c_char {
-        encode_json(&schemars::schema_for!(Self))
-    }
-
-    fn sapio_v1_wasm_plugin_client_get_create_arguments() -> *mut c_char;
-
-    unsafe fn sapio_v1_wasm_plugin_client_create(c: *mut c_char) -> *mut c_char;
-}
-
-fn encode_json<S: Serialize>(s: &S) -> *mut c_char {
-    if let Ok(Ok(c)) = serde_json::to_string_pretty(s).map(CString::new) {
-        c.into_raw()
-    } else {
-        0 as *mut c_char
-    }
-}
-
 #[cfg(feature = "host")]
 pub mod host;
 
