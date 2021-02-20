@@ -18,7 +18,7 @@ use sapio::contract::Compiled;
 use sapio_base::txindex::TxIndex;
 use sapio_base::txindex::TxIndexLogger;
 use sapio_base::util::CTVHash;
-use sapio_wasm_plugin::host::SapioPluginHandle;
+use sapio_wasm_plugin::host::{PluginHandle, WasmPluginHandle};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -211,7 +211,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         args.value_of("amount").unwrap(),
                         Denomination::Bitcoin,
                     )?;
-                    let sph = SapioPluginHandle::new(
+                    let sph = WasmPluginHandle::new(
                         emulator,
                         args.value_of("key"),
                         args.value_of_os("file"),
@@ -237,7 +237,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("{:?}", v);
                 }
                 Some(("schema", args)) => {
-                    let sph = SapioPluginHandle::new(
+                    let sph = WasmPluginHandle::new(
                         emulator,
                         args.value_of("key"),
                         args.value_of_os("file"),
@@ -248,7 +248,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("{}", sph.get_api()?);
                 }
                 Some(("load", args)) => {
-                    let sph = SapioPluginHandle::new(
+                    let sph = WasmPluginHandle::new(
                         emulator,
                         None,
                         args.value_of_os("file"),

@@ -4,6 +4,8 @@ use bitcoin::hashes::sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use bitcoin::Amount;
+pub use plugin_handle::PluginHandle;
+pub use plugin_handle::WasmPluginHandle;
 use sapio::contract::Compiled;
 use sapio_ctv_emulator_trait::{CTVEmulator, NullEmulator};
 use std::cell::Cell;
@@ -14,11 +16,10 @@ use tokio::runtime::Runtime;
 use wasmer::*;
 
 pub mod plugin_handle;
-pub use plugin_handle::SapioPluginHandle;
 pub mod wasm_cache;
 
 #[derive(WasmerEnv, Clone)]
-pub struct EmulatorEnv {
+pub struct HostEnvironment {
     pub typ: String,
     pub org: String,
     pub proj: String,
@@ -41,7 +42,7 @@ pub struct EmulatorEnv {
 }
 
 pub fn sapio_v1_wasm_plugin_lookup_module_name(
-    env: &EmulatorEnv,
+    env: &HostEnvironment,
     key: i32,
     len: i32,
     out: i32,
@@ -72,7 +73,7 @@ pub fn sapio_v1_wasm_plugin_lookup_module_name(
 }
 
 pub fn sapio_v1_wasm_plugin_create_contract(
-    env: &EmulatorEnv,
+    env: &HostEnvironment,
     key: i32,
     json: i32,
     json_len: i32,
@@ -108,7 +109,7 @@ pub fn sapio_v1_wasm_plugin_create_contract(
 
     let handle = tokio::runtime::Handle::current();
     handle.spawn(async move {
-        SapioPluginHandle::new(emulator, Some(&h), None, net, Some(mmap))
+        WasmPluginHandle::new(emulator, Some(&h), None, net, Some(mmap))
             .await
             .ok()
             .and_then(|sph| {
@@ -147,7 +148,7 @@ pub fn sapio_v1_wasm_plugin_create_contract(
     })
 }
 
-pub fn sapio_v1_wasm_plugin_debug_log_string(env: &EmulatorEnv, a: i32, len: i32) {
+pub fn sapio_v1_wasm_plugin_debug_log_string(env: &HostEnvironment, a: i32, len: i32) {
     let stdout = std::io::stdout();
     let lock = stdout.lock();
     let mut w = std::io::BufWriter::new(lock);
@@ -157,7 +158,7 @@ pub fn sapio_v1_wasm_plugin_debug_log_string(env: &EmulatorEnv, a: i32, len: i32
     }
     w.write("\n".as_bytes()).unwrap();
 }
-pub fn sapio_v1_wasm_plugin_ctv_emulator_signer_for(env: &EmulatorEnv, hash: i32) -> i32 {
+pub fn sapio_v1_wasm_plugin_ctv_emulator_signer_for(env: &HostEnvironment, hash: i32) -> i32 {
     let hash = hash as usize;
     let h = sha256::Hash::from_inner({
         let mut buf = [0u8; 32];
@@ -186,7 +187,7 @@ pub fn sapio_v1_wasm_plugin_ctv_emulator_signer_for(env: &EmulatorEnv, hash: i32
     bytes
 }
 
-pub fn sapio_v1_wasm_plugin_ctv_emulator_sign(env: &EmulatorEnv, psbt: i32, len: u32) -> i32 {
+pub fn sapio_v1_wasm_plugin_ctv_emulator_sign(env: &HostEnvironment, psbt: i32, len: u32) -> i32 {
     let mut buf = vec![0u8; len as usize];
     let psbt = psbt as usize;
     for (src, dst) in env.memory_ref().unwrap().view()[psbt..]

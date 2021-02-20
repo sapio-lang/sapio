@@ -12,9 +12,9 @@ use wasmer::{
 };
 use wasmer_cache::Hash as WASMCacheID;
 
-pub struct SapioPluginHandle {
+pub struct WasmPluginHandle {
     store: Store,
-    env: super::EmulatorEnv,
+    env: super::HostEnvironment,
     import_object: ImportObject,
     module: Module,
     instance: Instance,
@@ -38,7 +38,7 @@ macro_rules! create_imports {
         Function::new_native_with_env( &$store, $env.clone(), super::$name)
     };
 }
-impl SapioPluginHandle {
+impl WasmPluginHandle {
     pub fn id(&self) -> WASMCacheID {
         self.key
     }
@@ -53,7 +53,7 @@ impl SapioPluginHandle {
         key.xor(file.and(Some("")))
             .ok_or("Passed Both Key and File or Neither")?;
         let store = Store::default();
-        let mut wasm_ctv_emulator = super::EmulatorEnv {
+        let mut wasm_ctv_emulator = super::HostEnvironment {
             typ: "org".into(),
             org: "judica".into(),
             proj: "sapio-cli".into(),
@@ -114,7 +114,7 @@ impl SapioPluginHandle {
             .ok_or("No Init Function Specified")?
             .call()?;
 
-        Ok(SapioPluginHandle {
+        Ok(WasmPluginHandle {
             store,
             env: wasm_ctv_emulator,
             net,
@@ -125,12 +125,6 @@ impl SapioPluginHandle {
         })
     }
 
-    pub fn get_api(&self) -> Result<serde_json::value::Value, Box<dyn Error>> {
-        let p = self.env.get_api_ref().ok_or("Uninitialized")?.call()?;
-        let v = self.read_to_vec(p)?;
-        self.forget(p)?;
-        Ok(serde_json::from_slice(&v)?)
-    }
     pub fn forget(&self, p: i32) -> Result<(), Box<dyn Error>> {
         Ok(self.env.forget_ref().ok_or("Uninitialized")?.call(p)?)
     }
@@ -159,7 +153,23 @@ impl SapioPluginHandle {
         }
         Ok(())
     }
-    pub fn create(&self, c: &CreateArgs<String>) -> Result<Compiled, Box<dyn Error>> {
+    fn read_to_vec(&self, p: i32) -> Result<Vec<u8>, Box<dyn Error>> {
+        let memory = self.instance.exports.get_memory("memory")?;
+        let mem: MemoryView<u8> = memory.view();
+        Ok(mem[p as usize..]
+            .iter()
+            .map(Cell::get)
+            .take_while(|i| *i != 0)
+            .collect())
+    }
+}
+
+pub trait PluginHandle {
+    fn create(&self, c: &CreateArgs<String>) -> Result<Compiled, Box<dyn Error>>;
+    fn get_api(&self) -> Result<serde_json::value::Value, Box<dyn Error>>;
+}
+impl PluginHandle for WasmPluginHandle {
+    fn create(&self, c: &CreateArgs<String>) -> Result<Compiled, Box<dyn Error>> {
         let arg_str = serde_json::to_string_pretty(c)?;
         let offset = self.pass_string(&arg_str)?;
         let offset = self.env.create_ref().ok_or("Uninitialized")?.call(offset)?;
@@ -169,13 +179,10 @@ impl SapioPluginHandle {
         let v: Compiled = serde_json::from_str(&c?)?;
         Ok(v)
     }
-    fn read_to_vec(&self, p: i32) -> Result<Vec<u8>, Box<dyn Error>> {
-        let memory = self.instance.exports.get_memory("memory")?;
-        let mem: MemoryView<u8> = memory.view();
-        Ok(mem[p as usize..]
-            .iter()
-            .map(Cell::get)
-            .take_while(|i| *i != 0)
-            .collect())
+    fn get_api(&self) -> Result<serde_json::value::Value, Box<dyn Error>> {
+        let p = self.env.get_api_ref().ok_or("Uninitialized")?.call()?;
+        let v = self.read_to_vec(p)?;
+        self.forget(p)?;
+        Ok(serde_json::from_slice(&v)?)
     }
 }
