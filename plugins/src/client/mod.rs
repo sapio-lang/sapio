@@ -8,8 +8,8 @@ use serde_json::Value;
 use std::error::Error;
 
 pub mod api;
-mod ext;
 mod exports;
+mod ext;
 use exports::*;
 mod plugin;
-pub use plugin::{Plugin};
+pub use plugin::Plugin;

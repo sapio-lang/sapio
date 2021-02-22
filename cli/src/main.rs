@@ -22,12 +22,11 @@ use sapio_wasm_plugin::host::{PluginHandle, WasmPluginHandle};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::time::Duration;
+
 use util::*;
 use wasmer::*;
 
 pub mod config;
-pub mod prixfixe;
 mod util;
 
 #[tokio::main]
@@ -68,39 +67,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 (@arg json: +required "JSON to Bind")
             )
             (@subcommand create =>
-                (@arg name: +required "Which Contract to Create")
-                (@arg amount: +required "Amount to Send in BTC")
-                (@arg params: +required "JSON of args")
                 (about: "create a contract to a specific UTXO")
+                (@arg amount: +required "Amount to Send in BTC")
+                (@group from +required =>
+                    (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
+                    (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
+                )
+                (@arg params: +required "JSON of args")
             )
-            (@subcommand wasm =>
-                (@subcommand create =>
-                    (about: "create a contract to a specific UTXO")
-                    (@arg amount: +required "Amount to Send in BTC")
-                    (@group from +required =>
-                        (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
-                        (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
-                    )
-                    (@arg params: +required "JSON of args")
+            (@subcommand load =>
+                (about: "Load a wasm contract module, returns the hex sha3 hash key")
+                (@arg file: -f --file +required +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
+            )
+            (@subcommand api =>
+                (about: "Machine Readable API for a plugin, pipe into jq for pretty formatting.")
+                (@group from +required =>
+                    (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
+                    (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
                 )
-                (@subcommand load =>
-                    (about: "Load a wasm contract module, returns the hex sha3 hash key")
-                    (@arg file: -f --file +required +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
-                )
-                (@subcommand schema =>
-                    (about: "View the API for a plugin")
-                    (@group from +required =>
-                        (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
-                        (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
-                    )
+            )
+            (@subcommand info =>
+                (about: "View human readable basic information for a plugin")
+                (@group from +required =>
+                    (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
+                    (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
                 )
             )
             (@subcommand list =>
                 (about: "list available contracts")
-            )
-            (@subcommand schema =>
-                (about: "show the jsonschema for this contract")
-                (@arg name: +required "Which Contract to show")
             )
         )
     );
@@ -163,9 +157,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => unreachable!(),
         },
         Some(("contract", matches)) => match matches.subcommand() {
-            Some(("list", _args)) => {
-                for s in prixfixe::MENU.list() {
-                    println!("{}", s)
+            Some(("list", args)) => {
+                let plugins = WasmPluginHandle::load_all_keys(
+                    "org".into(),
+                    "judica".into(),
+                    "sapio-cli".into(),
+                    emulator,
+                    config.network,
+                    plugin_map,
+                )
+                .await?;
+                for plugin in plugins {
+                    println!("{} -- {}", plugin.get_name()?, plugin.id().to_string());
                 }
             }
             Some(("bind", args)) => {
@@ -197,76 +200,91 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Some(("create", args)) => {
                 let amt =
                     Amount::from_str_in(args.value_of("amount").unwrap(), Denomination::Bitcoin)?;
-                let ctx = sapio::contract::Context::new(config.network, amt, emulator.0.clone());
-                let contract = prixfixe::MENU.compile(
-                    args.value_of("name").unwrap().into(),
-                    serde_json::from_str(args.value_of("params").unwrap())?,
-                    &ctx,
+                let sph = WasmPluginHandle::new(
+                    "org".into(),
+                    "judica".into(),
+                    "sapio-cli".into(),
+                    emulator,
+                    args.value_of("key"),
+                    args.value_of_os("file"),
+                    config.network,
+                    plugin_map,
+                )
+                .await?;
+                let api = sph.get_api()?;
+                let validator = jsonschema_valid::Config::from_schema(
+                    &api,
+                    Some(jsonschema_valid::schemas::Draft::Draft6),
                 )?;
-                println!("{}", serde_json::to_string_pretty(&contract)?);
-            }
-            Some(("wasm", args)) => match args.subcommand() {
-                Some(("create", args)) => {
-                    let amt = Amount::from_str_in(
-                        args.value_of("amount").unwrap(),
-                        Denomination::Bitcoin,
-                    )?;
-                    let sph = WasmPluginHandle::new(
-                        emulator,
-                        args.value_of("key"),
-                        args.value_of_os("file"),
-                        config.network,
-                        plugin_map,
-                    )
-                    .await?;
-                    let api = sph.get_api()?;
-                    let validator = jsonschema_valid::Config::from_schema(
-                        &api,
-                        Some(jsonschema_valid::schemas::Draft::Draft6),
-                    )?;
-                    let params = args.value_of("params").unwrap();
-                    if let Err(it) = validator.validate(&serde_json::from_str(params)?) {
-                        for err in it {
-                            println!("Error: {}", err);
-                        }
-                        return Ok(());
+                let params = args.value_of("params").unwrap();
+                if let Err(it) = validator.validate(&serde_json::from_str(params)?) {
+                    for err in it {
+                        println!("Error: {}", err);
                     }
-                    let create_args =
-                        sapio_wasm_plugin::CreateArgs(params.to_string(), config.network, amt);
-                    let v = sph.create(&create_args)?;
-                    println!("{:?}", v);
+                    return Ok(());
                 }
-                Some(("schema", args)) => {
-                    let sph = WasmPluginHandle::new(
-                        emulator,
-                        args.value_of("key"),
-                        args.value_of_os("file"),
-                        config.network,
-                        plugin_map,
-                    )
-                    .await?;
-                    println!("{}", sph.get_api()?);
-                }
-                Some(("load", args)) => {
-                    let sph = WasmPluginHandle::new(
-                        emulator,
-                        None,
-                        args.value_of_os("file"),
-                        config.network,
-                        plugin_map,
-                    )
-                    .await?;
-                    println!("{}", sph.id().to_string());
-                }
-                _ => unreachable!(),
-            },
-            Some(("schema", args)) => {
+                let create_args =
+                    sapio_wasm_plugin::CreateArgs(params.to_string(), config.network, amt);
+                let v = sph.create(&create_args)?;
+                println!("{}", serde_json::to_string(&v)?);
+            }
+            Some(("api", args)) => {
+                let sph = WasmPluginHandle::new(
+                    "org".into(),
+                    "judica".into(),
+                    "sapio-cli".into(),
+                    emulator,
+                    args.value_of("key"),
+                    args.value_of_os("file"),
+                    config.network,
+                    plugin_map,
+                )
+                .await?;
+                println!("{}", sph.get_api()?);
+            }
+            Some(("info", args)) => {
+                let sph = WasmPluginHandle::new(
+                    "org".into(),
+                    "judica".into(),
+                    "sapio-cli".into(),
+                    emulator,
+                    args.value_of("key"),
+                    args.value_of_os("file"),
+                    config.network,
+                    plugin_map,
+                )
+                .await?;
+                println!("Name: {}", sph.get_name()?);
+                let api = sph.get_api()?;
                 println!(
-                    "{}",
-                    prixfixe::MENU
-                        .schema_for(args.value_of("name").unwrap())
-                        .ok_or("No Such Contract")?
+                    "Description:\n{}",
+                    api.get("description").unwrap().as_str().unwrap()
                 );
+                println!("Parameters:");
+                for (i, param) in api
+                    .get("properties")
+                    .unwrap()
+                    .as_object()
+                    .unwrap()
+                    .keys()
+                    .enumerate()
+                {
+                    println!("{}. {}", i, param)
+                }
+            }
+            Some(("load", args)) => {
+                let sph = WasmPluginHandle::new(
+                    "org".into(),
+                    "judica".into(),
+                    "sapio-cli".into(),
+                    emulator,
+                    None,
+                    args.value_of_os("file"),
+                    config.network,
+                    plugin_map,
+                )
+                .await?;
+                println!("{}", sph.id().to_string());
             }
             _ => unreachable!(),
         },

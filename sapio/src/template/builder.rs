@@ -1,5 +1,5 @@
-use super::Template;
 pub use super::{Output, OutputMeta};
+use super::{Template, TemplateMetadata};
 use crate::contract::{CompilationError, Context};
 use bitcoin::util::amount::Amount;
 use sapio_base::timelocks::*;
@@ -15,7 +15,7 @@ pub struct Builder {
     outputs: Vec<Output>,
     version: i32,
     lock_time: Option<AnyAbsTimeLock>,
-    label: String,
+    label: Option<String>,
     ctx: Context,
 }
 
@@ -27,7 +27,7 @@ impl Builder {
             outputs: vec![],
             version: 2,
             lock_time: None,
-            label: String::new(),
+            label: None,
             ctx,
         }
     }
@@ -115,7 +115,7 @@ impl Builder {
     }
 
     pub fn set_label(mut self, label: String) -> Self {
-        self.label = label;
+        self.label = Some(label);
         self
     }
 
@@ -151,12 +151,15 @@ impl Builder {
 impl From<Builder> for Template {
     fn from(t: Builder) -> Template {
         let tx = t.get_tx();
+        let mut metadata = TemplateMetadata::new();
+        metadata.label = t.label;
         Template {
             outputs: t.outputs,
             ctv: tx.get_ctv_hash(0),
+            ctv_index: 0,
             max: tx.total_amount().into(),
             tx,
-            label: t.label,
+            metadata_map_s2s: metadata,
         }
     }
 }

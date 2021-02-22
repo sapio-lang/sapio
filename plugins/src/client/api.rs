@@ -1,4 +1,3 @@
-
 use super::*;
 use bitcoin::Amount;
 pub fn log(s: &str) {

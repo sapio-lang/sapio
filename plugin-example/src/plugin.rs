@@ -1,14 +1,9 @@
-use bitcoin::Amount;
 use sapio::contract::*;
 use sapio::*;
 use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
-
-use std::convert::TryInto;
-
-use std::os::raw::c_char;
 
 #[derive(JsonSchema, Serialize, Deserialize, Clone)]
 pub struct Payment {
@@ -19,6 +14,7 @@ pub struct Payment {
     /// The Address to send to
     pub address: bitcoin::Address,
 }
+/// Documentation placed here will be visible to users!
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct TreePay {
     pub participants: Vec<Payment>,

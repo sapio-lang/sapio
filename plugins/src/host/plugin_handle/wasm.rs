@@ -1,6 +1,7 @@
 use super::*;
 use crate::host::exports::*;
-use crate::host::HostEnvironment;
+use crate::host::wasm_cache::get_all_keys_from_fs;
+use crate::host::{HostEnvironment, HostEnvironmentInner};
 use std::error::Error;
 pub struct WasmPluginHandle {
     store: Store,
@@ -15,7 +16,36 @@ impl WasmPluginHandle {
     pub fn id(&self) -> WASMCacheID {
         self.key
     }
+
+    pub async fn load_all_keys(
+        typ: String,
+        org: String,
+        proj: String,
+        emulator: NullEmulator,
+        net: bitcoin::Network,
+        plugin_map: Option<HashMap<Vec<u8>, [u8; 32]>>,
+    ) -> Result<Vec<Self>, Box<dyn Error>> {
+        let mut r = vec![];
+        for key in get_all_keys_from_fs(&typ, &org, &proj)? {
+            let wph = Self::new(
+                typ.clone(),
+                org.clone(),
+                proj.clone(),
+                emulator.clone(),
+                Some(&key),
+                None,
+                net,
+                plugin_map.clone(),
+            )
+            .await?;
+            r.push(wph)
+        }
+        Ok(r)
+    }
     pub async fn new(
+        typ: String,
+        org: String,
+        proj: String,
         emulator: NullEmulator,
         key: Option<&str>,
         file: Option<&OsStr>,
@@ -26,37 +56,17 @@ impl WasmPluginHandle {
         key.xor(file.and(Some("")))
             .ok_or("Passed Both Key and File or Neither")?;
         let store = Store::default();
-        let mut wasm_ctv_emulator = HostEnvironment {
-            typ: "org".into(),
-            org: "judica".into(),
-            proj: "sapio-cli".into(),
-            module_map: plugin_map.unwrap_or_else(HashMap::new).into(),
-            store: Arc::new(Mutex::new(store.clone())),
-            net,
-            emulator: Arc::new(Mutex::new(emulator)),
-            memory: LazyInit::new(),
-            get_api: LazyInit::new(),
-            forget: LazyInit::new(),
-            create: LazyInit::new(),
-            init: LazyInit::new(),
-            allocate_wasm_bytes: LazyInit::new(),
-        };
 
         let (module, key) = match (file, key) {
             (Some(file), _) => {
                 let wasm_bytes = tokio::fs::read(file).await?;
-                match wasm_cache::load_module("org", "judica", "sapio-cli", &store, &wasm_bytes) {
+                match wasm_cache::load_module(&typ, &org, &proj, &store, &wasm_bytes) {
                     Ok(module) => module,
                     Err(_) => {
                         let store = Store::default();
                         let module = Module::new(&store, &wasm_bytes)?;
-                        let key = wasm_cache::store_module(
-                            "org",
-                            "judica",
-                            "sapio-cli",
-                            &module,
-                            &wasm_bytes,
-                        )?;
+                        let key =
+                            wasm_cache::store_module(&typ, &org, &proj, &module, &wasm_bytes)?;
                         (module, key)
                     }
                 }
@@ -78,6 +88,23 @@ impl WasmPluginHandle {
                 }
             };
         }
+
+        let mut wasm_ctv_emulator = Arc::new(Mutex::new(HostEnvironmentInner {
+            typ,
+            org,
+            proj,
+            module_map: plugin_map.unwrap_or_else(HashMap::new).into(),
+            store: Arc::new(Mutex::new(store.clone())),
+            net,
+            emulator: Arc::new(Mutex::new(emulator)),
+            memory: LazyInit::new(),
+            get_api: LazyInit::new(),
+            get_name: LazyInit::new(),
+            forget: LazyInit::new(),
+            create: LazyInit::new(),
+            init: LazyInit::new(),
+            allocate_wasm_bytes: LazyInit::new(),
+        }));
         let import_object = create_imports!(
             store,
             wasm_ctv_emulator,
@@ -93,6 +120,8 @@ impl WasmPluginHandle {
         wasm_ctv_emulator.init_with_instance(&instance)?;
 
         wasm_ctv_emulator
+            .lock()
+            .unwrap()
             .init_ref()
             .ok_or("No Init Function Specified")?
             .call()?;
@@ -109,11 +138,19 @@ impl WasmPluginHandle {
     }
 
     pub fn forget(&self, p: i32) -> Result<(), Box<dyn Error>> {
-        Ok(self.env.forget_ref().ok_or("Uninitialized")?.call(p)?)
+        Ok(self
+            .env
+            .lock()
+            .unwrap()
+            .forget_ref()
+            .ok_or("Uninitialized")?
+            .call(p)?)
     }
     pub fn allocate(&self, len: i32) -> Result<i32, Box<dyn Error>> {
         Ok(self
             .env
+            .lock()
+            .unwrap()
             .allocate_wasm_bytes_ref()
             .ok_or("Uninitialized")?
             .call(len)?)
@@ -151,7 +188,11 @@ impl PluginHandle for WasmPluginHandle {
     fn create(&self, c: &CreateArgs<String>) -> Result<Compiled, Box<dyn Error>> {
         let arg_str = serde_json::to_string_pretty(c)?;
         let offset = self.pass_string(&arg_str)?;
-        let offset = self.env.create_ref().ok_or("Uninitialized")?.call(offset)?;
+        let create_func = {
+            let env = self.env.lock().unwrap();
+            env.create.clone()
+        };
+        let offset = create_func.get_ref().ok_or("Uninitialized")?.call(offset)?;
         let buf = self.read_to_vec(offset)?;
         self.forget(offset)?;
         let c: Result<String, String> = serde_json::from_slice(&buf)?;
@@ -159,9 +200,27 @@ impl PluginHandle for WasmPluginHandle {
         Ok(v)
     }
     fn get_api(&self) -> Result<serde_json::value::Value, Box<dyn Error>> {
-        let p = self.env.get_api_ref().ok_or("Uninitialized")?.call()?;
+        let p = self
+            .env
+            .lock()
+            .unwrap()
+            .get_api_ref()
+            .ok_or("Uninitialized")?
+            .call()?;
         let v = self.read_to_vec(p)?;
         self.forget(p)?;
         Ok(serde_json::from_slice(&v)?)
+    }
+    fn get_name(&self) -> Result<String, Box<dyn Error>> {
+        let p = self
+            .env
+            .lock()
+            .unwrap()
+            .get_name_ref()
+            .ok_or("Uninitialized")?
+            .call()?;
+        let v = self.read_to_vec(p)?;
+        self.forget(p)?;
+        Ok(String::from_utf8_lossy(&v).to_string())
     }
 }

@@ -9,6 +9,27 @@ fn get_path(typ: &str, org: &str, proj: &str) -> impl Into<PathBuf> {
     path.push("modules");
     path
 }
+use std::ffi::OsString;
+pub fn get_all_keys_from_fs(
+    typ: &str,
+    org: &str,
+    proj: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    std::fs::read_dir(get_path(typ, org, proj).into())?
+        .map(|entry| {
+            match entry.map(|x| {
+                x.path()
+                    .file_stem()
+                    .map(|f| f.to_str().map(String::from))
+                    .flatten()
+                    .ok_or(String::from("Nothing").into())
+            }) {
+                Ok(x) => x,
+                Err(x) => Err(x.into()),
+            }
+        })
+        .collect()
+}
 
 pub fn load_module(
     typ: &str,

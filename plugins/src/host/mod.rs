@@ -1,4 +1,3 @@
-use crate::host::wasm_cache::load_module_key;
 use crate::CreateArgs;
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::Hash;
@@ -12,14 +11,14 @@ use std::cell::Cell;
 use std::collections::HashMap;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
-use tokio::runtime::Runtime;
+
 use wasmer::*;
 
 pub mod plugin_handle;
 pub mod wasm_cache;
 
 #[derive(WasmerEnv, Clone)]
-pub struct HostEnvironment {
+pub struct HostEnvironmentInner {
     pub typ: String,
     pub org: String,
     pub proj: String,
@@ -33,6 +32,8 @@ pub struct HostEnvironment {
     pub allocate_wasm_bytes: LazyInit<NativeFunc<i32, i32>>,
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_get_create_arguments"))]
     pub get_api: LazyInit<NativeFunc<(), i32>>,
+    #[wasmer(export(name = "sapio_v1_wasm_plugin_client_get_name"))]
+    pub get_name: LazyInit<NativeFunc<(), i32>>,
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_drop_allocation"))]
     pub forget: LazyInit<NativeFunc<i32, ()>>,
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_create"))]
@@ -40,6 +41,8 @@ pub struct HostEnvironment {
     #[wasmer(export(name = "sapio_v1_wasm_plugin_entry_point"))]
     pub init: LazyInit<NativeFunc<(), ()>>,
 }
+
+pub type HostEnvironment = Arc<Mutex<HostEnvironmentInner>>;
 
 mod exports {
     use super::*;
@@ -50,6 +53,7 @@ mod exports {
         out: i32,
         ok: i32,
     ) {
+        let env = env.lock().unwrap();
         let mut buf = vec![0u8; len as usize];
         for (src, dst) in env.memory_ref().unwrap().view()[key as usize..(key + len) as usize]
             .iter()
@@ -81,6 +85,7 @@ mod exports {
         json_len: i32,
         amt: u32,
     ) -> i32 {
+        let env = env.lock().unwrap();
         const KEY_LEN: usize = 32;
         let key = key as usize;
         let h = wasmer_cache::Hash::new({
@@ -107,12 +112,16 @@ mod exports {
         }
         let emulator = env.emulator.lock().unwrap().clone();
         let mmap = env.module_map.clone();
+        let typ = env.typ.clone();
+        let org = env.org.clone();
+        let proj = env.proj.clone();
         let net = env.net;
         let (tx, mut rx) = tokio::sync::oneshot::channel::<Compiled>();
 
         let handle = tokio::runtime::Handle::current();
+
         handle.spawn(async move {
-            WasmPluginHandle::new(emulator, Some(&h), None, net, Some(mmap))
+            WasmPluginHandle::new(typ, org, proj, emulator, Some(&h), None, net, Some(mmap))
                 .await
                 .ok()
                 .and_then(|sph| {
@@ -152,6 +161,7 @@ mod exports {
     }
 
     pub fn sapio_v1_wasm_plugin_debug_log_string(env: &HostEnvironment, a: i32, len: i32) {
+        let env = env.lock().unwrap();
         let stdout = std::io::stdout();
         let lock = stdout.lock();
         let mut w = std::io::BufWriter::new(lock);
@@ -162,6 +172,7 @@ mod exports {
         w.write("\n".as_bytes()).unwrap();
     }
     pub fn sapio_v1_wasm_plugin_ctv_emulator_signer_for(env: &HostEnvironment, hash: i32) -> i32 {
+        let env = env.lock().unwrap();
         let hash = hash as usize;
         let h = sha256::Hash::from_inner({
             let mut buf = [0u8; 32];
@@ -195,6 +206,7 @@ mod exports {
         psbt: i32,
         len: u32,
     ) -> i32 {
+        let env = env.lock().unwrap();
         let mut buf = vec![0u8; len as usize];
         let psbt = psbt as usize;
         for (src, dst) in env.memory_ref().unwrap().view()[psbt..]
