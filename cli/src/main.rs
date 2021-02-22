@@ -237,7 +237,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let create_args =
                         sapio_wasm_plugin::CreateArgs(params.to_string(), config.network, amt);
                     let v = sph.create(&create_args)?;
-                    println!("{:?}", v);
+                    println!("{}", serde_json::to_string(&v)?);
                 }
                 Some(("schema", args)) => {
                     let sph = WasmPluginHandle::new(
