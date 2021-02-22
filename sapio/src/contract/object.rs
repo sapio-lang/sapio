@@ -50,10 +50,30 @@ impl std::fmt::Display for ObjectError {
 //TODO: Make type immutable and correct by construction...
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct Object {
+    #[serde(
+        rename = "template_hash_to_template_map",
+        skip_serializing_if = "HashMap::is_empty",
+        default
+    )]
     pub ctv_to_tx: HashMap<sha256::Hash, Template>,
+    #[serde(
+        rename = "suggested_template_hash_to_template_map",
+        skip_serializing_if = "HashMap::is_empty",
+        default
+    )]
     pub suggested_txs: HashMap<sha256::Hash, Template>,
+    #[serde(
+        rename = "known_policy",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub policy: Option<Clause>,
     pub address: bitcoin::Address,
+    #[serde(
+        rename = "known_descriptor",
+        skip_serializing_if = "Option::is_none",
+        default
+    )]
     pub descriptor: Option<Descriptor<bitcoin::PublicKey>>,
     pub amount_range: AmountRange,
 }
@@ -128,7 +148,10 @@ impl Object {
             for (
                 ctv_hash,
                 Template {
-                    label, outputs, tx, ..
+                    metadata_map_s2s,
+                    outputs,
+                    tx,
+                    ..
                 },
             ) in ctv_to_tx.iter().chain(suggested_txs.iter())
             {
@@ -156,7 +179,7 @@ impl Object {
                 txns.push(psbtx);
                 metadata_out.push(json!({
                     "color" : "green",
-                    "label" : label,
+                    "metadata" : metadata_map_s2s,
                     "utxo_metadata" : outputs.iter().map(|x| &x.metadata).collect::<Vec<_>>()
                 }));
                 stack.reserve(outputs.len());

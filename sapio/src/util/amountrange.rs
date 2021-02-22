@@ -3,7 +3,9 @@ use bitcoin::util::amount::Amount;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq)]
+#[derive(
+    Serialize, Deserialize, JsonSchema, Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq,
+)]
 #[serde(transparent)]
 struct AmountF64(
     #[schemars(with = "f64")]
@@ -24,7 +26,9 @@ impl From<AmountF64> for Amount {
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Copy, Debug)]
 pub struct AmountRange {
+    #[serde(rename = "min_btc", skip_serializing_if = "Option::is_none", default)]
     min: Option<AmountF64>,
+    #[serde(rename = "max_btc", skip_serializing_if = "Option::is_none", default)]
     max: Option<AmountF64>,
 }
 impl AmountRange {
