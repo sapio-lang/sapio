@@ -14,6 +14,7 @@ pub struct Payment {
     /// The Address to send to
     pub address: bitcoin::Address,
 }
+/// Documentation placed here will be visible to users!
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct TreePay {
     pub participants: Vec<Payment>,

@@ -80,7 +80,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 (@arg file: -f --file +required +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
             )
             (@subcommand api =>
-                (about: "View the API for a plugin")
+                (about: "Machine Readable API for a plugin, pipe into jq for pretty formatting.")
+                (@group from +required =>
+                    (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
+                    (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
+                )
+            )
+            (@subcommand info =>
+                (about: "View human readable basic information for a plugin")
                 (@group from +required =>
                     (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
                     (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
@@ -234,6 +241,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .await?;
                 println!("{}", sph.get_api()?);
+            }
+            Some(("info", args)) => {
+                let sph = WasmPluginHandle::new(
+                    "org".into(),
+                    "judica".into(),
+                    "sapio-cli".into(),
+                    emulator,
+                    args.value_of("key"),
+                    args.value_of_os("file"),
+                    config.network,
+                    plugin_map,
+                )
+                .await?;
+                println!("Name: {}", sph.get_name()?);
+                let api = sph.get_api()?;
+                println!(
+                    "Description:\n{}",
+                    api.get("description").unwrap().as_str().unwrap()
+                );
+                println!("Parameters:");
+                for (i, param) in api
+                    .get("properties")
+                    .unwrap()
+                    .as_object()
+                    .unwrap()
+                    .keys()
+                    .enumerate()
+                {
+                    println!("{}. {}", i, param)
+                }
             }
             Some(("load", args)) => {
                 let sph = WasmPluginHandle::new(
