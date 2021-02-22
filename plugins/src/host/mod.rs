@@ -18,7 +18,7 @@ pub mod plugin_handle;
 pub mod wasm_cache;
 
 #[derive(WasmerEnv, Clone)]
-pub struct HostEnvironment {
+pub struct HostEnvironmentInner {
     pub typ: String,
     pub org: String,
     pub proj: String,
@@ -40,6 +40,8 @@ pub struct HostEnvironment {
     pub init: LazyInit<NativeFunc<(), ()>>,
 }
 
+pub type HostEnvironment = Arc<Mutex<HostEnvironmentInner>>;
+
 mod exports {
     use super::*;
     pub fn sapio_v1_wasm_plugin_lookup_module_name(
@@ -49,6 +51,7 @@ mod exports {
         out: i32,
         ok: i32,
     ) {
+        let env = env.lock().unwrap();
         let mut buf = vec![0u8; len as usize];
         for (src, dst) in env.memory_ref().unwrap().view()[key as usize..(key + len) as usize]
             .iter()
@@ -80,6 +83,7 @@ mod exports {
         json_len: i32,
         amt: u32,
     ) -> i32 {
+        let env = env.lock().unwrap();
         const KEY_LEN: usize = 32;
         let key = key as usize;
         let h = wasmer_cache::Hash::new({
@@ -151,6 +155,7 @@ mod exports {
     }
 
     pub fn sapio_v1_wasm_plugin_debug_log_string(env: &HostEnvironment, a: i32, len: i32) {
+        let env = env.lock().unwrap();
         let stdout = std::io::stdout();
         let lock = stdout.lock();
         let mut w = std::io::BufWriter::new(lock);
@@ -161,6 +166,7 @@ mod exports {
         w.write("\n".as_bytes()).unwrap();
     }
     pub fn sapio_v1_wasm_plugin_ctv_emulator_signer_for(env: &HostEnvironment, hash: i32) -> i32 {
+        let env = env.lock().unwrap();
         let hash = hash as usize;
         let h = sha256::Hash::from_inner({
             let mut buf = [0u8; 32];
@@ -194,6 +200,7 @@ mod exports {
         psbt: i32,
         len: u32,
     ) -> i32 {
+        let env = env.lock().unwrap();
         let mut buf = vec![0u8; len as usize];
         let psbt = psbt as usize;
         for (src, dst) in env.memory_ref().unwrap().view()[psbt..]

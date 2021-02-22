@@ -1,6 +1,6 @@
 use super::*;
 use crate::host::exports::*;
-use crate::host::HostEnvironment;
+use crate::host::{HostEnvironment, HostEnvironmentInner};
 use std::error::Error;
 pub struct WasmPluginHandle {
     store: Store,
@@ -26,7 +26,7 @@ impl WasmPluginHandle {
         key.xor(file.and(Some("")))
             .ok_or("Passed Both Key and File or Neither")?;
         let store = Store::default();
-        let mut wasm_ctv_emulator = HostEnvironment {
+        let mut wasm_ctv_emulator = Arc::new(Mutex::new(HostEnvironmentInner {
             typ: "org".into(),
             org: "judica".into(),
             proj: "sapio-cli".into(),
@@ -40,7 +40,7 @@ impl WasmPluginHandle {
             create: LazyInit::new(),
             init: LazyInit::new(),
             allocate_wasm_bytes: LazyInit::new(),
-        };
+        }));
 
         let (module, key) = match (file, key) {
             (Some(file), _) => {
@@ -93,6 +93,8 @@ impl WasmPluginHandle {
         wasm_ctv_emulator.init_with_instance(&instance)?;
 
         wasm_ctv_emulator
+            .lock()
+            .unwrap()
             .init_ref()
             .ok_or("No Init Function Specified")?
             .call()?;
@@ -109,11 +111,19 @@ impl WasmPluginHandle {
     }
 
     pub fn forget(&self, p: i32) -> Result<(), Box<dyn Error>> {
-        Ok(self.env.forget_ref().ok_or("Uninitialized")?.call(p)?)
+        Ok(self
+            .env
+            .lock()
+            .unwrap()
+            .forget_ref()
+            .ok_or("Uninitialized")?
+            .call(p)?)
     }
     pub fn allocate(&self, len: i32) -> Result<i32, Box<dyn Error>> {
         Ok(self
             .env
+            .lock()
+            .unwrap()
             .allocate_wasm_bytes_ref()
             .ok_or("Uninitialized")?
             .call(len)?)
@@ -151,7 +161,11 @@ impl PluginHandle for WasmPluginHandle {
     fn create(&self, c: &CreateArgs<String>) -> Result<Compiled, Box<dyn Error>> {
         let arg_str = serde_json::to_string_pretty(c)?;
         let offset = self.pass_string(&arg_str)?;
-        let offset = self.env.create_ref().ok_or("Uninitialized")?.call(offset)?;
+        let create_func = {
+            let env = self.env.lock().unwrap();
+            env.create.clone()
+        };
+        let offset = create_func.get_ref().ok_or("Uninitialized")?.call(offset)?;
         let buf = self.read_to_vec(offset)?;
         self.forget(offset)?;
         let c: Result<String, String> = serde_json::from_slice(&buf)?;
@@ -159,7 +173,13 @@ impl PluginHandle for WasmPluginHandle {
         Ok(v)
     }
     fn get_api(&self) -> Result<serde_json::value::Value, Box<dyn Error>> {
-        let p = self.env.get_api_ref().ok_or("Uninitialized")?.call()?;
+        let p = self
+            .env
+            .lock()
+            .unwrap()
+            .get_api_ref()
+            .ok_or("Uninitialized")?
+            .call()?;
         let v = self.read_to_vec(p)?;
         self.forget(p)?;
         Ok(serde_json::from_slice(&v)?)
