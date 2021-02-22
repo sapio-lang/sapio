@@ -16,6 +16,9 @@ impl WasmPluginHandle {
         self.key
     }
     pub async fn new(
+        typ: String,
+        org: String,
+        proj: String,
         emulator: NullEmulator,
         key: Option<&str>,
         file: Option<&OsStr>,
@@ -26,37 +29,17 @@ impl WasmPluginHandle {
         key.xor(file.and(Some("")))
             .ok_or("Passed Both Key and File or Neither")?;
         let store = Store::default();
-        let mut wasm_ctv_emulator = Arc::new(Mutex::new(HostEnvironmentInner {
-            typ: "org".into(),
-            org: "judica".into(),
-            proj: "sapio-cli".into(),
-            module_map: plugin_map.unwrap_or_else(HashMap::new).into(),
-            store: Arc::new(Mutex::new(store.clone())),
-            net,
-            emulator: Arc::new(Mutex::new(emulator)),
-            memory: LazyInit::new(),
-            get_api: LazyInit::new(),
-            forget: LazyInit::new(),
-            create: LazyInit::new(),
-            init: LazyInit::new(),
-            allocate_wasm_bytes: LazyInit::new(),
-        }));
 
         let (module, key) = match (file, key) {
             (Some(file), _) => {
                 let wasm_bytes = tokio::fs::read(file).await?;
-                match wasm_cache::load_module("org", "judica", "sapio-cli", &store, &wasm_bytes) {
+                match wasm_cache::load_module(&typ, &org, &proj, &store, &wasm_bytes) {
                     Ok(module) => module,
                     Err(_) => {
                         let store = Store::default();
                         let module = Module::new(&store, &wasm_bytes)?;
-                        let key = wasm_cache::store_module(
-                            "org",
-                            "judica",
-                            "sapio-cli",
-                            &module,
-                            &wasm_bytes,
-                        )?;
+                        let key =
+                            wasm_cache::store_module(&typ, &org, &proj, &module, &wasm_bytes)?;
                         (module, key)
                     }
                 }
@@ -78,6 +61,22 @@ impl WasmPluginHandle {
                 }
             };
         }
+
+        let mut wasm_ctv_emulator = Arc::new(Mutex::new(HostEnvironmentInner {
+            typ,
+            org,
+            proj,
+            module_map: plugin_map.unwrap_or_else(HashMap::new).into(),
+            store: Arc::new(Mutex::new(store.clone())),
+            net,
+            emulator: Arc::new(Mutex::new(emulator)),
+            memory: LazyInit::new(),
+            get_api: LazyInit::new(),
+            forget: LazyInit::new(),
+            create: LazyInit::new(),
+            init: LazyInit::new(),
+            allocate_wasm_bytes: LazyInit::new(),
+        }));
         let import_object = create_imports!(
             store,
             wasm_ctv_emulator,

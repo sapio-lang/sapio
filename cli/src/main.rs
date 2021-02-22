@@ -212,6 +212,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Denomination::Bitcoin,
                     )?;
                     let sph = WasmPluginHandle::new(
+                        "org".into(),
+                        "judica".into(),
+                        "sapio-cli".into(),
                         emulator,
                         args.value_of("key"),
                         args.value_of_os("file"),
@@ -238,6 +241,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Some(("schema", args)) => {
                     let sph = WasmPluginHandle::new(
+                        "org".into(),
+                        "judica".into(),
+                        "sapio-cli".into(),
                         emulator,
                         args.value_of("key"),
                         args.value_of_os("file"),
@@ -249,6 +255,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 Some(("load", args)) => {
                     let sph = WasmPluginHandle::new(
+                        "org".into(),
+                        "judica".into(),
+                        "sapio-cli".into(),
                         emulator,
                         None,
                         args.value_of_os("file"),

@@ -110,12 +110,16 @@ mod exports {
         }
         let emulator = env.emulator.lock().unwrap().clone();
         let mmap = env.module_map.clone();
+        let typ = env.typ.clone();
+        let org = env.org.clone();
+        let proj = env.proj.clone();
         let net = env.net;
         let (tx, mut rx) = tokio::sync::oneshot::channel::<Compiled>();
 
         let handle = tokio::runtime::Handle::current();
+
         handle.spawn(async move {
-            WasmPluginHandle::new(emulator, Some(&h), None, net, Some(mmap))
+            WasmPluginHandle::new(typ, org, proj, emulator, Some(&h), None, net, Some(mmap))
                 .await
                 .ok()
                 .and_then(|sph| {
