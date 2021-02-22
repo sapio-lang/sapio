@@ -22,7 +22,7 @@ use sapio_wasm_plugin::host::{PluginHandle, WasmPluginHandle};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::time::Duration;
+
 use util::*;
 use wasmer::*;
 

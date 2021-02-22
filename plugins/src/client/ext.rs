@@ -1,4 +1,3 @@
-
 extern "C" {
     pub fn sapio_v1_wasm_plugin_ctv_emulator_sign(psbt: i32, len: u32) -> i32;
     pub fn sapio_v1_wasm_plugin_ctv_emulator_signer_for(hash: i32) -> i32;

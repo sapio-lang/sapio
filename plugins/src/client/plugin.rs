@@ -1,4 +1,3 @@
-
 use super::*;
 pub trait Plugin: JsonSchema + Sized + for<'a> Deserialize<'a> + Compilable {
     fn get_api_inner() -> *mut c_char {

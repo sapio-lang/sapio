@@ -1,4 +1,3 @@
-use crate::host::wasm_cache::load_module_key;
 use crate::CreateArgs;
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::Hash;
@@ -12,7 +11,7 @@ use std::cell::Cell;
 use std::collections::HashMap;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
-use tokio::runtime::Runtime;
+
 use wasmer::*;
 
 pub mod plugin_handle;
