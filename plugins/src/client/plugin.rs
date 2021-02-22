@@ -19,9 +19,10 @@ pub trait Plugin: JsonSchema + Sized + for<'a> Deserialize<'a> + Compilable {
         Ok(serde_json::to_string_pretty(&s.compile(&ctx)?)?)
     }
 
-    unsafe fn register() {
+    unsafe fn register(name: &'static str) {
         sapio_v1_wasm_plugin_client_get_create_arguments_ptr = Self::get_api_inner;
         sapio_v1_wasm_plugin_client_create_ptr = Self::create;
+        sapio_plugin_name = name;
     }
 }
 
@@ -40,7 +41,7 @@ macro_rules! REGISTER {
         }
         #[no_mangle]
         unsafe fn sapio_v1_wasm_plugin_entry_point() {
-            $plugin::register();
+            $plugin::register(stringify!($plugin));
         }
     };
 }

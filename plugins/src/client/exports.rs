@@ -31,3 +31,11 @@ unsafe extern "C" fn sapio_v1_wasm_plugin_client_drop_allocation(s: *mut c_char)
 extern "C" fn sapio_v1_wasm_plugin_client_allocate_bytes(len: u32) -> *mut c_char {
     CString::new(vec![1; len as usize]).unwrap().into_raw()
 }
+
+pub(crate) static mut sapio_plugin_name: &'static str = "Unnamed";
+#[no_mangle]
+unsafe extern "C" fn sapio_v1_wasm_plugin_client_get_name() -> *mut c_char {
+    CString::new(sapio_plugin_name.as_bytes())
+        .unwrap()
+        .into_raw()
+}

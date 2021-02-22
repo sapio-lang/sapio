@@ -32,6 +32,8 @@ pub struct HostEnvironmentInner {
     pub allocate_wasm_bytes: LazyInit<NativeFunc<i32, i32>>,
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_get_create_arguments"))]
     pub get_api: LazyInit<NativeFunc<(), i32>>,
+    #[wasmer(export(name = "sapio_v1_wasm_plugin_client_get_name"))]
+    pub get_name: LazyInit<NativeFunc<(), i32>>,
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_drop_allocation"))]
     pub forget: LazyInit<NativeFunc<i32, ()>>,
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_create"))]

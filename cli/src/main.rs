@@ -79,7 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 (about: "Load a wasm contract module, returns the hex sha3 hash key")
                 (@arg file: -f --file +required +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
             )
-            (@subcommand schema =>
+            (@subcommand api =>
                 (about: "View the API for a plugin")
                 (@group from +required =>
                     (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
@@ -150,6 +150,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => unreachable!(),
         },
         Some(("contract", matches)) => match matches.subcommand() {
+            Some(("list", args)) => {
+                let plugins = WasmPluginHandle::load_all_keys(
+                    "org".into(),
+                    "judica".into(),
+                    "sapio-cli".into(),
+                    emulator,
+                    config.network,
+                    plugin_map,
+                )
+                .await?;
+                for plugin in plugins {
+                    println!("{} -- {}", plugin.get_name()?, plugin.id().to_string());
+                }
+            }
             Some(("bind", args)) => {
                 let client =
                     rpc::Client::new(cfg.api_node.url.clone(), cfg.api_node.auth.clone()).await?;
@@ -207,7 +221,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let v = sph.create(&create_args)?;
                 println!("{}", serde_json::to_string(&v)?);
             }
-            Some(("schema", args)) => {
+            Some(("api", args)) => {
                 let sph = WasmPluginHandle::new(
                     "org".into(),
                     "judica".into(),

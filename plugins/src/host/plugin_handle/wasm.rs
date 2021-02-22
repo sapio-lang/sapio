@@ -1,5 +1,6 @@
 use super::*;
 use crate::host::exports::*;
+use crate::host::wasm_cache::get_all_keys_from_fs;
 use crate::host::{HostEnvironment, HostEnvironmentInner};
 use std::error::Error;
 pub struct WasmPluginHandle {
@@ -14,6 +15,32 @@ pub struct WasmPluginHandle {
 impl WasmPluginHandle {
     pub fn id(&self) -> WASMCacheID {
         self.key
+    }
+
+    pub async fn load_all_keys(
+        typ: String,
+        org: String,
+        proj: String,
+        emulator: NullEmulator,
+        net: bitcoin::Network,
+        plugin_map: Option<HashMap<Vec<u8>, [u8; 32]>>,
+    ) -> Result<Vec<Self>, Box<dyn Error>> {
+        let mut r = vec![];
+        for key in get_all_keys_from_fs(&typ, &org, &proj)? {
+            let wph = Self::new(
+                typ.clone(),
+                org.clone(),
+                proj.clone(),
+                emulator.clone(),
+                Some(&key),
+                None,
+                net,
+                plugin_map.clone(),
+            )
+            .await?;
+            r.push(wph)
+        }
+        Ok(r)
     }
     pub async fn new(
         typ: String,
@@ -72,6 +99,7 @@ impl WasmPluginHandle {
             emulator: Arc::new(Mutex::new(emulator)),
             memory: LazyInit::new(),
             get_api: LazyInit::new(),
+            get_name: LazyInit::new(),
             forget: LazyInit::new(),
             create: LazyInit::new(),
             init: LazyInit::new(),
@@ -182,5 +210,17 @@ impl PluginHandle for WasmPluginHandle {
         let v = self.read_to_vec(p)?;
         self.forget(p)?;
         Ok(serde_json::from_slice(&v)?)
+    }
+    fn get_name(&self) -> Result<String, Box<dyn Error>> {
+        let p = self
+            .env
+            .lock()
+            .unwrap()
+            .get_name_ref()
+            .ok_or("Uninitialized")?
+            .call()?;
+        let v = self.read_to_vec(p)?;
+        self.forget(p)?;
+        Ok(String::from_utf8_lossy(&v).to_string())
     }
 }
