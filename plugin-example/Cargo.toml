@@ -45,3 +45,8 @@ wasm-opt = false
 [dependencies.sapio-wasm-plugin]
 path = "../plugins"
 features = ["client"]
+
+[patch.crates-io]
+miniscript = {git="https://github.com/sapio-lang/rust-miniscript.git", branch="sapio-lang"}
+bitcoin = {git="https://github.com/sapio-lang/rust-bitcoin.git", branch="sapio-lang"}
+secp256k1 = {git="https://github.com/sapio-lang/rust-secp256k1.git", branch="sapio-lang"}

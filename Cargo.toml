@@ -1,6 +1,6 @@
 [workspace]
-members = ["sapio", "sapio-ws", "sapio-front", "sapio-contrib", "ctv_emulators", "sapio-base", "cli", "tools", "plugins", 'emulator-trait', "plugin-example"]
-
+members = ["sapio", "sapio-ws", "sapio-front", "sapio-contrib", "ctv_emulators", "sapio-base", "cli", "tools", "plugins", 'emulator-trait']
+exclude = ["plugin-example"]
 [patch.crates-io]
 miniscript = {git="https://github.com/sapio-lang/rust-miniscript.git", branch="sapio-lang"}
 bitcoin = {git="https://github.com/sapio-lang/rust-bitcoin.git", branch="sapio-lang"}
