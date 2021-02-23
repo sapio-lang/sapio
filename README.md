@@ -1,4 +1,5 @@
 ![](https://github.com/sapio-lang/sapio/workflows/Continuous%20integration/badge.svg)
+![Say hi to Jared](https://github.com/sapio-lang/sapio/blob/master/.github/logo.png)
 
 # Sapio Workspace
 
@@ -8,14 +9,14 @@ Sapio is a framework for creating composable multi-transaction Bitcoin Smart Con
 
 The root crate is a workspace for various Sapio Components such as:
 
-1. [Sapio CLI](cli/README.md): Easy to use interface for using and running sapio contracts.
-1. [Sapio Language](sapio/README.md): Base Specification for Sapio Language and Contract Generation
-1. [Plugin Example](plugin-example/README.md): Example Project for a Sapio Plugin
-1. [Sapio Contrib](sapio-contrib/README.md): Contract modules / functionality made available for general use
-1. [Plugin Framework](plugin/README.md): Library for bundling Sapio Plugins
-1. [CTV Emulator](ctv_emualtors/README.md): Emulation protocols and servers for CheckTemplateVerify.
-1. [Sapio Front](sapio-front/README.md): Protocols for interacting with a compilation session
-1. [Sapio Compiler Server](sapio-ws/README.md): Binary for a websocket server running sapio-front
+1. [Sapio CLI](cli/): Easy to use interface for using and running sapio contracts.
+1. [Sapio Language](sapio/): Base Specification for Sapio Language and Contract Generation
+1. [Plugin Example](plugin-example/): Example Project for a Sapio Plugin
+1. [Sapio Contrib](sapio-contrib/): Contract modules / functionality made available for general use
+1. [Plugin Framework](plugin/): Library for bundling Sapio Plugins
+1. [CTV Emulator](ctv_emualtors/): Emulation protocols and servers for CheckTemplateVerify.
+1. [Sapio Front](sapio-front/): Protocols for interacting with a compilation session
+1. [Sapio Compiler Server](sapio-ws/): Binary for a websocket server running sapio-front
 
 ## QuickStart:
 
