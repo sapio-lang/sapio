@@ -1,28 +1,43 @@
 ![](https://github.com/sapio-lang/sapio/workflows/Continuous%20integration/badge.svg)
+
 # Sapio Workspace
 
 Welcome!
 
 Sapio is a framework for creating composable multi-transaction Bitcoin Smart Contracts.
 
-This crate is a workspace for various Sapio Components such as:
+The root crate is a workspace for various Sapio Components such as:
 
+1. [Sapio CLI](cli/README.md): Easy to use interface for using and running sapio contracts.
 1. [Sapio Language](sapio/README.md): Base Specification for Sapio Language and Contract Generation
+1. [Plugin Example](plugin-example/README.md): Example Project for a Sapio Plugin
 1. [Sapio Contrib](sapio-contrib/README.md): Contract modules / functionality made available for general use
+1. [Plugin Framework](plugin/README.md): Library for bundling Sapio Plugins
+1. [CTV Emulator](ctv_emualtors/README.md): Emulation protocols and servers for CheckTemplateVerify.
 1. [Sapio Front](sapio-front/README.md): Protocols for interacting with a compilation session
 1. [Sapio Compiler Server](sapio-ws/README.md): Binary for a websocket server running sapio-front
 
-### Why is Sapio Different?
-Sapio helps you build payment protocol specifiers that oblivious third parties
-can participate in being none the wiser.
+## QuickStart:
 
-For example, with Sapio you can generate an address that represents a lightning
-channel between you and friend and give that address to a third party service
-like an exchange and have them create the channel without requiring any
-signature interaction from you or your friend, zero trusted parties, and an
-inability to differentiate your address from any other.
+Sapio should work on all platforms, but is recommend for use with Linux (Ubuntu preferred).
+Follow this quickstart guide to get going.
 
-That's the tip of the iceberg of what Sapio lets you accomplish. See the [Sapio
-Readme](sapio/README.md) to learn more.
+1.  Get [rust](https://rustup.rs/) if you don't have it already.
+1.  Add the wasm target by running `rustup target add wasm32-unknown-unknown` in your terminal.
+1.  Get the [wasm-pack](https://rustwasm.github.io/wasm-pack/) tool.
+1.  Clone this repo: `git clone git@github.com:sapio-lang/sapio.git && cd sapio`
+1.  Build the plugin `cd plugin-example && wasm-pack build && cd ..`
+1.  Instantiate a contract from the plugin: `cargo run --bin cli -- contract create 9.99 "{\"participants\": [{\"amount\": 9.99, \"address\": \"bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw\"}], \"radix\": 2}" --file="plugin-example/pkg/sapio_wasm_plugin_example_bg.wasm"` to see some magic!
 
+You can use `cargo run --bin cli -- help` to learn more about what a the CLI can do! and `cargo run --bin cli -- <subcommand> help` to learn about subcommands like `contract`.
 
+As a second experiment, try modifying the contract in plugin-example to one
+of the contracts from sapio-contrib! Remember to recompile plugin-example
+with `wasm-pack build`!
+
+Still hungry for more? Implement your own smart contract idea -- you can use
+sapio-contrib for inspiration or as building blocks for something new!
+
+Stuck? Run `cargo doc --open --no-deps` to build and open the documentation
+locally, or just shoot me a note and I'll guide you through it! Any and all
+feedback welcome!
