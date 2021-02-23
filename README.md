@@ -1,11 +1,11 @@
-![](https://github.com/sapio-lang/sapio/workflows/Continuous%20integration/badge.svg)
-![Say hi to Jared](https://github.com/sapio-lang/sapio/blob/master/.github/logo.png)
+# Sapio &emsp; [![Build Status]][actions]
+[Build Status]: https://github.com/sapio-lang/sapio/workflows/Continuous%20integration/badge.svg
+[actions]: https://github.com/sapio-lang/sapio/actions?query=branch%3Amaster
+**a framework for creating composable multi-transaction Bitcoin Smart Contracts.**
 
-# Sapio Workspace
+<img src="https://github.com/sapio-lang/sapio/raw/master/.github/logo.png" alt="Say hi to Jared">
 
-Welcome!
 
-Sapio is a framework for creating composable multi-transaction Bitcoin Smart Contracts.
 
 The root crate is a workspace for various Sapio Components such as:
 
