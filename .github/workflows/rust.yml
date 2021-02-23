@@ -73,7 +73,7 @@ jobs:
           override: true
       - name: Pin cc if rust 1.48
         if: matrix.rust == '1.48.0'
-        run: cargo generate-lockfile && cargo update -p serde_json --precise "1.0.39"
+        run: cargo generate-lockfile
       - name: Running cargo
         env:
           DO_FEATURE_MATRIX: true
