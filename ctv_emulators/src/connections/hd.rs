@@ -1,10 +1,10 @@
 use super::*;
 /// HDOracleEmulatorConnection wraps a tokio runtime and a TCPStream
 /// with a key to be able to talk to an Oracle server.
-/// 
+///
 /// Note that because HDOracleEmulatorConnection uses block_in_place/block_on
 /// internally in the trait object because the CTVEmulator trait is not async.
-/// 
+///
 /// This seems to be a limitation with tokio / rust around using async inside non-async
 /// traits.
 pub struct HDOracleEmulatorConnection {
@@ -22,14 +22,14 @@ impl HDOracleEmulatorConnection {
         self.root.derive_pub(&self.secp, &c)
     }
     /// Creates a new instance of a HDOracleEmulatorConnection.
-    /// 
+    ///
     /// Note that the runtime and secp can be shared with other instances as it is Arc.
-    /// 
+    ///
     /// `new` does not connect to the address passed in immediately, but it does
     /// use tokio::net::lookup_host to resolve the address. A connection is not
     /// opened to the server until a call to the `sign` method is made. This is
     /// purposeful so that connections are not opened until they are actually needed.
-    /// 
+    ///
     /// Note that as a consequence of new doing the host resolving, if DNS
     /// records change, then a new HDOracleEmulatorConnection would need to be
     /// created to observe it.
@@ -63,7 +63,7 @@ impl HDOracleEmulatorConnection {
     }
     /// receive a response via the tcpstream.
     /// wire format: length:u32 data:[u8;length]
-    /// 
+    ///
     /// TODO: secure response by limiting the length to a max value.
     /// This is not super critical because presumably the oracles are not trying to OOM your system.
     async fn response<T: DeserializeOwned + Clone>(t: &mut TcpStream) -> Result<T, std::io::Error> {

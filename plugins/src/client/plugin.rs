@@ -8,7 +8,7 @@ pub trait Plugin: JsonSchema + Sized + for<'a> Deserialize<'a> + Compilable {
         encode_json(&schemars::schema_for!(Self))
     }
 
-    /// creates an instance of the plugin from a json pointer and outputs a result pointer 
+    /// creates an instance of the plugin from a json pointer and outputs a result pointer
     unsafe fn create(c: *mut c_char) -> *mut c_char {
         let res = Self::create_result_err(c);
         encode_json(&res)
@@ -42,7 +42,7 @@ fn encode_json<S: Serialize>(s: &S) -> *mut c_char {
 
 /// A helper macro to implement the plugin interface for a plugin-type
 /// and register it to the plugin entry point.
-/// 
+///
 /// U.B. to call REGISTER more than once because of the internal #[no_mangle]
 #[macro_export]
 macro_rules! REGISTER {

@@ -31,11 +31,11 @@ fn input_error<T>(s: &str) -> Result<T, std::io::Error> {
 }
 
 /// Compute a derivation path from a sha256 hash.
-/// 
+///
 /// Format is a bit peculiar, it's 9 u32's with the top bit as 0 (for unhardened
 /// derivation). We take each u32 in the hash (big endian) and mask off the top bit.
 /// Then we go over the 8 u32s and make a 8 bit u32 from the top bits.
-/// 
+///
 /// This is because the ChildNumber is a enum u31 where the top bit is used to
 /// indicate hardened or not, so we can't just do the simple thing.
 fn hash_to_child_vec(h: Sha256) -> Vec<ChildNumber> {

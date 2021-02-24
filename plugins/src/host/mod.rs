@@ -46,7 +46,7 @@ pub struct HostEnvironmentInner {
 
 /// Wrapped Plugin Env so that we don't duplicate state for each function.
 /// We must be careful to ensure we don't see deadlocks.
-/// 
+///
 /// TODO: Figure out how to *just* make this Arc and not Mutex.
 pub type HostEnvironment = Arc<Mutex<HostEnvironmentInner>>;
 

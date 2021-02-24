@@ -7,13 +7,13 @@ pub struct HDOracleEmulator {
 
 impl HDOracleEmulator {
     /// create a new HDOracleEmulator
-    /// 
+    ///
     /// if debug is set, runs in a "single threaded" mode where we can observe errors on connections rather than ignoring them.
     pub fn new(root: ExtendedPrivKey, debug: bool) -> Self {
         HDOracleEmulator { root, debug }
     }
     /// binds a HDOracleEmulator to a socket interface and runs the server
-    /// 
+    ///
     /// This will only return when debug = false if The TcpListener fails.
     /// When debug = true, then we join each connection one at a time and return
     /// any errors.
@@ -43,9 +43,9 @@ impl HDOracleEmulator {
     }
 
     /// Signs a PSBT with the correct derived key.
-    /// 
+    ///
     /// Always signs for spending index 0.
-    /// 
+    ///
     /// May fail to sign if the PSBT is not properly formatted
     fn sign(
         &self,
@@ -93,9 +93,9 @@ impl HDOracleEmulator {
         }
         input_error("Unknown Failure to Sign")
     }
-    
+
     /// the main server business logic.
-    /// 
+    ///
     /// - on receiving Request::SignPSBT, signs the PSBT.
     /// - on receiving Request::ConfirmKey, signs the challenge prefixed by a nonce.
     async fn handle(&self, t: &mut TcpStream) -> Result<(), std::io::Error> {
@@ -123,10 +123,9 @@ impl HDOracleEmulator {
         }
     }
 
-
     /// receive a request via the tcpstream.
     /// wire format: length:u32 data:[u8;length]
-    /// 
+    ///
     /// TODO: DoS Critical: limit the allowed max length we will attempt to derserialize
     async fn requested(t: &mut TcpStream) -> Result<msgs::Request, std::io::Error> {
         let l = t.read_u32().await? as usize;
