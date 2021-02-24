@@ -1,11 +1,14 @@
+///! Wraps the external API with friendly methods
 use super::*;
 use bitcoin::Amount;
+/// Print a &str to the parent's console.
 pub fn log(s: &str) {
     unsafe {
         sapio_v1_wasm_plugin_debug_log_string(s.as_ptr() as i32, s.len() as i32);
     }
 }
 
+/// Given a 32 byte plugin identifier, create a new contract instance.
 pub fn create_contract_by_key(key: &[u8; 32], args: Value, amt: Amount) -> Option<Compiled> {
     unsafe {
         let s = args.to_string();
@@ -25,6 +28,7 @@ pub fn create_contract_by_key(key: &[u8; 32], args: Value, amt: Amount) -> Optio
     }
 }
 
+/// lookup a plugin module's key given a human readable name
 pub fn lookup_module_name(key: &str) -> Option<[u8; 32]> {
     unsafe {
         let mut res = [0u8; 32];
@@ -43,11 +47,13 @@ pub fn lookup_module_name(key: &str) -> Option<[u8; 32]> {
     }
 }
 
+/// Given a human readable name, create a new contract instance
 pub fn create_contract(key: &str, args: Value, amt: Amount) -> Option<Compiled> {
     let key = lookup_module_name(key)?;
     create_contract_by_key(&key, args, amt)
 }
 
+/// A empty type tag to bind the dynamically linked host emulator functionality
 pub struct WasmHostEmulator;
 impl CTVEmulator for WasmHostEmulator {
     fn get_signer_for(

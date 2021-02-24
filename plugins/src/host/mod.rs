@@ -17,6 +17,8 @@ use wasmer::*;
 pub mod plugin_handle;
 pub mod wasm_cache;
 
+/// The state that host-side functions need to be able to use
+/// Also handles the imports of plugin-side functions
 #[derive(WasmerEnv, Clone)]
 pub struct HostEnvironmentInner {
     pub typ: String,
@@ -42,10 +44,19 @@ pub struct HostEnvironmentInner {
     pub init: LazyInit<NativeFunc<(), ()>>,
 }
 
+/// Wrapped Plugin Env so that we don't duplicate state for each function.
+/// We must be careful to ensure we don't see deadlocks.
+/// 
+/// TODO: Figure out how to *just* make this Arc and not Mutex.
 pub type HostEnvironment = Arc<Mutex<HostEnvironmentInner>>;
 
 mod exports {
+    //! the exports that the client will be able to use.
+    //! They must be manually bound when instantiating the client.
     use super::*;
+    /// lookup a plugin key from a human reable name.
+    /// if ok == 1, result is valid.
+    /// out is written and must be 32 bytes of writable memory.
     pub fn sapio_v1_wasm_plugin_lookup_module_name(
         env: &HostEnvironment,
         key: i32,
@@ -78,6 +89,8 @@ mod exports {
         );
     }
 
+    /// Create an instance of a contract by "trampolining" through the host to use another
+    /// plugin identified by key.
     pub fn sapio_v1_wasm_plugin_create_contract(
         env: &HostEnvironment,
         key: i32,
@@ -160,6 +173,7 @@ mod exports {
         })
     }
 
+    /// use the hosts stdout to log a string. The host may make this a no-op.
     pub fn sapio_v1_wasm_plugin_debug_log_string(env: &HostEnvironment, a: i32, len: i32) {
         let env = env.lock().unwrap();
         let stdout = std::io::stdout();
@@ -171,6 +185,8 @@ mod exports {
         }
         w.write("\n".as_bytes()).unwrap();
     }
+
+    /// for the provided hash value, get the clause the oracle will satisfy
     pub fn sapio_v1_wasm_plugin_ctv_emulator_signer_for(env: &HostEnvironment, hash: i32) -> i32 {
         let env = env.lock().unwrap();
         let hash = hash as usize;
@@ -201,6 +217,7 @@ mod exports {
         bytes
     }
 
+    /// get the oracle to sign the psbt passed in
     pub fn sapio_v1_wasm_plugin_ctv_emulator_sign(
         env: &HostEnvironment,
         psbt: i32,
