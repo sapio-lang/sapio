@@ -1,12 +1,17 @@
+#[deny(missing_docs)]
 use bitcoin::hash_types::*;
 use bitcoincore_rpc_async as rpc;
 use rpc::RpcApi;
 use sapio_base::txindex::{TxIndex, TxIndexError};
 use std::sync::Arc;
+/// A TxIndex based on a Bitcoin RPC Client
 pub struct BitcoinNodeIndex {
-    client: rpc::Client,
-    runtime: tokio::runtime::Runtime,
-    can_add: bool,
+    /// RPC Client
+    pub client: rpc::Client,
+    /// tokio runtime
+    pub runtime: Arc<tokio::runtime::Runtime>,
+    /// if can_add is true, then allow the Index to call send_raw_transaction
+    pub can_add: bool,
 }
 
 type Result<T> = std::result::Result<T, TxIndexError>;
