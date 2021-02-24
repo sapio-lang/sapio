@@ -5,20 +5,31 @@ use serde::de::Visitor;
 use serde::de::*;
 use serde::*;
 use std::fmt;
+
 const MAX_MSG: usize = 1_000_000;
 
+/// a PSBT Wrapper type. Note that Serialize/Deserialize are manually implemented
+/// limited to 1MB in size.
 #[derive(Clone)]
 pub struct PSBT(pub PartiallySignedTransaction);
+
+/// A message for a client to challenge a server to prove it has the key
 #[derive(Serialize, Deserialize)]
 pub struct ConfirmKey(pub ExtendedPubKey, pub Sha256);
+
+/// a response from a server to a client with a challenge response
 #[derive(Serialize, Deserialize)]
 pub struct KeyConfirmed(pub bitcoin::secp256k1::Signature, pub Sha256);
+
+/// Wrapper for message serialization
 #[derive(Serialize, Deserialize)]
 pub enum Request {
     ConfirmKey(ConfirmKey),
     SignPSBT(PSBT),
 }
 
+/// A visitor tage for a SafePSBT type that is size limited
+/// Serialized/deserialized with a size tag internally.
 struct SafePSBT(usize);
 
 impl<'de> Visitor<'de> for SafePSBT {
