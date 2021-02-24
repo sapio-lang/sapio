@@ -11,13 +11,23 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+/// EmulatorConfig is used to determine how this sapio-cli instance should stub
+/// out CTV. Emulators are specified by EPK and interface address. Threshold
+/// should be <= emulators.len().
 #[derive(Serialize, Deserialize, Debug)]
 pub struct EmulatorConfig {
+    /// if the emulator should be used or not. We tag explicitly for convenience
+    /// in the config file format.
     pub enabled: bool,
     pub emulators: Vec<(ExtendedPubKey, String)>,
+    /// threshold could be larger than u8, but that seems very unlikely/an error.
     pub threshold: u8,
 }
+
 impl EmulatorConfig {
+    /// Converts a config instance into an emulator trait object. Intenrally, we
+    /// are using a Federated Emulator Connection if emulators.len() > 1, or a
+    /// bare HDOracleEmulatorConnection if emulators.len() == 1
     pub fn get_emulator(&self) -> Result<Arc<dyn CTVEmulator>, Box<dyn std::error::Error>> {
         if self.emulators.len() < self.threshold as usize {
             Err(String::from("Too High Thresh"))?;
@@ -68,6 +78,7 @@ impl Into<PathBuf> for PathBufWrapped {
         self.0
     }
 }
+/// Used to serailize/deserialize pathbufs for config
 mod pathbuf {
     use serde::*;
     use std::path::PathBuf;
@@ -84,6 +95,9 @@ mod pathbuf {
         Ok(String::deserialize(d)?.into())
     }
 }
+
+/// Remote type Derivation for rpc::Auth
+/// TODO: Move to the RPC Library?
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(remote = "super::rpc::Auth")]
 enum Auth {
@@ -91,14 +105,19 @@ enum Auth {
     UserPass(String, String),
     CookieFile(#[serde(with = "pathbuf")] PathBuf),
 }
+/// Which Bitcoin Node should Sapio use
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Node {
     pub url: String,
     #[serde(with = "Auth")]
     pub auth: super::rpc::Auth,
 }
+
+/// A configuration for any network (regtest, main, signet, testnet)
+/// Only one config may set active = true at a time.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NetworkConfig {
+    /// if this is the active config
     pub active: bool,
     pub api_node: Node,
     pub emulator_nodes: Option<EmulatorConfig>,
@@ -112,6 +131,8 @@ impl From<WasmerCacheHash> for [u8; 32] {
     }
 }
 
+/// An ID for an uncompiled Plugin Wasm Binary
+/// It is serialized as a hex slice.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(try_from = "String", into = "String")]
 pub struct WasmerCacheHash([u8; 32]);
@@ -130,6 +151,8 @@ impl TryFrom<String> for WasmerCacheHash {
     }
 }
 
+/// This config has only the currently active network, the other configs get
+/// dropped during the ConfigVerifier::try_into.
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(try_from = "ConfigVerifier")]
 pub struct Config {
@@ -138,6 +161,14 @@ pub struct Config {
 }
 
 impl Config {
+    /// reads the user's config file and returns it,
+    /// or a different one if the user specified a different file manually.
+    ///
+    /// if no config is found for the user, creates a file.
+    ///
+    /// **Race Conditions** This is clearly not safe if multiple edits are
+    /// happening on config.json. It is assumed that the user will ensure
+    /// writes to config.json are safe.
     pub async fn setup(
         matches: &clap::ArgMatches,
         typ: &str,
@@ -164,6 +195,8 @@ impl Config {
     }
 }
 
+/// This is a deserialization helper which checks the config file for well
+/// formedness before processing into an actual config.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ConfigVerifier {
     main: Option<NetworkConfig>,
@@ -186,6 +219,7 @@ impl TryFrom<ConfigVerifier> for Config {
 }
 
 impl ConfigVerifier {
+    /// Return the active network
     fn get_network(&self) -> Result<bitcoin::network::constants::Network, ConfigError> {
         match self.get_n() {
             1 => Err(ConfigError::NoActiveConfig),
@@ -198,6 +232,13 @@ impl ConfigVerifier {
             _ => Err(ConfigError::TooManyActiveNetworks),
         }
     }
+    /// This is some... clever... code which assigns a prime number to every
+    /// active network and then multiplies them all together.
+    ///
+    /// The result can then be used to pick which network should be used & verify
+    /// that only one network is active at once.
+    ///
+    /// The alternative is a bit messier unfortunately, but maybe simpler as a refactor.
     fn get_n(&self) -> i32 {
         let v0 = self.main.as_ref().map(|c| 3 * c.active as i32).unwrap_or(1);
         let v1 = self
@@ -217,6 +258,7 @@ impl ConfigVerifier {
             .unwrap_or(1);
         v0 * v1 * v2 * v3
     }
+    /// Checks the config for correctness and then returns the active config.
     pub fn check(self) -> Result<NetworkConfig, ConfigError> {
         match self.get_n() {
             1 => Err(ConfigError::NoActiveConfig),
