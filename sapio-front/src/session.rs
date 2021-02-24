@@ -1,5 +1,6 @@
-type Key = bitcoin::hashes::sha256::Hash;
+//! An interactive compilation session designed to be compatible with sapio-lang/TUX
 use bitcoin::hashes::hex::ToHex;
+use bitcoin::hashes::Hash;
 use bitcoin::util::amount::Amount;
 use sapio::contract::{Compilable, CompilationError, Compiled, Context};
 use schemars::schema::RootSchema;
@@ -10,10 +11,15 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::Display;
 
+type Key = bitcoin::hashes::sha256::Hash;
+/// Errors that can arise during a Session
 #[derive(Debug)]
 pub enum SessionError {
+    /// Issue was with Serde
     Json(serde_json::Error),
+    /// Issue came from Compilation
     Compiler(CompilationError),
+    /// The session does not have an object saved for the key requested
     ContractNotRegistered,
 }
 
@@ -36,6 +42,7 @@ impl From<CompilationError> for SessionError {
     }
 }
 
+/// Create a compiled object of type `T` from a JSON
 pub fn from_json<T>(s: serde_json::Value, ctx: &Context) -> Result<Compiled, SessionError>
 where
     T: for<'a> Deserialize<'a> + Compilable,
@@ -45,6 +52,8 @@ where
     c
 }
 
+/// Create a compiled object of type `T` from a JSON which we first pass through
+/// type `C`.
 pub fn from_json_convert<C, T, E>(
     s: serde_json::Value,
     ctx: &Context,
@@ -61,10 +70,24 @@ where
     c
 }
 
+/// A `Program` is a wrapper type for a list of
+/// JSON objects that should be of form:
+/// ```json
+/// {
+///     "hex" : Hex Encoded Transaction
+///     "color" : HTML Color,
+///     "metadata" : JSON Value,
+///     "utxo_metadata" : {
+///         "key" : "value",
+///         ...
+///     }
+/// }
+/// ```
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Program {
     program: Vec<Value>,
 }
+/// An action requested by the client
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "action", content = "content")]
 enum Action {
@@ -82,25 +105,30 @@ enum Action {
     Bind(bitcoin::OutPoint, bitcoin::Address),
 }
 
+/// A response to a client request
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "action", content = "content")]
 pub enum Reaction {
+    /// Send over a menu of available contracts / their arguments
     #[serde(rename = "menu")]
     Menu(Value),
+    ///  sendthe Session ID
     #[serde(rename = "session_id")]
     Session(bool, String),
+    /// Send the program created
     #[serde(rename = "created")]
     Created(
         #[serde(with = "bitcoin::util::amount::serde::as_sat")] Amount,
         bitcoin::Address,
         Program,
     ),
+    /// if the save request completed successfully
     #[serde(rename = "saved")]
     Saved(bool),
+    /// respond to Bind request with the transactions created
     #[serde(rename = "bound")]
     Bound(Vec<bitcoin::Transaction>),
 }
-use bitcoin::hashes::Hash;
 fn create_mock_output() -> bitcoin::OutPoint {
     bitcoin::OutPoint {
         txid: bitcoin::hashes::sha256d::Hash::from_inner(
@@ -144,6 +172,7 @@ impl Action {
     }
 }
 
+/// A struct for creating a session Menu interactively
 pub struct MenuBuilder {
     menu: Vec<RootSchema>,
     gen: schemars::gen::SchemaGenerator,
@@ -151,6 +180,7 @@ pub struct MenuBuilder {
     schemas: HashMap<String, String>,
 }
 impl MenuBuilder {
+    /// create an empty Menu
     pub fn new() -> MenuBuilder {
         MenuBuilder {
             menu: Vec::new(),
@@ -159,6 +189,8 @@ impl MenuBuilder {
             schemas: HashMap::new(),
         }
     }
+    /// register type T with an optional name.
+    /// If no name is provided, infer it from the type.
     pub fn register_as<T: JsonSchema + for<'a> Deserialize<'a> + Compilable>(
         &mut self,
         name: Option<String>,
@@ -176,7 +208,8 @@ impl MenuBuilder {
         );
         self.menu.push(s);
     }
-
+    /// register a type T with an optional name and a conversion type C.
+    /// If no name is provided, infer it from the type C.
     pub fn register_as_from<
         C: JsonSchema + for<'a> Deserialize<'a>,
         T: Compilable + TryFrom<C, Error = E>,
@@ -223,12 +256,14 @@ impl From<MenuBuilder> for Menu {
     }
 }
 
+/// A precompiled menu of available contract options
 pub struct Menu {
     menu: String,
     internal_menu: HashMap<String, fn(Value, &Context) -> Result<Compiled, SessionError>>,
     schemas: HashMap<String, String>,
 }
 impl Menu {
+    /// create an instance of contract `name` with the provided args.
     pub fn compile(
         &self,
         name: String,
@@ -241,14 +276,17 @@ impl Menu {
             .ok_or(SessionError::ContractNotRegistered)?;
         f(args, ctx)
     }
+    /// list all available contract names
     pub fn list(&self) -> impl Iterator<Item = &String> {
         self.internal_menu.keys()
     }
+    /// get the schema for a particular contract
     pub fn schema_for(&self, name: &str) -> Option<&String> {
         self.schemas.get(name)
     }
 }
 
+/// An interactive compiler session
 pub struct Session {
     contracts: HashMap<Key, Compiled>,
     example_msg: Option<String>,
@@ -256,12 +294,16 @@ pub struct Session {
     network: bitcoin::Network,
 }
 
+/// Internal msg type to permit either strings or bytes
 pub enum Msg<'a> {
+    /// msg as bytes
     Bytes(&'a [u8]),
+    /// msg as string
     Text(&'a String),
 }
 
 impl Session {
+    /// create an instance of a session with a fixed menu and a given network
     pub fn new(menu: &'static Menu, network: bitcoin::Network) -> Session {
         Session {
             contracts: HashMap::new(),
@@ -270,11 +312,16 @@ impl Session {
             network,
         }
     }
+    /// get a context for this session
+    /// TODO: link to a bitcoin node or something to determine available funds
+    /// TODO: use an emulator if desired?
     pub fn get_context(&self) -> Context {
         // Todo: Make Create specify the amount to send.
         Context::new(self.network, Amount::from_sat(100_000_000_000), None)
     }
 
+    /// process a message from the Session manager (e.g., networking stack)
+    /// and react to it.
     pub fn handle(&mut self, m: Msg) -> Result<Option<Reaction>, serde_json::Error> {
         let action: Action = match m {
             Msg::Text(m) => serde_json::from_str(&m),
@@ -283,6 +330,7 @@ impl Session {
         Ok(action.react(self))
     }
 
+    /// returns the precompiled menu
     pub fn open(&mut self) -> &str {
         &self.menu.menu
     }

@@ -1,3 +1,4 @@
+#[deny(missing_docs)]
 /// Extra functionality for working with Bitcoin types
 pub mod util;
 pub use util::CTVHash;
