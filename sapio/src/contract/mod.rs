@@ -1,3 +1,4 @@
+//! Functionality comprising the language base, macros, and compiler internals.
 use crate::template::Template as TransactionTemplate;
 
 #[macro_use]
@@ -44,9 +45,13 @@ pub struct DynamicContract<'a, T, S>
 where
     S: 'a,
 {
+    /// the list of `ThenFunc` for this contract.
     pub then: Vec<fn() -> Option<actions::ThenFunc<'a, S>>>,
+    /// the list of `FinishOrFunc` for this contract.
     pub finish_or: Vec<fn() -> Option<actions::FinishOrFunc<'a, S, T>>>,
+    /// the list of `Guard` for this contract to finish.
     pub finish: Vec<fn() -> Option<actions::Guard<S>>>,
+    /// The contract data argument to pass to functions
     pub data: S,
 }
 
@@ -79,15 +84,25 @@ pub trait AnyContract
 where
     Self: Sized,
 {
+    /// The parameter pack type for `FinishOrFunc`s.
     type StatefulArguments;
+    /// A Reference which can be extracted to the contract argument data
+    /// For some types, Ref == Self, and for other types Ref may point to a member.
+    /// This enables `DynamicContract` and `Contract` to impl `AnyContract`, as well
+    /// as more exotic types.
     type Ref;
+    /// obtain a reference to the `ThenFunc` list.
     fn then_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::ThenFunc<'a, Self::Ref>>]
     where
         Self::Ref: 'a;
+
+    /// obtain a reference to the `FinishOrFunc` list.
     fn finish_or_fns<'a>(
         &'a self,
     ) -> &'a [fn() -> Option<actions::FinishOrFunc<'a, Self::Ref, Self::StatefulArguments>>];
+    /// obtain a reference to the `Guard` list.
     fn finish_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::Guard<Self::Ref>>];
+    /// obtain a reference to `Self::Ref` type.
     fn get_inner_ref<'a>(&'a self) -> &'a Self::Ref;
 }
 

@@ -1,22 +1,41 @@
+//! error types that can be returned from Sapio.
+//! Where possible, concrete error types are wrapped, but in order to handle
+//! errors created by the user we allow boxing an error trait.
 use sapio_ctv_emulator_trait::EmulatorError;
 use std::error::Error;
 use std::fmt;
+/// Sapio's core error type.
 #[derive(Debug)]
 pub enum CompilationError {
+    /// Unspecified Error -- but we should stop compiling
     TerminateCompilation,
+    /// Error when a `ThenFunc` returns no Templates.
     MissingTemplates,
+    /// Error if a Policy is empty
     EmptyPolicy,
+    /// Error if a contract does not have sufficient funds available
     OutOfFunds,
+    /// Error if a CheckSequenceVerify clause is incompatible with the sequence already set.
+    /// E.g., blocks and time
     IncompatibleSequence,
+    /// Error if a CheckLockTime clause is incompatible with the locktime already set.
+    /// E.g., blocks and time
     IncompatibleLockTime,
+    /// Error if a sequence at index j >= inputs.len() is attempted to be set
     NoSuchSequence,
+    /// Error if parsing an Amount failed
     ParseAmountError(bitcoin::util::amount::ParseAmountError),
+    /// Error from the Policy Compiler
     Miniscript(miniscript::policy::compiler::CompilerError),
+    /// Error from the miniscript system
     MiniscriptE(miniscript::Error),
+    /// Error with a Timelock
     TimeLockError(sapio_base::timelocks::LockTimeError),
+    /// Unknown Error type -- either from a user or from some unhandled dependency
     Custom(Box<dyn std::error::Error>),
 }
 impl CompilationError {
+    /// Create a custom compilation error instance
     pub fn custom<E: std::error::Error + 'static>(e: E) -> Self {
         CompilationError::Custom(Box::new(e))
     }

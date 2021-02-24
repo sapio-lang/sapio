@@ -1,3 +1,4 @@
+//! The primary compilation traits and types
 use super::AnyContract;
 use super::CompilationError;
 use super::Compiled;
@@ -56,6 +57,7 @@ mod private {
 }
 /// Compilable is a trait for anything which can be compiled
 pub trait Compilable: private::ImplSeal {
+    /// Compile a compilable object returning errors, if any.
     fn compile(&self, ctx: &Context) -> Result<Compiled, CompilationError>;
 }
 

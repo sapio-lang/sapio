@@ -1,3 +1,4 @@
+//! Interactive Transaction Template Builder
 pub use super::{Output, OutputMeta};
 use super::{Template, TemplateMetadata};
 use crate::contract::{CompilationError, Context};
@@ -31,6 +32,7 @@ impl Builder {
             ctx,
         }
     }
+    /// reduce the amount availble in the builder's context
     pub fn spend_amount(mut self, amount: Amount) -> Result<Self, CompilationError> {
         self.ctx.spend_amount(amount)?;
         Ok(self)
@@ -52,7 +54,8 @@ impl Builder {
         self.spend_amount(amount)
     }
 
-    // TODO: Make guarantee there is some external input?
+    /// adds available funds to the builder's context object.
+    /// TODO: Make guarantee there is some external input?
     pub fn add_amount(mut self, a: Amount) -> Self {
         self.ctx.add_amount(a);
         self
@@ -114,6 +117,8 @@ impl Builder {
         Ok(self)
     }
 
+    /// overwrite any existing label with the provided string,
+    /// or set a label if non provided thus far.
     pub fn set_label(mut self, label: String) -> Self {
         self.label = Some(label);
         self

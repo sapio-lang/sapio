@@ -1,3 +1,4 @@
+//! general non-parameter compilation state required by all contracts
 use super::{Amount, Compilable, CompilationError, Compiled};
 use crate::util::amountrange::AmountRange;
 use bitcoin::Network;
@@ -12,6 +13,7 @@ pub struct Context {
     /* TODO: Add Context Fields! */
     available_funds: Amount,
     emulator: NullEmulator,
+    /// which network is the contract building for?
     pub network: Network,
 }
 

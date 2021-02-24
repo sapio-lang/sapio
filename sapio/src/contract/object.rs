@@ -1,3 +1,4 @@
+//! Object is the output of Sapio Compilation & can be linked to a specific coin
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
 use ::miniscript::{self, *};
@@ -17,9 +18,12 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
+/// Error types that can arise when constructing an Object
 #[derive(Debug)]
 pub enum ObjectError {
+    /// The Error was due to Miniscript
     Miniscript(miniscript::policy::compiler::CompilerError),
+    /// The Error was for an unknown/unhandled reason
     Custom(Box<dyn std::error::Error>),
 }
 impl std::error::Error for ObjectError {}
@@ -50,31 +54,40 @@ impl std::fmt::Display for ObjectError {
 //TODO: Make type immutable and correct by construction...
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct Object {
+    /// a map of template hashes to the corresponding template, that in the
+    /// policy are a CTV protected
     #[serde(
         rename = "template_hash_to_template_map",
         skip_serializing_if = "HashMap::is_empty",
         default
     )]
     pub ctv_to_tx: HashMap<sha256::Hash, Template>,
+    /// a map of template hashes to the corresponding template, that in the
+    /// policy are not necessarily CTV protected but we might want to know about
+    /// anyways.
     #[serde(
         rename = "suggested_template_hash_to_template_map",
         skip_serializing_if = "HashMap::is_empty",
         default
     )]
     pub suggested_txs: HashMap<sha256::Hash, Template>,
+    /// The Object's Policy -- if known
     #[serde(
         rename = "known_policy",
         skip_serializing_if = "Option::is_none",
         default
     )]
     pub policy: Option<Clause>,
+    /// The Object's address
     pub address: bitcoin::Address,
+    /// The Object's descriptor -- if there is one known/available
     #[serde(
         rename = "known_descriptor",
         skip_serializing_if = "Option::is_none",
         default
     )]
     pub descriptor: Option<Descriptor<bitcoin::PublicKey>>,
+    /// The amount_range safe to send this object
     pub amount_range: AmountRange,
 }
 
@@ -114,6 +127,11 @@ impl Object {
             .unwrap();
         (a.into_iter().map(|x| x.extract_tx()).collect(), b)
     }
+    /// bind_psbt attaches and `Object` to a specific UTXO, returning a
+    /// Vector of PSBTs and transaction metadata.
+    ///
+    /// `bind_psbt` accepts a CTVEmulator, a txindex, and a map of outputs to be
+    /// bound to specific template hashes.
     pub fn bind_psbt(
         &self,
         out_in: bitcoin::OutPoint,
