@@ -1,3 +1,4 @@
+#[deny(missing_docs)]
 use sapio::contract::{Compilable, Context};
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};

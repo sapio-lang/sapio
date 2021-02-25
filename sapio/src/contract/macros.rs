@@ -1,3 +1,5 @@
+//! macros for making defining Sapio contracts less verbose.
+
 /// The declare macro is used to declare the list of pathways in a Contract trait impl.
 /// formats for calling are:
 /// ```ignore
@@ -13,6 +15,8 @@
 #[macro_export]
 macro_rules! declare {
     {then $(,$a:expr)*} => {
+        /// binds the list of `ThenFunc`'s to this impl.
+        /// Any fn() which returns None is ignored (useful for type-level state machines)
         const THEN_FNS: &'static [fn() -> Option<$crate::contract::actions::ThenFunc<'static, Self>>] = &[$($a,)*];
     };
     [state $i:ty]  => {
@@ -20,12 +24,18 @@ macro_rules! declare {
     };
 
     [state]  => {
+        /// Due to type system limitations, all `FinishOrFuncs` for a Contract type must share a
+        /// parameter pack type. If Nightly, trait default types allowed.
         #[cfg(feature = "nightly")]
         type StatefulArguments = ();
+        /// Due to type system limitations, all `FinishOrFuncs` for a Contract type must share a
+        /// parameter pack type. If stable, no default type allowed.
         #[cfg(not(feature = "nightly"))]
         type StatefulArguments;
     };
     {updatable<$($i:ty)?> $(,$a:expr)*} => {
+        /// binds the list of `FinishOrFunc`'s to this impl.
+        /// Any fn() which returns None is ignored (useful for type-level state machines)
         const FINISH_OR_FUNCS: &'static [fn() -> Option<$crate::contract::actions::FinishOrFunc<'static, Self, Self::StatefulArguments>>] = &[$($a,)*];
         declare![state $($i)?];
     };
@@ -34,6 +44,11 @@ macro_rules! declare {
         declare![state ()];
     };
     {finish $(,$a:expr)*} => {
+        /// binds the list of `Gurard`'s to this impl as unlocking conditions.
+        /// `Guard`s only need to be bound if it is desired that they are
+        /// sufficient to unlock funds, a `Guard` should not be bound if it is
+        /// intended to be used with a `ThenFunc`.
+        /// Any fn() which returns None is ignored (useful for type-level state machines)
         const FINISH_FNS: &'static [fn() -> Option<$crate::contract::actions::Guard<Self>>] = &[$($a,)*];
     };
 

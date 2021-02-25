@@ -1,12 +1,12 @@
+//! example of using a dynamic contract
 use sapio::contract::DynamicContract;
 use sapio::contract::*;
 use sapio::*;
 use schemars::*;
 use serde::*;
 
-#[derive(JsonSchema, Deserialize)]
-pub struct DynamicExample;
-
+/// Demonstrates how to make a contract object without known functionality at
+/// (rust) compile time. `D` Binds statically to the AnyContract interface though!
 struct D<'a> {
     v: Vec<fn() -> Option<actions::ThenFunc<'a, D<'a>>>>,
 }
@@ -32,6 +32,10 @@ impl AnyContract for D<'static> {
         self
     }
 }
+
+/// Shows how to make a Dynamic Contract without creating a bespoke type.
+#[derive(JsonSchema, Deserialize)]
+pub struct DynamicExample;
 impl DynamicExample {
     then! {next |s, ctx| {
         let v:

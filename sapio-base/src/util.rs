@@ -5,12 +5,14 @@ use bitcoin::util::amount::Amount;
 
 /// Any type which can generate a CTVHash. Allows some decoupling in the future if some types will
 /// not be literal transactions.
+/// TODO: Rename to something like Transaction Extension Features
 pub trait CTVHash {
+    /// Uses BIP-119 Logic to compute a CTV Hash
     fn get_ctv_hash(&self, input_index: u32) -> sha256::Hash;
+    /// Gets the total amount a transaction creates in outputs.
     fn total_amount(&self) -> Amount;
 }
 impl CTVHash for bitcoin::Transaction {
-    /// Uses BIP-119 Logic to compute a CTV Hash
     fn get_ctv_hash(&self, input_index: u32) -> sha256::Hash {
         let mut ctv_hash = sha256::Hash::engine();
         self.version.consensus_encode(&mut ctv_hash).unwrap();

@@ -1,3 +1,4 @@
+//! A Price Oracle trait for Derivatives
 use sapio_base::Clause;
 /// Placeholder type for a standard way of looking up a stock symbol; can be defined more
 /// concretely but should have a human readable string representation.
@@ -15,7 +16,9 @@ pub trait Oracle {
 ///
 /// Under *certain* circumstances, composition could be optimized (e.g., schnorr keys)
 pub struct ThresholdOracle {
+    /// the list of price oracles to consult
     pub oracles: Vec<Box<dyn Oracle>>,
+    /// how many oracles must agree
     pub thresh: usize,
 }
 

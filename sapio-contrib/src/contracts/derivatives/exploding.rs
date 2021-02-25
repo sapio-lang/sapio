@@ -1,8 +1,16 @@
+//! Contracts which have a expiration date before which they must be executed...
 use super::*;
 use sapio_base::timelocks::*;
+/// Generic functionality required for Exploding contracts
 pub trait Explodes: 'static + Sized {
-    then!(explodes);
-    then!(strikes);
+    then!(
+        /// What to do when the timeout expires
+        explodes
+    );
+    then!(
+        /// what to do when the holder wishes to strike
+        strikes
+    );
 }
 
 impl<T> Contract for ExplodingOption<T>
@@ -22,7 +30,7 @@ where
     declare!(then, Self::explodes, Self::strikes);
     declare!(non updatable);
 }
-
+/// Wraps a generic option opt with functionality to refund both parties on timeout.
 pub struct ExplodingOption<T: 'static> {
     party_one: Amount,
     party_two: Amount,
@@ -74,6 +82,8 @@ where
     );
 }
 
+/// Similar to `ExplodingOption` except that the option requires an additional
+/// value amount to be paid in in order to execute, hence being "under funded"
 pub struct UnderFundedExplodingOption<T: 'static> {
     party_one: Amount,
     party_two: Amount,

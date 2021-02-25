@@ -1,3 +1,4 @@
+#[deny(missing_docs)]
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::{Hash, HashEngine};
 use bitcoin::util::bip32::*;

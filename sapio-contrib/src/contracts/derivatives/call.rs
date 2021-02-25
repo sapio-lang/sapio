@@ -1,4 +1,6 @@
+//! Call Options
 use super::*;
+/// A Call Option -- the buyer gains money as the price increases.
 pub struct Call<'a> {
     /// The # of units
     amount: Amount,

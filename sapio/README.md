@@ -69,7 +69,7 @@ to [tux](https://github.com/sapio-lang/tux) to run an interactive session.
 
 
 Let's look at some example Sapio contracts (see
-[the example contracts](https://github.com/JeremyRubin/sapio/tree/master/examples/server/contracts/) for more
+[the example contracts](https://github.com/JeremyRubin/sapio/tree/master/sapio-contrib/src/contracts) for more
 examples).
 
 All contracts have 3 basic parts: a struct definition, some set of methods, and a Contract trait

@@ -1,3 +1,4 @@
+//! The Contracts from the sapio README.md
 use bitcoin::util::amount::CoinAmount;
 use sapio::contract::*;
 use sapio::*;

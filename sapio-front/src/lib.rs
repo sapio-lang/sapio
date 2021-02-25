@@ -1,3 +1,4 @@
+#[deny(missing_docs)]
 pub mod session;
 #[cfg(test)]
 mod tests {

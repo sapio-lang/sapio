@@ -1,3 +1,4 @@
+#[deny(missing_docs)]
 use sapio::contract::*;
 use sapio::*;
 use sapio_wasm_plugin::client::*;
@@ -5,8 +6,10 @@ use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
 
+/// A payment to a specific address
 #[derive(JsonSchema, Serialize, Deserialize, Clone)]
 pub struct Payment {
+    /// The amount to send
     #[serde(with = "bitcoin::util::amount::serde::as_btc")]
     #[schemars(with = "f64")]
     pub amount: bitcoin::util::amount::Amount,
@@ -17,7 +20,10 @@ pub struct Payment {
 /// Documentation placed here will be visible to users!
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct TreePay {
+    /// all of the payments needing to be sent
     pub participants: Vec<Payment>,
+    /// the radix of the tree to build. Optimal for users should be around 4 or
+    /// 5 (with CTV, not emulators).
     pub radix: usize,
 }
 

@@ -1,3 +1,4 @@
+//! A collection of modules for creating derivative contracts with Sapio
 use bitcoin;
 use bitcoin::util::amount::Amount;
 use contract::*;

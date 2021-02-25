@@ -1,11 +1,16 @@
+//! definitions of emulator traits required to use as a trait object in low-level libraries.
 use bitcoin::hashes::sha256;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 pub use sapio_base::Clause;
 use std::fmt;
 use std::sync::Arc;
+/// Errors that an emulator might throw
 #[derive(Debug)]
 pub enum EmulatorError {
+    /// Wraps an issue caused in a Network/IO context
+    /// (TODO: Prevents serialization/deserialization)
     NetworkIssue(std::io::Error),
+    /// Error was caused by BIP32
     BIP32Error(bitcoin::util::bip32::Error),
 }
 impl fmt::Display for EmulatorError {

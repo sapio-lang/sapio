@@ -1,3 +1,4 @@
+//! External required APIs in order to use Derivative contracts
 use super::*;
 /// An API for the Operator Service:
 pub trait OperatorApi {

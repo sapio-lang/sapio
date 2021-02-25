@@ -1,3 +1,4 @@
+#[deny(missing_docs)]
 use bitcoin::consensus::serialize;
 use bitcoin::consensus::Decodable;
 use bitcoin::secp256k1::Secp256k1;
