@@ -1,4 +1,6 @@
+//! Put Contract
 use super::*;
+/// Put Contracts pay out as the price goes down.
 pub struct Put<'a> {
     /// The # of units
     amount: Amount,

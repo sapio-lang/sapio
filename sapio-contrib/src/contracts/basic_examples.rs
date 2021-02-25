@@ -1,7 +1,9 @@
+//! Some basic examples showing a kitchen sink of functionality
 use super::*;
+use std::marker::PhantomData;
 
 #[derive(JsonSchema, Serialize, Deserialize)]
-pub struct ExampleA {
+struct ExampleA {
     alice: bitcoin::PublicKey,
     bob: bitcoin::PublicKey,
     amount: CoinAmount,
@@ -18,24 +20,23 @@ impl Contract for ExampleA {
     declare! {non updatable}
 }
 
-use std::marker::PhantomData;
-pub trait BState: JsonSchema {
+trait BState: JsonSchema {
     fn get_n(_n: u8, max: u8) -> u8 {
         return max;
     }
 }
 #[derive(JsonSchema, Serialize, Deserialize)]
-pub struct Start;
+struct Start;
 impl BState for Start {}
 #[derive(JsonSchema, Serialize, Deserialize)]
-pub struct Finish;
+struct Finish;
 impl BState for Finish {
     fn get_n(n: u8, _max: u8) -> u8 {
         return n;
     }
 }
 
-pub trait ExampleBThen
+trait ExampleBThen
 where
     Self: Sized,
 {
@@ -43,7 +44,7 @@ where
 }
 
 #[derive(JsonSchema, Serialize, Deserialize)]
-pub struct ExampleB<T: BState> {
+struct ExampleB<T: BState> {
     participants: Vec<bitcoin::PublicKey>,
     threshold: u8,
     amount: CoinAmount,

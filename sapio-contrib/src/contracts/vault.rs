@@ -1,15 +1,17 @@
+//! Contract for managing movement of funds from cold to hot storage
 use super::undo_send::UndoSendInternal;
 use bitcoin::util::amount::CoinAmount;
-
 use sapio::contract::*;
 use sapio::*;
+use sapio_base::timelocks::AnyRelTimeLock;
 use schemars::*;
 use serde::*;
 use std::convert::{TryFrom, TryInto};
-
-use sapio_base::timelocks::AnyRelTimeLock;
 use std::rc::Rc;
 
+/// A Vault makes a "annuity chain" which pays out to `hot_storage` every `timeout` period for `n_steps`.
+/// The funds in `hot_storage` are in an UndoSend contract for a timeout of
+/// `mature`. At any time the remaining funds can be moved to `cold_storage`, which may vary based on the amount.
 pub struct Vault {
     cold_storage: Rc<dyn Fn(CoinAmount, &Context) -> Result<Compiled, CompilationError>>,
     hot_storage: bitcoin::Address,
@@ -60,6 +62,7 @@ impl Contract for Vault {
     declare! {non updatable}
 }
 
+/// A specialization of `Vault` where cold storage is a regular `bitcoin::Address`
 #[derive(JsonSchema, Deserialize)]
 pub struct VaultAddress {
     cold_storage: bitcoin::Address,
@@ -86,6 +89,8 @@ impl From<VaultAddress> for Vault {
     }
 }
 
+/// A specialization of `Vault` where cold storage is a tree payment to a `bitcoin::Address`
+/// split up based on a max amount per address
 #[derive(JsonSchema, Deserialize)]
 pub struct VaultTree {
     cold_storage: bitcoin::Address,

@@ -1,18 +1,24 @@
+//! contracts for paying a large set of recipients fee efficiently
 use sapio::contract::*;
 use sapio::*;
 use schemars::*;
 use serde::*;
 use std::convert::TryInto;
+/// instructions to send an amount of coin to an address
 #[derive(JsonSchema, Serialize, Deserialize, Clone)]
 pub struct Payment {
+    /// The amount of coin to send
     pub amount: bitcoin::util::amount::CoinAmount,
     /// # Address
     /// The Address to send to
     pub address: bitcoin::Address,
 }
+/// Create a tree of payments with a given radix
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct TreePay {
+    /// the list of payments to create
     pub participants: Vec<Payment>,
+    /// the radix to use (4 or 5 near optimal, depending on if CTV emulation is used this may be inaccurate)
     pub radix: usize,
 }
 

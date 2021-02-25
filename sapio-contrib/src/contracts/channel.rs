@@ -1,10 +1,9 @@
+//! An example of how one might begin building a payment channel contract in Sapio
 use contract::actions::*;
 use contract::*;
 use sapio::*;
+use sapio_base::Clause;
 
-use sapio::clause::Clause;
-
-use ::miniscript::*;
 use bitcoin;
 use bitcoin::secp256k1::*;
 use bitcoin::util::amount::{Amount, CoinAmount};
@@ -20,6 +19,9 @@ use std::convert::TryInto;
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use miniscript::Descriptor;
+    use miniscript::DescriptorTrait;
     #[test]
     fn it_works() {
         db_serde::register_db("mock".to_string(), |_s| Arc::new(Mutex::new(MockDB {})));
@@ -30,9 +32,13 @@ mod tests {
                 compressed: true,
                 key: full.generate_keypair(&mut rng).1,
             })
-        .collect();
-        let resolution =
-            Compiled::from_descriptor(Descriptor::<bitcoin::PublicKey>::Pkh(public_keys[2]), None);
+            .collect();
+        let resolution = Compiled::from_address(
+            Descriptor::<bitcoin::PublicKey>::Pkh(miniscript::descriptor::Pkh::new(public_keys[2]))
+                .address(bitcoin::Network::Regtest)
+                .expect("An Address"),
+            None,
+        );
 
         let db = Arc::new(Mutex::new(MockDB {}));
         let x: Channel<Start> = Channel {
@@ -56,17 +62,21 @@ mod tests {
             serde_json::to_string_pretty(&schema_for!(Channel<Stop>)).unwrap()
         );
         println!("{}", serde_json::to_string_pretty(&y).unwrap());
-        Compilable::compile(&x);
-        Compilable::compile(&y);
+        let mut ctx =
+            sapio::contract::Context::new(bitcoin::Network::Regtest, Amount::from_sat(10000), None);
+        Compilable::compile(&x, &mut ctx);
+        Compilable::compile(&y, &mut ctx);
     }
-
 }
 
 /// Args are some messages that can be passed to a Channel instance
 #[derive(Debug)]
 pub enum Args {
+    /// Revoke a hash and move to the next state...
     Update {
+        /// hash to revoke
         revoke: bitcoin::hashes::sha256::Hash,
+        /// the balances of the channel
         split: (Amount, Amount),
     },
 }
@@ -80,7 +90,9 @@ pub struct DBHandle {
 /// DB Trait is for a Trait Object that can be used to record state updates for a channel.
 /// Examples implements a MockDB
 pub trait DB {
+    /// Simply save a transcript of all messages to reconstrue channel state
     fn save(&self, a: Args);
+    /// gets a handle to this DB instance for global lookup
     fn link(&self) -> DBHandle;
 }
 
@@ -140,8 +152,10 @@ mod db_serde {
 /// These States are enum'd at the trait/type level so as
 /// to be used as type tags
 trait State {}
+/// State Start
 #[derive(JsonSchema)]
 struct Start();
+/// state Stop
 #[derive(JsonSchema)]
 struct Stop();
 impl State for Start {}
@@ -162,7 +176,7 @@ struct Channel<T: State> {
 
 /// Functionality Available for a channel regardless of state
 impl<T: State> Channel<T> {
-    guard!(timeout |s, ctx| { Clause::Older(100) });
+    guard!(timeout | s, ctx | { Clause::Older(100) });
     guard!(cached signed |s, ctx| {Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)])});
 
     finish! {
@@ -180,6 +194,9 @@ impl<T: State> Channel<T> {
 
     finish! {
         cooperate [Self::signed]
+            |s, ctx, o| {
+                Ok(Box::new(std::iter::empty()))
+            }
     }
 }
 
@@ -188,10 +205,10 @@ trait FunctionalityAtState
 where
     Self: Sized,
 {
-    fn begin_contest() -> Option<ThenFunc<Self>> {
+    fn begin_contest<'a>() -> Option<ThenFunc<'a, Self>> {
         None
     }
-    fn finish_contest() -> Option<ThenFunc<Self>> {
+    fn finish_contest<'a>() -> Option<ThenFunc<'a, Self>> {
         None
     }
 }
@@ -200,7 +217,7 @@ where
 impl FunctionalityAtState for Channel<Start> {
     then! {begin_contest |s, ctx| {
         ctx.template().add_output(
-            s.amount,
+            s.amount.try_into()?,
             &Channel::<Stop> {
                 pd: Default::default(),
                 alice: s.alice,
@@ -217,7 +234,7 @@ impl FunctionalityAtState for Channel<Start> {
 /// Override finish_contest when state = Start
 impl FunctionalityAtState for Channel<Stop> {
     then! {finish_contest [Self::timeout] |s, ctx| {
-        ctx.template().add_output(s.amount, &s.resolution, None)?.into()
+        ctx.template().add_output(s.amount.try_into()?, &s.resolution, None)?.into()
     }}
 }
 

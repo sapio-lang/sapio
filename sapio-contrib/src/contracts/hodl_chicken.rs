@@ -1,3 +1,5 @@
+//! HODL Chicken is a fun game to see who has stronger hands.
+//!
 /**
 * This License applies solely to the file hodl_chicken.rs.
 * Copyright (c) 2020, Pyskell and Judica, Inc
@@ -31,6 +33,7 @@ use schemars::*;
 use serde::*;
 use std::convert::TryFrom;
 
+/// Payout can be into any Compiled object
 pub type Payout = Compiled;
 #[derive(JsonSchema, Serialize, Deserialize, Clone)]
 struct Payouts {
@@ -39,6 +42,8 @@ struct Payouts {
     /// Loser
     loser: Payout,
 }
+/// The `HodlChickenInner` has been structurally verified
+/// during conversion from `HodlChickenChecks`
 #[derive(JsonSchema, Serialize, Deserialize)]
 #[serde(try_from = "HodlChickenChecks")]
 pub struct HodlChickenInner {
@@ -52,6 +57,8 @@ pub struct HodlChickenInner {
     chicken_gets: u64,
 }
 
+/// A wrapper around HodlChickenInner that ensures
+/// invariants on values are kept.
 #[derive(JsonSchema, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct HodlChickenChecks(HodlChickenInner);

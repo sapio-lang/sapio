@@ -1,3 +1,4 @@
+//! A Contract that offers peg-in functionality for sidechains
 use bitcoin::util::amount::CoinAmount;
 use sapio::contract::*;
 use sapio::*;
@@ -7,16 +8,20 @@ use serde::*;
 use std::convert::TryInto;
 use std::marker::PhantomData;
 
+/// State  when recover may start
 #[derive(JsonSchema, Deserialize, Default)]
 pub struct CanBeginRecovery;
+/// State when recovery may complete
 #[derive(JsonSchema, Deserialize, Default)]
 pub struct CanFinishRecovery;
 
+/// trait-level enum for states of a FederatedPegIn
 pub trait RecoveryState {}
 
 impl RecoveryState for CanFinishRecovery {}
 impl RecoveryState for CanBeginRecovery {}
 
+/// A contract for depositing into a federated side chain.
 #[derive(JsonSchema, Deserialize)]
 pub struct FederatedPegIn<T: RecoveryState> {
     keys: Vec<bitcoin::PublicKey>,
@@ -28,14 +33,18 @@ pub struct FederatedPegIn<T: RecoveryState> {
     _pd: PhantomData<T>,
 }
 
+/// Actions that will be specialized depending on the exact state.
 pub trait StateDependentActions
 where
     Self: Sized,
 {
-    /* Should only be defined when RecoveryState is in CanFinishRecovery */
-    guard! {finish_recovery}
-    /* Should only be defined when RecoveryState is in CanBeginRecovery */
-    then! {begin_recovery}
+    guard! {
+    /// Should only be defined when RecoveryState is in CanFinishRecovery
+    finish_recovery}
+
+    then! {
+    /// Should only be defined when RecoveryState is in CanBeginRecovery
+    begin_recovery}
 }
 impl StateDependentActions for FederatedPegIn<CanBeginRecovery> {
     then! {begin_recovery [Self::recovery_signed] |s, ctx| {
@@ -78,4 +87,5 @@ where
     declare! {non updatable}
 }
 
+/// Type Alias for the state to start FederatedPegIn from.
 pub type PegIn = FederatedPegIn<CanBeginRecovery>;
