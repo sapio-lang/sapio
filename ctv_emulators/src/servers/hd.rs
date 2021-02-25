@@ -6,9 +6,17 @@ pub struct HDOracleEmulator {
 }
 
 impl HDOracleEmulator {
+    /// create a new HDOracleEmulator
+    ///
+    /// if debug is set, runs in a "single threaded" mode where we can observe errors on connections rather than ignoring them.
     pub fn new(root: ExtendedPrivKey, debug: bool) -> Self {
         HDOracleEmulator { root, debug }
     }
+    /// binds a HDOracleEmulator to a socket interface and runs the server
+    ///
+    /// This will only return when debug = false if The TcpListener fails.
+    /// When debug = true, then we join each connection one at a time and return
+    /// any errors.
     pub async fn bind<A: ToSocketAddrs>(self, a: A) -> std::io::Result<()> {
         let listener = TcpListener::bind(a).await?;
         loop {
@@ -28,11 +36,17 @@ impl HDOracleEmulator {
             }
         }
     }
+    /// helper to get an EPK for the oracle.
     fn derive(&self, h: Sha256, secp: &Secp256k1<All>) -> Result<ExtendedPrivKey, Error> {
         let c = hash_to_child_vec(h);
         self.root.derive_priv(secp, &c)
     }
 
+    /// Signs a PSBT with the correct derived key.
+    ///
+    /// Always signs for spending index 0.
+    ///
+    /// May fail to sign if the PSBT is not properly formatted
     fn sign(
         &self,
         mut b: PartiallySignedTransaction,
@@ -72,13 +86,18 @@ impl HDOracleEmulator {
                 b.inputs[0].partial_sigs.insert(pk, signature);
                 return Ok(b);
             } else {
-                input_error("Could not find UTXOe")?;
+                input_error("Could not find UTXO")?;
             }
         } else {
             input_error("Could Not Derive Key")?;
         }
         input_error("Unknown Failure to Sign")
     }
+
+    /// the main server business logic.
+    ///
+    /// - on receiving Request::SignPSBT, signs the PSBT.
+    /// - on receiving Request::ConfirmKey, signs the challenge prefixed by a nonce.
     async fn handle(&self, t: &mut TcpStream) -> Result<(), std::io::Error> {
         let request = Self::requested(t).await?;
         match request {
@@ -104,12 +123,19 @@ impl HDOracleEmulator {
         }
     }
 
+    /// receive a request via the tcpstream.
+    /// wire format: length:u32 data:[u8;length]
+    ///
+    /// TODO: DoS Critical: limit the allowed max length we will attempt to derserialize
     async fn requested(t: &mut TcpStream) -> Result<msgs::Request, std::io::Error> {
         let l = t.read_u32().await? as usize;
         let mut v = vec![0u8; l];
         t.read_exact(&mut v[..]).await?;
         Ok(serde_json::from_slice(&v[..])?)
     }
+
+    /// respond via the tcpstream.
+    /// wire format: length:u32 data:[u8;length]
     async fn respond<T: Serialize>(t: &mut TcpStream, r: &T) -> Result<(), std::io::Error> {
         let v = serde_json::to_vec(r)?;
         t.write_u32(v.len() as u32).await?;

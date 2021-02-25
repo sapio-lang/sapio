@@ -1,7 +1,10 @@
+//! tools for caching compilations of wasm plugins to disk
+use std::ffi::OsString;
 use std::path::PathBuf;
 use wasmer::{DeserializeError, Module, SerializeError, Store};
 use wasmer_cache::{Cache, FileSystemCache, Hash};
 
+/// get the path for the compiled modules
 fn get_path(typ: &str, org: &str, proj: &str) -> impl Into<PathBuf> {
     let proj =
         directories::ProjectDirs::from(typ, org, proj).expect("Failed to find config directory");
@@ -9,7 +12,8 @@ fn get_path(typ: &str, org: &str, proj: &str) -> impl Into<PathBuf> {
     path.push("modules");
     path
 }
-use std::ffi::OsString;
+
+/// look at the cache and get all of the keys (as Strings) for plugins
 pub fn get_all_keys_from_fs(
     typ: &str,
     org: &str,
@@ -31,6 +35,7 @@ pub fn get_all_keys_from_fs(
         .collect()
 }
 
+/// load a module given the bytes of the module, may consult cache if available
 pub fn load_module(
     typ: &str,
     org: &str,
@@ -44,6 +49,7 @@ pub fn load_module(
     unsafe { f.load(store, key) }.map(|m| (m, key))
 }
 
+/// load a module from the cache
 pub fn load_module_key(
     typ: &str,
     org: &str,
@@ -55,6 +61,8 @@ pub fn load_module_key(
     let f = FileSystemCache::new(path)?;
     unsafe { f.load(store, key) }.map(|m| (m, key))
 }
+
+/// store a module into the cache
 pub fn store_module(
     typ: &str,
     org: &str,

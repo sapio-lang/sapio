@@ -1,3 +1,4 @@
+//!  a plugin handle for a wasm plugin.
 use super::*;
 use crate::host::exports::*;
 use crate::host::wasm_cache::get_all_keys_from_fs;
@@ -13,10 +14,12 @@ pub struct WasmPluginHandle {
     net: bitcoin::Network,
 }
 impl WasmPluginHandle {
+    /// the cache ID for this plugin
     pub fn id(&self) -> WASMCacheID {
         self.key
     }
 
+    /// load all the cached keys as plugins upfront.
     pub async fn load_all_keys(
         typ: String,
         org: String,
@@ -42,6 +45,9 @@ impl WasmPluginHandle {
         }
         Ok(r)
     }
+
+    /// Create an plugin handle. Only one of key or file should be set, and one
+    /// should be set.
     pub async fn new(
         typ: String,
         org: String,
@@ -137,6 +143,7 @@ impl WasmPluginHandle {
         })
     }
 
+    /// forget an allocated pointer
     pub fn forget(&self, p: i32) -> Result<(), Box<dyn Error>> {
         Ok(self
             .env
@@ -146,6 +153,8 @@ impl WasmPluginHandle {
             .ok_or("Uninitialized")?
             .call(p)?)
     }
+
+    /// create an allocation
     pub fn allocate(&self, len: i32) -> Result<i32, Box<dyn Error>> {
         Ok(self
             .env
@@ -155,6 +164,8 @@ impl WasmPluginHandle {
             .ok_or("Uninitialized")?
             .call(len)?)
     }
+
+    /// pass a string to the WASM plugin
     pub fn pass_string(&self, s: &str) -> Result<i32, Box<dyn Error>> {
         let offset = self.allocate(s.len() as i32)?;
         match self.pass_string_inner(s, offset) {
@@ -165,6 +176,8 @@ impl WasmPluginHandle {
             }
         }
     }
+
+    /// helper for string passing
     fn pass_string_inner(&self, s: &str, offset: i32) -> Result<(), Box<dyn Error>> {
         let memory = self.instance.exports.get_memory("memory")?;
         let mem: MemoryView<u8> = memory.view();
@@ -173,6 +186,8 @@ impl WasmPluginHandle {
         }
         Ok(())
     }
+
+    /// read something from wasm memory, null terminated
     fn read_to_vec(&self, p: i32) -> Result<Vec<u8>, Box<dyn Error>> {
         let memory = self.instance.exports.get_memory("memory")?;
         let mem: MemoryView<u8> = memory.view();

@@ -1,4 +1,6 @@
 use super::*;
+/// Creates a multi-condition emulator with a certain threshold.
+/// It implements CTVEmulator so that it itself can be used as a trait object.
 pub struct FederatedEmulatorConnection {
     emulators: Vec<Arc<dyn CTVEmulator>>,
     threshold: u8,

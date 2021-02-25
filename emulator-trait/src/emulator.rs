@@ -27,14 +27,21 @@ impl From<bitcoin::util::bip32::Error> for EmulatorError {
     }
 }
 
+/// `CTVEmulator` trait is used to make the method in which CheckTemplateVerify
+/// is stubbed out with.
 pub trait CTVEmulator: Sync + Send {
+    /// For a given transaction hash, gets the corresponding Clause that the
+    /// Emulator would satisfy.
     fn get_signer_for(&self, h: sha256::Hash) -> Result<Clause, EmulatorError>;
+    /// Adds the Emulators signature to the PSBT, if any.
     fn sign(
         &self,
         b: PartiallySignedTransaction,
     ) -> Result<PartiallySignedTransaction, EmulatorError>;
 }
 
+/// A wrapper for an optional internal emulator trait object. If no emulator is
+/// provided, then it defaults to using actual CheckTemplateVerify Clauses.
 #[derive(Clone)]
 pub struct NullEmulator(pub Option<Arc<dyn CTVEmulator>>);
 
