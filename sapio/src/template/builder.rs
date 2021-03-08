@@ -32,6 +32,12 @@ impl Builder {
             ctx,
         }
     }
+
+    /// get a read-only reference to the builder's context
+    pub fn ctx(&self) -> &Context {
+        &self.ctx
+    }
+
     /// reduce the amount availble in the builder's context
     pub fn spend_amount(mut self, amount: Amount) -> Result<Self, CompilationError> {
         self.ctx.spend_amount(amount)?;
