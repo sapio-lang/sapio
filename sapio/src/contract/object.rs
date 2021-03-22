@@ -23,6 +23,8 @@ use std::sync::Arc;
 pub enum ObjectError {
     /// The Error was due to Miniscript
     Miniscript(miniscript::policy::compiler::CompilerError),
+    /// Unknown Script Type
+    UnknownScriptType(bitcoin::Script),
     /// The Error was for an unknown/unhandled reason
     Custom(Box<dyn std::error::Error>),
 }
@@ -108,6 +110,18 @@ impl Object {
                 a
             }),
         }
+    }
+
+    /// Creates an object from a given script. The optional AmountRange argument determines the
+    /// safe bounds the contract can receive, otherwise it is set to any.
+    pub fn from_script(
+        script: bitcoin::Script,
+        a: Option<AmountRange>,
+        net: bitcoin::Network,
+    ) -> Result<Object, ObjectError> {
+        bitcoin::Address::from_script(&script, net)
+            .ok_or_else(|| ObjectError::UnknownScriptType(script.clone()))
+            .map(|m| Object::from_address(m, a))
     }
 
     /// bind attaches an Object to a specific UTXO and returns a vec of transactions and

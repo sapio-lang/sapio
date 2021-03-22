@@ -1,6 +1,7 @@
 //! error types that can be returned from Sapio.
 //! Where possible, concrete error types are wrapped, but in order to handle
 //! errors created by the user we allow boxing an error trait.
+use crate::contract::object::ObjectError;
 use sapio_ctv_emulator_trait::EmulatorError;
 use std::error::Error;
 use std::fmt;
@@ -31,6 +32,8 @@ pub enum CompilationError {
     MiniscriptE(miniscript::Error),
     /// Error with a Timelock
     TimeLockError(sapio_base::timelocks::LockTimeError),
+    /// Error creating an object,
+    CompiledObjectError(ObjectError),
     /// Unknown Error type -- either from a user or from some unhandled dependency
     Custom(Box<dyn std::error::Error>),
 }
@@ -60,6 +63,11 @@ impl From<miniscript::policy::compiler::CompilerError> for CompilationError {
 impl From<miniscript::Error> for CompilationError {
     fn from(v: miniscript::Error) -> Self {
         CompilationError::MiniscriptE(v)
+    }
+}
+impl From<ObjectError> for CompilationError {
+    fn from(e: ObjectError) -> Self {
+        CompilationError::CompiledObjectError(e)
     }
 }
 

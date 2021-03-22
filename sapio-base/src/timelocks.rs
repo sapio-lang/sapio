@@ -39,8 +39,10 @@ use type_tags::*;
 /// LockTime represents either a nLockTime or a Sequence field.
 /// They are represented generically in the same type
 #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
+#[serde(transparent)]
 pub struct LockTime<RelOrAbs: Absolutivity, HeightOrTime: TimeType>(
     u32,
+    #[serde(skip)]
     PhantomData<(RelOrAbs, HeightOrTime)>,
 );
 /// Represents a type which can be either type of relative lock
