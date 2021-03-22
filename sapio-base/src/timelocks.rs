@@ -42,8 +42,7 @@ use type_tags::*;
 #[serde(transparent)]
 pub struct LockTime<RelOrAbs: Absolutivity, HeightOrTime: TimeType>(
     u32,
-    #[serde(skip)]
-    PhantomData<(RelOrAbs, HeightOrTime)>,
+    #[serde(skip)] PhantomData<(RelOrAbs, HeightOrTime)>,
 );
 /// Represents a type which can be either type of relative lock
 #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
