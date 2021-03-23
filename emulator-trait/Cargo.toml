@@ -31,7 +31,3 @@ features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 path="../sapio-base"
 version = "0.1.0"
 
-
-[dev-dependencies.sapio]
-path = "../sapio"
-version = "0.1.0"
