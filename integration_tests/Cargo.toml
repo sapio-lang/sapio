@@ -1,14 +1,11 @@
 [package]
-name = "ctv_emulators"
-version = "0.1.2"
-license = "MPL-2.0"
+name = "sapio_integration_tests"
+version = "0.1.0"
 authors = ["Jeremy Rubin <j@rubin.io>"]
 edition = "2018"
-repository = "https://github.com/sapio-lang/sapio"
-homepage = "https://sapio-lang.org"
-description = "Implementation of the CTV Emulator Trait"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 schemars = "0.8.0"
@@ -17,6 +14,11 @@ serde = "1.0"
 serde_derive = "1.0"
 rand = "0.8.1"
 
+[dependencies.sapio]
+path = "../sapio"
+
+[dependencies.ctv_emulators]
+path = "../ctv_emulators"
 
 [dependencies.sapio-ctv-emulator-trait]
 path="../emulator-trait"
@@ -36,13 +38,3 @@ features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 path="../sapio-base"
 version = "0.1.0"
 
-
-
-
-[lib]
-name = "emulator_connect"
-path = "src/lib.rs"
-
-[[bin]]
-name = "emulator_server"
-path = "src/bin/main.rs"
