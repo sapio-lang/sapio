@@ -17,7 +17,7 @@ serde = "1.0"
 serde_derive = "1.0"
 clap = "3.0.0-beta.2"
 base64 = "0.13.0"
-lazy_static = "*"
+lazy_static = "1.4.0"
 bitcoincore-rpc-async = "3.0.1"
 tokio = { version = "1", features = ["full"] }
 directories = "3.0.1"
