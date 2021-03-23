@@ -20,6 +20,8 @@ rand = "0.8.1"
 
 [dependencies.sapio-ctv-emulator-trait]
 path="../emulator-trait"
+version = "0.1.0"
+
 [dependencies.bitcoin]
 package = "sapio-bitcoin"
 version = "^0.26.0"
@@ -32,6 +34,7 @@ features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 
 [dependencies.sapio-base]
 path="../sapio-base"
+version = "0.1.0"
 
 
 
@@ -46,3 +49,4 @@ path = "src/bin/main.rs"
 
 [dev-dependencies.sapio]
 path = "../sapio"
+version = "0.1.0"

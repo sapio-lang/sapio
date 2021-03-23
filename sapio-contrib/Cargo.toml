@@ -23,9 +23,11 @@ version = "^0.26.0"
 features = ['use-serde', 'rand']
 [dependencies.sapio]
 path = "../sapio"
+version = "0.1.0"
 
 [dependencies.sapio-base]
 path = "../sapio-base"
+version = "0.1.0"
 
 
 [dependencies.miniscript]
