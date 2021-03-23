@@ -52,6 +52,7 @@ version = "0.1.0"
 [dependencies.sapio-base]
 path = "../sapio-base"
 version = "0.1.0"
+
 [lib]
 path = "src/lib.rs"
 

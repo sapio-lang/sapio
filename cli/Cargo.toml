@@ -52,4 +52,6 @@ version = "0.1.0"
 
 [dependencies.sapio-wasm-plugin]
 path = "../plugins"
+version = "0.1.2"
+
 features = ["host"]
