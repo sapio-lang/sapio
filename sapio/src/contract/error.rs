@@ -1,3 +1,9 @@
+// Copyright Judica, Inc 2021
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+//  License, v. 2.0. If a copy of the MPL was not distributed with this
+//  file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 //! error types that can be returned from Sapio.
 //! Where possible, concrete error types are wrapped, but in order to handle
 //! errors created by the user we allow boxing an error trait.
