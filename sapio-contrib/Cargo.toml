@@ -15,7 +15,7 @@ schemars = "0.8.0"
 serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
-lazy_static="*"
+lazy_static="1.4.0"
 
 [dependencies.bitcoin]
 package = "sapio-bitcoin"
