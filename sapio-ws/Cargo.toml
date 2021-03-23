@@ -19,12 +19,15 @@ serde_derive = "1.0"
 
 [dependencies.sapio]
 path = "../sapio"
+version = "0.1.0"
 
 [dependencies.sapio-front]
 path = "../sapio-front"
+version = "0.1.0"
 
 [dependencies.sapio-contrib]
 path = "../sapio-contrib"
+version = "0.1.0"
 
 [dependencies.actix-web]
 version= "3"

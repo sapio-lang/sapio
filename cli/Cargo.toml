@@ -29,19 +29,26 @@ jsonschema-valid = "0.4.0"
 package = "sapio-bitcoin"
 version = "^0.26.0"
 features = ['use-serde', 'rand']
+
 [dependencies.sapio]
 path = "../sapio"
+version = "0.1.0"
 
 [dependencies.sapio-base]
 path = "../sapio-base"
+version = "0.1.0"
 
 [dependencies.ctv_emulators]
 path = "../ctv_emulators"
+version = "0.1.0"
 
 [dependencies.sapio-front]
 path = "../sapio-front"
+version = "0.1.0"
+
 [dependencies.sapio-contrib]
 path = "../sapio-contrib"
+version = "0.1.0"
 
 [dependencies.sapio-wasm-plugin]
 path = "../plugins"
