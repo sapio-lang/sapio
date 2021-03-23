@@ -14,6 +14,7 @@ serde_derive = "1.0"
 lazy_static="*"
 
 [dependencies.bitcoin]
+package = "sapio-bitcoin"
 version = "^0.26.0"
 features = ['use-serde', 'rand']
 [dependencies.sapio]
@@ -24,5 +25,6 @@ path = "../sapio-base"
 
 
 [dependencies.miniscript]
+package = "sapio-miniscript"
 version = "^5.1.0"
 features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']

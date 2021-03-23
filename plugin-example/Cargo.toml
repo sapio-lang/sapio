@@ -18,6 +18,7 @@ serde_derive = "1.0"
 version = "0.2.69"
 
 [dependencies.bitcoin]
+package = "sapio-bitcoin"
 version = "^0.26.0"
 features = ['use-serde', 'rand']
 [dependencies.sapio]
@@ -35,6 +36,7 @@ path = "src/plugin.rs"
 path="../emulator-trait"
 
 [dependencies.miniscript]
+package = "sapio-miniscript"
 version = "^5.1.0"
 features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 optional = true
@@ -46,7 +48,3 @@ wasm-opt = false
 path = "../plugins"
 features = ["client"]
 
-[patch.crates-io]
-miniscript = {git="https://github.com/sapio-lang/rust-miniscript.git", branch="sapio-lang"}
-bitcoin = {git="https://github.com/sapio-lang/rust-bitcoin.git", branch="sapio-lang"}
-secp256k1 = {git="https://github.com/sapio-lang/rust-secp256k1.git", branch="sapio-lang"}

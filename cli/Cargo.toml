@@ -14,7 +14,7 @@ serde_derive = "1.0"
 clap = "3.0.0-beta.2"
 base64 = "0.13.0"
 lazy_static = "*"
-bitcoincore-rpc-async = "3.0.0"
+bitcoincore-rpc-async = "3.0.1"
 tokio = { version = "1", features = ["full"] }
 directories = "3.0.1"
 wasmer= "1.0"
@@ -22,6 +22,7 @@ wasmer-cache = "1.0"
 jsonschema-valid = "0.4.0"
 
 [dependencies.bitcoin]
+package = "sapio-bitcoin"
 version = "^0.26.0"
 features = ['use-serde', 'rand']
 [dependencies.sapio]

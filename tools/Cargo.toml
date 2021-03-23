@@ -10,13 +10,15 @@ serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
 tokio = { version = "1", features = ["full"] }
-bitcoincore-rpc-async = "3.0.0"
+bitcoincore-rpc-async = "3.0.1"
 
 [dependencies.miniscript]
+package = "sapio-miniscript"
 version = "^5.1.0"
 features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 
 [dependencies.bitcoin]
+package = "sapio-bitcoin"
 version = "^0.26.0"
 features = ['use-serde', 'rand']
 
