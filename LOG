@@ -1,0 +1,266 @@
+{
+  "template_hash_to_template_map": {
+    "2a5a2eecaf8090ffc6668ae60f70722d8d4791f9c282c6da0ecc5e8838c38175": {
+      "precomputed_template_hash": "2a5a2eecaf8090ffc6668ae60f70722d8d4791f9c282c6da0ecc5e8838c38175",
+      "precomputed_template_hash_idx": 0,
+      "max_amount_sats": 9010000,
+      "metadata_map_s2s": {
+        "label": "continue_expansion"
+      },
+      "transaction_literal": {
+        "version": 2,
+        "lock_time": 0,
+        "input": [
+          {
+            "previous_output": "0000000000000000000000000000000000000000000000000000000000000000:4294967295",
+            "script_sig": "",
+            "sequence": 2016,
+            "witness": []
+          }
+        ],
+        "output": [
+          {
+            "value": 3000000,
+            "script_pubkey": "51200279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f817"
+          },
+          {
+            "value": 6010000,
+            "script_pubkey": "00206709d4f25ab69955961cc8538e5d58343ae3aa3709a3fd9c7c0fa33f4af63887"
+          }
+        ]
+      },
+      "outputs_info": [
+        {
+          "sending_amount_sats": 3000000,
+          "receiving_contract": {
+            "address": "bcrt1pqfumuen7l8wthtz45p3ftn58pvrs9xlumvkuu2xet8egzkcklqtscyvky6",
+            "amount_range": {
+              "max_btc": 0.03
+            }
+          }
+        },
+        {
+          "sending_amount_sats": 6010000,
+          "receiving_contract": {
+            "template_hash_to_template_map": {
+              "d61ac7b03b54f0ad0ab9e9e69ad966e4faa325375577cb259e7891a7b493dc82": {
+                "precomputed_template_hash": "d61ac7b03b54f0ad0ab9e9e69ad966e4faa325375577cb259e7891a7b493dc82",
+                "precomputed_template_hash_idx": 0,
+                "max_amount_sats": 6005000,
+                "metadata_map_s2s": {
+                  "label": "stop_expansion"
+                },
+                "transaction_literal": {
+                  "version": 2,
+                  "lock_time": 0,
+                  "input": [
+                    {
+                      "previous_output": "0000000000000000000000000000000000000000000000000000000000000000:4294967295",
+                      "script_sig": "",
+                      "sequence": 2116,
+                      "witness": []
+                    }
+                  ],
+                  "output": [
+                    {
+                      "value": 6005000,
+                      "script_pubkey": "001487a87e0e17a80a2d2bd65c421a1090df8ed6cc9a"
+                    }
+                  ]
+                },
+                "outputs_info": [
+                  {
+                    "sending_amount_sats": 6005000,
+                    "receiving_contract": {
+                      "address": "bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw",
+                      "amount_range": {
+                        "max_btc": 21000000
+                      }
+                    }
+                  }
+                ]
+              },
+              "ebcea40f3558db070bf30445c208b329e2386080662dd5d6fe29da8f0c301ffb": {
+                "precomputed_template_hash": "ebcea40f3558db070bf30445c208b329e2386080662dd5d6fe29da8f0c301ffb",
+                "precomputed_template_hash_idx": 0,
+                "max_amount_sats": 6005000,
+                "metadata_map_s2s": {
+                  "label": "continue_expansion"
+                },
+                "transaction_literal": {
+                  "version": 2,
+                  "lock_time": 0,
+                  "input": [
+                    {
+                      "previous_output": "0000000000000000000000000000000000000000000000000000000000000000:4294967295",
+                      "script_sig": "",
+                      "sequence": 2016,
+                      "witness": []
+                    }
+                  ],
+                  "output": [
+                    {
+                      "value": 3000000,
+                      "script_pubkey": "51200279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f817"
+                    },
+                    {
+                      "value": 3005000,
+                      "script_pubkey": "0020d023b8ffc5162902a1902e12d0282957fb4726a0f83efc2cb7efc4a6d4247483"
+                    }
+                  ]
+                },
+                "outputs_info": [
+                  {
+                    "sending_amount_sats": 3000000,
+                    "receiving_contract": {
+                      "address": "bcrt1pqfumuen7l8wthtz45p3ftn58pvrs9xlumvkuu2xet8egzkcklqtscyvky6",
+                      "amount_range": {
+                        "max_btc": 0.03
+                      }
+                    }
+                  },
+                  {
+                    "sending_amount_sats": 3005000,
+                    "receiving_contract": {
+                      "template_hash_to_template_map": {
+                        "64ca1a03d428ce2bb3413080cfa303dcdc841ba30900c2d72cd3615593bf294b": {
+                          "precomputed_template_hash": "64ca1a03d428ce2bb3413080cfa303dcdc841ba30900c2d72cd3615593bf294b",
+                          "precomputed_template_hash_idx": 0,
+                          "max_amount_sats": 3000000,
+                          "metadata_map_s2s": {
+                            "label": "continue_expansion"
+                          },
+                          "transaction_literal": {
+                            "version": 2,
+                            "lock_time": 0,
+                            "input": [
+                              {
+                                "previous_output": "0000000000000000000000000000000000000000000000000000000000000000:4294967295",
+                                "script_sig": "",
+                                "sequence": 2016,
+                                "witness": []
+                              }
+                            ],
+                            "output": [
+                              {
+                                "value": 3000000,
+                                "script_pubkey": "51200279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f817"
+                              }
+                            ]
+                          },
+                          "outputs_info": [
+                            {
+                              "sending_amount_sats": 3000000,
+                              "receiving_contract": {
+                                "address": "bcrt1pqfumuen7l8wthtz45p3ftn58pvrs9xlumvkuu2xet8egzkcklqtscyvky6",
+                                "amount_range": {
+                                  "max_btc": 0.03
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        "037164a6bc5e23333ccd750972927c4de669face404841ce476b867eb08a5d1e": {
+                          "precomputed_template_hash": "037164a6bc5e23333ccd750972927c4de669face404841ce476b867eb08a5d1e",
+                          "precomputed_template_hash_idx": 0,
+                          "max_amount_sats": 3000000,
+                          "metadata_map_s2s": {
+                            "label": "stop_expansion"
+                          },
+                          "transaction_literal": {
+                            "version": 2,
+                            "lock_time": 0,
+                            "input": [
+                              {
+                                "previous_output": "0000000000000000000000000000000000000000000000000000000000000000:4294967295",
+                                "script_sig": "",
+                                "sequence": 2116,
+                                "witness": []
+                              }
+                            ],
+                            "output": [
+                              {
+                                "value": 3000000,
+                                "script_pubkey": "001487a87e0e17a80a2d2bd65c421a1090df8ed6cc9a"
+                              }
+                            ]
+                          },
+                          "outputs_info": [
+                            {
+                              "sending_amount_sats": 3000000,
+                              "receiving_contract": {
+                                "address": "bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw",
+                                "amount_range": {
+                                  "max_btc": 21000000
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      "known_policy": "thresh(1,and(older(2116),pk(02d9259ccb8d82d21b80155926dc8dd840f22a862792eba28c935b5221bda7f696)),and(older(2016),pk(037a7ffbdac37874b4128c484318f3a9c0f0f2088628181d2ed83add9e4ab291c1)))",
+                      "address": "bcrt1q6q3m3l79zc5s9gvs9cfdq2pf2la5wf4qlql0ct9halz2d4pywjpsa25fsl",
+                      "known_descriptor": "wsh(thresh(1,nj:and_v(v:pk(02d9259ccb8d82d21b80155926dc8dd840f22a862792eba28c935b5221bda7f696),older(2116)),snj:and_v(v:pk(037a7ffbdac37874b4128c484318f3a9c0f0f2088628181d2ed83add9e4ab291c1),older(2016))))#fcpsm54r",
+                      "amount_range": {
+                        "max_btc": 0.03
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "known_policy": "thresh(1,and(older(2116),pk(03bac00d55195f4822f0d6660b43e2a0c20bb162542fe7656400024c499edb21a1)),and(older(2016),pk(03ea94374570b77c401224ffe335b4dd4a640e5cd7d52c3d2f9e5fe3a5b02e481e)))",
+            "address": "bcrt1qvuyafuj6k6v4t9suepfcuh2cxsaw823hpx3lm8rup73n7jhk8zrsmkaflr",
+            "known_descriptor": "wsh(thresh(1,nj:and_v(v:pk(03bac00d55195f4822f0d6660b43e2a0c20bb162542fe7656400024c499edb21a1),older(2116)),snj:and_v(v:pk(03ea94374570b77c401224ffe335b4dd4a640e5cd7d52c3d2f9e5fe3a5b02e481e),older(2016))))#wc87daeg",
+            "amount_range": {
+              "max_btc": 0.06005
+            }
+          }
+        }
+      ]
+    },
+    "a6dbda05299a7225d6422e8a0d163b9e5c734143eb1a507a5772e65edb4898dd": {
+      "precomputed_template_hash": "a6dbda05299a7225d6422e8a0d163b9e5c734143eb1a507a5772e65edb4898dd",
+      "precomputed_template_hash_idx": 0,
+      "max_amount_sats": 9010000,
+      "metadata_map_s2s": {
+        "label": "stop_expansion"
+      },
+      "transaction_literal": {
+        "version": 2,
+        "lock_time": 0,
+        "input": [
+          {
+            "previous_output": "0000000000000000000000000000000000000000000000000000000000000000:4294967295",
+            "script_sig": "",
+            "sequence": 2116,
+            "witness": []
+          }
+        ],
+        "output": [
+          {
+            "value": 9010000,
+            "script_pubkey": "001487a87e0e17a80a2d2bd65c421a1090df8ed6cc9a"
+          }
+        ]
+      },
+      "outputs_info": [
+        {
+          "sending_amount_sats": 9010000,
+          "receiving_contract": {
+            "address": "bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw",
+            "amount_range": {
+              "max_btc": 21000000
+            }
+          }
+        }
+      ]
+    }
+  },
+  "known_policy": "thresh(1,and(older(2116),pk(02d3c32217f7bc3d43f1b8cfd7425379a3bf07074f1a3b4d243546e80e69b0c172)),and(older(2016),pk(02214f6ce3917541ca51705ea29e592dd4e39cfffcf8f46d43e26011e331e6f5bd)))",
+  "address": "bcrt1qgc803gks4d89362ql09ayycr2s7k6v4ze34pc4ndc0ggu4j24lgqewwf7y",
+  "known_descriptor": "wsh(thresh(1,nj:and_v(v:pk(02d3c32217f7bc3d43f1b8cfd7425379a3bf07074f1a3b4d243546e80e69b0c172),older(2116)),snj:and_v(v:pk(02214f6ce3917541ca51705ea29e592dd4e39cfffcf8f46d43e26011e331e6f5bd),older(2016))))#nu55ucem",
+  "amount_range": {
+    "max_btc": 0.0901
+  }
+}

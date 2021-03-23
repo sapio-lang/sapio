@@ -1,0 +1,20 @@
+[package]
+name = "sapio-tui"
+version = "0.1.0"
+license = "MPL-2.0"
+authors = ["Jeremy Rubin <j@rubin.io>"]
+edition = "2018"
+repository = "https://github.com/sapio-lang/sapio"
+homepage = "https://sapio-lang.org"
+description = "Nah"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tui = "0.14.0"
+termion = "1.5.5"
+rand = "*"
+
+[dependencies.sapio]
+path = "../sapio"
+version = "0.1.0"

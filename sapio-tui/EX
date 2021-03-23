@@ -1,0 +1,48 @@
+warning: constant is never used: `MAX_MSG`
+  --> ctv_emulators/src/lib.rs:19:1
+   |
+19 | const MAX_MSG: usize = 1_000_000;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: 1 warning emitted
+
+   Compiling sapio-tui v0.1.0 (/home/jr/develop/judica/sapio-lang/sapio/sapio-tui)
+error[E0308]: `match` arms have incompatible types
+  --> sapio-tui/src/main.rs:79:22
+   |
+75 |               let inner = match app.tabs.index {
+   |  _________________________-
+76 | |                 0 => Block::default().title("Inner 0").borders(Borders::ALL),
+   | |                      ------------------------------------------------------- this is found to be of type `tui::widgets::Block<'_>`
+77 | |                 1 => Block::default().title("Inner 1").borders(Borders::ALL),
+   | |                      ------------------------------------------------------- this is found to be of type `tui::widgets::Block<'_>`
+78 | |                 2 => Block::default().title("Inner 2").borders(Borders::ALL),
+   | |                      ------------------------------------------------------- this is found to be of type `tui::widgets::Block<'_>`
+79 | |                 3 => psbt(f, chunks[1]),
+   | |                      ^^^^^^^^^^^^^^^^^^ expected struct `tui::widgets::Block`, found enum `std::result::Result`
+80 | |                 _ => unreachable!(),
+81 | |             };
+   | |_____________- `match` arms have incompatible types
+   |
+   = note: expected struct `tui::widgets::Block<'_>`
+                found enum `std::result::Result<(), Box<(dyn std::error::Error + 'static)>>`
+
+error[E0308]: mismatched types
+  --> sapio-tui/src/main.rs:99:51
+   |
+99 | fn psbt<B: Backend>(f: &mut Frame<B>, r: Rect) -> Result<(), Box<dyn Error>> {
+   |    ----                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^ expected enum `std::result::Result`, found `()`
+   |    |
+   |    implicitly returns `()` as its body has no tail or `return` expression
+   |
+   = note:   expected enum `std::result::Result<(), Box<(dyn std::error::Error + 'static)>>`
+           found unit type `()`
+
+error: aborting due to 2 previous errors
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `sapio-tui`
+
+To learn more, run the command again with --verbose.
