@@ -50,7 +50,7 @@ impl DynamicExample {
         let d : D = D{v};
 
         let d2 = DynamicContract::<(), String> {
-            then: vec![|| None, || Some(sapio::contract::actions::ThenFunc{guard: &[], func: |_s, _ctx| Err(CompilationError::TerminateCompilation)})],
+            then: vec![|| None, || Some(sapio::contract::actions::ThenFunc{conditional_compile_if: &[], guard: &[], func: |_s, _ctx| Err(CompilationError::TerminateCompilation)})],
             finish: vec![],
             finish_or: vec![],
             data: "E.g., Create a Vault".into(),

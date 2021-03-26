@@ -75,15 +75,34 @@ macro_rules! declare {
 macro_rules! then {
     {
         $(#[$meta:meta])*
-        $name:ident $a:tt |$s:ident, $ctx:ident| $b:block } => {
+        $name:ident $conditional_compile_list:tt $guard_list:tt |$s:ident, $ctx:ident| $b:block
+    } => {
         $(#[$meta])*
-        fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<'a, Self>> { Some($crate::contract::actions::ThenFunc{guard: &$a, func:|$s: &Self, $ctx:&$crate::contract::Context| $b})}
+        fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<'a, Self>>{
+            Some($crate::contract::actions::ThenFunc{
+                guard: &$guard_list,
+                conditional_compile_if: &$conditional_compile_list,
+                func:|$s: &Self, $ctx:&$crate::contract::Context| $b
+            })
+        }
     };
     {
         $(#[$meta:meta])*
-        $name:ident |$s:ident, $ctx:ident| $b:block } => { then!{
+        $name:ident |$s:ident, $ctx:ident| $b:block
+    } => {
+        then!{
             $(#[$meta])*
-            $name [] |$s, $ctx| $b } };
+            $name [] [] |$s, $ctx| $b }
+    };
+
+    {
+        $(#[$meta:meta])*
+        $name:ident $guard_list:tt |$s:ident, $ctx:ident| $b:block
+    } => {
+        then!{
+            $(#[$meta])*
+            $name [] $guard_list |$s, $ctx| $b }
+    };
 
     {
         $(#[$meta:meta])*
@@ -106,18 +125,32 @@ macro_rules! then {
 macro_rules! finish {
     {
         $(#[$meta:meta])*
-        $name:ident $a:tt |$s:ident, $ctx:ident, $o:ident| $b:block } => {
+        $name:ident $conditional_compile_list:tt $guard_list:tt |$s:ident, $ctx:ident, $o:ident| $b:block
+    } => {
         $(#[$meta])*
         fn $name<'a>() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, Args>>{
-            Some($crate::contract::actions::FinishOrFunc{guard: &$a, func: |$s: &Self, $ctx:&$crate::contract::Context, $o: Option<&_>| $b} .into())
+            Some($crate::contract::actions::FinishOrFunc{
+                conditional_compile_if: &$conditional_compile_list,
+                guard: &$guard_list,
+                func: |$s: &Self, $ctx:&$crate::contract::Context, $o: Option<&_>| $b} .into())
         }
     };
     {
         $(#[$meta:meta])*
-        $name:ident $a:tt} => {
+        $name:ident $guard_list:tt |$s:ident, $ctx:ident, $o:ident| $b:block
+    } => {
+        finish!{
+            $(#[$meta])*
+            $name [] $guard_list |$s, $ctx, $o| $b
+        }
+    };
+    {
+        $(#[$meta:meta])*
+        $name:ident $guard_list:tt
+    } => {
         finish!(
             $(#[$meta])*
-            $name $a |s, o| { Ok(Box::new(std::iter::empty()))});
+            $name [] $guard_list |s, o| { Ok(Box::new(std::iter::empty()))});
     };
 }
 
