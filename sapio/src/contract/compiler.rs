@@ -10,8 +10,10 @@ use super::CompilationError;
 use super::Compiled;
 use super::Context;
 use crate::util::amountrange::AmountRange;
+use std::collections::LinkedList;
 
 use super::actions::Guard;
+use super::actions::{ConditionalCompileType, ConditionallyCompileIf};
 use ::miniscript::*;
 use sapio_base::Clause;
 use std::collections::HashMap;
@@ -87,6 +89,11 @@ where
             Yes,
             No,
         }
+        #[derive(PartialEq, Eq)]
+        enum Nullable {
+            Yes,
+            No,
+        }
         let self_ref = self.get_inner_ref();
 
         // The code for then_fns and finish_or_fns is very similar, differing
@@ -97,7 +104,39 @@ where
             .then_fns()
             .iter()
             .filter_map(|x| x())
-            .map(|x| (CTVRequired::Yes, x.guard, (x.func)(self_ref, ctx)));
+            .filter_map(|x| {
+                let mut v = ConditionalCompileType::NoConstraint;
+                for cond in x.conditional_compile_if.iter().filter_map(|x| x()) {
+                    let ConditionallyCompileIf::Fresh(f) = cond;
+                    v = v.merge(f(self_ref, ctx));
+                }
+                match v {
+                    ConditionalCompileType::Fail(v) => Some((v, Nullable::No, x)),
+                    ConditionalCompileType::Required | ConditionalCompileType::NoConstraint => {
+                        Some((LinkedList::new(), Nullable::No, x))
+                    }
+                    ConditionalCompileType::Skippable => None,
+                    ConditionalCompileType::Never => None,
+                    ConditionalCompileType::Nullable => Some((LinkedList::new(), Nullable::Yes, x)),
+                }
+            })
+            .map(|(errors, nullability, x)| {
+                if errors.is_empty() {
+                    (
+                        nullability,
+                        CTVRequired::Yes,
+                        x.guard,
+                        (x.func)(self_ref, ctx),
+                    )
+                } else {
+                    (
+                        nullability,
+                        CTVRequired::Yes,
+                        x.guard,
+                        Err(CompilationError::ConditionalCompilationFailed(errors)),
+                    )
+                }
+            });
         // finish_or_fns may be used to compute additional transactions with
         // a given argument, but for building the ABI we only precompute with
         // the default argument.
@@ -106,7 +145,40 @@ where
             .finish_or_fns()
             .iter()
             .filter_map(|x| x())
-            .map(|x| (CTVRequired::No, x.guard, (x.func)(self_ref, ctx, arg)));
+            // TODO: De-duplicate this code?
+            .filter_map(|x| {
+                let mut v = ConditionalCompileType::NoConstraint;
+                for cond in x.conditional_compile_if.iter().filter_map(|x| x()) {
+                    let ConditionallyCompileIf::Fresh(f) = cond;
+                    v = v.merge(f(self_ref, ctx));
+                }
+                match v {
+                    ConditionalCompileType::Fail(v) => Some((v, x)),
+                    ConditionalCompileType::Required | ConditionalCompileType::NoConstraint => {
+                        Some((LinkedList::new(), x))
+                    }
+                    ConditionalCompileType::Skippable => None,
+                    ConditionalCompileType::Never => None,
+                    ConditionalCompileType::Nullable => Some((LinkedList::new(), x)),
+                }
+            })
+            .map(|(errors, x)| {
+                if errors.is_empty() {
+                    (
+                        Nullable::Yes,
+                        CTVRequired::No,
+                        x.guard,
+                        (x.func)(self_ref, ctx, arg),
+                    )
+                } else {
+                    (
+                        Nullable::Yes,
+                        CTVRequired::No,
+                        x.guard,
+                        Err(CompilationError::ConditionalCompilationFailed(errors)),
+                    )
+                }
+            });
 
         let mut guard_clauses = GuardCache::new();
         let mut ctv_to_tx = HashMap::new();
@@ -118,7 +190,7 @@ where
         // If CTV and guards, CTV & guards added.
         let mut clause_accumulator = then_fns
             .chain(finish_or_fns)
-            .map(|(uses_ctv, guards, r_txtmpls)| {
+            .map(|(nullability, uses_ctv, guards, r_txtmpls)| {
                 // Compute all guard clauses.
                 // Don't use a threshold here because then miniscript will just
                 // re-compile it into the And for again, causing extra allocations.
@@ -149,21 +221,33 @@ where
                     // Forces any error to abort the whole thing
                     .collect::<Result<Vec<_>, CompilationError>>()?;
                 if uses_ctv == CTVRequired::Yes {
-                    let hashes = match txtmpl_clauses.len() {
-                        0 => {
-                            return Err(CompilationError::MissingTemplates);
-                        }
-                        1 => txtmpl_clauses
-                            .pop()
-                            .expect("Length of txtmpl_clauses must be at least 1"),
-                        _n => Clause::Threshold(1, txtmpl_clauses),
-                    };
-                    guard = match guard {
-                        Clause::Trivial => hashes,
-                        _ => Clause::And(vec![guard, hashes]),
-                    };
+                    if nullability == Nullable::Yes && txtmpl_clauses.is_empty() {
+                        // Mark this branch dead.
+                        guard = Clause::Unsatisfiable;
+                    } else {
+                        let hashes = match txtmpl_clauses.len() {
+                            0 => {
+                                return Err(CompilationError::MissingTemplates);
+                            }
+                            1 => txtmpl_clauses
+                                .pop()
+                                .expect("Length of txtmpl_clauses must be at least 1"),
+                            _n => Clause::Threshold(1, txtmpl_clauses),
+                        };
+                        guard = match guard {
+                            Clause::Trivial => hashes,
+                            _ => Clause::And(vec![guard, hashes]),
+                        };
+                    }
                 }
                 Ok(guard)
+            })
+            .filter_map(|x| {
+                if let Ok(Clause::Unsatisfiable) = x {
+                    None
+                } else {
+                    Some(x)
+                }
             })
             .collect::<Result<Vec<_>, _>>()?;
 
