@@ -188,3 +188,30 @@ macro_rules! guard {
             }
         };
 }
+
+/// The compile_if macro is used to define a `ConditionallyCompileIf`.
+/// formats for calling are:
+/// ```ignore
+/// compile_if!(name |s| {/*ConditionallyCompileType*/})
+/// ```
+#[macro_export]
+macro_rules! compile_if {
+    {
+        $(#[$meta:meta])*
+        $name:ident
+    } => {
+            $(#[$meta])*
+            fn $name() -> Option<$crate::contract::actions::ConditionallyCompileIf<Self>> {
+                None
+            }
+     };
+    {
+        $(#[$meta:meta])*
+        $name:ident |$s:ident, $ctx:ident| $b:block
+    } => {
+            $(#[$meta])*
+            fn $name() -> Option<$crate::contract::actions::ConditionallyCompileIf<Self>> {
+                Some($crate::contract::actions::ConditionallyCompileIf::Fresh( |$s: &Self, $ctx: &$crate::contract::Context| $b))
+            }
+        };
+}
