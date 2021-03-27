@@ -9,6 +9,7 @@
 //! errors created by the user we allow boxing an error trait.
 use crate::contract::object::ObjectError;
 use sapio_ctv_emulator_trait::EmulatorError;
+use std::collections::LinkedList;
 use std::error::Error;
 use std::fmt;
 /// Sapio's core error type.
@@ -40,6 +41,8 @@ pub enum CompilationError {
     TimeLockError(sapio_base::timelocks::LockTimeError),
     /// Error creating an object,
     CompiledObjectError(ObjectError),
+    /// Failure in conditional compilation logic
+    ConditionalCompilationFailed(LinkedList<String>),
     /// Unknown Error type -- either from a user or from some unhandled dependency
     Custom(Box<dyn std::error::Error>),
 }
