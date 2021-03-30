@@ -131,7 +131,7 @@ pub struct ThenFunc<'a, ContractSelf: 'a> {
 
 /// A function which by default finishes, but may receive some context object which can induce the
 /// generation of additional transactions (as a suggestion)
-pub struct FinishOrFunc<'a, ContractSelf: 'a, Extra> {
+pub struct FinishOrFunc<'a, ContractSelf: 'a, StatefulArguments> {
     /// Guards returns Clauses -- if any -- before the coins should be unlocked
     pub guard: GuardList<'a, ContractSelf>,
     /// conditional_compile_if returns ConditionallyCompileType to determine if a function
@@ -141,5 +141,5 @@ pub struct FinishOrFunc<'a, ContractSelf: 'a, Extra> {
     /// Implementors should aim to return as few `TxTmpl`s as possible for enhanced
     /// semantics, preferring to split across multiple `FinishOrFunc`'s.
     /// These `TxTmpl`s are non-binding, merely suggested.
-    pub func: fn(&ContractSelf, &Context, Option<&Extra>) -> TxTmplIt,
+    pub func: fn(&ContractSelf, &Context, Option<&StatefulArguments>) -> TxTmplIt,
 }

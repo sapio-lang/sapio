@@ -171,12 +171,12 @@ macro_rules! finish {
         $crate::contract::macros::paste!{
 
             $(#[$meta])*
-            fn [<FINISH_ $name>](&self, _ctx:&$crate::contract::Context, $o: Option<&Args>)-> $crate::contract::TxTmplIt
+            fn [<FINISH_ $name>](&self, _ctx:&$crate::contract::Context, $o: Option<&<Self as $crate::contract::Contract>::StatefulArguments>)-> $crate::contract::TxTmplIt
             {
                 unimplemented!();
             }
             $(#[$meta])*
-            fn $name<'a>() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, Args>> {None}
+            fn $name<'a>() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, <Self as $crate::contract::Contract>::StatefulArguments>> {None}
         }
     };
     {
@@ -190,10 +190,10 @@ macro_rules! finish {
         $crate::contract::macros::paste!{
 
             $(#[$meta])*
-            fn [<FINISH_ $name>](&$s, $ctx:&$crate::contract::Context, $o: Option<&Args>) -> $crate::contract::TxTmplIt
+            fn [<FINISH_ $name>](&$s, $ctx:&$crate::contract::Context, $o: Option<&<Self as $crate::contract::Contract>::StatefulArguments>) -> $crate::contract::TxTmplIt
             $b
             $(#[$meta])*
-            fn $name<'a>() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, Args>>{
+            fn $name<'a>() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, <Self as $crate::contract::Contract>::StatefulArguments>>{
                 Some($crate::contract::actions::FinishOrFunc{
                     guard: &$guard_list,
                     conditional_compile_if: &$conditional_compile_list,

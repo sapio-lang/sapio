@@ -181,7 +181,10 @@ struct Channel<T: State> {
 }
 
 /// Functionality Available for a channel regardless of state
-impl<T: State> Channel<T> {
+impl<T: State> Channel<T>
+where
+    Channel<T>: Contract,
+{
     guard! {fn timeout(self, ctx) { Clause::Older(100) }}
     guard! {cached fn signed(self, ctx) {Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])}}
 
@@ -209,7 +212,7 @@ impl<T: State> Channel<T> {
 /// Functionality that differs depending on current State
 trait FunctionalityAtState
 where
-    Self: Sized,
+    Self: Sized + Contract,
 {
     then! {begin_contest}
     then! {finish_contest}
