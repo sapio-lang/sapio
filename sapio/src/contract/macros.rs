@@ -208,18 +208,6 @@ macro_rules! finish {
     };
     {
         $(#[$meta:meta])*
-        fn $name:ident($s:ident, $ctx:ident, $o:ident) $b:block
-    } => {
-        finish!{
-            $(#[$meta])*
-            compile_if: []
-            guarded_by: []
-            fn $name($s, $ctx, $o) $b
-        }
-    };
-
-    {
-        $(#[$meta:meta])*
         guarded_by: $guard_list:tt
         fn $name:ident($s:ident, $ctx:ident, $o:ident) $b:block
     } => {
@@ -230,17 +218,6 @@ macro_rules! finish {
             fn $name($s, $ctx, $o) $b }
     };
 
-    {
-        $(#[$meta:meta])*
-        compile_if: $conditional_compile_list:tt
-        fn $name:ident($s:ident, $ctx:ident, $o:ident) $b:block
-    } => {
-        finish!{
-            $(#[$meta])*
-            compile_if: $conditional_compile_list
-            guarded_by: []
-            fn $name($s, $ctx, $o) $b }
-    };
 
 }
 
