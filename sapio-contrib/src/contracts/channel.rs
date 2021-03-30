@@ -182,8 +182,8 @@ struct Channel<T: State> {
 
 /// Functionality Available for a channel regardless of state
 impl<T: State> Channel<T> {
-    guard! {fn timeout(s, ctx) { Clause::Older(100) }}
-    guard! {cached fn signed(s, ctx) {Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)])}}
+    guard! {fn timeout(self, ctx) { Clause::Older(100) }}
+    guard! {cached fn signed(self, ctx) {Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])}}
 
     finish! {
         update_state_a [Self::signed]

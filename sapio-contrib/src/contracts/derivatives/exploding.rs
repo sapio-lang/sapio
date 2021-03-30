@@ -48,7 +48,7 @@ pub struct ExplodingOption<T: 'static> {
 }
 
 impl<T> ExplodingOption<T> {
-    guard!{fn signed(s, ctx) { s.key_p2_pk.clone() }}
+    guard! {fn signed(self, ctx) { self.key_p2_pk.clone() }}
 }
 impl<T> Explodes for ExplodingOption<T>
 where

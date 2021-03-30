@@ -69,18 +69,18 @@ impl StateDependentActions for FederatedPegIn<CanBeginRecovery> {
     }}
 }
 impl StateDependentActions for FederatedPegIn<CanFinishRecovery> {
-    guard! {fn finish_recovery (s, ctx) {
-        Clause::And(vec![Clause::Older(4725 /* 4 weeks? */), Clause::Threshold(s.thresh_recovery, s.keys_recovery.iter().cloned().map(Clause::Key).collect())])
+    guard! {fn finish_recovery(self, ctx) {
+        Clause::And(vec![Clause::Older(4725 /* 4 weeks? */), Clause::Threshold(self.thresh_recovery, self.keys_recovery.iter().cloned().map(Clause::Key).collect())])
     }}
 }
 
 impl<T: RecoveryState> FederatedPegIn<T> {
-    guard! {fn recovery_signed (s, ctx) {
-        Clause::Threshold(s.thresh_recovery, s.keys_recovery.iter().cloned().map(Clause::Key).collect())
+    guard! {fn recovery_signed (self, ctx) {
+        Clause::Threshold(self.thresh_recovery, self.keys_recovery.iter().cloned().map(Clause::Key).collect())
     }}
 
-    guard! {fn normal_signed(s, ctx) {
-        Clause::Threshold(s.thresh_normal, s.keys.iter().cloned().map(Clause::Key).collect())
+    guard! {fn normal_signed(self, ctx) {
+        Clause::Threshold(self.thresh_normal, self.keys.iter().cloned().map(Clause::Key).collect())
     }}
 }
 

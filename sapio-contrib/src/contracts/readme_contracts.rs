@@ -22,7 +22,7 @@ pub struct PayToPublicKey {
 }
 
 impl PayToPublicKey {
-    guard! {fn with_key(s, ctx) { Clause::Key(s.key) }}
+    guard! {fn with_key(self, ctx) { Clause::Key(self.key) }}
 }
 
 impl Contract for PayToPublicKey {
@@ -40,14 +40,14 @@ pub struct BasicEscrow {
 
 impl BasicEscrow {
     guard! {
-        fn redeem(s, ctx) {
+        fn redeem(self, ctx) {
             Clause::Threshold(
                 1,
                 vec![
-                    Clause::Threshold(2, vec![Clause::Key(s.alice), Clause::Key(s.bob)]),
+                    Clause::Threshold(2, vec![Clause::Key(self.alice), Clause::Key(self.bob)]),
                     Clause::And(vec![
-                        Clause::Key(s.escrow),
-                        Clause::Threshold(1, vec![Clause::Key(s.alice), Clause::Key(s.bob)]),
+                        Clause::Key(self.escrow),
+                        Clause::Threshold(1, vec![Clause::Key(self.alice), Clause::Key(self.bob)]),
                     ]),
                 ],
             )
@@ -70,15 +70,15 @@ pub struct BasicEscrow2 {
 
 impl BasicEscrow2 {
     guard! {
-        fn use_escrow(s, ctx) {
+        fn use_escrow(self, ctx) {
             Clause::And(vec![
-                Clause::Key(s.escrow),
-                Clause::Threshold(2, vec![Clause::Key(s.alice), Clause::Key(s.bob)]),
+                Clause::Key(self.escrow),
+                Clause::Threshold(2, vec![Clause::Key(self.alice), Clause::Key(self.bob)]),
             ])
         }
     }
     guard! {
-        fn cooperate(s, ctx) { Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)]) }
+        fn cooperate(self, ctx) { Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)]) }
     }
 }
 
@@ -98,7 +98,7 @@ pub struct TrustlessEscrow {
 
 impl TrustlessEscrow {
     guard! {
-    fn cooperate (s, ctx ) { Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)]) }
+    fn cooperate (self, ctx ) { Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)]) }
     }
     then! {use_escrow |s, ctx| {
         ctx.template()

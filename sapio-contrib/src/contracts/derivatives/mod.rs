@@ -99,8 +99,8 @@ impl GenericBet {
     }
     guard! {
         /// Action when the price is greater than or equal to the price in the middle
-        fn gte(s, ctx) {
-            s.price(true)
+        fn gte(self, ctx) {
+            self.price(true)
         }
     }
     then!(
@@ -114,10 +114,10 @@ impl GenericBet {
         }
     );
 
-    guard!{
+    guard! {
         /// Action when the price is less than or equal to the price in the middle
-        fn lt(s, ctx) {
-            s.price(false)
+        fn lt(self, ctx) {
+            self.price(false)
         }
     }
     then!(
@@ -130,9 +130,9 @@ impl GenericBet {
             }
         }
     );
-    guard!{
+    guard! {
         /// Allow for both parties to cooperative close
-        fn cooperate(s, ctx) { s.cooperate.clone() }
+        fn cooperate(self, ctx) { self.cooperate.clone() }
     }
 
     // elided: unilateral close initiation after certain relative delay

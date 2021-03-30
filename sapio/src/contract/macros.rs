@@ -6,6 +6,8 @@
 
 //! macros for making defining Sapio contracts less verbose.
 
+pub use paste::paste;
+
 /// The declare macro is used to declare the list of pathways in a Contract trait impl.
 /// formats for calling are:
 /// ```ignore
@@ -166,26 +168,42 @@ macro_rules! guard {
     {
         $(#[$meta:meta])*
         $name:ident} => {
-            $(#[$meta])*
-            fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
-                None
+            $crate::contract::macros::paste!{
+                $(#[$meta])*
+                fn [<GUARD_ $name>](&self, _ctx:&$crate::contract::Context) -> $crate::sapio_base::Clause {
+                    unimplemented!();
+                }
+                $(#[$meta])*
+                fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
+                    None
+                }
             }
      };
     {
         $(#[$meta:meta])*
         fn $name:ident($s:ident, $ctx:ident) $b:block} => {
-            $(#[$meta])*
-            fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
-                Some($crate::contract::actions::Guard::Fresh( |$s: &Self, $ctx: &$crate::contract::Context| $b))
+            $crate::contract::macros::paste!{
+                fn [<GUARD_ $name>](&$s, $ctx:&$crate::contract::Context) -> $crate::sapio_base::Clause
+                $b
+                $(#[$meta])*
+                    fn  $name() -> Option<$crate::contract::actions::Guard<Self>> {
+                    Some($crate::contract::actions::Guard::Fresh(Self::[<GUARD_ $name>]))
+                }
+
             }
         };
     {
         $(#[$meta:meta])*
         cached
         fn $name:ident($s:ident, $ctx:ident) $b:block} => {
-            $(#[$meta])*
-            fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
-                Some($crate::contract::actions::Guard::Cache( |$s: &Self, $ctx:&$crate::contract::Context| $b))
+            $crate::contract::macros::paste!{
+                fn [<GUARD_ $name>](&$s, $ctx:&$crate::contract::Context) -> $crate::sapio_base::Clause
+                $b
+
+                $(#[$meta])*
+                fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
+                    Some($crate::contract::actions::Guard::Cache(Self::[<GUARD_ $name>]))
+                }
             }
         };
 }
