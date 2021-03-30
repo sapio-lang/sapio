@@ -112,11 +112,11 @@ impl ExampleCompileIf {
         /// it checks to make the branch required. This is done in a conflict-free way;
         /// that is that  if escrow_required_no_conflict_disabled is set and escrow_disable
         /// is set there is no problem.
-        fn should_escrow(s, ctx) {
-            if s.escrow_disable {
+        fn should_escrow(self, ctx) {
+            if self.escrow_disable {
                 ConditionalCompileType::Never
             } else {
-                if s.escrow_required_no_conflict_disabled {
+                if self.escrow_required_no_conflict_disabled {
                     ConditionalCompileType::Required
                 } else {
                     ConditionalCompileType::Skippable
@@ -128,8 +128,8 @@ impl ExampleCompileIf {
         /// `must_escrow` requires that any depending branch be taken.
         /// It may conflict with escrow_disable, if they are both set then
         /// compilation will fail.
-        fn must_escrow(s, ctx) {
-            if s.escrow_required_conflict_disabled {
+        fn must_escrow(self, ctx) {
+            if self.escrow_required_conflict_disabled {
                 ConditionalCompileType::Required
             } else {
                 ConditionalCompileType::NoConstraint
@@ -139,8 +139,8 @@ impl ExampleCompileIf {
     compile_if! {
         /// `escrow_nullable_ok` tells the compiler if it is OK if dependents on this
         /// condition return 0 txiter items -- if so, the entire branch is pruned.
-        fn escrow_nullable_ok(s, ctx) {
-            if s.escrow_nullable {
+        fn escrow_nullable_ok(self, ctx) {
+            if self.escrow_nullable {
                 ConditionalCompileType::Nullable
             } else {
                 ConditionalCompileType::NoConstraint
@@ -150,8 +150,8 @@ impl ExampleCompileIf {
 
     compile_if! {
         /// `escrow_error_chk` fails with the provided error, if any
-        fn escrow_error_chk(s, ctx) {
-            if let Some(e) = &s.escrow_error {
+        fn escrow_error_chk(self, ctx) {
+            if let Some(e) = &self.escrow_error {
                 let mut l = LinkedList::new();
                 l.push_front(e.clone());
                 ConditionalCompileType::Fail(l)

@@ -219,18 +219,27 @@ macro_rules! compile_if {
         $(#[$meta:meta])*
         $name:ident
     } => {
-            $(#[$meta])*
-            fn $name() -> Option<$crate::contract::actions::ConditionallyCompileIf<Self>> {
-                None
+            $crate::contract::macros::paste!{
+                fn [<COMPILE_IF $name>](&self, _ctx: &$crate::contract::Context) -> $crate::contract::actions::ConditionalCompileType {
+                    unimplemented!()
+                }
+                $(#[$meta])*
+                fn $name() -> Option<$crate::contract::actions::ConditionallyCompileIf<Self>> {
+                    None
+                }
             }
      };
     {
         $(#[$meta:meta])*
         fn $name:ident($s:ident, $ctx:ident) $b:block
     } => {
-            $(#[$meta])*
-            fn $name() -> Option<$crate::contract::actions::ConditionallyCompileIf<Self>> {
-                Some($crate::contract::actions::ConditionallyCompileIf::Fresh( |$s: &Self, $ctx: &$crate::contract::Context| $b))
+            $crate::contract::macros::paste!{
+                fn [<COMPILE_IF $name>](&$s, $ctx: &$crate::contract::Context) -> $crate::contract::actions::ConditionalCompileType
+                $b
+                $(#[$meta])*
+                fn $name() -> Option<$crate::contract::actions::ConditionallyCompileIf<Self>> {
+                    Some($crate::contract::actions::ConditionallyCompileIf::Fresh(Self::[<COMPILE_IF $name>]))
+                }
             }
         };
 }
