@@ -186,23 +186,23 @@ impl<T: State> Channel<T> {
     guard! {cached fn signed(self, ctx) {Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])}}
 
     finish! {
-        update_state_a [Self::signed]
-            |s, ctx, o| {
-                Ok(Box::new(std::iter::empty()))
-            }
+        guarded_by: [Self::signed]
+        fn update_state_a(self, ctx, o) {
+            Ok(Box::new(std::iter::empty()))
+        }
     }
     finish! {
-        update_state_b [Self::signed]
-            |s, ctx, o| {
-                Ok(Box::new(std::iter::empty()))
-            }
+        guarded_by: [Self::signed]
+        fn update_state_b(self, ctx, o){
+            Ok(Box::new(std::iter::empty()))
+        }
     }
 
     finish! {
-        cooperate [Self::signed]
-            |s, ctx, o| {
-                Ok(Box::new(std::iter::empty()))
-            }
+        guarded_by: [Self::signed]
+        fn cooperate(self, ctx, o) {
+            Ok(Box::new(std::iter::empty()))
+        }
     }
 }
 

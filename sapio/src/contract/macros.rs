@@ -152,7 +152,7 @@ macro_rules! then {
 
 }
 
-/// The then macro is used to define a `FinishFunc` or a `FinishOrFunc`
+/// The finish macro is used to define a `FinishFunc` or a `FinishOrFunc`
 /// formats for calling are:
 /// ```ignore
 /// /// A Guarded CTV Function
@@ -165,33 +165,79 @@ macro_rules! then {
 macro_rules! finish {
     {
         $(#[$meta:meta])*
-        $name:ident $conditional_compile_list:tt $guard_list:tt |$s:ident, $ctx:ident, $o:ident| $b:block
+        $name:ident
     } => {
-        $(#[$meta])*
-        fn $name<'a>() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, Args>>{
-            Some($crate::contract::actions::FinishOrFunc{
-                conditional_compile_if: &$conditional_compile_list,
-                guard: &$guard_list,
-                func: |$s: &Self, $ctx:&$crate::contract::Context, $o: Option<&_>| $b} .into())
+
+        $crate::contract::macros::paste!{
+
+            $(#[$meta])*
+            fn [<FINISH_ $name>](&self, _ctx:&$crate::contract::Context, $o: Option<&Args>)-> $crate::contract::TxTmplIt
+            {
+                unimplemented!();
+            }
+            $(#[$meta])*
+            fn $name<'a>() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, Args>> {None}
         }
     };
     {
         $(#[$meta:meta])*
-        $name:ident $guard_list:tt |$s:ident, $ctx:ident, $o:ident| $b:block
+        compile_if: $conditional_compile_list:tt
+        guarded_by: $guard_list:tt
+        fn $name:ident($s:ident, $ctx:ident, $o:ident)
+        $b:block
+    } => {
+
+        $crate::contract::macros::paste!{
+
+            $(#[$meta])*
+            fn [<FINISH_ $name>](&$s, $ctx:&$crate::contract::Context, $o: Option<&Args>) -> $crate::contract::TxTmplIt
+            $b
+            $(#[$meta])*
+            fn $name<'a>() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, Args>>{
+                Some($crate::contract::actions::FinishOrFunc{
+                    guard: &$guard_list,
+                    conditional_compile_if: &$conditional_compile_list,
+                    func: Self::[<FINISH_ $name>]
+                })
+            }
+        }
+    };
+    {
+        $(#[$meta:meta])*
+        fn $name:ident($s:ident, $ctx:ident, $o:ident) $b:block
     } => {
         finish!{
             $(#[$meta])*
-            $name [] $guard_list |$s, $ctx, $o| $b
+            compile_if: []
+            guarded_by: []
+            fn $name($s, $ctx, $o) $b
         }
     };
+
     {
         $(#[$meta:meta])*
-        $name:ident $guard_list:tt
+        guarded_by: $guard_list:tt
+        fn $name:ident($s:ident, $ctx:ident, $o:ident) $b:block
     } => {
-        finish!(
+        finish!{
             $(#[$meta])*
-            $name [] $guard_list |s, o| { Ok(Box::new(std::iter::empty()))});
+            compile_if: []
+            guarded_by: $guard_list
+            fn $name($s, $ctx, $o) $b }
     };
+
+    {
+        $(#[$meta:meta])*
+        compile_if: $conditional_compile_list:tt
+        fn $name:ident($s:ident, $ctx:ident, $o:ident) $b:block
+    } => {
+        finish!{
+            $(#[$meta])*
+            compile_if: $conditional_compile_list
+            guarded_by: []
+            fn $name($s, $ctx, $o) $b }
+    };
+
 }
 
 /// The guard macro is used to define a `Guard`. Guards may be cached or uncached.
