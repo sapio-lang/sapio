@@ -43,7 +43,7 @@ impl AnyContract for D<'static> {
 #[derive(JsonSchema, Deserialize)]
 pub struct DynamicExample;
 impl DynamicExample {
-    then! {next |s, ctx| {
+    then! {fn next (self, ctx) {
         let v:
             Vec<fn() -> Option<actions::ThenFunc<'static, D<'static>>>>
             = vec![];

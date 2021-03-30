@@ -6,6 +6,8 @@
 
 //! macros for making defining Sapio contracts less verbose.
 
+pub use paste::paste;
+
 /// The declare macro is used to declare the list of pathways in a Contract trait impl.
 /// formats for calling are:
 /// ```ignore
@@ -65,9 +67,11 @@ macro_rules! declare {
 /// formats for calling are:
 /// ```ignore
 /// /// A Guarded CTV Function
-/// then!(name [guard_1, ... guard_n] |s| {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
+/// then!(guarded_by: [guard_1, ... guard_n] fn name(self, ctx) {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
+/// /// A Conditional CTV Function
+/// then!(compile_if: [compile_if_1, ... compile_if_n] fn name(self, ctx) {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
 /// /// An Unguarded CTV Function
-/// then!(name |s| {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
+/// then!(fn name(self, ctx) {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
 /// /// Null Implementation
 /// then!(name);
 /// ```
@@ -75,116 +79,198 @@ macro_rules! declare {
 macro_rules! then {
     {
         $(#[$meta:meta])*
-        $name:ident $conditional_compile_list:tt $guard_list:tt |$s:ident, $ctx:ident| $b:block
+        $name:ident
     } => {
-        $(#[$meta])*
-        fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<'a, Self>>{
-            Some($crate::contract::actions::ThenFunc{
-                guard: &$guard_list,
-                conditional_compile_if: &$conditional_compile_list,
-                func:|$s: &Self, $ctx:&$crate::contract::Context| $b
-            })
+
+        $crate::contract::macros::paste!{
+
+            $(#[$meta])*
+            fn [<THEN_ $name>](&self, _ctx:&$crate::contract::Context)-> $crate::contract::TxTmplIt
+            {
+                unimplemented!();
+            }
+            $(#[$meta])*
+            fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<'a, Self>> {None}
         }
     };
     {
         $(#[$meta:meta])*
-        $name:ident |$s:ident, $ctx:ident| $b:block
+        compile_if: $conditional_compile_list:tt
+        guarded_by: $guard_list:tt
+        fn $name:ident($s:ident, $ctx:ident)
+        $b:block
+    } => {
+
+        $crate::contract::macros::paste!{
+
+            $(#[$meta])*
+            fn [<THEN_ $name>](&$s, $ctx:&$crate::contract::Context) -> $crate::contract::TxTmplIt
+            $b
+            $(#[$meta])*
+            fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<'a, Self>>{
+                Some($crate::contract::actions::ThenFunc{
+                    guard: &$guard_list,
+                    conditional_compile_if: &$conditional_compile_list,
+                    func: Self::[<THEN_ $name>]
+                })
+            }
+        }
+    };
+    {
+        $(#[$meta:meta])*
+        fn $name:ident($s:ident, $ctx:ident) $b:block
     } => {
         then!{
             $(#[$meta])*
-            $name [] [] |$s, $ctx| $b }
+            compile_if: []
+            guarded_by: []
+            fn $name($s, $ctx) $b
+        }
     };
 
     {
         $(#[$meta:meta])*
-        $name:ident $guard_list:tt |$s:ident, $ctx:ident| $b:block
+        guarded_by: $guard_list:tt
+        fn $name:ident($s:ident, $ctx:ident) $b:block
     } => {
         then!{
             $(#[$meta])*
-            $name [] $guard_list |$s, $ctx| $b }
+            compile_if: []
+            guarded_by: $guard_list
+            fn $name($s, $ctx) $b }
     };
 
     {
         $(#[$meta:meta])*
-        $name:ident} => {
-        $(#[$meta])*
-        fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<'a, Self>> {None}
+        compile_if: $conditional_compile_list:tt
+        fn $name:ident($s:ident, $ctx:ident) $b:block
+    } => {
+        then!{
+            $(#[$meta])*
+            compile_if: $conditional_compile_list
+            guarded_by: []
+            fn $name($s, $ctx) $b }
     };
+
 }
 
-/// The then macro is used to define a `FinishFunc` or a `FinishOrFunc`
+/// The finish macro is used to define a `FinishFunc` or a `FinishOrFunc`
 /// formats for calling are:
 /// ```ignore
 /// /// A Guarded CTV Function
-/// finish!(name [guard_1, ... guard_n] |s| {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
+/// finish!(guarded_by: [guard_1, ... guard_n] fn name(self, ctx, o) {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
+/// /// A Conditional CTV Function
+/// finish!(compile_if: [compile_if_1, ... compile_if_n] fn name(self, ctx, o) {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
 /// /// Null Implementation
-/// then!(name);
+/// finish!(name);
 /// ```
 /// Unlike a `then!`, `finish!` must always have guards.
 #[macro_export]
 macro_rules! finish {
     {
         $(#[$meta:meta])*
-        $name:ident $conditional_compile_list:tt $guard_list:tt |$s:ident, $ctx:ident, $o:ident| $b:block
+        $name:ident
     } => {
-        $(#[$meta])*
-        fn $name<'a>() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, Args>>{
-            Some($crate::contract::actions::FinishOrFunc{
-                conditional_compile_if: &$conditional_compile_list,
-                guard: &$guard_list,
-                func: |$s: &Self, $ctx:&$crate::contract::Context, $o: Option<&_>| $b} .into())
+
+        $crate::contract::macros::paste!{
+
+            $(#[$meta])*
+            fn [<FINISH_ $name>](&self, _ctx:&$crate::contract::Context, $o: Option<&<Self as $crate::contract::AnyContract>::StatefulArguments>)-> $crate::contract::TxTmplIt
+            {
+                unimplemented!();
+            }
+            $(#[$meta])*
+            fn $name<'a>() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, <Self as $crate::contract::AnyContract>::StatefulArguments>> {None}
         }
     };
     {
         $(#[$meta:meta])*
-        $name:ident $guard_list:tt |$s:ident, $ctx:ident, $o:ident| $b:block
+        compile_if: $conditional_compile_list:tt
+        guarded_by: $guard_list:tt
+        fn $name:ident($s:ident, $ctx:ident, $o:ident)
+        $b:block
+    } => {
+
+        $crate::contract::macros::paste!{
+
+            $(#[$meta])*
+            fn [<FINISH_ $name>](&$s, $ctx:&$crate::contract::Context, $o: Option<&<Self as $crate::contract::AnyContract>::StatefulArguments>) -> $crate::contract::TxTmplIt
+            $b
+            $(#[$meta])*
+            fn $name<'a>() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, <Self as $crate::contract::AnyContract>::StatefulArguments>>{
+                Some($crate::contract::actions::FinishOrFunc{
+                    guard: &$guard_list,
+                    conditional_compile_if: &$conditional_compile_list,
+                    func: Self::[<FINISH_ $name>]
+                })
+            }
+        }
+    };
+    {
+        $(#[$meta:meta])*
+        guarded_by: $guard_list:tt
+        fn $name:ident($s:ident, $ctx:ident, $o:ident) $b:block
     } => {
         finish!{
             $(#[$meta])*
-            $name [] $guard_list |$s, $ctx, $o| $b
-        }
+            compile_if: []
+            guarded_by: $guard_list
+            fn $name($s, $ctx, $o) $b }
     };
-    {
-        $(#[$meta:meta])*
-        $name:ident $guard_list:tt
-    } => {
-        finish!(
-            $(#[$meta])*
-            $name [] $guard_list |s, o| { Ok(Box::new(std::iter::empty()))});
-    };
+
+
 }
 
 /// The guard macro is used to define a `Guard`. Guards may be cached or uncached.
 /// formats for calling are:
 /// ```ignore
-/// guard!(name |s| {/*Clause*/})
+/// guard!(fn name(self, ctx) {/*Clause*/})
 /// /// The guard should only be invoked once
-/// guard!(cached name |s| {/*Clause*/})
+/// guard!(cached fn name(self, ctx) {/*Clause*/})
 /// ```
 #[macro_export]
 macro_rules! guard {
     {
         $(#[$meta:meta])*
         $name:ident} => {
-            $(#[$meta])*
-            fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
-                None
+            $crate::contract::macros::paste!{
+                $(#[$meta])*
+                fn [<GUARD_ $name>](&self, _ctx:&$crate::contract::Context) -> $crate::sapio_base::Clause {
+                    unimplemented!();
+                }
+                $(#[$meta])*
+                fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
+                    None
+                }
             }
      };
     {
         $(#[$meta:meta])*
-        $name:ident |$s:ident, $ctx:ident| $b:block} => {
-            $(#[$meta])*
-            fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
-                Some($crate::contract::actions::Guard::Fresh( |$s: &Self, $ctx: &$crate::contract::Context| $b))
+        fn $name:ident($s:ident, $ctx:ident) $b:block} => {
+            $crate::contract::macros::paste!{
+                $(#[$meta])*
+                fn [<GUARD_ $name>](&$s, $ctx:&$crate::contract::Context) -> $crate::sapio_base::Clause
+                $b
+                $(#[$meta])*
+                fn  $name() -> Option<$crate::contract::actions::Guard<Self>> {
+                    Some($crate::contract::actions::Guard::Fresh(Self::[<GUARD_ $name>]))
+                }
+
             }
         };
     {
         $(#[$meta:meta])*
-        cached $name:ident |$s:ident, $ctx:ident| $b:block} => {
-            $(#[$meta])*
-            fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
-                Some($crate::contract::actions::Guard::Cache( |$s: &Self, $ctx:&$crate::contract::Context| $b))
+        cached
+        fn $name:ident($s:ident, $ctx:ident) $b:block} => {
+            $crate::contract::macros::paste!{
+                $(#[$meta])*
+                fn [<GUARD_ $name>](&$s, $ctx:&$crate::contract::Context) -> $crate::sapio_base::Clause
+                $b
+
+                $(#[$meta])*
+                fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
+                    Some($crate::contract::actions::Guard::Cache(Self::[<GUARD_ $name>]))
+                }
             }
         };
 }
@@ -192,7 +278,7 @@ macro_rules! guard {
 /// The compile_if macro is used to define a `ConditionallyCompileIf`.
 /// formats for calling are:
 /// ```ignore
-/// compile_if!(name |s| {/*ConditionallyCompileType*/})
+/// compile_if!(fn name(self, ctx) {/*ConditionallyCompileType*/})
 /// ```
 #[macro_export]
 macro_rules! compile_if {
@@ -200,18 +286,29 @@ macro_rules! compile_if {
         $(#[$meta:meta])*
         $name:ident
     } => {
-            $(#[$meta])*
-            fn $name() -> Option<$crate::contract::actions::ConditionallyCompileIf<Self>> {
-                None
+            $crate::contract::macros::paste!{
+                $(#[$meta])*
+                fn [<COMPILE_IF $name>](&self, _ctx: &$crate::contract::Context) -> $crate::contract::actions::ConditionalCompileType {
+                    unimplemented!()
+                }
+                $(#[$meta])*
+                fn $name() -> Option<$crate::contract::actions::ConditionallyCompileIf<Self>> {
+                    None
+                }
             }
      };
     {
         $(#[$meta:meta])*
-        $name:ident |$s:ident, $ctx:ident| $b:block
+        fn $name:ident($s:ident, $ctx:ident) $b:block
     } => {
-            $(#[$meta])*
-            fn $name() -> Option<$crate::contract::actions::ConditionallyCompileIf<Self>> {
-                Some($crate::contract::actions::ConditionallyCompileIf::Fresh( |$s: &Self, $ctx: &$crate::contract::Context| $b))
+            $crate::contract::macros::paste!{
+                $(#[$meta])*
+                fn [<COMPILE_IF $name>](&$s, $ctx: &$crate::contract::Context) -> $crate::contract::actions::ConditionalCompileType
+                $b
+                $(#[$meta])*
+                fn $name() -> Option<$crate::contract::actions::ConditionallyCompileIf<Self>> {
+                    Some($crate::contract::actions::ConditionallyCompileIf::Fresh(Self::[<COMPILE_IF $name>]))
+                }
             }
         };
 }

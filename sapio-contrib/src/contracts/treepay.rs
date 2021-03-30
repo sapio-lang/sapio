@@ -29,19 +29,19 @@ pub struct TreePay {
 }
 
 impl TreePay {
-    then! {expand |s, ctx| {
+    then! {fn expand(self, ctx) {
         let mut builder = ctx.template();
-        if s.participants.len() > s.radix {
+        if self.participants.len() > self.radix {
 
-            for c in s.participants.chunks(s.participants.len()/s.radix) {
+            for c in self.participants.chunks(self.participants.len()/self.radix) {
                 let mut amt =  bitcoin::util::amount::Amount::from_sat(0);
                 for Payment{amount, ..}  in c {
                     amt += amount.clone().try_into()?;
                 }
-                builder = builder.add_output(amt, &TreePay {participants: c.to_vec(), radix: s.radix}, None)?;
+                builder = builder.add_output(amt, &TreePay {participants: c.to_vec(), radix: self.radix}, None)?;
             }
         } else {
-            for Payment{amount, address} in s.participants.iter() {
+            for Payment{amount, address} in self.participants.iter() {
                 builder = builder.add_output((*amount).try_into()?, &Compiled::from_address(address.clone(), None), None)?;
             }
         }

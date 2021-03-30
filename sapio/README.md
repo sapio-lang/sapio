@@ -84,12 +84,12 @@ pub struct Something {
 }
 
 /// Something's methods. Note 'a required for macros
-impl<'a> Something {
+impl Something {
     /* omitted */
 }
 
 /// Something's Contract trait binding
-impl<'a> Contract<'a> for Something {
+impl Contract for Something {
     /// [Optional] declares the unlocking conditions
     declare! {finish, /*omitted*/}
     /// [Optional] declares the CTV next steps
@@ -109,18 +109,17 @@ Let's look at some examples:
 A Basic Pay to Public Key contract can be generated as follows:
 
 ```rust
+/// Pay To Public Key Sapio Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct PayToPublicKey {
-    key: bitcoin::PublicKey
+    key: bitcoin::PublicKey,
 }
 
-impl<'a> PayToPublicKey {
-    /// a guard is a definition of a unlocking condition
-    guard!(with_key |s| {Clause::Key(s.key)});
+impl PayToPublicKey {
+    guard! {fn with_key(self, ctx) { Clause::Key(self.key) }}
 }
 
-impl<'a> Contract<'a> for PayToPublicKey {
-    /// the unlocking condition must be declared as a finish to be active
+impl Contract for PayToPublicKey {
     declare! {finish, Self::with_key}
     declare! {non updatable}
 }
@@ -131,17 +130,32 @@ Escrow, or Alice and Bob can spend the funds. Clauses are defined via (a patched
 version of) [rust-miniscript](https://github.com/rust-bitcoin/rust-miniscript/).
 
 ```rust
-impl<'a> BasicEscrow {
-    guard!(redeem |s| {
-            Clause::Threshold(1, vec![
-                Clause::Threshold(2, vec![Clause::Key(s.alice), Clause::Key(s.bob)]),
-                Clause::And(vec![Clause::Key(s.escrow), Clause::Threshold(1, vec![Clause::Key(s.alice), Clause::Key(s.bob)])])
-            ])
-        }
-    );
+/// Basic Escrowing Contract
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct BasicEscrow {
+    alice: bitcoin::PublicKey,
+    bob: bitcoin::PublicKey,
+    escrow: bitcoin::PublicKey,
 }
 
-impl<'a> Contract<'a> for BasicEscrow {
+impl BasicEscrow {
+    guard! {
+        fn redeem(self, ctx) {
+            Clause::Threshold(
+                1,
+                vec![
+                    Clause::Threshold(2, vec![Clause::Key(self.alice), Clause::Key(self.bob)]),
+                    Clause::And(vec![
+                        Clause::Key(self.escrow),
+                        Clause::Threshold(1, vec![Clause::Key(self.alice), Clause::Key(self.bob)]),
+                    ]),
+                ],
+            )
+        }
+    }
+}
+
+impl Contract for BasicEscrow {
     declare! {finish, Self::redeem}
     declare! {non updatable}
 }
@@ -150,19 +164,30 @@ impl<'a> Contract<'a> for BasicEscrow {
 We can also write this a bit more clearly as:
 
 ```rust
+
+/// Basic Escrowing Contract, written more expressively
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct BasicEscrow2 {
     alice: bitcoin::PublicKey,
     bob: bitcoin::PublicKey,
-    escrow: bitcoin::PublicKey
+    escrow: bitcoin::PublicKey,
 }
 
-impl<'a> BasicEscrow2 {
-    guard!(use_escrow |s| {Clause::And(vec![Clause::Key(s.escrow), Clause::Threshold(2, vec![Clause::Key(s.alice), Clause::Key(s.bob)])]) });
-    guard!(cooperate |s| {Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)])});
+impl BasicEscrow2 {
+    guard! {
+        fn use_escrow(self, ctx) {
+            Clause::And(vec![
+                Clause::Key(self.escrow),
+                Clause::Threshold(2, vec![Clause::Key(self.alice), Clause::Key(self.bob)]),
+            ])
+        }
+    }
+    guard! {
+        fn cooperate(self, ctx) { Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)]) }
+    }
 }
 
-impl<'a> Contract<'a> for BasicEscrow2 {
+impl Contract for BasicEscrow2 {
     declare! {finish, Self::use_escrow, Self::cooperate}
     declare! {non updatable}
 }
@@ -176,40 +201,35 @@ escrow or Bob and the escrow from cheating?
 
 
 ```rust
+/// Trustless Escrowing Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct TrustlessEscrow {
     alice: bitcoin::PublicKey,
     bob: bitcoin::PublicKey,
     alice_escrow: (CoinAmount, bitcoin::Address),
-    bob_escrow: (CoinAmount, bitcoin::Address)
+    bob_escrow: (CoinAmount, bitcoin::Address),
 }
 
-impl<'a> TrustlessEscrow {
-    guard!(cooperate |s| {Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)])});
-    /// then! macro defines a function to create a list of transactions options
-    /// to be required.
-    /// The iterator is boxed to permit arbitrary inner types.
-    then! {use_escrow |s| {
-        let o1 = txn::Output::new(
-            s.alice_escrow.0,
-            Compiled::from_address(s.alice_escrow.1.clone(), None),
-            None,
-        )?;
-        let o2 = txn::Output::new(
-            s.bob_escrow.0,
-            Compiled::from_address(s.bob_escrow.1.clone(), None),
-            None,
-        )?;
-        let mut tb = txn::TemplateBuilder::new().add_output(o1).add_output(o2).set_sequence(0, 1700 /*roughly 10 days*/);
-        Ok(Box::new(std::iter::once(
-            tb.into(),
-        )))
+impl TrustlessEscrow {
+    guard! {
+    fn cooperate (self, ctx ) { Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)]) }
+    }
+    then! {fn use_escrow(self, ctx) {
+        ctx.template()
+            .add_output(
+                self.alice_escrow.0.try_into()?,
+                &Compiled::from_address(self.alice_escrow.1.clone(), None),
+                None)?
+            .add_output(
+                self.bob_escrow.0.try_into()?,
+                &Compiled::from_address(self.bob_escrow.1.clone(), None),
+                None)?
+            .set_sequence(0, RelTime::try_from(std::time::Duration::from_secs(10*24*60*60))?.into())?.into()
     }}
 }
 
-impl<'a> Contract<'a> for TrustlessEscrow {
+impl Contract for TrustlessEscrow {
     declare! {finish, Self::cooperate}
-    /// we must declare in order for it to be active
     declare! {then, Self::use_escrow}
     declare! {non updatable}
 }

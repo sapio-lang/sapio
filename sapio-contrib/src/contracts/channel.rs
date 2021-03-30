@@ -181,56 +181,55 @@ struct Channel<T: State> {
 }
 
 /// Functionality Available for a channel regardless of state
-impl<T: State> Channel<T> {
-    guard!(timeout | s, ctx | { Clause::Older(100) });
-    guard!(cached signed |s, ctx| {Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)])});
+impl<T: State> Channel<T>
+where
+    Channel<T>: Contract,
+{
+    guard! {fn timeout(self, ctx) { Clause::Older(100) }}
+    guard! {cached fn signed(self, ctx) {Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])}}
 
     finish! {
-        update_state_a [Self::signed]
-            |s, ctx, o| {
-                Ok(Box::new(std::iter::empty()))
-            }
+        guarded_by: [Self::signed]
+        fn update_state_a(self, ctx, o) {
+            Ok(Box::new(std::iter::empty()))
+        }
     }
     finish! {
-        update_state_b [Self::signed]
-            |s, ctx, o| {
-                Ok(Box::new(std::iter::empty()))
-            }
+        guarded_by: [Self::signed]
+        fn update_state_b(self, ctx, o){
+            Ok(Box::new(std::iter::empty()))
+        }
     }
 
     finish! {
-        cooperate [Self::signed]
-            |s, ctx, o| {
-                Ok(Box::new(std::iter::empty()))
-            }
+        guarded_by: [Self::signed]
+        fn cooperate(self, ctx, o) {
+            Ok(Box::new(std::iter::empty()))
+        }
     }
 }
 
 /// Functionality that differs depending on current State
 trait FunctionalityAtState
 where
-    Self: Sized,
+    Self: Sized + Contract,
 {
-    fn begin_contest<'a>() -> Option<ThenFunc<'a, Self>> {
-        None
-    }
-    fn finish_contest<'a>() -> Option<ThenFunc<'a, Self>> {
-        None
-    }
+    then! {begin_contest}
+    then! {finish_contest}
 }
 
 /// Override begin_contest when state = Start
 impl FunctionalityAtState for Channel<Start> {
-    then! {begin_contest |s, ctx| {
+    then! {fn begin_contest(self, ctx) {
         ctx.template().add_output(
-            s.amount.try_into()?,
+            self.amount.try_into()?,
             &Channel::<Stop> {
                 pd: Default::default(),
-                alice: s.alice,
-                bob: s.bob,
-                amount: s.amount.try_into().unwrap(),
-                resolution: s.resolution.clone(),
-                db: s.db.clone(),
+                alice: self.alice,
+                bob: self.bob,
+                amount: self.amount.try_into().unwrap(),
+                resolution: self.resolution.clone(),
+                db: self.db.clone(),
             },
             None,
         )?.into()
@@ -239,9 +238,12 @@ impl FunctionalityAtState for Channel<Start> {
 
 /// Override finish_contest when state = Start
 impl FunctionalityAtState for Channel<Stop> {
-    then! {finish_contest [Self::timeout] |s, ctx| {
-        ctx.template().add_output(s.amount.try_into()?, &s.resolution, None)?.into()
-    }}
+    then! {
+        guarded_by: [Self::timeout]
+        fn finish_contest (self, ctx) {
+            ctx.template().add_output(self.amount.try_into()?, &self.resolution, None)?.into()
+        }
+    }
 }
 
 /// Implement Contract for Channel<T> and functionality will be correctly assembled for different

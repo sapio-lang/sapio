@@ -53,15 +53,17 @@ where
     begin_recovery}
 }
 impl StateDependentActions for FederatedPegIn<CanBeginRecovery> {
-    then! {begin_recovery [Self::recovery_signed] |s, ctx| {
+    then! {
+        guarded_by: [Self::recovery_signed]
+        fn begin_recovery(self, ctx) {
         ctx.template().add_output(
-            s.amount.try_into()?,
+            self.amount.try_into()?,
             &FederatedPegIn::<CanFinishRecovery> {
-                keys: s.keys.clone(),
-                thresh_normal: s.thresh_normal,
-                keys_recovery: s.keys_recovery.clone(),
-                thresh_recovery: s.thresh_recovery,
-                amount: s.amount,
+                keys: self.keys.clone(),
+                thresh_normal: self.thresh_normal,
+                keys_recovery: self.keys_recovery.clone(),
+                thresh_recovery: self.thresh_recovery,
+                amount: self.amount,
                 _pd: PhantomData::default()
             },
             None
@@ -69,18 +71,18 @@ impl StateDependentActions for FederatedPegIn<CanBeginRecovery> {
     }}
 }
 impl StateDependentActions for FederatedPegIn<CanFinishRecovery> {
-    guard! {finish_recovery |s, ctx| {
-        Clause::And(vec![Clause::Older(4725 /* 4 weeks? */), Clause::Threshold(s.thresh_recovery, s.keys_recovery.iter().cloned().map(Clause::Key).collect())])
+    guard! {fn finish_recovery(self, ctx) {
+        Clause::And(vec![Clause::Older(4725 /* 4 weeks? */), Clause::Threshold(self.thresh_recovery, self.keys_recovery.iter().cloned().map(Clause::Key).collect())])
     }}
 }
 
 impl<T: RecoveryState> FederatedPegIn<T> {
-    guard! {recovery_signed |s, ctx| {
-        Clause::Threshold(s.thresh_recovery, s.keys_recovery.iter().cloned().map(Clause::Key).collect())
+    guard! {fn recovery_signed (self, ctx) {
+        Clause::Threshold(self.thresh_recovery, self.keys_recovery.iter().cloned().map(Clause::Key).collect())
     }}
 
-    guard! {normal_signed |s, ctx| {
-        Clause::Threshold(s.thresh_normal, s.keys.iter().cloned().map(Clause::Key).collect())
+    guard! {fn normal_signed(self, ctx) {
+        Clause::Threshold(self.thresh_normal, self.keys.iter().cloned().map(Clause::Key).collect())
     }}
 }
 

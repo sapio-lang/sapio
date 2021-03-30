@@ -97,15 +97,16 @@ impl GenericBet {
             )),
         }
     }
-    guard!(
+    guard! {
         /// Action when the price is greater than or equal to the price in the middle
-        gte | s,
-        ctx | { s.price(true) }
-    );
+        fn gte(self, ctx) {
+            self.price(true)
+        }
+    }
     then!(
-        pay_gte[Self::gte] | s,
-        ctx | {
-            if let Some(tmpl) = s.recurse_over(s.outcomes.len() / 2..s.outcomes.len(), ctx)? {
+        guarded_by: [Self::gte]
+        fn pay_gte(self, ctx) {
+            if let Some(tmpl) = self.recurse_over(self.outcomes.len() / 2..self.outcomes.len(), ctx)? {
                 Ok(Box::new(std::iter::once(Ok(tmpl))))
             } else {
                 Ok(Box::new(std::iter::empty()))
@@ -113,27 +114,26 @@ impl GenericBet {
         }
     );
 
-    guard!(
+    guard! {
         /// Action when the price is less than or equal to the price in the middle
-        lt | s,
-        ctx | { s.price(false) }
-    );
+        fn lt(self, ctx) {
+            self.price(false)
+        }
+    }
     then!(
-        pay_lt[Self::lt] | s,
-        ctx | {
-            if let Some(tmpl) = s.recurse_over(0..s.outcomes.len() / 2, ctx)? {
+        guarded_by: [Self::lt]
+        fn pay_lt(self, ctx) {
+            if let Some(tmpl) = self.recurse_over(0..self.outcomes.len() / 2, ctx)? {
                 Ok(Box::new(std::iter::once(Ok(tmpl))))
             } else {
                 Ok(Box::new(std::iter::empty()))
             }
         }
     );
-    guard!(
+    guard! {
         /// Allow for both parties to cooperative close
-        cooperate
-            | s,
-        ctx | { s.cooperate.clone() }
-    );
+        fn cooperate(self, ctx) { self.cooperate.clone() }
+    }
 
     // elided: unilateral close initiation after certain relative delay
 }

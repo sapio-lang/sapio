@@ -9,14 +9,14 @@ use super::*;
 use sapio_base::timelocks::*;
 /// Generic functionality required for Exploding contracts
 pub trait Explodes: 'static + Sized {
-    then!(
+    then! {
         /// What to do when the timeout expires
         explodes
-    );
-    then!(
+    }
+    then! {
         /// what to do when the holder wishes to strike
         strikes
-    );
+    }
 }
 
 impl<T> Contract for ExplodingOption<T>
@@ -48,44 +48,43 @@ pub struct ExplodingOption<T: 'static> {
 }
 
 impl<T> ExplodingOption<T> {
-    guard!(signed | s, ctx | { s.key_p2_pk.clone() });
+    guard! {fn signed(self, ctx) { self.key_p2_pk.clone() }}
 }
 impl<T> Explodes for ExplodingOption<T>
 where
     GenericBet: TryFrom<T, Error = CompilationError>,
     T: Clone,
 {
-    then!(
-        explodes | s,
-        ctx | {
+    then! {
+        fn explodes (self, ctx) {
             ctx.template()
                 .add_output(
-                    s.party_one.into(),
-                    &Compiled::from_address(s.key_p1.clone(), None),
+                    self.party_one.into(),
+                    &Compiled::from_address(self.key_p1.clone(), None),
                     None,
                 )?
                 .add_output(
-                    s.party_two.into(),
-                    &Compiled::from_address(s.key_p2.clone(), None),
+                    self.party_two.into(),
+                    &Compiled::from_address(self.key_p2.clone(), None),
                     None,
                 )?
-                .set_lock_time(s.timeout)?
+                .set_lock_time(self.timeout)?
                 .into()
         }
-    );
+    }
 
-    then!(
-        strikes[Self::signed] | s,
-        ctx | {
+    then! {
+        guarded_by: [Self::signed]
+        fn strikes(self, ctx) {
             ctx.template()
                 .add_output(
-                    (s.party_one + s.party_two).into(),
-                    &GenericBet::try_from(s.opt.clone())?,
+                    (self.party_one + self.party_two).into(),
+                    &GenericBet::try_from(self.opt.clone())?,
                     None,
                 )?
                 .into()
         }
-    );
+    }
 }
 
 /// Similar to `ExplodingOption` except that the option requires an additional
@@ -103,34 +102,32 @@ where
     GenericBet: TryFrom<T, Error = CompilationError>,
     T: Clone,
 {
-    then!(
-        explodes | s,
-        ctx | {
+    then! {
+        fn explodes(self, ctx) {
             Ok(Box::new(std::iter::once(
                 ctx.template()
                     .add_output(
-                        s.party_one.into(),
-                        &Compiled::from_address(s.key_p1.clone(), None),
+                        self.party_one.into(),
+                        &Compiled::from_address(self.key_p1.clone(), None),
                         None,
                     )?
-                    .set_lock_time(s.timeout)?
+                    .set_lock_time(self.timeout)?
                     .into(),
             )))
         }
-    );
+    }
 
-    then!(
-        strikes | s,
-        ctx | {
+    then! {
+        fn strikes(self, ctx) {
             ctx.template()
-                .add_amount(s.party_two)
+                .add_amount(self.party_two)
                 .add_sequence()
                 .add_output(
-                    (s.party_one + s.party_two).into(),
-                    &GenericBet::try_from(s.opt.clone())?,
+                    (self.party_one + self.party_two).into(),
+                    &GenericBet::try_from(self.opt.clone())?,
                     None,
                 )?
                 .into()
         }
-    );
+    }
 }

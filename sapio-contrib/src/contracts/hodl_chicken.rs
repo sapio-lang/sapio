@@ -82,37 +82,42 @@ impl TryFrom<HodlChickenChecks> for HodlChickenInner {
 }
 
 impl HodlChickenInner {
-    guard! {alice_is_a_chicken |s, ctx| {Clause::Key(s.alice_key)}}
-    guard! {bob_is_a_chicken |s, ctx| {Clause::Key(s.bob_key)}}
-    then! {alice_redeem [Self::alice_is_a_chicken] |s, ctx| {
+    guard! {fn alice_is_a_chicken(self, ctx) {Clause::Key(self.alice_key)}}
+    guard! {fn bob_is_a_chicken(self, ctx) {Clause::Key(self.bob_key)}}
+    then! {
+        guarded_by: [Self::alice_is_a_chicken]
+        fn alice_redeem(self, ctx) {
         ctx.template()
             .add_output(
-                Amount::from_sat(s.winner_gets),
-                &s.bob_contract.winner,
+                Amount::from_sat(self.winner_gets),
+                &self.bob_contract.winner,
                 None,
             )?
             .add_output(
-                Amount::from_sat(s.chicken_gets),
-                &s.alice_contract.loser,
+                Amount::from_sat(self.chicken_gets),
+                &self.alice_contract.loser,
                 None,
             )?
             .into()
     }}
 
-    then! {bob_redeem [Self::bob_is_a_chicken] |s, ctx| {
-        ctx.template()
-            .add_output(
-                Amount::from_sat(s.winner_gets),
-                &s.alice_contract.winner,
-                None,
-            )?
-            .add_output(
-                Amount::from_sat(s.chicken_gets),
-                &s.bob_contract.loser,
-                None,
-            )?
-            .into()
-    }}
+    then! {
+        guarded_by: [Self::bob_is_a_chicken]
+        fn bob_redeem(self, ctx) {
+            ctx.template()
+                .add_output(
+                    Amount::from_sat(self.winner_gets),
+                    &self.alice_contract.winner,
+                    None,
+                )?
+                .add_output(
+                    Amount::from_sat(self.chicken_gets),
+                    &self.bob_contract.loser,
+                    None,
+                )?
+                .into()
+        }
+    }
 }
 
 impl Contract for HodlChickenInner {
