@@ -84,7 +84,7 @@ impl TryFrom<HodlChickenChecks> for HodlChickenInner {
 impl HodlChickenInner {
     guard! {fn alice_is_a_chicken(self, ctx) {Clause::Key(self.alice_key)}}
     guard! {fn bob_is_a_chicken(self, ctx) {Clause::Key(self.bob_key)}}
-    then! {alice_redeem [Self::alice_is_a_chicken] |s, ctx| {
+    then! {[Self::alice_is_a_chicken] fn alice_redeem(s, ctx) {
         ctx.template()
             .add_output(
                 Amount::from_sat(s.winner_gets),
@@ -99,7 +99,7 @@ impl HodlChickenInner {
             .into()
     }}
 
-    then! {bob_redeem [Self::bob_is_a_chicken] |s, ctx| {
+    then! {[Self::bob_is_a_chicken] fn bob_redeem(s, ctx) {
         ctx.template()
             .add_output(
                 Amount::from_sat(s.winner_gets),

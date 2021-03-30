@@ -100,7 +100,7 @@ impl TrustlessEscrow {
     guard! {
     fn cooperate (self, ctx ) { Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)]) }
     }
-    then! {use_escrow |s, ctx| {
+    then! {fn use_escrow(s, ctx) {
         ctx.template()
             .add_output(
                 s.alice_escrow.0.try_into()?,

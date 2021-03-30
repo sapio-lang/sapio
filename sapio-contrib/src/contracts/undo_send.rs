@@ -32,8 +32,7 @@ pub struct UndoSendInternal {
 
 impl UndoSendInternal {
     then!(
-        complete | s,
-        ctx | {
+        fn complete(s, ctx) {
             ctx.template()
                 .add_output(s.amount.try_into()?, &s.to_contract, None)?
                 .set_sequence(0, s.timeout)?
@@ -41,8 +40,7 @@ impl UndoSendInternal {
         }
     );
     then!(
-        undo | s,
-        ctx | {
+        fn undo (s, ctx) {
             ctx.template()
                 .add_output(s.amount.try_into()?, &s.from_contract, None)?
                 .into()

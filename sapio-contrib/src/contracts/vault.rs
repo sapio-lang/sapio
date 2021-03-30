@@ -28,7 +28,7 @@ pub struct Vault {
 }
 
 impl Vault {
-    then! {step |s, ctx| {
+    then! {fn step(s, ctx) {
         let builder = ctx.template()
         .add_output(s.amount_step.try_into()?,
                 &UndoSendInternal {
@@ -55,7 +55,7 @@ impl Vault {
             builder
         }.into()
     }}
-    then! {to_cold |s, ctx| {
+    then! {fn to_cold (s, ctx) {
         let amount = bitcoin::Amount::try_from(s.amount_step).map_err(|_e| contract::CompilationError::TerminateCompilation)?.checked_mul(s.n_steps).ok_or(contract::CompilationError::TerminateCompilation)?;
         ctx.template()
             .add_output(amount, &(s.cold_storage)(amount.into(), ctx)?, None)?

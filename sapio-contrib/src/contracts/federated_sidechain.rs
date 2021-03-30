@@ -53,7 +53,9 @@ where
     begin_recovery}
 }
 impl StateDependentActions for FederatedPegIn<CanBeginRecovery> {
-    then! {begin_recovery [Self::recovery_signed] |s, ctx| {
+    then! {
+        [Self::recovery_signed]
+        fn begin_recovery(s, ctx) {
         ctx.template().add_output(
             s.amount.try_into()?,
             &FederatedPegIn::<CanFinishRecovery> {

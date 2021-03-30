@@ -68,7 +68,7 @@ impl<T: BState> ExampleB<T> {
 
 impl ExampleBThen for ExampleB<Finish> {}
 impl ExampleBThen for ExampleB<Start> {
-    then! {begin_contest |s, ctx| {
+    then! {fn begin_contest(s, ctx) {
         ctx.template().add_output(
             s.amount.try_into()?,
             &ExampleB::<Finish> {
@@ -160,7 +160,8 @@ impl ExampleCompileIf {
             }
         }
     }
-    then! {use_escrow [Self::should_escrow, Self::must_escrow, Self::escrow_nullable_ok, Self::escrow_error_chk] [] |s, ctx| {
+    then! {[Self::should_escrow, Self::must_escrow, Self::escrow_nullable_ok, Self::escrow_error_chk] []
+        fn use_escrow(s, ctx) {
         ctx.template()
             .add_output(
                 s.alice_escrow.0.try_into()?,

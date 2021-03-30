@@ -9,14 +9,14 @@ use super::*;
 use sapio_base::timelocks::*;
 /// Generic functionality required for Exploding contracts
 pub trait Explodes: 'static + Sized {
-    then!(
+    then! {
         /// What to do when the timeout expires
         explodes
-    );
-    then!(
+    }
+    then! {
         /// what to do when the holder wishes to strike
         strikes
-    );
+    }
 }
 
 impl<T> Contract for ExplodingOption<T>
@@ -55,9 +55,8 @@ where
     GenericBet: TryFrom<T, Error = CompilationError>,
     T: Clone,
 {
-    then!(
-        explodes | s,
-        ctx | {
+    then! {
+        fn explodes (s, ctx) {
             ctx.template()
                 .add_output(
                     s.party_one.into(),
@@ -72,11 +71,11 @@ where
                 .set_lock_time(s.timeout)?
                 .into()
         }
-    );
+    }
 
-    then!(
-        strikes[Self::signed] | s,
-        ctx | {
+    then! {
+        [Self::signed]
+        fn strikes(s, ctx) {
             ctx.template()
                 .add_output(
                     (s.party_one + s.party_two).into(),
@@ -85,7 +84,7 @@ where
                 )?
                 .into()
         }
-    );
+    }
 }
 
 /// Similar to `ExplodingOption` except that the option requires an additional
@@ -103,9 +102,8 @@ where
     GenericBet: TryFrom<T, Error = CompilationError>,
     T: Clone,
 {
-    then!(
-        explodes | s,
-        ctx | {
+    then! {
+        fn explodes(s, ctx) {
             Ok(Box::new(std::iter::once(
                 ctx.template()
                     .add_output(
@@ -117,11 +115,10 @@ where
                     .into(),
             )))
         }
-    );
+    }
 
-    then!(
-        strikes | s,
-        ctx | {
+    then! {
+        fn strikes(s, ctx) {
             ctx.template()
                 .add_amount(s.party_two)
                 .add_sequence()
@@ -132,5 +129,5 @@ where
                 )?
                 .into()
         }
-    );
+    }
 }

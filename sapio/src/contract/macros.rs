@@ -77,7 +77,26 @@ macro_rules! declare {
 macro_rules! then {
     {
         $(#[$meta:meta])*
-        $name:ident $conditional_compile_list:tt $guard_list:tt |$s:ident, $ctx:ident| $b:block
+        $name:ident
+    } => {
+
+        $crate::contract::macros::paste!{
+
+            $(#[$meta])*
+            fn [<THEN_ $name>](_s: &Self, _ctx:&$crate::contract::Context)-> $crate::contract::TxTmplIt
+            {
+                unimplemented!();
+            }
+            $(#[$meta])*
+            fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<'a, Self>> {None}
+        }
+    };
+    {
+        $(#[$meta:meta])*
+        $conditional_compile_list:tt
+        $guard_list:tt
+        fn $name:ident($s:ident, $ctx:ident)
+        $b:block
     } => {
 
         $crate::contract::macros::paste!{
@@ -97,37 +116,26 @@ macro_rules! then {
     };
     {
         $(#[$meta:meta])*
-        $name:ident |$s:ident, $ctx:ident| $b:block
+        fn $name:ident($s:ident, $ctx:ident) $b:block
     } => {
         then!{
             $(#[$meta])*
-            $name [] [] |$s, $ctx| $b }
-    };
-
-    {
-        $(#[$meta:meta])*
-        $name:ident $guard_list:tt |$s:ident, $ctx:ident| $b:block
-    } => {
-        then!{
-            $(#[$meta])*
-            $name [] $guard_list |$s, $ctx| $b }
-    };
-
-    {
-        $(#[$meta:meta])*
-        $name:ident} => {
-
-        $crate::contract::macros::paste!{
-
-            $(#[$meta])*
-            fn [<THEN_ $name>](_s: &Self, _ctx:&$crate::contract::Context)-> $crate::contract::TxTmplIt
-            {
-                unimplemented!();
-            }
-            $(#[$meta])*
-            fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<'a, Self>> {None}
+            [] []
+            fn $name($s, $ctx) $b
         }
     };
+
+    {
+        $(#[$meta:meta])*
+        $guard_list:tt
+        fn $name:ident($s:ident, $ctx:ident) $b:block
+    } => {
+        then!{
+            $(#[$meta])*
+            [] $guard_list
+            fn $name($s, $ctx) $b }
+    };
+
 }
 
 /// The then macro is used to define a `FinishFunc` or a `FinishOrFunc`

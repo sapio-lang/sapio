@@ -29,7 +29,7 @@ pub struct TreePay {
 }
 
 impl TreePay {
-    then! {expand |s, ctx| {
+    then! {fn expand(s, ctx) {
         let mut builder = ctx.template();
         if s.participants.len() > s.radix {
 

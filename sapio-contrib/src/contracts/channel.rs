@@ -217,7 +217,7 @@ where
 
 /// Override begin_contest when state = Start
 impl FunctionalityAtState for Channel<Start> {
-    then! {begin_contest |s, ctx| {
+    then! {fn begin_contest(s, ctx) {
         ctx.template().add_output(
             s.amount.try_into()?,
             &Channel::<Stop> {
@@ -235,7 +235,7 @@ impl FunctionalityAtState for Channel<Start> {
 
 /// Override finish_contest when state = Start
 impl FunctionalityAtState for Channel<Stop> {
-    then! {finish_contest [Self::timeout] |s, ctx| {
+    then! { [Self::timeout] fn finish_contest (s, ctx) {
         ctx.template().add_output(s.amount.try_into()?, &s.resolution, None)?.into()
     }}
 }
