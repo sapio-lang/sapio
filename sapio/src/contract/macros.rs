@@ -207,7 +207,7 @@ macro_rules! compile_if {
      };
     {
         $(#[$meta:meta])*
-        $name:ident |$s:ident, $ctx:ident| $b:block
+        fn $name:ident($s:ident, $ctx:ident) $b:block
     } => {
             $(#[$meta])*
             fn $name() -> Option<$crate::contract::actions::ConditionallyCompileIf<Self>> {
