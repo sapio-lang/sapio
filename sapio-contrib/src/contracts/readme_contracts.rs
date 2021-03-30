@@ -22,7 +22,7 @@ pub struct PayToPublicKey {
 }
 
 impl PayToPublicKey {
-    guard!(with_key | s, ctx | { Clause::Key(s.key) });
+    guard! {fn with_key(s, ctx) { Clause::Key(s.key) }}
 }
 
 impl Contract for PayToPublicKey {
@@ -39,9 +39,8 @@ pub struct BasicEscrow {
 }
 
 impl BasicEscrow {
-    guard!(
-        redeem | s,
-        ctx | {
+    guard! {
+        fn redeem(s, ctx) {
             Clause::Threshold(
                 1,
                 vec![
@@ -53,7 +52,7 @@ impl BasicEscrow {
                 ],
             )
         }
-    );
+    }
 }
 
 impl Contract for BasicEscrow {
@@ -70,19 +69,17 @@ pub struct BasicEscrow2 {
 }
 
 impl BasicEscrow2 {
-    guard!(
-        use_escrow | s,
-        ctx | {
+    guard! {
+        fn use_escrow(s, ctx) {
             Clause::And(vec![
                 Clause::Key(s.escrow),
                 Clause::Threshold(2, vec![Clause::Key(s.alice), Clause::Key(s.bob)]),
             ])
         }
-    );
-    guard!(
-        cooperate | s,
-        ctx | { Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)]) }
-    );
+    }
+    guard! {
+        fn cooperate(s, ctx) { Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)]) }
+    }
 }
 
 impl Contract for BasicEscrow2 {
@@ -100,10 +97,9 @@ pub struct TrustlessEscrow {
 }
 
 impl TrustlessEscrow {
-    guard!(
-        cooperate | s,
-        ctx | { Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)]) }
-    );
+    guard! {
+    fn cooperate (s, ctx ) { Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)]) }
+    }
     then! {use_escrow |s, ctx| {
         ctx.template()
             .add_output(

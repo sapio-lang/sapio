@@ -21,8 +21,8 @@ struct ExampleA {
 }
 
 impl ExampleA {
-    guard!(timeout | s, ctx | { Clause::Older(100) });
-    guard!(cached signed |s, ctx| {Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)])});
+    guard!{fn timeout(s, ctx) { Clause::Older(100) }}
+    guard!{cached fn signed(s, ctx) {Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)])}}
 }
 
 impl Contract for ExampleA {
@@ -63,7 +63,7 @@ struct ExampleB<T: BState> {
 }
 
 impl<T: BState> ExampleB<T> {
-    guard!(cached all_signed |s, ctx| {Clause::Threshold(T::get_n(s.threshold, s.participants.len()as u8) as usize, s.participants.iter().map(|k| Clause::Key(*k)).collect())});
+    guard!{cached fn all_signed(s, ctx) {Clause::Threshold(T::get_n(s.threshold, s.participants.len()as u8) as usize, s.participants.iter().map(|k| Clause::Key(*k)).collect())}}
 }
 
 impl ExampleBThen for ExampleB<Finish> {}
@@ -106,7 +106,7 @@ pub struct ExampleCompileIf {
 }
 
 impl ExampleCompileIf {
-    guard! { cooperate | s, ctx | { Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)]) } }
+    guard! { fn cooperate(s, ctx) { Clause::And(vec![Clause::Key(s.alice), Clause::Key(s.bob)]) } }
     compile_if!(
         /// `should_escrow` disables any branch depending on it. If not set,
         /// it checks to make the branch required. This is done in a conflict-free way;
@@ -141,7 +141,7 @@ impl ExampleCompileIf {
         /// condition return 0 txiter items -- if so, the entire branch is pruned.
         fn escrow_nullable_ok(s, ctx) {
             if s.escrow_nullable {
-            ConditionalCompileType::Nullable
+                ConditionalCompileType::Nullable
             } else {
                 ConditionalCompileType::NoConstraint
             }

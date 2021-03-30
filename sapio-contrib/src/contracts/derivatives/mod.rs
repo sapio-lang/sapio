@@ -97,11 +97,12 @@ impl GenericBet {
             )),
         }
     }
-    guard!(
+    guard! {
         /// Action when the price is greater than or equal to the price in the middle
-        gte | s,
-        ctx | { s.price(true) }
-    );
+        fn gte(s, ctx) {
+            s.price(true)
+        }
+    }
     then!(
         pay_gte[Self::gte] | s,
         ctx | {
@@ -113,11 +114,12 @@ impl GenericBet {
         }
     );
 
-    guard!(
+    guard!{
         /// Action when the price is less than or equal to the price in the middle
-        lt | s,
-        ctx | { s.price(false) }
-    );
+        fn lt(s, ctx) {
+            s.price(false)
+        }
+    }
     then!(
         pay_lt[Self::lt] | s,
         ctx | {
@@ -128,12 +130,10 @@ impl GenericBet {
             }
         }
     );
-    guard!(
+    guard!{
         /// Allow for both parties to cooperative close
-        cooperate
-            | s,
-        ctx | { s.cooperate.clone() }
-    );
+        fn cooperate(s, ctx) { s.cooperate.clone() }
+    }
 
     // elided: unilateral close initiation after certain relative delay
 }

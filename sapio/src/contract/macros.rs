@@ -173,7 +173,7 @@ macro_rules! guard {
      };
     {
         $(#[$meta:meta])*
-        $name:ident |$s:ident, $ctx:ident| $b:block} => {
+        fn $name:ident($s:ident, $ctx:ident) $b:block} => {
             $(#[$meta])*
             fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
                 Some($crate::contract::actions::Guard::Fresh( |$s: &Self, $ctx: &$crate::contract::Context| $b))
@@ -181,7 +181,8 @@ macro_rules! guard {
         };
     {
         $(#[$meta:meta])*
-        cached $name:ident |$s:ident, $ctx:ident| $b:block} => {
+        cached
+        fn $name:ident($s:ident, $ctx:ident) $b:block} => {
             $(#[$meta])*
             fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
                 Some($crate::contract::actions::Guard::Cache( |$s: &Self, $ctx:&$crate::contract::Context| $b))
