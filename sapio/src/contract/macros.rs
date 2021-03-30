@@ -83,7 +83,7 @@ macro_rules! then {
         $crate::contract::macros::paste!{
 
             $(#[$meta])*
-            fn [<THEN_ $name>](_s: &Self, _ctx:&$crate::contract::Context)-> $crate::contract::TxTmplIt
+            fn [<THEN_ $name>](&self, _ctx:&$crate::contract::Context)-> $crate::contract::TxTmplIt
             {
                 unimplemented!();
             }
@@ -102,7 +102,7 @@ macro_rules! then {
         $crate::contract::macros::paste!{
 
             $(#[$meta])*
-            fn [<THEN_ $name>]($s: &Self, $ctx:&$crate::contract::Context) -> $crate::contract::TxTmplIt
+            fn [<THEN_ $name>](&$s, $ctx:&$crate::contract::Context) -> $crate::contract::TxTmplIt
             $b
             $(#[$meta])*
             fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<'a, Self>>{

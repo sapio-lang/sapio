@@ -86,16 +86,16 @@ impl HodlChickenInner {
     guard! {fn bob_is_a_chicken(self, ctx) {Clause::Key(self.bob_key)}}
     then! {
         guarded_by: [Self::alice_is_a_chicken]
-        fn alice_redeem(s, ctx) {
+        fn alice_redeem(self, ctx) {
         ctx.template()
             .add_output(
-                Amount::from_sat(s.winner_gets),
-                &s.bob_contract.winner,
+                Amount::from_sat(self.winner_gets),
+                &self.bob_contract.winner,
                 None,
             )?
             .add_output(
-                Amount::from_sat(s.chicken_gets),
-                &s.alice_contract.loser,
+                Amount::from_sat(self.chicken_gets),
+                &self.alice_contract.loser,
                 None,
             )?
             .into()
@@ -103,16 +103,16 @@ impl HodlChickenInner {
 
     then! {
         guarded_by: [Self::bob_is_a_chicken]
-        fn bob_redeem(s, ctx) {
+        fn bob_redeem(self, ctx) {
             ctx.template()
                 .add_output(
-                    Amount::from_sat(s.winner_gets),
-                    &s.alice_contract.winner,
+                    Amount::from_sat(self.winner_gets),
+                    &self.alice_contract.winner,
                     None,
                 )?
                 .add_output(
-                    Amount::from_sat(s.chicken_gets),
-                    &s.bob_contract.loser,
+                    Amount::from_sat(self.chicken_gets),
+                    &self.bob_contract.loser,
                     None,
                 )?
                 .into()

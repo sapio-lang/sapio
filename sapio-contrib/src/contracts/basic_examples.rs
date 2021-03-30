@@ -68,13 +68,13 @@ impl<T: BState> ExampleB<T> {
 
 impl ExampleBThen for ExampleB<Finish> {}
 impl ExampleBThen for ExampleB<Start> {
-    then! {fn begin_contest(s, ctx) {
+    then! {fn begin_contest(self, ctx) {
         ctx.template().add_output(
-            s.amount.try_into()?,
+            self.amount.try_into()?,
             &ExampleB::<Finish> {
-                participants: s.participants.clone(),
-                threshold: s.threshold,
-                amount: s.amount,
+                participants: self.participants.clone(),
+                threshold: self.threshold,
+                amount: self.amount,
                 pd: Default::default(),
             },
             None,
@@ -161,15 +161,15 @@ impl ExampleCompileIf {
         }
     }
     then! {compile_if: [Self::should_escrow, Self::must_escrow, Self::escrow_nullable_ok, Self::escrow_error_chk]
-        fn use_escrow(s, ctx) {
+        fn use_escrow(self, ctx) {
         ctx.template()
             .add_output(
-                s.alice_escrow.0.try_into()?,
-                &Compiled::from_address(s.alice_escrow.1.clone(), None),
+                self.alice_escrow.0.try_into()?,
+                &Compiled::from_address(self.alice_escrow.1.clone(), None),
                 None)?
             .add_output(
-                s.bob_escrow.0.try_into()?,
-                &Compiled::from_address(s.bob_escrow.1.clone(), None),
+                self.bob_escrow.0.try_into()?,
+                &Compiled::from_address(self.bob_escrow.1.clone(), None),
                 None)?
             .set_sequence(0, RelTime::try_from(std::time::Duration::from_secs(10*24*60*60))?.into())?.into()
     }}

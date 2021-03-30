@@ -217,16 +217,16 @@ where
 
 /// Override begin_contest when state = Start
 impl FunctionalityAtState for Channel<Start> {
-    then! {fn begin_contest(s, ctx) {
+    then! {fn begin_contest(self, ctx) {
         ctx.template().add_output(
-            s.amount.try_into()?,
+            self.amount.try_into()?,
             &Channel::<Stop> {
                 pd: Default::default(),
-                alice: s.alice,
-                bob: s.bob,
-                amount: s.amount.try_into().unwrap(),
-                resolution: s.resolution.clone(),
-                db: s.db.clone(),
+                alice: self.alice,
+                bob: self.bob,
+                amount: self.amount.try_into().unwrap(),
+                resolution: self.resolution.clone(),
+                db: self.db.clone(),
             },
             None,
         )?.into()
@@ -235,9 +235,12 @@ impl FunctionalityAtState for Channel<Start> {
 
 /// Override finish_contest when state = Start
 impl FunctionalityAtState for Channel<Stop> {
-    then! { guarded_by: [Self::timeout] fn finish_contest (s, ctx) {
-        ctx.template().add_output(s.amount.try_into()?, &s.resolution, None)?.into()
-    }}
+    then! {
+        guarded_by: [Self::timeout]
+        fn finish_contest (self, ctx) {
+            ctx.template().add_output(self.amount.try_into()?, &self.resolution, None)?.into()
+        }
+    }
 }
 
 /// Implement Contract for Channel<T> and functionality will be correctly assembled for different

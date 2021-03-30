@@ -56,30 +56,30 @@ where
     T: Clone,
 {
     then! {
-        fn explodes (s, ctx) {
+        fn explodes (self, ctx) {
             ctx.template()
                 .add_output(
-                    s.party_one.into(),
-                    &Compiled::from_address(s.key_p1.clone(), None),
+                    self.party_one.into(),
+                    &Compiled::from_address(self.key_p1.clone(), None),
                     None,
                 )?
                 .add_output(
-                    s.party_two.into(),
-                    &Compiled::from_address(s.key_p2.clone(), None),
+                    self.party_two.into(),
+                    &Compiled::from_address(self.key_p2.clone(), None),
                     None,
                 )?
-                .set_lock_time(s.timeout)?
+                .set_lock_time(self.timeout)?
                 .into()
         }
     }
 
     then! {
         guarded_by: [Self::signed]
-        fn strikes(s, ctx) {
+        fn strikes(self, ctx) {
             ctx.template()
                 .add_output(
-                    (s.party_one + s.party_two).into(),
-                    &GenericBet::try_from(s.opt.clone())?,
+                    (self.party_one + self.party_two).into(),
+                    &GenericBet::try_from(self.opt.clone())?,
                     None,
                 )?
                 .into()
@@ -103,28 +103,28 @@ where
     T: Clone,
 {
     then! {
-        fn explodes(s, ctx) {
+        fn explodes(self, ctx) {
             Ok(Box::new(std::iter::once(
                 ctx.template()
                     .add_output(
-                        s.party_one.into(),
-                        &Compiled::from_address(s.key_p1.clone(), None),
+                        self.party_one.into(),
+                        &Compiled::from_address(self.key_p1.clone(), None),
                         None,
                     )?
-                    .set_lock_time(s.timeout)?
+                    .set_lock_time(self.timeout)?
                     .into(),
             )))
         }
     }
 
     then! {
-        fn strikes(s, ctx) {
+        fn strikes(self, ctx) {
             ctx.template()
-                .add_amount(s.party_two)
+                .add_amount(self.party_two)
                 .add_sequence()
                 .add_output(
-                    (s.party_one + s.party_two).into(),
-                    &GenericBet::try_from(s.opt.clone())?,
+                    (self.party_one + self.party_two).into(),
+                    &GenericBet::try_from(self.opt.clone())?,
                     None,
                 )?
                 .into()

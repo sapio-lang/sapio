@@ -105,8 +105,8 @@ impl GenericBet {
     }
     then!(
         guarded_by: [Self::gte]
-        fn pay_gte(s, ctx) {
-            if let Some(tmpl) = s.recurse_over(s.outcomes.len() / 2..s.outcomes.len(), ctx)? {
+        fn pay_gte(self, ctx) {
+            if let Some(tmpl) = self.recurse_over(self.outcomes.len() / 2..self.outcomes.len(), ctx)? {
                 Ok(Box::new(std::iter::once(Ok(tmpl))))
             } else {
                 Ok(Box::new(std::iter::empty()))
@@ -122,8 +122,8 @@ impl GenericBet {
     }
     then!(
         guarded_by: [Self::lt]
-        fn pay_lt( s, ctx) {
-            if let Some(tmpl) = s.recurse_over(0..s.outcomes.len() / 2, ctx)? {
+        fn pay_lt(self, ctx) {
+            if let Some(tmpl) = self.recurse_over(0..self.outcomes.len() / 2, ctx)? {
                 Ok(Box::new(std::iter::once(Ok(tmpl))))
             } else {
                 Ok(Box::new(std::iter::empty()))

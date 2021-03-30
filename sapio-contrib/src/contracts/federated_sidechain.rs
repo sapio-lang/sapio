@@ -55,15 +55,15 @@ where
 impl StateDependentActions for FederatedPegIn<CanBeginRecovery> {
     then! {
         guarded_by: [Self::recovery_signed]
-        fn begin_recovery(s, ctx) {
+        fn begin_recovery(self, ctx) {
         ctx.template().add_output(
-            s.amount.try_into()?,
+            self.amount.try_into()?,
             &FederatedPegIn::<CanFinishRecovery> {
-                keys: s.keys.clone(),
-                thresh_normal: s.thresh_normal,
-                keys_recovery: s.keys_recovery.clone(),
-                thresh_recovery: s.thresh_recovery,
-                amount: s.amount,
+                keys: self.keys.clone(),
+                thresh_normal: self.thresh_normal,
+                keys_recovery: self.keys_recovery.clone(),
+                thresh_recovery: self.thresh_recovery,
+                amount: self.amount,
                 _pd: PhantomData::default()
             },
             None
