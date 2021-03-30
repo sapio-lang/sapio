@@ -93,8 +93,8 @@ macro_rules! then {
     };
     {
         $(#[$meta:meta])*
-        $conditional_compile_list:tt
-        $guard_list:tt
+        compile_if: $conditional_compile_list:tt
+        guarded_by: $guard_list:tt
         fn $name:ident($s:ident, $ctx:ident)
         $b:block
     } => {
@@ -120,19 +120,33 @@ macro_rules! then {
     } => {
         then!{
             $(#[$meta])*
-            [] []
+            compile_if: []
+            guarded_by: []
             fn $name($s, $ctx) $b
         }
     };
 
     {
         $(#[$meta:meta])*
-        $guard_list:tt
+        guarded_by: $guard_list:tt
         fn $name:ident($s:ident, $ctx:ident) $b:block
     } => {
         then!{
             $(#[$meta])*
-            [] $guard_list
+            compile_if: []
+            guarded_by: $guard_list
+            fn $name($s, $ctx) $b }
+    };
+
+    {
+        $(#[$meta:meta])*
+        compile_if: $conditional_compile_list:tt
+        fn $name:ident($s:ident, $ctx:ident) $b:block
+    } => {
+        then!{
+            $(#[$meta])*
+            compile_if: $conditional_compile_list
+            guarded_by: []
             fn $name($s, $ctx) $b }
     };
 

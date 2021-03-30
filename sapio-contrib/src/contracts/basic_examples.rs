@@ -160,7 +160,7 @@ impl ExampleCompileIf {
             }
         }
     }
-    then! {[Self::should_escrow, Self::must_escrow, Self::escrow_nullable_ok, Self::escrow_error_chk] []
+    then! {compile_if: [Self::should_escrow, Self::must_escrow, Self::escrow_nullable_ok, Self::escrow_error_chk]
         fn use_escrow(s, ctx) {
         ctx.template()
             .add_output(

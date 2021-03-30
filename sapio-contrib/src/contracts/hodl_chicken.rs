@@ -84,7 +84,9 @@ impl TryFrom<HodlChickenChecks> for HodlChickenInner {
 impl HodlChickenInner {
     guard! {fn alice_is_a_chicken(self, ctx) {Clause::Key(self.alice_key)}}
     guard! {fn bob_is_a_chicken(self, ctx) {Clause::Key(self.bob_key)}}
-    then! {[Self::alice_is_a_chicken] fn alice_redeem(s, ctx) {
+    then! {
+        guarded_by: [Self::alice_is_a_chicken]
+        fn alice_redeem(s, ctx) {
         ctx.template()
             .add_output(
                 Amount::from_sat(s.winner_gets),
@@ -99,20 +101,23 @@ impl HodlChickenInner {
             .into()
     }}
 
-    then! {[Self::bob_is_a_chicken] fn bob_redeem(s, ctx) {
-        ctx.template()
-            .add_output(
-                Amount::from_sat(s.winner_gets),
-                &s.alice_contract.winner,
-                None,
-            )?
-            .add_output(
-                Amount::from_sat(s.chicken_gets),
-                &s.bob_contract.loser,
-                None,
-            )?
-            .into()
-    }}
+    then! {
+        guarded_by: [Self::bob_is_a_chicken]
+        fn bob_redeem(s, ctx) {
+            ctx.template()
+                .add_output(
+                    Amount::from_sat(s.winner_gets),
+                    &s.alice_contract.winner,
+                    None,
+                )?
+                .add_output(
+                    Amount::from_sat(s.chicken_gets),
+                    &s.bob_contract.loser,
+                    None,
+                )?
+                .into()
+        }
+    }
 }
 
 impl Contract for HodlChickenInner {

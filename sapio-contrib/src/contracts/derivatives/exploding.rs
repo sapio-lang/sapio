@@ -74,7 +74,7 @@ where
     }
 
     then! {
-        [Self::signed]
+        guarded_by: [Self::signed]
         fn strikes(s, ctx) {
             ctx.template()
                 .add_output(

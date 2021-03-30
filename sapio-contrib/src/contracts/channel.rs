@@ -235,7 +235,7 @@ impl FunctionalityAtState for Channel<Start> {
 
 /// Override finish_contest when state = Start
 impl FunctionalityAtState for Channel<Stop> {
-    then! { [Self::timeout] fn finish_contest (s, ctx) {
+    then! { guarded_by: [Self::timeout] fn finish_contest (s, ctx) {
         ctx.template().add_output(s.amount.try_into()?, &s.resolution, None)?.into()
     }}
 }
