@@ -52,10 +52,10 @@ impl Builder {
 
     /// Creates a new Output, forcing the compilation of the compilable object and defaulting
     /// metadata if not provided to blank.
-    pub fn add_output<T: crate::contract::Compilable>(
+    pub fn add_output(
         mut self,
         amount: Amount,
-        contract: &T,
+        contract: &dyn crate::contract::Compilable,
         metadata: Option<OutputMeta>,
     ) -> Result<Self, CompilationError> {
         self.outputs.push(Output {
