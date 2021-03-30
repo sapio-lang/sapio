@@ -199,10 +199,11 @@ macro_rules! guard {
         $(#[$meta:meta])*
         fn $name:ident($s:ident, $ctx:ident) $b:block} => {
             $crate::contract::macros::paste!{
+                $(#[$meta])*
                 fn [<GUARD_ $name>](&$s, $ctx:&$crate::contract::Context) -> $crate::sapio_base::Clause
                 $b
                 $(#[$meta])*
-                    fn  $name() -> Option<$crate::contract::actions::Guard<Self>> {
+                fn  $name() -> Option<$crate::contract::actions::Guard<Self>> {
                     Some($crate::contract::actions::Guard::Fresh(Self::[<GUARD_ $name>]))
                 }
 
@@ -213,6 +214,7 @@ macro_rules! guard {
         cached
         fn $name:ident($s:ident, $ctx:ident) $b:block} => {
             $crate::contract::macros::paste!{
+                $(#[$meta])*
                 fn [<GUARD_ $name>](&$s, $ctx:&$crate::contract::Context) -> $crate::sapio_base::Clause
                 $b
 
@@ -236,6 +238,7 @@ macro_rules! compile_if {
         $name:ident
     } => {
             $crate::contract::macros::paste!{
+                $(#[$meta])*
                 fn [<COMPILE_IF $name>](&self, _ctx: &$crate::contract::Context) -> $crate::contract::actions::ConditionalCompileType {
                     unimplemented!()
                 }
@@ -250,6 +253,7 @@ macro_rules! compile_if {
         fn $name:ident($s:ident, $ctx:ident) $b:block
     } => {
             $crate::contract::macros::paste!{
+                $(#[$meta])*
                 fn [<COMPILE_IF $name>](&$s, $ctx: &$crate::contract::Context) -> $crate::contract::actions::ConditionalCompileType
                 $b
                 $(#[$meta])*
