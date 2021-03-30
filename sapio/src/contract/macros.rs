@@ -67,9 +67,11 @@ macro_rules! declare {
 /// formats for calling are:
 /// ```ignore
 /// /// A Guarded CTV Function
-/// then!(name [guard_1, ... guard_n] |s| {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
+/// then!(guarded_by: [guard_1, ... guard_n] fn name(self, ctx) {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
+/// /// A Conditional CTV Function
+/// then!(compile_if: [compile_if_1, ... compile_if_n] fn name(self, ctx) {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
 /// /// An Unguarded CTV Function
-/// then!(name |s| {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
+/// then!(fn name(self, ctx) {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
 /// /// Null Implementation
 /// then!(name);
 /// ```
@@ -156,9 +158,11 @@ macro_rules! then {
 /// formats for calling are:
 /// ```ignore
 /// /// A Guarded CTV Function
-/// finish!(name [guard_1, ... guard_n] |s| {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
+/// finish!(guarded_by: [guard_1, ... guard_n] fn name(self, ctx, o) {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
+/// /// A Conditional CTV Function
+/// finish!(compile_if: [compile_if_1, ... compile_if_n] fn name(self, ctx, o) {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
 /// /// Null Implementation
-/// then!(name);
+/// finish!(name);
 /// ```
 /// Unlike a `then!`, `finish!` must always have guards.
 #[macro_export]
@@ -243,9 +247,9 @@ macro_rules! finish {
 /// The guard macro is used to define a `Guard`. Guards may be cached or uncached.
 /// formats for calling are:
 /// ```ignore
-/// guard!(name |s| {/*Clause*/})
+/// guard!(fn name(self, ctx) {/*Clause*/})
 /// /// The guard should only be invoked once
-/// guard!(cached name |s| {/*Clause*/})
+/// guard!(cached fn name(self, ctx) {/*Clause*/})
 /// ```
 #[macro_export]
 macro_rules! guard {
@@ -297,7 +301,7 @@ macro_rules! guard {
 /// The compile_if macro is used to define a `ConditionallyCompileIf`.
 /// formats for calling are:
 /// ```ignore
-/// compile_if!(name |s| {/*ConditionallyCompileType*/})
+/// compile_if!(fn name(self, ctx) {/*ConditionallyCompileType*/})
 /// ```
 #[macro_export]
 macro_rules! compile_if {
