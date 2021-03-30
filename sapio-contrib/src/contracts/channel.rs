@@ -211,12 +211,8 @@ trait FunctionalityAtState
 where
     Self: Sized,
 {
-    fn begin_contest<'a>() -> Option<ThenFunc<'a, Self>> {
-        None
-    }
-    fn finish_contest<'a>() -> Option<ThenFunc<'a, Self>> {
-        None
-    }
+    then! {begin_contest}
+    then! {finish_contest}
 }
 
 /// Override begin_contest when state = Start

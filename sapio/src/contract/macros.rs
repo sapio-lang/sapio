@@ -79,13 +79,20 @@ macro_rules! then {
         $(#[$meta:meta])*
         $name:ident $conditional_compile_list:tt $guard_list:tt |$s:ident, $ctx:ident| $b:block
     } => {
-        $(#[$meta])*
-        fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<'a, Self>>{
-            Some($crate::contract::actions::ThenFunc{
-                guard: &$guard_list,
-                conditional_compile_if: &$conditional_compile_list,
-                func:|$s: &Self, $ctx:&$crate::contract::Context| $b
-            })
+
+        $crate::contract::macros::paste!{
+
+            $(#[$meta])*
+            fn [<THEN_ $name>]($s: &Self, $ctx:&$crate::contract::Context) -> $crate::contract::TxTmplIt
+            $b
+            $(#[$meta])*
+            fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<'a, Self>>{
+                Some($crate::contract::actions::ThenFunc{
+                    guard: &$guard_list,
+                    conditional_compile_if: &$conditional_compile_list,
+                    func: Self::[<THEN_ $name>]
+                })
+            }
         }
     };
     {
@@ -109,8 +116,17 @@ macro_rules! then {
     {
         $(#[$meta:meta])*
         $name:ident} => {
-        $(#[$meta])*
-        fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<'a, Self>> {None}
+
+        $crate::contract::macros::paste!{
+
+            $(#[$meta])*
+            fn [<THEN_ $name>](_s: &Self, _ctx:&$crate::contract::Context)-> $crate::contract::TxTmplIt
+            {
+                unimplemented!();
+            }
+            $(#[$meta])*
+            fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<'a, Self>> {None}
+        }
     };
 }
 
