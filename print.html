@@ -47,6 +47,9 @@
         
 
         
+        <!-- MathJax -->
+        <script async type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+        
     </head>
     <body>
         <!-- Provide site root to javascript -->
@@ -97,7 +100,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="chapter_1.html"><strong aria-hidden="true">1.</strong> Chapter 1</a></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded affix "><a href="title-page.html">The Sapio Language</a></li><li class="chapter-item expanded affix "><a href="ch00-00-introduction.html">Introduction</a></li><li class="chapter-item expanded "><a href="ch01-00-getting-started.html"><strong aria-hidden="true">1.</strong> Getting Started</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch01-01-installation.html"><strong aria-hidden="true">1.1.</strong> Installing Sapio</a></li><li class="chapter-item expanded "><a href="ch01-02-learn-rust.html"><strong aria-hidden="true">1.2.</strong> Learning Rust</a></li><li class="chapter-item expanded "><a href="ch01-03-hello-world.html"><strong aria-hidden="true">1.3.</strong> Hello World</a></li></ol></li><li class="chapter-item expanded "><a href="ch02-00-bip-119.html"><strong aria-hidden="true">2.</strong> BIP-119 CTV Fundamentals</a></li><li class="chapter-item expanded "><a href="ch03-00-basics.html"><strong aria-hidden="true">3.</strong> Sapio Basics</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch03-01-guts.html"><strong aria-hidden="true">3.1.</strong> Contract Guts</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch03-01-miniscript.html"><strong aria-hidden="true">3.1.1.</strong> Miniscript/Policy</a></li><li class="chapter-item expanded "><a href="ch03-01-builder.html"><strong aria-hidden="true">3.1.2.</strong> Template Builder</a></li><li class="chapter-item expanded "><a href="ch03-01-timelocks.html"><strong aria-hidden="true">3.1.3.</strong> Time Locks</a></li><li class="chapter-item expanded "><a href="ch03-01-amounts.html"><strong aria-hidden="true">3.1.4.</strong> Sats and Coins</a></li></ol></li><li class="chapter-item expanded "><a href="ch03-02-guts.html"><strong aria-hidden="true">3.2.</strong> Contract Actions</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch03-02-guard.html"><strong aria-hidden="true">3.2.1.</strong> guard!</a></li><li class="chapter-item expanded "><a href="ch03-02-compile_if.html"><strong aria-hidden="true">3.2.2.</strong> compile_if!</a></li><li class="chapter-item expanded "><a href="ch03-02-then.html"><strong aria-hidden="true">3.2.3.</strong> then!</a></li><li class="chapter-item expanded "><a href="ch03-02-finish.html"><strong aria-hidden="true">3.2.4.</strong> finish!</a></li><li class="chapter-item expanded "><a href="ch03-02-when-use-macros.html"><strong aria-hidden="true">3.2.5.</strong> When to use macros?</a></li></ol></li><li class="chapter-item expanded "><a href="ch03-03-declarations.html"><strong aria-hidden="true">3.3.</strong> Contract Declarations</a></li><li class="chapter-item expanded "><a href="ch03-04-compliation.html"><strong aria-hidden="true">3.4.</strong> Contract Compilation Overview</a></li></ol></li><li class="chapter-item expanded "><a href="ch04-00-sapio-fun-profit.html"><strong aria-hidden="true">4.</strong> Sapio for Fun (and Profit)</a></li><li class="chapter-item expanded "><a href="ch05-00-limitations.html"><strong aria-hidden="true">5.</strong> Limitations of Sapio</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch05-01-ctv-emulator.html"><strong aria-hidden="true">5.1.</strong> BIP-119 Emulation</a></li><li class="chapter-item expanded "><a href="ch05-02-taproot.html"><strong aria-hidden="true">5.2.</strong> No Taproot</a></li><li class="chapter-item expanded "><a href="ch05-03-txns.html"><strong aria-hidden="true">5.3.</strong> Advanced Transaction Handling</a></li><li class="chapter-item expanded "><a href="ch05-04-gas.html"><strong aria-hidden="true">5.4.</strong> Gas Fees</a></li></ol></li><li class="chapter-item expanded "><a href="ch06-00-packaging.html"><strong aria-hidden="true">6.</strong> Application Packaging</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch06-01-wasm.html"><strong aria-hidden="true">6.1.</strong> WASM</a></li><li class="chapter-item expanded "><a href="ch06-02-rust.html"><strong aria-hidden="true">6.2.</strong> Rust Lib</a></li><li class="chapter-item expanded "><a href="ch06-02-tux.html"><strong aria-hidden="true">6.3.</strong> TUX</a></li></ol></li><li class="chapter-item expanded "><a href="ch07-00-cli.html"><strong aria-hidden="true">7.</strong> Sapio CLI</a></li><li class="chapter-item expanded "><a href="ch08-00-useful-rust.html"><strong aria-hidden="true">8.</strong> Advanced Rust Patterns</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch08-01-state-machines.html"><strong aria-hidden="true">8.1.</strong> Type Level State Machines</a></li><li class="chapter-item expanded "><a href="ch08-02-tryfrom.html"><strong aria-hidden="true">8.2.</strong> TryFrom Constructors</a></li><li class="chapter-item expanded "><a href="ch08-03-concrete.html"><strong aria-hidden="true">8.3.</strong> Concrete Wrappers</a></li></ol></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -138,6 +141,10 @@
                         </a>
                         
                         
+                        <a href="https://github.com/sapio-lang/sapio" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        
                     </div>
                 </div>
 
@@ -165,7 +172,597 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="chapter-1"><a class="header" href="#chapter-1">Chapter 1</a></h1>
+                        <h1 id="the-sapio-language-bible"><a class="header" href="#the-sapio-language-bible">The Sapio Language Bible</a></h1>
+<h1 id="a-hrefhttpsgithubcomsapio-langsapioactionsquerybranch3amasterimg-srchttpsgithubcomsapio-langsapioworkflowscontinuous20integrationbadgesvg-altbuild-status-a-a-hrefhttpscratesiocratessapioimg-srchttpsimgshieldsiocratesdvsapio-altcrates-a-a-hrefhttpsdocsrssapioimg-srchttpsimgshieldsiodocsrssapiolatest-altdocs-a-a-hrefhttpsgithubcomsapio-langsapioforkimg-srchttpsimgshieldsiogithubforkssapio-langsapiolabelfork20mestylesocial-altforkme-a"><a class="header" href="#a-hrefhttpsgithubcomsapio-langsapioactionsquerybranch3amasterimg-srchttpsgithubcomsapio-langsapioworkflowscontinuous20integrationbadgesvg-altbuild-status-a-a-hrefhttpscratesiocratessapioimg-srchttpsimgshieldsiocratesdvsapio-altcrates-a-a-hrefhttpsdocsrssapioimg-srchttpsimgshieldsiodocsrssapiolatest-altdocs-a-a-hrefhttpsgithubcomsapio-langsapioforkimg-srchttpsimgshieldsiogithubforkssapio-langsapiolabelfork20mestylesocial-altforkme-a"><a href="https://github.com/sapio-lang/sapio/actions?query=branch%3Amaster"><img src="https://github.com/sapio-lang/sapio/workflows/Continuous%20integration/badge.svg" alt="Build Status" /></a> <a href="https://crates.io/crates/sapio"><img src="https://img.shields.io/crates/dv/sapio" alt="crates" /></a> <a href="https://docs.rs/sapio"><img src="https://img.shields.io/docsrs/sapio/latest" alt="docs" /></a> <a href="https://github.com/sapio-lang/sapio/fork"><img src="https://img.shields.io/github/forks/sapio-lang/sapio?label=Fork%20Me&amp;style=social" alt="forkme" /></a></a></h1>
+<p><em>A practical guide to engineering bitcoin smart contracts using the Sapio Language.</em></p>
+<img src="https://github.com/sapio-lang/sapio/raw/master/.github/logo.png" alt="Say hi to Jared">
+<p>This book is a work in progress! Please <a href="https://github.com/sapio-lang/sapio">submit a PR</a> with
+improvements or suggestions.</p>
+<h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
+<h1 id="getting-started"><a class="header" href="#getting-started">Getting Started</a></h1>
+<h1 id="installing-sapio"><a class="header" href="#installing-sapio">Installing Sapio</a></h1>
+<h2 id="quickstart"><a class="header" href="#quickstart">QuickStart:</a></h2>
+<p>Sapio should work on all platforms, but is recommend for use with Linux (Ubuntu preferred).
+Follow this quickstart guide to get going.</p>
+<ol>
+<li>Get <a href="https://rustup.rs/">rust</a> if you don't have it already.</li>
+<li>Add the wasm target by running the below command in your terminal:</li>
+</ol>
+<pre><code class="language-bash">rustup target add wasm32-unknown-unknown
+</code></pre>
+<ol>
+<li>Get the <a href="https://rustwasm.github.io/wasm-pack/">wasm-pack</a> tool.</li>
+<li>Clone this repo: </li>
+</ol>
+<pre><code>git clone git@github.com:sapio-lang/sapio.git &amp;&amp; cd sapio
+</code></pre>
+<ol>
+<li>[Optional] To use dependencies from <a href="https://crates.io">crates.io</a></li>
+</ol>
+<pre><code>git checkout v0.1.4 &amp;&amp; cp plugin-example .. &amp;&amp; cd ..
+</code></pre>
+<ol>
+<li>Build the plugin</li>
+</ol>
+<pre><code>cd plugin-example &amp;&amp; wasm-pack build &amp;&amp; cd ..
+</code></pre>
+<ol>
+<li>Instantiate a contract from the plugin:</li>
+</ol>
+<pre><code>cargo run --bin sapio-cli -- contract create 9.99 &quot;{\&quot;participants\&quot;: [{\&quot;amount\&quot;: 9.99, \&quot;address\&quot;: \&quot;bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw\&quot;}], \&quot;radix\&quot;: 2}&quot; --file=&quot;plugin-example/pkg/sapio_wasm_plugin_example_bg.wasm&quot;
+</code></pre>
+<p>You can use <code>cargo run --bin sapio-cli -- help</code> to learn more about what a the CLI
+can do! and <code>cargo run --bin sapio-cli -- &lt;subcommand&gt; help</code> to learn about
+subcommands like <code>contract</code>.</p>
+<h2 id="docs"><a class="header" href="#docs">Docs</a></h2>
+<p>You can review the docs either by building them locally or viewing
+<a href="https://docs.rs/sapio">online</a>.</p>
+<h1 id="learning-rust"><a class="header" href="#learning-rust">Learning Rust</a></h1>
+<p>A full rust tutorial is out of scope for this guide.</p>
+<p>You may wish to begin with <a href="https://doc.rust-lang.org/book/">The Rust Programming
+Language</a>.</p>
+<p>Expertise in Rust is not <em>required</em> to be a fluent Sapio developer, but it
+helps. Typical Sapio programs are relatively simple as we are not typically
+concerned with concurrency or memory efficiency.</p>
+<h1 id="hello-world"><a class="header" href="#hello-world">Hello World</a></h1>
+<p>Let's get going with your very first hello world contract!</p>
+<p>Unfortunately, until Sapio becomes a little more popular the embedded rust
+playground won't work, so you'll want to copy it locally.</p>
+<p>We're going to start with a contract that allows two parties, Alice and Bob,
+to either agree on an outcome or to default to a pre-fixed outcome after a
+relative timeout.</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use bitcoin::util::amount::CoinAmount;
+use sapio::contract::*;
+use sapio::*;
+use sapio_base::timelocks::RelTime;
+use sapio_base::Clause;
+pub struct TrustlessEscrow {
+    alice: bitcoin::PublicKey,
+    bob: bitcoin::PublicKey,
+    alice_escrow: (CoinAmount, bitcoin::Address),
+    bob_escrow: (CoinAmount, bitcoin::Address),
+}
+
+impl TrustlessEscrow {
+    guard! {
+        fn cooperate(self, ctx) {
+            Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
+        }
+    }
+    then! {
+        fn use_escrow(self, ctx) {
+            ctx.template()
+                .add_output(
+                    self.alice_escrow.0.try_into()?,
+                    &amp;Compiled::from_address(self.alice_escrow.1.clone(), None),
+                    None)?
+                .add_output(
+                    self.bob_escrow.0.try_into()?,
+                    &amp;Compiled::from_address(self.bob_escrow.1.clone(), None),
+                    None)?
+                .set_sequence(0, RelTime::try_from(std::time::Duration::from_secs(10*24*60*60))?.into())?.into()
+        }
+    }
+}
+
+impl Contract for TrustlessEscrow {
+    declare! {finish, Self::cooperate}
+    declare! {then, Self::use_escrow}
+    declare! {non updatable}
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Create a new rust project and paste the above code in. You should be able to
+compile it using <code>cargo build</code>. </p>
+<h2 id="challenges"><a class="header" href="#challenges">Challenges</a></h2>
+<ol>
+<li>Add a new finish state that allows Alice to spend after a relative timeout.</li>
+<li>Add <code>use_escrow2</code> which enables a different pair of payouts to Alice and
+Bob as an alternative.</li>
+</ol>
+<h1 id="bip-119-ctv-fundamentals"><a class="header" href="#bip-119-ctv-fundamentals">BIP-119 CTV Fundamentals</a></h1>
+<h2 id="background"><a class="header" href="#background">Background</a></h2>
+<p>BIP-119 OP_CHECKTEMPLATEVERIFY (CTV) is a
+<a href="https://github.com/bitcoin/bips/blob/master/bip-0119.mediawiki">proposed</a>
+soft-fork upgrade to Bitcoin for enabling a bevy of use cases.</p>
+<p>At it's core, CTV enables a script to commit to the &quot;important bits&quot; of how it can be spent, or the:</p>
+<ol>
+<li>nVersion</li>
+<li>nLockTime</li>
+<li>scriptSig hash (maybe!)</li>
+<li>input count</li>
+<li>sequences hash</li>
+<li>output count</li>
+<li>outputs hash</li>
+<li>input index</li>
+</ol>
+<p>This enables a myriad of use cases, which are described in detail in the
+<a href="https://github.com/bitcoin/bips/blob/master/bip-0119.mediawiki">BIP</a> and on
+the website <a href="https://utxos.org">utxos.org</a>.</p>
+<h2 id="how-do-we-think-about-smart-contracts-and-ctv"><a class="header" href="#how-do-we-think-about-smart-contracts-and-ctv">How do we think about Smart Contracts and CTV?</a></h2>
+<p>Before CTV, in most Bitcoin smart contracts, we think at the key-level. That
+is, what is a complex set of signers and satisfactions to unlock a specific
+coin. But once we unlock a coin, the smart contract usually does not encode
+any further restrictions on how it may be spent.</p>
+<p>You could think of this as &quot;a key to a car&quot;. If it unlocks the car, you can
+take the car wherever you want.</p>
+<p>With CTV, we hope to encode a bit more information about how coins should
+move by providing the paths that the coins must move through as well. So
+rather than just being the key to a car, you could think of it a bit more
+like the keys to train -- still required to start the engine, but you have to
+stay on the tracks and there is a finite number of tracks to pick at any
+juncture.</p>
+<p>That's all a bit abstract. This back to the Hello World example we gave. We
+created a coin with the following options:</p>
+<ol>
+<li>Alice and Bob Agree \( \rightarrow \) coin goes anywhere</li>
+<li>Timeout \( \rightarrow \) coins go back to Alice and Bob</li>
+</ol>
+<p>Now imagine we wanted to change the rules a little. What if instead of rule 2
+apply after a timeout, what if we wanted the timeout to be measured <em>from the
+time that Alice or Bob claimed they wanted to use the escrow</em>.</p>
+<p>This puts us in a little bit of a pickle. Sure we could just re-write the rules:</p>
+<ol>
+<li>Alice and Bob Agree \( \rightarrow \) coin goes anywhere</li>
+<li>Timeout <em>since Alice or Bob requested</em> \( \rightarrow \) coins go back to Alice and Bob</li>
+</ol>
+<p>But Bitcoin doesn't have a script level notion of &quot;since&quot; a part of a witness was constructed. The CTV way to think of this script is to define a state machine with two states \( S \in \{Normal, Closing\}\) and the rules:</p>
+<ul>
+<li>
+<p>\( S \gets Normal\):</p>
+<ol>
+<li>Alice and Bob Agree \( \rightarrow \) coin goes anywhere</li>
+<li>Alice or Bob Requested \( \rightarrow \) (\(S \gets Closing \))</li>
+</ol>
+</li>
+<li>
+<p>\( S \gets Closing\):</p>
+<ol>
+<li>Alice and Bob Agree \( \rightarrow \) coin goes anywhere</li>
+<li>Timeout <em>since</em> (\(S \gets Closing\)) \( \rightarrow \) coins go back to Alice and Bob.</li>
+</ol>
+</li>
+</ul>
+<p>What drives the transition from Normal to Closing? Just a standard Bitcoin transaction!</p>
+<h2 id="so-what-is-sapio"><a class="header" href="#so-what-is-sapio">So What is Sapio</a></h2>
+<p>Sapio is an embedded domain specific language for defining these sorts of
+state transition rules to build smart contracts for Bitcoin.</p>
+<p>CTV is used as the mechanism to enforce that specific state transitions occur.</p>
+<p>When we <strong>write</strong> a program in Sapio, we are designing an <em>arbitrary</em> state
+machine that can run any program.</p>
+<p>When we <strong>compile</strong> a Sapio program, we run that state machine to completion and merkelize the resultant program states into a fixed graph.</p>
+<p>As such, Sapio  is a very powerful framework for designing Bitcoin smart contracts, but we're constrained to the set of contracts where we can enumerate all possible end states.</p>
+<p>To get around these restrictions, Sapio has some tricks up it's sleeve that
+will be described in future chapters.</p>
+<h1 id="sapio-basics"><a class="header" href="#sapio-basics">Sapio Basics</a></h1>
+<p>This section is intended to introduce the basic components of Sapio and how
+they are used. It's a nice complement to the material avaialble in the
+<a href="https://docs.rs/sapio">online docs</a>, which are more targetted to everyday users.</p>
+<h1 id="contract-guts"><a class="header" href="#contract-guts">Contract Guts</a></h1>
+<p>This section covers basic modules and primitives that are handy to know as
+you navigate Sapio contracts.</p>
+<p>Feel free to skip this section and refer back to it as needed!</p>
+<h1 id="miniscript--policy"><a class="header" href="#miniscript--policy">Miniscript &amp; Policy</a></h1>
+<p>Miniscript &amp; Policy are tools for creating well formed Bitcoin scripts
+developed by Blockstream developers Pieter Wiulle, Andrew Poelstra, and
+Sanket Kanjalkar.</p>
+<p>from the <a href="http://bitcoin.sipa.be/miniscript/">miniscript website</a>:</p>
+<blockquote>
+<p>Miniscript is a language for writing (a subset of) Bitcoin Scripts in a
+structured way, enabling analysis, composition, generic signing and more.</p>
+<p>Bitcoin Script is an unusual stack-based language with many edge cases,
+designed for implementing spending conditions consisting of various
+combinations of signatures, hash locks, and time locks. Yet despite being
+limited in functionality it is still highly nontrivial to:</p>
+<ol>
+<li>Given a combination of spending conditions, finding the most economical script to implement it.</li>
+<li>Given two scripts, construct a script that implements a composition of their spending conditions (e.g. a multisig where one of the &quot;keys&quot; is another multisig).</li>
+<li>Given a script, find out what spending conditions it permits.</li>
+<li>Given a script and access to a sufficient set of private keys, construct a general satisfying witness for it.</li>
+<li>Given a script, be able to predict the cost of spending an output.</li>
+<li>Given a script, know whether particular resource limitations like the ops limit might be hit when spending.</li>
+</ol>
+<p>Miniscript functions as a representation for scripts that makes these sort of
+operations possible. It has a structure that allows composition. It is very
+easy to statically analyze for various properties (spending conditions,
+correctness, security properties, malleability, ...). It can be targeted by
+spending policy compilers (see below). Finally, compatible scripts can easily
+be converted to Miniscript form - avoiding the need for additional metadata
+for e.g. signing devices that support it.</p>
+</blockquote>
+<p>For Sapio, we use a customized
+<a href="https://github.com/sapio-lang/rust-miniscript">rust-miniscript</a> which
+extends miniscript with functionality relevent to CheckTemplateVerify and
+Sapio. All changes should be able to be upstreamed eventually.</p>
+<p>The Policy type (named Clause in Sapio) allows us to specify the predicates upon which various state transitions should unlock.</p>
+<p>This makes it so that Sapio should be compatible with other software that can
+generate valid Policies, and compatible with PSBT signing devices that
+understand how to satisfy miniscripts.</p>
+<p>A limitation of this approach is that there are certain types of script which
+are possible, but not yet supported in Sapio. For example, the <code>OP_SIZE</code>
+coinflip script is not currently possible with Miniscript.</p>
+<h1 id="template-builder"><a class="header" href="#template-builder">Template Builder</a></h1>
+<h1 id="time-locks"><a class="header" href="#time-locks">Time Locks</a></h1>
+<p>Sapio provides some utilities for working with both relative and absolute timelocks. See <a href="https://docs.rs/sapio-base/0.1.0/sapio_base/timelocks/index.html">the sapio-base docs</a> for more details.</p>
+<p>The Time Lock Utilities have some nice interfaces for dealing with timelocks generically and converting them into Policy Clauses.</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span>
+<span class="boring">fn main() {
+</span>use sapio_base::timelocks::*;
+use std::time::Duration;
+
+AbsHeight::try_from(800_000u32);
+AbsTime::try_from(1_000_000_000u32);
+AbsTime::try_from(Duration::from_secs(1_000_000_000u64));
+// chunks of 512 seconds
+RelTime::from(10u16);
+RelTime::try_from(Duration::from_secs(10*512));
+RelHeight::from(20u16);
+
+
+// Correctly compiles into Clause::Older
+let c: Clause = RelHeight::from(20u16).into();
+
+let a: AnyRelTimeLock = RelHeight::from(20u16).into();
+let b: AnyTimeLock = RelHeight::from(20u16).into();
+
+<span class="boring">}
+</span></code></pre></pre>
+<p>These are not required to be used, but care should be taken if not used to
+ensure that correct values are passed to the miniscript compiler.</p>
+<h1 id="sats-and-coins"><a class="header" href="#sats-and-coins">Sats and Coins</a></h1>
+<p>There are several different ways of expressing amounts in Sapio.</p>
+<p>That there isn't a single canonical way to represent amounts is unfortunate,
+and hopefully these types can be fully unified in the future. But it's a
+problem for good reason.</p>
+<h2 id="a-brief-rant"><a class="header" href="#a-brief-rant">A brief rant</a></h2>
+<p>Suppose I tell you to send 10 to Alice. Is that 10 sats? or 10 bitcoin? You
+might think that 10.0 would be unambiguous, but it turns out the lightning
+network is building sub-satoshi support.</p>
+<p>The <em>only</em> way to make context-free unambiguous amounts is to have them
+explicityly tagged, e.g., {denom: &quot;sats&quot;, amount: 10}.</p>
+<p>This would be great, but there are already myriads of services out there
+where the only way to know what unit you have is to RTFM.</p>
+<p>Generally, we know that floating point representations are evil for financial
+transactions, but because we want to be compatible with JSON/Javascript, we
+don't quite have a choice. Fortunately, 21e6 Bitcoin with 8 places fit
+exactly into floats without loss. However, bets are off when doing arithmetic
+with such values.</p>
+<p>A last wrinkle: Bitcoin's amount type is a signed integer. Rust-bitcoin uses an Unsigned integer. So in theory there are unrepresentable amounts we're happy to work with. Great.</p>
+<h2 id="its-up-to-every-programmer"><a class="header" href="#its-up-to-every-programmer">It's up to every programmer</a></h2>
+<p>Therefore, to get amounts right is a task that is up to the programmer
+largely to get this right. There are a few different amount types to be aware
+of.</p>
+<ol>
+<li>u64 represents sats. may be too big!</li>
+<li>i64 represents sats. may be too small!</li>
+<li><code>bitcoin::Amount</code> represents u64, no standard serialization.</li>
+<li><code>bitcoin::SignedAmount</code> represents i64, no standard serialization.</li>
+<li><code>bitcoin::CoinAmount</code> standard tagged serialization, either u64 or f64.</li>
+</ol>
+<p>These different types have uses in different circumstances.</p>
+<p>Because <code>bitcoin::Amount</code> does not have a standard serializer, in order to
+use it in e.g. a <code>Vec</code>, you have to wrap the type with a a serializer. <code>From</code> impls can make life a little eaiser to work with these.</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use bitcoin::util::amount::Amount;
+
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+
+/// A wrapper around `bitcoin::Amount` to force it to serialize with f64.
+#[derive(
+    Serialize, Deserialize, JsonSchema, Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq,
+)]
+#[serde(transparent)]
+struct AmountF64(
+    #[schemars(with = &quot;f64&quot;)]
+    #[serde(with = &quot;bitcoin::util::amount::serde::as_btc&quot;)]
+    Amount,
+);
+
+impl From&lt;Amount&gt; for AmountF64 {
+    fn from(a: Amount) -&gt; AmountF64 {
+        AmountF64(a)
+    }
+}
+impl From&lt;AmountF64&gt; for Amount {
+    fn from(a: AmountF64) -&gt; Amount {
+        a.0
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p><code>CoinAmount</code> does not have this problem, but it can't be used in all
+contexts, e.g. extenral APIs that aren't tagged.</p>
+<h2 id="dont-panic-or-do"><a class="header" href="#dont-panic-or-do">Don't Panic (or do)</a></h2>
+<p>A final annoyance is that <code>bitcoin::Amount</code> has arithmetic that may panic
+(unless you use the <code>checked_</code> variants). So one must be careful to ensure
+that any set of values passed in are safe to add.</p>
+<p>Sapio currently does not do a fantastic job of this, but that can be improved
+in the future.</p>
+<h1 id="contract-actions"><a class="header" href="#contract-actions">Contract Actions</a></h1>
+<h1 id="guard"><a class="header" href="#guard">Guard</a></h1>
+<p>Guards are central to any Sapio contract. The allow declaring a piece of
+miniscript logic.</p>
+<p>These guards can either be used standalone as unlocking condtions or as a
+requirement on a <code>finish!</code> or <code>then!</code> function.</p>
+<p>If a <code>guard!</code> is marked as cached, the compiler will make an effort to only
+invoke the <code>guard!</code> once during compilation. This is helpful in contexts
+where a <code>guard!</code> might be expensive to call, e.g. if it is programmed to
+retreive a <code>Clause</code> from a remote server. It is not guaranteed that the
+<code>guard!</code> is only invoked once.</p>
+<h2 id="guard-macro"><a class="header" href="#guard-macro">guard! macro</a></h2>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>guard!{
+    fn name(self, ctx) {/*Clause*/}
+}
+/// The guard should only be invoked once by the compiler, and the result stored
+guard!{
+    cached fn name(self, ctx) {/*Clause*/}
+}
+<span class="boring">}
+</span></code></pre></pre>
+<h1 id="conditionallycompileif"><a class="header" href="#conditionallycompileif">ConditionallyCompileIf</a></h1>
+<p><code>ConditionallyCompileIf</code> enables a contract writer to evaluate certain
+value-based logic before evaluating a path function.</p>
+<p>If the return value(s) indicate that a branch should not be evaluated, it is
+skipped.</p>
+<h2 id="when-to-use-conditionallycompileif"><a class="header" href="#when-to-use-conditionallycompileif">When to Use ConditionallyCompileIf</a></h2>
+<p>Suppose we're creating a super secure wallet vault, and we want a recovery
+path that's only acessible if the amount of funds being sent to the contract is &lt; an amount.</p>
+<p>We could write:</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>compile_if!{
+    fn not_too_much(self, ctx) {
+        if ctx.funds() &gt; Self::MAX_FUNDS {
+            ConditionallyCompileType::Never
+        } else {
+            ConditionalCompileType::NoConstraint
+        }
+    }
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>and apply it to the relevent paths.</p>
+<h2 id="conditionalcompiletype-variants"><a class="header" href="#conditionalcompiletype-variants">ConditionalCompileType Variants</a></h2>
+<p>There are many different ConditionalCompileType return values:</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>pub enum ConditionalCompileType {
+    /// May proceed without calling this function at all
+    Skippable,
+    /// If no errors are returned, and no txtmpls are returned,
+    /// it is not an error and the branch is pruned.
+    Nullable,
+    /// The default condition if no ConditionallyCompileIf function is set, the
+    /// branch is present and it is required.
+    Required,
+    /// This branch must never be used
+    Never,
+    /// No Constraint, nothing is changed by this rule
+    NoConstraint,
+    /// The branch should always trigger an error, with some reasons
+    Fail(LinkedList&lt;String&gt;),
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>These values are merged according to specific &quot;common sense&quot; logic. Please
+see <code>ConditionalCompileType::merge</code> for details.</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span>
+<span class="boring">fn main() {
+</span>    ///     Fail &gt; non-Fail ==&gt; Fail
+    ///     forall X. X &gt; NoConstraint ==&gt; X
+    ///     Required &gt; {Skippable, Nullable} ==&gt; Required
+    ///     Skippable &gt; Nullable ==&gt; Skippable
+    ///     Never &gt;&lt; Required ==&gt; Fail
+    ///     Never &gt; {Skippable, Nullable}  ==&gt; Never
+<span class="boring">}
+</span></code></pre></pre>
+<h1 id="compile_if-macro"><a class="header" href="#compile_if-macro">compile_if! macro</a></h1>
+<p>The <code>compile_if</code> macro can be called two ways:</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>compile_if!{
+    fn name(self, ctx) {
+        /*ConditionalCompileType*/
+    }
+}
+/// null implementation
+compile_if!{name}
+<span class="boring">}
+</span></code></pre></pre>
+<h1 id="thenfunc"><a class="header" href="#thenfunc">ThenFunc</a></h1>
+<p>A <code>ThenFunc</code> is a continuation of a contract that can proceed when all the
+guarded_by conditions on that object are met. The <code>ThenFunc</code> provides an
+iterator of possible next transactions, using CTV to ensure execution.</p>
+<h2 id="when-to-use-a-thenfunc"><a class="header" href="#when-to-use-a-thenfunc">When to use a ThenFunc</a></h2>
+<p>We've already seen an example of a <code>then!</code> function in the wild in <a href="./ch01-03-hello-world.html">Chapter
+1</a>. In that example we are guaranteeing that after
+a timeout, a specific &quot;return policy&quot; is honored out of the escrow. Unless
+Alice and Bob agree to something else, the funds can only be returned via
+that transaction.</p>
+<p>In general, any time you want a state transition to be &quot;locked in&quot; you should use a <code>then!</code>.</p>
+<h2 id="then-macro"><a class="header" href="#then-macro">then! macro</a></h2>
+<p>The <code>then!</code> macro generates a static <code>fn() -&gt; Option&lt;ThenFunc&gt;</code> method for a given impl.</p>
+<p>There are a few variants of how you can create a <code>then!</code>.</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// A Guarded CTV Function
+then!{
+    guarded_by: [guard_1, ... guard_n]
+    fn name(self, ctx) {
+        /*Result&lt;Box&lt;Iterator&lt;TransactionTemplate&gt;&gt;&gt;*/
+    }
+}
+/// A Conditional CTV Function
+then!{
+    compile_if: [compile_if_1, ... compile_if_n]
+    fn name(self, ctx) {
+        /*Result&lt;Box&lt;Iterator&lt;TransactionTemplate&gt;&gt;&gt;*/
+    }
+}
+/// A Conditional + Guarded CTV Function
+then!{
+    compile_if: [compile_if_1, ... compile_if_n]
+    guarded_by: [guard_1, ... guard_n]
+    fn name(self, ctx) {
+        /*Result&lt;Box&lt;Iterator&lt;TransactionTemplate&gt;&gt;&gt;*/
+    }
+}
+/// An Unguarded CTV Function
+then!{
+    fn name(self, ctx) {
+        /*Result&lt;Box&lt;Iterator&lt;TransactionTemplate&gt;&gt;&gt;*/
+    }
+}
+/// Null Implementation
+then!{name}
+<span class="boring">}
+</span></code></pre></pre>
+<p>The Iterator must not be empty, or it will cause an error.</p>
+<h1 id="finishorfunc"><a class="header" href="#finishorfunc">FinishOrFunc</a></h1>
+<p>A <code>FinishOrFunc</code> is a continuation of a contract that <em>may</em> terminate when
+all the guarded_by conditions on that object are met, but provides logic for some default continuations and logic for new continuations in light of new information.</p>
+<p><code>FinishOrFunc</code>s do not use CTV to ensure execution.</p>
+<h2 id="when-to-use-a-finishorfunc"><a class="header" href="#when-to-use-a-finishorfunc">When to use a FinishOrFunc</a></h2>
+<p>An example of where a <code>FinishOrFunc</code> could be used is a multisig escrow contract, where if n-of-n interested parties agree to move the funds, the funds can move to any transaction. However, perhaps the escrow operators typically emit a payment to a third party and carry the remaining balances to a new escrow. A <code>FinishOrFunc</code> can provide convenient logic shared by all participants for generating what that next transaction should look like.</p>
+<h2 id="finish-macro"><a class="header" href="#finish-macro">finish! macro</a></h2>
+<p>The <code>finish!</code> macro generates a static <code>fn() -&gt; Option&lt;FinishOrFunc&gt;</code> method for a given impl.</p>
+<p>There are a few variants of how you can create a <code>finish!</code>.</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// A Guarded CTV Function
+finish!{
+    guarded_by: [guard_1, ... guard_n]
+    fn name(self, ctx, o) {
+        /*Result&lt;Box&lt;Iterator&lt;TransactionTemplate&gt;&gt;&gt;*/
+    }
+}
+/// A Conditional CTV Function
+finish!{
+    compile_if: [compile_if_1, ... compile_if_n]
+    guarded_by: [guard_1, ... guard_n]
+    fn name(self, ctx, o) {
+        /*Result&lt;Box&lt;Iterator&lt;TransactionTemplate&gt;&gt;&gt;*/
+    }
+}
+/// Null Implementation
+finish!(name);
+<span class="boring">}
+</span></code></pre></pre>
+<p>The type of the parameter <code>o</code> is <code>Option&lt;&lt;Self as Contract&gt;::StatefulArguments&gt;</code> and is the same across all <code>FinishOrFunc</code>s. Enums may be used to pass different arguments to different functions.</p>
+<h1 id="when-to-use-macros"><a class="header" href="#when-to-use-macros">When to use macros?</a></h1>
+<p>Generally, you want to use <code>finish!</code>, <code>then!</code>, etc to generate your methods.
+However, if you prefer to create them manually, it's entirely possible to do
+so without much effort. A tool like <code>cargo expand</code> may be useful as you can
+just copy the macro output and customize from there.</p>
+<p>One reason you might choose to manually define them is if you want to have
+custom static logic (that is, known just from the type and not a value-filled
+instance) to decide if a method should be <code>Some</code> or <code>None</code>. If it does not
+need to be static logic, a <code>compile_if</code> can be used.</p>
+<h1 id="contract-declarations"><a class="header" href="#contract-declarations">Contract Declarations</a></h1>
+<h2 id="static-contracts"><a class="header" href="#static-contracts">Static Contracts</a></h2>
+<p>This is the usual way to declare a contract for Sapio.</p>
+<p>Once a contract and all relevent logic has been defined, a <code>impl Contract</code>
+should be written. This binds the functionality to the compiler interface.</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>impl Contract for T {
+    declare!{then, Self::a, Self::b}
+    declare!{finish, Self::guard_1, Self::guard_2}
+    /// if there are finish! functions
+    declare!{updatable&lt;Z&gt;, Self::updatable_1}
+    /// if there are no updatable functions
+    declare!{non updatable}
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>The type <code>Z</code> above becomes bound for the updatable functions.</p>
+<h2 id="dynamic-contracts"><a class="header" href="#dynamic-contracts">Dynamic Contracts</a></h2>
+<p>Sapio also supports several &quot;Dynamic Contract&quot; paradigms which allows a user
+to assemble contracts at run-time. The two main paradigms are accomplished by
+either directly <code>impl AnyContract</code> or by using the <code>DynamicContract</code> struct
+which holds all functions in vecs.</p>
+<p>These are useful in rare circumstances.</p>
+<h2 id="external-addresses"><a class="header" href="#external-addresses">External Addresses?</a></h2>
+<p>The compiler is able to &quot;lift&quot; an address or a script into a contract via
+<code>Object::from_address</code> and <code>Object::from_script</code>. Care should be taken when
+doing so as Sapio will not be able to provide any further API data beyond such a bound.</p>
+<h1 id="contract-compilation-overview"><a class="header" href="#contract-compilation-overview">Contract Compilation Overview</a></h1>
+<p>When the compiler sees a new contract, it proceeds by processing each path
+item one at a time. If the order of compilation is important for your contract:</p>
+<ol>
+<li>reconsider your priorities</li>
+<li>repeat step 1</li>
+<li>read the logic inside of the <code>Compilable::compile</code> function</li>
+</ol>
+<p>This logic may be improved over time to take advantage of parallelization or
+otherwise restructure. As such, one should be careful when switching compiler
+versions.</p>
+<h2 id="determinism"><a class="header" href="#determinism">Determinism?</a></h2>
+<p>Sapio is designed to be determinism-friendly. Repeated runs of the same
+program should -- unless the user includes entropy -- return the same
+results.</p>
+<p>However, at writing, this property is not closely audited for, so outputs
+should be treated as required to be stored in order to use a contract.</p>
+<p>On the other hand, determinism means that for multi-party contracts being
+generated in a Replicated state machine, if all parties have the same e.g.
+WASM plugin, they can generate a contract definition and check that the
+merkle root (in this case, a bitcoin address) is the same. If it differs,
+either the arguments differed, someone cheated, or there was unexpected
+non-determinism.</p>
+<h1 id="sapio-for-fun-and-profit"><a class="header" href="#sapio-for-fun-and-profit">Sapio for Fun (and Profit)</a></h1>
+<h1 id="limitations-of-sapio"><a class="header" href="#limitations-of-sapio">Limitations of Sapio</a></h1>
+<h1 id="bip-119-emulation"><a class="header" href="#bip-119-emulation">BIP-119 Emulation</a></h1>
+<h1 id="no-taproot"><a class="header" href="#no-taproot">No Taproot</a></h1>
+<h1 id="advanced-transaction-handling"><a class="header" href="#advanced-transaction-handling">Advanced Transaction Handling</a></h1>
+<h1 id="gas-fees"><a class="header" href="#gas-fees">Gas Fees</a></h1>
+<h1 id="application-packaging"><a class="header" href="#application-packaging">Application Packaging</a></h1>
+<h1 id="wasm"><a class="header" href="#wasm">WASM</a></h1>
+<h1 id="rust-lib"><a class="header" href="#rust-lib">Rust Lib</a></h1>
+<h1 id="tux"><a class="header" href="#tux">TUX</a></h1>
+<h1 id="sapio-cli"><a class="header" href="#sapio-cli">Sapio CLI</a></h1>
+<h1 id="advanced-rust-patterns"><a class="header" href="#advanced-rust-patterns">Advanced Rust Patterns</a></h1>
+<h1 id="type-level-state-machines"><a class="header" href="#type-level-state-machines">Type Level State Machines</a></h1>
+<h1 id="tryfrom-constructors"><a class="header" href="#tryfrom-constructors">TryFrom Constructors</a></h1>
+<h1 id="concrete-wrappers"><a class="header" href="#concrete-wrappers">Concrete Wrappers</a></h1>
 
                     </main>
 
@@ -193,6 +790,10 @@
         
 
         
+        <script type="text/javascript">
+            window.playground_line_numbers = true;
+        </script>
+        
 
         
         <script type="text/javascript">
@@ -200,6 +801,12 @@
         </script>
         
 
+        
+        <script src="ace.js" type="text/javascript" charset="utf-8"></script>
+        <script src="editor.js" type="text/javascript" charset="utf-8"></script>
+        <script src="mode-rust.js" type="text/javascript" charset="utf-8"></script>
+        <script src="theme-dawn.js" type="text/javascript" charset="utf-8"></script>
+        <script src="theme-tomorrow_night.js" type="text/javascript" charset="utf-8"></script>
         
 
         
@@ -219,7 +826,9 @@
         
         <script type="text/javascript">
         window.addEventListener('load', function() {
-            window.setTimeout(window.print, 100);
+            MathJax.Hub.Register.StartupHook('End', function() {
+                window.setTimeout(window.print, 100);
+            });
         });
         </script>
         
