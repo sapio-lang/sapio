@@ -160,7 +160,7 @@ macro_rules! then {
 /// /// A Guarded CTV Function
 /// finish!(guarded_by: [guard_1, ... guard_n] fn name(self, ctx, o) {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
 /// /// A Conditional CTV Function
-/// finish!(compile_if: [compile_if_1, ... compile_if_n] fn name(self, ctx, o) {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
+/// finish!(compile_if: [compile_if_1, ... compile_if_n] guarded_by: [guard_1, ..., guard_n] fn name(self, ctx, o) {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
 /// /// Null Implementation
 /// finish!(name);
 /// ```
