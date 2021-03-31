@@ -25,11 +25,11 @@ cd plugin-example && wasm-pack build && cd ..
 ```
 1.  Instantiate a contract from the plugin:
 ```
-cargo run --bin cli -- contract create 9.99 "{\"participants\": [{\"amount\": 9.99, \"address\": \"bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw\"}], \"radix\": 2}" --file="plugin-example/pkg/sapio_wasm_plugin_example_bg.wasm"
+cargo run --bin sapio-cli -- contract create 9.99 "{\"participants\": [{\"amount\": 9.99, \"address\": \"bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw\"}], \"radix\": 2}" --file="plugin-example/pkg/sapio_wasm_plugin_example_bg.wasm"
 ```
 
-You can use `cargo run --bin cli -- help` to learn more about what a the CLI
-can do! and `cargo run --bin cli -- <subcommand> help` to learn about
+You can use `cargo run --bin sapio-cli -- help` to learn more about what a the CLI
+can do! and `cargo run --bin sapio-cli -- <subcommand> help` to learn about
 subcommands like `contract`.
 
 
