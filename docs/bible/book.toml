@@ -9,7 +9,7 @@ title = "Sapio Language Bible"
 edition=2018
 
 [output.html]
-
+mathjax-support = true
 git-repository-url = "https://github.com/sapio-lang/sapio"
 
 [output.html.playground]
