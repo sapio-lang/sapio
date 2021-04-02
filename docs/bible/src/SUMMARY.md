@@ -3,7 +3,7 @@
 [The Sapio Language](title-page.md)
 [Introduction](./ch00-00-introduction.md)
 
-## Getting Started
+# ABC 123
 - [Getting Started](./ch01-00-getting-started.md)
     - [Installing Sapio](./ch01-01-installation.md)
     - [Learning Rust](./ch01-02-learn-rust.md)
@@ -27,14 +27,17 @@
     - [Contract Declarations](./ch03-03-declarations.md)
     - [Contract Compilation Overview](./ch03-04-compliation.md)
 
+# Exercises
 - [Sapio for Fun (and Profit)](./ch04-00-sapio-fun-profit.md)
 
+# Warnings
 - [Limitations of Sapio](./ch05-00-limitations.md)
     - [BIP-119 Emulation](./ch05-01-ctv-emulator.md)
     - [No Taproot](./ch05-02-taproot.md)
     - [Advanced Transaction Handling](./ch05-03-txns.md)
-    - [Gas Fees](./ch05-04-gas.md)
+    - [Mempool & Fees](./ch05-04-gas.md)
 
+# Advanced Topics
 - [Application Packaging](./ch06-00-packaging.md)
     - [WASM](./ch06-01-wasm.md)
     - [Rust Lib](./ch06-02-rust.md)
