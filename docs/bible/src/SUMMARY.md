@@ -40,7 +40,7 @@
 # Advanced Topics
 - [Application Packaging](./ch06-00-packaging.md)
     - [WASM](./ch06-01-wasm.md)
-    - [Rust Lib](./ch06-02-rust.md)
+    - [Rust Lib/Bin](./ch06-02-rust.md)
     - [TUX](./ch06-02-tux.md)
 
 - [Sapio CLI](./ch07-00-cli.md)
@@ -48,4 +48,4 @@
 - [Advanced Rust Patterns](./ch08-00-useful-rust.md)
     - [Type Level State Machines](./ch08-01-state-machines.md)
     - [TryFrom Constructors](./ch08-02-tryfrom.md)
-    - [Concrete Wrappers](./ch08-03-concrete.md)
+    - [Concrete & Generic Types](./ch08-03-concrete.md)
