@@ -40,7 +40,7 @@
 # Advanced Topics
 - [Application Packaging](./ch06-00-packaging.md)
     - [WASM](./ch06-01-wasm.md)
-    - [Rust Lib](./ch06-02-rust.md)
+    - [Rust Lib/Bin](./ch06-02-rust.md)
     - [TUX](./ch06-02-tux.md)
 
 - [Sapio CLI](./ch07-00-cli.md)
