@@ -48,4 +48,4 @@
 - [Advanced Rust Patterns](./ch08-00-useful-rust.md)
     - [Type Level State Machines](./ch08-01-state-machines.md)
     - [TryFrom Constructors](./ch08-02-tryfrom.md)
-    - [Concrete Wrappers](./ch08-03-concrete.md)
+    - [Concrete & Generic Types](./ch08-03-concrete.md)
