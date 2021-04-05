@@ -16,12 +16,12 @@ jobs:
         with:
           mdbook-version: '0.4.7'
 
-      - run: mdbook build ./docs/bible/
+      - run: mdbook build ./docs/learn-sapio/
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_branch: gh-pages
-          publish_dir: ./docs/bible/book
-          cname: bible.sapio-lang.org
+          publish_dir: ./docs/learn-sapio/book
+          cname: learn.sapio-lang.org

@@ -3,7 +3,7 @@ authors = ["Jeremy Rubin"]
 language = "en"
 multilingual = false
 src = "src"
-title = "Sapio Language Bible"
+title = "The Sapio Language"
 
 [rust]
 edition=2018

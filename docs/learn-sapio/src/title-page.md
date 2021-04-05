@@ -1,4 +1,4 @@
-# The Sapio Language Bible
+# The Sapio Language
 # [![Build Status]][actions] [![crates]][crates-link] [![docs]][docs-link] [![forkme]][forkme-link]
 _A practical guide to engineering bitcoin smart contracts using the Sapio Language._
 
