@@ -155,8 +155,14 @@ mod trait_impls {
 
     impl TryFrom<u32> for AbsTime {
         type Error = LockTimeError;
-        fn try_from(u: u32) -> Result<Self, Self::Error> {
-            Ok(Self(u, Default::default()))
+        fn try_from(t: u32) -> Result<Self, Self::Error> {
+            if t < 500_000_000 {
+                Err(LockTimeError::TimeTooFarInPast(Duration::from_secs(
+                    t as u64,
+                )))
+            } else {
+                Ok(Self(t, Default::default()))
+            }
         }
     }
     impl TryFrom<u32> for AbsHeight {
@@ -183,26 +189,18 @@ mod trait_impls {
     impl TryFrom<Duration> for RelTime {
         type Error = LockTimeError;
         fn try_from(u: Duration) -> Result<Self, Self::Error> {
-            let windows = u.as_secs() / 512;
-            if windows > u16::MAX as u64 {
-                Err(LockTimeError::DurationTooLong(u))
-            } else {
-                Ok((windows as u16).into())
-            }
+            u16::try_from(u.as_secs() / 512)
+                .or(Err(LockTimeError::DurationTooLong(u)))
+                .map(From::from)
         }
     }
 
     impl TryFrom<Duration> for AbsTime {
         type Error = LockTimeError;
         fn try_from(u: Duration) -> Result<Self, Self::Error> {
-            let t = u.as_secs();
-            if t < 500_000_000 {
-                Err(LockTimeError::TimeTooFarInPast(u))
-            } else if t > u32::MAX as u64 {
-                Err(LockTimeError::DurationTooLong(u))
-            } else {
-                (t as u32).try_into()
-            }
+            u32::try_from(u.as_secs())
+                .or(Err(LockTimeError::DurationTooLong(u)))?
+                .try_into()
         }
     }
 
