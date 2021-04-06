@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Template Builder - The Sapio Language</title>
+        <title>Template Builder - Designing Bitcoin Contracts with Sapio</title>
         
         
 
@@ -130,7 +130,7 @@
                         
                     </div>
 
-                    <h1 class="menu-title">The Sapio Language</h1>
+                    <h1 class="menu-title">Designing Bitcoin Contracts with Sapio</h1>
 
                     <div class="right-buttons">
                         
@@ -171,6 +171,63 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="template-builder"><a class="header" href="#template-builder">Template Builder</a></h1>
+<p>The Template builder is one of the most important parts of a Sapio contract.
+It is how you define and build a transaction step.</p>
+<p>It's also an area of active work to improve the UX of, to enable building new
+kinds of smart contract more easily, supporting more advanced constructs.</p>
+<p>The below code demonstrates how to use the template builder. See the
+<a href="https://docs.rs/sapio/0.1.2/sapio/template/builder/struct.Builder.html">docs</a>
+for more detail!</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>struct X;
+impl X {
+    then! {
+        fn example(self, ctx) {
+            /// create a new template with the current context
+            /// and set lock time to height 100
+            let mut tmpl = ctx.template().set_lock_time(AbsHeight::from(10).into())?;
+            let h = vec![(String::from(&quot;Metadata&quot;), String::from(&quot;IS_COOL&quot;))].into_iter().collect();
+            /// Add an output
+            /// make sure to assign to update after initial assignment, otherwise tmpl is consumed completely...
+            /// Note: What happens when X creates an X (infinite loop)
+            tmpl = tmpl.add_output(bitcoin::Amount::from_sat(1000), &amp;X, Some(h))?;
+            /// mark some funds unavailable (e.g. fees)
+            tmpl = tmpl.spend_amount(bitcoin::Amount::from_sat(0xFEE))?;
+            /// note that tmpl has it's own clone of ctx, which we should be
+            /// careful to use instead of the passed in ctx, which is immutable
+            if tmpl.ctx().funds() &lt; bitcoin::Amount::from_sat(100000) {
+                return Err(CompilationError::TerminateCompilation);
+            }
+            /// certain metadata is inteded to be &quot;non-proprietary&quot; and has dedicated setters
+            tmpl = tmpl.set_label(&quot;Example!&quot;.into());
+            /// adds a new _input_ and sets it sequence to relheight 1 block.
+            tmpl = tmpl.add_sequence().set_sequence(-1, RelHeight::from(1))?;
+            /// add some additional funds (i.e. from the input we just added)
+            tmpl = tmpl.add_amount(Bitcoin::from_sats(10000));
+            /// Send the remaining funds to this output
+            tmpl = tmpl.add_output(tmpl.ctx().funds(), &amp;X, None)?;
+            let feeling_lazy = true;
+            if feeling_lazy {
+                /// This finishes the builder and turns it into the correct result type
+                tmpl.into()
+            } else {
+                /// equivalently, but more verbosely
+                Ok(Box::new(std::iter::once(Template::from(tmpl))))
+            }
+        }
+    }
+}
+impl Contract for X {
+    /*...*/
+}
+
+<span class="boring">}
+</span></code></pre></pre>
+<p>The Sapio model currently expects that all contracts UTXO spends are located
+in the first input. The CTV hash commits to this, so it cannot be modified at
+this time (but future work might allow changing this).</p>
 
                     </main>
 

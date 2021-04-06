@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>The Sapio Language</title>
+        <title>Designing Bitcoin Contracts with Sapio</title>
         
         <meta name="robots" content="noindex" />
         
@@ -132,7 +132,7 @@
                         
                     </div>
 
-                    <h1 class="menu-title">The Sapio Language</h1>
+                    <h1 class="menu-title">Designing Bitcoin Contracts with Sapio</h1>
 
                     <div class="right-buttons">
                         
@@ -172,14 +172,48 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="the-sapio-language"><a class="header" href="#the-sapio-language">The Sapio Language</a></h1>
-<h1 id="a-hrefhttpsgithubcomsapio-langsapioactionsquerybranch3amasterimg-srchttpsgithubcomsapio-langsapioworkflowscontinuous20integrationbadgesvg-altbuild-status-a-a-hrefhttpscratesiocratessapioimg-srchttpsimgshieldsiocratesdvsapio-altcrates-a-a-hrefhttpsdocsrssapioimg-srchttpsimgshieldsiodocsrssapiolatest-altdocs-a-a-hrefhttpsgithubcomsapio-langsapioforkimg-srchttpsimgshieldsiogithubforkssapio-langsapiolabelfork20mestylesocial-altforkme-a"><a class="header" href="#a-hrefhttpsgithubcomsapio-langsapioactionsquerybranch3amasterimg-srchttpsgithubcomsapio-langsapioworkflowscontinuous20integrationbadgesvg-altbuild-status-a-a-hrefhttpscratesiocratessapioimg-srchttpsimgshieldsiocratesdvsapio-altcrates-a-a-hrefhttpsdocsrssapioimg-srchttpsimgshieldsiodocsrssapiolatest-altdocs-a-a-hrefhttpsgithubcomsapio-langsapioforkimg-srchttpsimgshieldsiogithubforkssapio-langsapiolabelfork20mestylesocial-altforkme-a"><a href="https://github.com/sapio-lang/sapio/actions?query=branch%3Amaster"><img src="https://github.com/sapio-lang/sapio/workflows/Continuous%20integration/badge.svg" alt="Build Status" /></a> <a href="https://crates.io/crates/sapio"><img src="https://img.shields.io/crates/dv/sapio" alt="crates" /></a> <a href="https://docs.rs/sapio"><img src="https://img.shields.io/docsrs/sapio/latest" alt="docs" /></a> <a href="https://github.com/sapio-lang/sapio/fork"><img src="https://img.shields.io/github/forks/sapio-lang/sapio?label=Fork%20Me&amp;style=social" alt="forkme" /></a></a></h1>
+                        <p><img src="https://github.com/sapio-lang/sapio/raw/master/.github/logo.png" alt="" /></p>
+<h2 id="designing-bitcoin-contracts-with-sapio"><a class="header" href="#designing-bitcoin-contracts-with-sapio">Designing Bitcoin Contracts with Sapio</a></h2>
+<p><a href="https://github.com/sapio-lang/sapio/actions?query=branch%3Amaster"><img src="https://github.com/sapio-lang/sapio/workflows/Continuous%20integration/badge.svg" alt="Build Status" /></a> <a href="https://crates.io/crates/sapio"><img src="https://img.shields.io/crates/dv/sapio" alt="crates" /></a> <a href="https://docs.rs/sapio"><img src="https://img.shields.io/docsrs/sapio/latest" alt="docs" /></a> <a href="https://github.com/sapio-lang/sapio/fork"><img src="https://img.shields.io/github/forks/sapio-lang/sapio?label=Fork%20Me&amp;style=social" alt="forkme" /></a> </p>
 <p><em>A practical guide to engineering bitcoin smart contracts using the Sapio Language.</em></p>
-<img src="https://github.com/sapio-lang/sapio/raw/master/.github/logo.png" alt="Say hi to Jared">
 <p>This book is a work in progress! Please <a href="https://github.com/sapio-lang/sapio">submit a PR</a> with
 improvements or suggestions.</p>
 <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
+<p>Welcome to <em>Designing Bitcoin Contracts with Sapio</em>, the official manual and
+best starting place ro learn how to make Smart Contracts for Bitcoin. Sapio
+is an in-development tool that empowers Bitcoin Developers to craft smart
+contracts in an intuitive, safe, and composable way. Sapio challenges the
+notion that you can't make complex smart contracts for Bitcoin, and opens the
+floodgates for a myriad of new ideas to be defined easily.</p>
+<h2 id="who-is-sapio-for"><a class="header" href="#who-is-sapio-for">Who is Sapio For?</a></h2>
+<p>Sapio is for anyone who wants to build with Bitcoin. That spans students
+demonstrating research concepts, corporations working on custody solutions,
+and developers improving open source solutions. Sapio is not a Solidity
+equivalent. The programming model is <em>very</em> different. But it does help
+anyone trying to solve a transactional protocol for Bitcoin solve it
+elegently.</p>
+<p>Sapio is currently alpha quality software. You should think very carefully
+before using Sapio with any real money. There will be kinks to untwist,
+wrinkles to iron out, and bugs to squash. Hopefully you, dear reader, will
+even be able to help with that! Sapio is not -- at present -- for the faint
+of heart.</p>
+<h2 id="what-will-i-learn-if-i-read-this-book"><a class="header" href="#what-will-i-learn-if-i-read-this-book">What will I learn if I read this book?</a></h2>
+<p>This book is intended to teach you how to think about programming Sapio
+contracts. The book contains some exercises (that are heavily encouraged)
+that should instigate your understanding of how to build smart contracts
+for Bitcoin.</p>
+<p>If you go through the chapters in order and complete all the exercises you
+should develop a firm grasp of how to use Sapio, how it works, and how it
+will progress over time. You will also have sufficient understanding to
+contribute back meaningfully to the open source project.</p>
 <h1 id="getting-started"><a class="header" href="#getting-started">Getting Started</a></h1>
+<p>Let's start buil... not so fast there.</p>
+<p>Before we get into it, we need to cover some basics:</p>
+<ul>
+<li>Setting up an environment</li>
+<li>Learning Rust</li>
+<li>Hello World contract</li>
+</ul>
 <h1 id="installing-sapio"><a class="header" href="#installing-sapio">Installing Sapio</a></h1>
 <h2 id="quickstart"><a class="header" href="#quickstart">QuickStart:</a></h2>
 <p>Sapio should work on all platforms, but is recommend for use with Linux (Ubuntu preferred).
@@ -405,6 +439,63 @@ understand how to satisfy miniscripts.</p>
 are possible, but not yet supported in Sapio. For example, the <code>OP_SIZE</code>
 coinflip script is not currently possible with Miniscript.</p>
 <h1 id="template-builder"><a class="header" href="#template-builder">Template Builder</a></h1>
+<p>The Template builder is one of the most important parts of a Sapio contract.
+It is how you define and build a transaction step.</p>
+<p>It's also an area of active work to improve the UX of, to enable building new
+kinds of smart contract more easily, supporting more advanced constructs.</p>
+<p>The below code demonstrates how to use the template builder. See the
+<a href="https://docs.rs/sapio/0.1.2/sapio/template/builder/struct.Builder.html">docs</a>
+for more detail!</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>struct X;
+impl X {
+    then! {
+        fn example(self, ctx) {
+            /// create a new template with the current context
+            /// and set lock time to height 100
+            let mut tmpl = ctx.template().set_lock_time(AbsHeight::from(10).into())?;
+            let h = vec![(String::from(&quot;Metadata&quot;), String::from(&quot;IS_COOL&quot;))].into_iter().collect();
+            /// Add an output
+            /// make sure to assign to update after initial assignment, otherwise tmpl is consumed completely...
+            /// Note: What happens when X creates an X (infinite loop)
+            tmpl = tmpl.add_output(bitcoin::Amount::from_sat(1000), &amp;X, Some(h))?;
+            /// mark some funds unavailable (e.g. fees)
+            tmpl = tmpl.spend_amount(bitcoin::Amount::from_sat(0xFEE))?;
+            /// note that tmpl has it's own clone of ctx, which we should be
+            /// careful to use instead of the passed in ctx, which is immutable
+            if tmpl.ctx().funds() &lt; bitcoin::Amount::from_sat(100000) {
+                return Err(CompilationError::TerminateCompilation);
+            }
+            /// certain metadata is inteded to be &quot;non-proprietary&quot; and has dedicated setters
+            tmpl = tmpl.set_label(&quot;Example!&quot;.into());
+            /// adds a new _input_ and sets it sequence to relheight 1 block.
+            tmpl = tmpl.add_sequence().set_sequence(-1, RelHeight::from(1))?;
+            /// add some additional funds (i.e. from the input we just added)
+            tmpl = tmpl.add_amount(Bitcoin::from_sats(10000));
+            /// Send the remaining funds to this output
+            tmpl = tmpl.add_output(tmpl.ctx().funds(), &amp;X, None)?;
+            let feeling_lazy = true;
+            if feeling_lazy {
+                /// This finishes the builder and turns it into the correct result type
+                tmpl.into()
+            } else {
+                /// equivalently, but more verbosely
+                Ok(Box::new(std::iter::once(Template::from(tmpl))))
+            }
+        }
+    }
+}
+impl Contract for X {
+    /*...*/
+}
+
+<span class="boring">}
+</span></code></pre></pre>
+<p>The Sapio model currently expects that all contracts UTXO spends are located
+in the first input. The CTV hash commits to this, so it cannot be modified at
+this time (but future work might allow changing this).</p>
 <h1 id="time-locks"><a class="header" href="#time-locks">Time Locks</a></h1>
 <p>Sapio provides some utilities for working with both relative and absolute timelocks. See <a href="https://docs.rs/sapio-base/0.1.0/sapio_base/timelocks/index.html">the sapio-base docs</a> for more details.</p>
 <p>The Time Lock Utilities have some nice interfaces for dealing with timelocks generically and converting them into Policy Clauses.</p>
@@ -507,6 +598,14 @@ that any set of values passed in are safe to add.</p>
 <p>Sapio currently does not do a fantastic job of this, but that can be improved
 in the future.</p>
 <h1 id="contract-actions"><a class="header" href="#contract-actions">Contract Actions</a></h1>
+<p>Contracts have a variety of different actions used at different times.</p>
+<table><thead><tr><th>name</th><th>function</th></tr></thead><tbody>
+<tr><td>guard!</td><td>Create a clause using miniscript with access to the contract's values and context.</td></tr>
+<tr><td>compile_if!</td><td>Determine if a <code>then!</code> or <code>finish!</code> should be compiled based on the contract's values and context</td></tr>
+<tr><td>then!</td><td>Create a path or paths  that are guaranteed using CTV for a contract to be spent,  with optional <code>guard!</code>s and <code>compile_if!</code>s.</td></tr>
+<tr><td>finish!</td><td>Create a suggested path or paths for a contract to be spent that are not guaranteed via CTV with mandatory <code>guard!</code>s and <code>compile_if!</code>s. Also accepts an update argument for generating transactions based on future data.</td></tr>
+</tbody></table>
+<p>This section will teach you then ins and outs of each.</p>
 <h1 id="guard"><a class="header" href="#guard">Guard</a></h1>
 <p>Guards are central to any Sapio contract. The allow declaring a piece of
 miniscript logic.</p>

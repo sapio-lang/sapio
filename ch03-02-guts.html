@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Contract Actions - The Sapio Language</title>
+        <title>Contract Actions - Designing Bitcoin Contracts with Sapio</title>
         
         
 
@@ -130,7 +130,7 @@
                         
                     </div>
 
-                    <h1 class="menu-title">The Sapio Language</h1>
+                    <h1 class="menu-title">Designing Bitcoin Contracts with Sapio</h1>
 
                     <div class="right-buttons">
                         
@@ -171,6 +171,14 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="contract-actions"><a class="header" href="#contract-actions">Contract Actions</a></h1>
+<p>Contracts have a variety of different actions used at different times.</p>
+<table><thead><tr><th>name</th><th>function</th></tr></thead><tbody>
+<tr><td>guard!</td><td>Create a clause using miniscript with access to the contract's values and context.</td></tr>
+<tr><td>compile_if!</td><td>Determine if a <code>then!</code> or <code>finish!</code> should be compiled based on the contract's values and context</td></tr>
+<tr><td>then!</td><td>Create a path or paths  that are guaranteed using CTV for a contract to be spent,  with optional <code>guard!</code>s and <code>compile_if!</code>s.</td></tr>
+<tr><td>finish!</td><td>Create a suggested path or paths for a contract to be spent that are not guaranteed via CTV with mandatory <code>guard!</code>s and <code>compile_if!</code>s. Also accepts an update argument for generating transactions based on future data.</td></tr>
+</tbody></table>
+<p>This section will teach you then ins and outs of each.</p>
 
                     </main>
 
