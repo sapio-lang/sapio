@@ -5,6 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 #[deny(missing_docs)]
+use tokio::io::AsyncReadExt;
 use bitcoin::consensus::serialize;
 use bitcoin::consensus::Decodable;
 use bitcoin::hashes::{hex::ToHex, Hash};
@@ -21,7 +22,7 @@ use clap::clap_app;
 use config::*;
 use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::CTVEmulator;
-use emulator_connect::NullEmulator;
+use emulator_connect::CTVAvailable;
 use sapio::contract::Compiled;
 use sapio::contract::Context;
 use sapio_base::txindex::TxIndex;
@@ -73,11 +74,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             (@subcommand bind =>
                 (about: "Bind Contract to a specific UTXO")
                 (@arg mock: --mock "Create a fake output for this txn.")
-                (@arg json: +required "JSON to Bind")
+                (@arg json: "JSON to Bind")
             )
             (@subcommand for_tux =>
                 (about: "Translate for TUX viewer")
-                (@arg json: +required "JSON to translate")
+                (@arg json: "JSON to translate")
             )
             (@subcommand create =>
                 (about: "create a contract to a specific UTXO")
@@ -86,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
                     (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
                 )
-                (@arg params: +required "JSON of args")
+                (@arg json: "JSON of args")
             )
             (@subcommand load =>
                 (about: "Load a wasm contract module, returns the hex sha3 hash key")
@@ -116,15 +117,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::setup(&matches, "org", "judica", "sapio-cli").await?;
 
     let cfg = config.active;
-    let emulator = NullEmulator(if let Some(emcfg) = &cfg.emulator_nodes {
+    let emulator : Arc<dyn CTVEmulator>= if let Some(emcfg) = &cfg.emulator_nodes {
         if emcfg.enabled {
-            Some(emcfg.get_emulator()?.into())
+            emcfg.get_emulator()?.into()
         } else {
-            None
+            Arc::new(CTVAvailable)
         }
     } else {
-        None
-    });
+        Arc::new(CTVAvailable)
+    };
     let plugin_map = cfg.plugin_map.map(|x| {
         x.into_iter()
             .map(|(x, y)| (x.into_bytes().into(), y.into()))
@@ -134,7 +135,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut emulator = emulator.clone();
         // Drop Emulator from own thread...
         std::thread::spawn(move || loop {
-            if let Some(_) = emulator.0.as_mut().and_then(|e| Arc::get_mut(e)) {
+            if let Some(_) = Arc::get_mut(&mut emulator) {
                 break;
             }
         });
@@ -199,11 +200,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let use_mock = args.is_present("mock");
                 let client =
                     rpc::Client::new(cfg.api_node.url.clone(), cfg.api_node.auth.clone()).await?;
-                let j: Compiled = serde_json::from_str(args.value_of("json").unwrap())?;
+                let j: Compiled = if let Some(json) = args.value_of("json") {
+                    serde_json::from_str(json)?
+                } else {
+                    let mut s = String::new();
+                    tokio::io::stdin().read_to_string(&mut s).await?;
+                    serde_json::from_str(&s)?
+                };
 
-                let em = Arc::new(emulator);
                 let (tx, vout) = if use_mock {
-                    let ctx = Context::new(config.network, j.amount_range.max(), Some(em.clone()));
+                    let ctx = Context::new(config.network, j.amount_range.max(), emulator.clone());
                     let mut tx = ctx
                         .template()
                         .add_output(j.amount_range.max(), &j, None)?
@@ -231,7 +237,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     OutPoint::new(tx.txid(), vout as u32),
                     HashMap::new(),
                     logger,
-                    em.as_ref(),
+                    emulator.as_ref(),
                 )?;
                 txns.push(PartiallySignedTransaction::from_unsigned_tx(tx)?);
                 meta.push(serde_json::json!({
@@ -263,7 +269,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let (txns, metadata): (
                     Vec<bitcoin::util::psbt::PartiallySignedTransaction>,
                     Vec<serde_json::Value>,
-                ) = serde_json::from_str(args.value_of("json").unwrap())?;
+                ) = if let Some(json) = args.value_of("json") {
+                   serde_json::from_str(json)?
+                } else {
+                    let mut s = String::new();
+                    tokio::io::stdin().read_to_string(&mut s).await?;
+                    serde_json::from_str(&s)?
+                };
                 let program = Program {
                     program: txns
                         .into_iter()
@@ -297,7 +309,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "org".into(),
                     "judica".into(),
                     "sapio-cli".into(),
-                    emulator,
+                    &emulator,
                     args.value_of("key"),
                     args.value_of_os("file"),
                     config.network,
@@ -309,8 +321,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     &api,
                     Some(jsonschema_valid::schemas::Draft::Draft6),
                 )?;
-                let params = args.value_of("params").unwrap();
-                if let Err(it) = validator.validate(&serde_json::from_str(params)?) {
+                let params = 
+                if let Some(params) = args.value_of("json") {
+                    serde_json::from_str(params)?
+                } else {
+                    let mut s = String::new();
+                    tokio::io::stdin().read_to_string(&mut s).await?;
+                    serde_json::from_str(&s)?
+                };
+                if let Err(it) = validator.validate(&params) {
                     for err in it {
                         println!("Error: {}", err);
                     }
@@ -326,7 +345,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "org".into(),
                     "judica".into(),
                     "sapio-cli".into(),
-                    emulator,
+                    &emulator,
                     args.value_of("key"),
                     args.value_of_os("file"),
                     config.network,
@@ -340,7 +359,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "org".into(),
                     "judica".into(),
                     "sapio-cli".into(),
-                    emulator,
+                    &emulator,
                     args.value_of("key"),
                     args.value_of_os("file"),
                     config.network,
@@ -370,7 +389,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "org".into(),
                     "judica".into(),
                     "sapio-cli".into(),
-                    emulator,
+                    &emulator,
                     None,
                     args.value_of_os("file"),
                     config.network,

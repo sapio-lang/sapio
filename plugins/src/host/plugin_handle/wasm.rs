@@ -5,6 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //!  a plugin handle for a wasm plugin.
+use sapio_ctv_emulator_trait::CTVEmulator;
 use super::*;
 use crate::host::exports::*;
 use crate::host::wasm_cache::get_all_keys_from_fs;
@@ -40,7 +41,7 @@ impl WasmPluginHandle {
                 typ.clone(),
                 org.clone(),
                 proj.clone(),
-                emulator.clone(),
+                &emulator,
                 Some(&key),
                 None,
                 net,
@@ -58,7 +59,7 @@ impl WasmPluginHandle {
         typ: String,
         org: String,
         proj: String,
-        emulator: NullEmulator,
+        emulator: &Arc<dyn CTVEmulator>,
         key: Option<&str>,
         file: Option<&OsStr>,
         net: bitcoin::Network,
@@ -108,7 +109,7 @@ impl WasmPluginHandle {
             module_map: plugin_map.unwrap_or_else(HashMap::new).into(),
             store: Arc::new(Mutex::new(store.clone())),
             net,
-            emulator: Arc::new(Mutex::new(emulator)),
+            emulator: emulator.clone(),
             memory: LazyInit::new(),
             get_api: LazyInit::new(),
             get_name: LazyInit::new(),

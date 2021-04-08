@@ -16,7 +16,7 @@ use bitcoin::util::psbt::PartiallySignedTransaction;
 use sapio_base::txindex::TxIndexError;
 use sapio_base::txindex::{TxIndex, TxIndexLogger};
 use sapio_base::Clause;
-use sapio_ctv_emulator_trait::{CTVEmulator, EmulatorError, NullEmulator};
+use sapio_ctv_emulator_trait::{CTVAvailable, CTVEmulator, EmulatorError};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -142,7 +142,7 @@ impl Object {
                 out_in,
                 HashMap::new(),
                 Rc::new(TxIndexLogger::new()),
-                &NullEmulator(None),
+                &CTVAvailable,
             )
             .unwrap();
         (a.into_iter().map(|x| x.extract_tx()).collect(), b)
