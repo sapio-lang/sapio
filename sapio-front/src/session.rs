@@ -9,6 +9,7 @@ use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::Hash;
 use bitcoin::util::amount::Amount;
 use sapio::contract::{Compilable, CompilationError, Compiled, Context};
+use sapio_ctv_emulator_trait::CTVAvailable;
 use schemars::schema::RootSchema;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::Display;
+use std::sync::Arc;
 
 type Key = bitcoin::hashes::sha256::Hash;
 /// Errors that can arise during a Session
@@ -323,7 +325,11 @@ impl Session {
     /// TODO: use an emulator if desired?
     pub fn get_context(&self) -> Context {
         // Todo: Make Create specify the amount to send.
-        Context::new(self.network, Amount::from_sat(100_000_000_000), None)
+        Context::new(
+            self.network,
+            Amount::from_sat(100_000_000_000),
+            Arc::new(CTVAvailable),
+        )
     }
 
     /// process a message from the Session manager (e.g., networking stack)

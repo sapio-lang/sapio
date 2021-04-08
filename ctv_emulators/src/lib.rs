@@ -9,7 +9,7 @@ use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::{Hash, HashEngine};
 use bitcoin::util::bip32::*;
 use sapio_ctv_emulator_trait::Clause;
-pub use sapio_ctv_emulator_trait::{CTVEmulator, EmulatorError, NullEmulator};
+pub use sapio_ctv_emulator_trait::{CTVAvailable, CTVEmulator, EmulatorError, NullEmulator};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 

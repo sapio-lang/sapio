@@ -26,7 +26,7 @@ pub trait Plugin: JsonSchema + Sized + for<'a> Deserialize<'a> + Compilable {
     unsafe fn create_result(c: *mut c_char) -> Result<String, Box<dyn Error>> {
         let s = CString::from_raw(c);
         let CreateArgs::<Self>(s, net, amt) = serde_json::from_slice(s.to_bytes())?;
-        let ctx = Context::new(net, amt, Some(Arc::new(client::WasmHostEmulator)));
+        let ctx = Context::new(net, amt, Arc::new(client::WasmHostEmulator));
         Ok(serde_json::to_string_pretty(&s.compile(&ctx)?)?)
     }
     /// binds this type to the wasm interface, must be called before the plugin can be used.
