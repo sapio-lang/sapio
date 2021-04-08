@@ -215,7 +215,7 @@ where
                         }
                         .entry(h)
                         .or_insert(txtmpl);
-                        amount_range.update_range(txtmpl.total_amount());
+                        amount_range.update_range(txtmpl.max);
                         ctx.ctv_emulator(h)
                     })
                     // Forces any error to abort the whole thing

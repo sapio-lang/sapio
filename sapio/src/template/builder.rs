@@ -24,6 +24,7 @@ pub struct Builder {
     lock_time: Option<AnyAbsTimeLock>,
     label: Option<String>,
     ctx: Context,
+    fees: Amount,
 }
 
 impl Builder {
@@ -35,6 +36,7 @@ impl Builder {
             version: 2,
             lock_time: None,
             label: None,
+            fees: Amount::from_sat(0),
             ctx,
         }
     }
@@ -48,6 +50,13 @@ impl Builder {
     pub fn spend_amount(mut self, amount: Amount) -> Result<Self, CompilationError> {
         self.ctx.spend_amount(amount)?;
         Ok(self)
+    }
+
+    /// reduce the amount availble in the builder's context, and add to the fees
+    pub fn add_fees(self, amount: Amount) -> Result<Self, CompilationError> {
+        let mut c = self.spend_amount(amount)?;
+        c.fees += amount;
+        Ok(c)
     }
 
     /// Creates a new Output, forcing the compilation of the compilable object and defaulting
@@ -174,7 +183,7 @@ impl From<Builder> for Template {
             outputs: t.outputs,
             ctv: tx.get_ctv_hash(0),
             ctv_index: 0,
-            max: tx.total_amount().into(),
+            max: tx.total_amount() + t.fees,
             tx,
             metadata_map_s2s: metadata,
         }
