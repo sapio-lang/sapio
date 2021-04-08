@@ -5,6 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use super::*;
+use bitcoin::SigHash;
 #[derive(Clone)]
 pub struct HDOracleEmulator {
     root: ExtendedPrivKey,
@@ -81,12 +82,18 @@ impl HDOracleEmulator {
                     utxo.value,
                     bitcoin::blockdata::transaction::SigHashType::All,
                 );
-                let msg = bitcoin::secp256k1::Message::from_slice(&sighash[..])
-                    .or_else(|_e| input_error("Message hash not valid (impossible?)"))?;
+                use bitcoin::secp256k1::ThirtyTwoByteHash;
+                struct Wrapped(SigHash);
+                impl ThirtyTwoByteHash for Wrapped {
+                    fn into_32(self) -> [u8; 32] {
+                        self.0.as_hash().into_inner()
+                    }
+                }
+                let msg = bitcoin::secp256k1::Message::from(Wrapped(sighash));
                 let mut signature: Vec<u8> = secp
                     .sign(&msg, &key.private_key.key)
-                    .serialize_compact()
-                    .into();
+                    .serialize_der()
+                    .to_vec();
                 signature.push(0x01);
                 let pk = key.private_key.public_key(secp);
                 b.inputs[0].partial_sigs.insert(pk, signature);
