@@ -78,6 +78,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
             (@subcommand for_tux =>
                 (about: "Translate for TUX viewer")
+                (@arg psbts: --psbt "Output in PSBT format instead of tx hex.")
+                (@arg finalize: --finalize "Attempt finalizing via miniscript...")
                 (@arg json: "JSON to translate")
             )
             (@subcommand create =>
@@ -276,15 +278,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     tokio::io::stdin().read_to_string(&mut s).await?;
                     serde_json::from_str(&s)?
                 };
+                let encode_as_psbt = args.is_present("psbts");
+                let finalize_psbt = args.is_present("finalize");
+                let secp = Secp256k1::new();
                 let program = Program {
                     program: txns
                         .into_iter()
-                        .map(|p| p.extract_tx())
-                        .map(|u| bitcoin::consensus::encode::serialize(&u))
                         .zip(metadata.into_iter())
-                        .map(|(h, mut v)| {
+                        .map(|(mut u, mut v)| {
+                            if finalize_psbt {
+                                miniscript::psbt::finalize(&mut u, &secp)
+                                    .map_err(|e| println!("{:?}", e)).ok();
+                            }
+                            let h = if encode_as_psbt {
+                                let bytes = serialize(&u);
+                                base64::encode(bytes)
+                            } else {
+                                bitcoin::consensus::encode::serialize_hex(&u.extract_tx())
+                            };
                             v.as_object_mut().map(|ref mut m| {
-                                m.insert("hex".into(), h.to_hex().into());
+                                m.insert("hex".into(), h.into());
                                 m.insert(
                                     "label".into(),
                                     m.get("metadata")
@@ -296,9 +309,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         .clone(),
                                 )
                             });
-                            v
+                            Ok(v)
                         })
-                        .collect(),
+                        .collect::<Result<Vec<_>, String>>()?,
                 };
                 println!("{}", serde_json::to_string_pretty(&program)?);
             }
