@@ -34,3 +34,8 @@ version = "0.1.0"
 package = "sapio-miniscript"
 version = "^5.1.0"
 features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
+
+
+[dependencies.sapio-ctv-emulator-trait]
+path = "../emulator-trait"
+version = "0.1.0"

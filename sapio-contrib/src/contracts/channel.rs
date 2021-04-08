@@ -28,6 +28,7 @@ mod tests {
     use super::*;
     use miniscript::Descriptor;
     use miniscript::DescriptorTrait;
+    use sapio_ctv_emulator_trait::CTVAvailable;
     #[test]
     fn it_works() {
         db_serde::register_db("mock".to_string(), |_s| Arc::new(Mutex::new(MockDB {})));
@@ -68,8 +69,11 @@ mod tests {
             serde_json::to_string_pretty(&schema_for!(Channel<Stop>)).unwrap()
         );
         println!("{}", serde_json::to_string_pretty(&y).unwrap());
-        let mut ctx =
-            sapio::contract::Context::new(bitcoin::Network::Regtest, Amount::from_sat(10000), None);
+        let mut ctx = sapio::contract::Context::new(
+            bitcoin::Network::Regtest,
+            Amount::from_sat(10000),
+            std::sync::Arc::new(CTVAvailable),
+        );
         Compilable::compile(&x, &mut ctx);
         Compilable::compile(&y, &mut ctx);
     }

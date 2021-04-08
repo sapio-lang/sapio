@@ -53,23 +53,18 @@ pub trait CTVEmulator: Sync + Send {
 
 /// A wrapper for an optional internal emulator trait object. If no emulator is
 /// provided, then it defaults to using actual CheckTemplateVerify Clauses.
-#[derive(Clone)]
-pub struct NullEmulator(pub Option<Arc<dyn CTVEmulator>>);
+pub type NullEmulator = Arc<dyn CTVEmulator>;
 
-impl CTVEmulator for NullEmulator {
+/// a type tag that can be tossed inside an Arc to get CTV
+pub struct CTVAvailable;
+impl CTVEmulator for CTVAvailable {
     fn get_signer_for(&self, h: sha256::Hash) -> Result<Clause, EmulatorError> {
-        match &self.0 {
-            None => Ok(Clause::TxTemplate(h)),
-            Some(emulator) => emulator.get_signer_for(h),
-        }
+        Ok(Clause::TxTemplate(h))
     }
     fn sign(
         &self,
         b: PartiallySignedTransaction,
     ) -> Result<PartiallySignedTransaction, EmulatorError> {
-        match &self.0 {
-            None => Ok(b),
-            Some(emulator) => emulator.sign(b),
-        }
+        Ok(b)
     }
 }

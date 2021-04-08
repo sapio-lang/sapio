@@ -33,7 +33,7 @@ pub struct HostEnvironmentInner {
     pub module_map: HashMap<Vec<u8>, [u8; 32]>,
     pub store: Arc<Mutex<Store>>,
     pub net: bitcoin::Network,
-    pub emulator: Arc<Mutex<NullEmulator>>,
+    pub emulator: Arc<CTVEmulator>,
     #[wasmer(export)]
     pub memory: LazyInit<Memory>,
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_allocate_bytes"))]
@@ -129,7 +129,7 @@ mod exports {
         {
             *dst = src;
         }
-        let emulator = env.emulator.lock().unwrap().clone();
+        let emulator = env.emulator.clone();
         let mmap = env.module_map.clone();
         let typ = env.typ.clone();
         let org = env.org.clone();
@@ -140,7 +140,7 @@ mod exports {
         let handle = tokio::runtime::Handle::current();
 
         handle.spawn(async move {
-            WasmPluginHandle::new(typ, org, proj, emulator, Some(&h), None, net, Some(mmap))
+            WasmPluginHandle::new(typ, org, proj, &emulator, Some(&h), None, net, Some(mmap))
                 .await
                 .ok()
                 .and_then(|sph| {
@@ -207,7 +207,7 @@ mod exports {
             }
             buf
         });
-        let clause = env.emulator.lock().unwrap().get_signer_for(h).unwrap();
+        let clause = env.emulator.get_signer_for(h).unwrap();
         let s = serde_json::to_string_pretty(&clause).unwrap();
         let bytes = env
             .allocate_wasm_bytes_ref()
@@ -240,7 +240,7 @@ mod exports {
             *dst = src;
         }
         let psbt: PartiallySignedTransaction = serde_json::from_slice(&buf[..]).unwrap();
-        let psbt = env.emulator.lock().unwrap().sign(psbt).unwrap();
+        let psbt = env.emulator.sign(psbt).unwrap();
         buf.clear();
         let s = serde_json::to_string_pretty(&psbt).unwrap();
         let bytes = env

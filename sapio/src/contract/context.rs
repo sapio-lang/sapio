@@ -18,17 +18,17 @@ use std::sync::Arc;
 pub struct Context {
     /* TODO: Add Context Fields! */
     available_funds: Amount,
-    emulator: NullEmulator,
+    emulator: Arc<dyn CTVEmulator>,
     /// which network is the contract building for?
     pub network: Network,
 }
 
 impl Context {
     /// create a context instance
-    pub fn new(network: Network, amount: Amount, emulator: Option<Arc<dyn CTVEmulator>>) -> Self {
+    pub fn new(network: Network, amount: Amount, emulator: Arc<dyn CTVEmulator>) -> Self {
         Context {
             available_funds: amount,
-            emulator: NullEmulator(emulator),
+            emulator: emulator,
             network,
         }
     }
