@@ -6,11 +6,13 @@
 
 #[deny(missing_docs)]
 use sapio::contract::*;
+use sapio::util::amountrange::*;
 use sapio::*;
 use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
+use std::collections::VecDeque;
 
 /// A payment to a specific address
 #[derive(JsonSchema, Serialize, Deserialize, Clone)]
@@ -31,27 +33,64 @@ pub struct TreePay {
     /// the radix of the tree to build. Optimal for users should be around 4 or
     /// 5 (with CTV, not emulators).
     pub radix: usize,
+    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    #[schemars(with = "u64")]
+    pub fee_sats_per_tx: bitcoin::util::amount::Amount,
 }
 
+use bitcoin::util::amount::Amount;
+struct PayThese {
+    contracts: Vec<(Amount, Box<dyn Compilable>)>,
+    fees: Amount,
+}
+impl PayThese {
+    then! {
+        fn expand(self, ctx) {
+            let mut bld = ctx.template();
+            for (amt, ct) in self.contracts.iter() {
+                bld = bld.add_output(*amt, ct.as_ref(), None)?;
+            }
+            bld.add_fees(self.fees)?.into()
+        }
+    }
+
+    fn total_to_pay(&self) -> Amount {
+        let mut amt = self.fees;
+        for (x, _) in self.contracts.iter() {
+            amt += *x;
+        }
+        amt
+    }
+}
+impl Contract for PayThese {
+    declare! {then, Self::expand}
+    declare! {non updatable}
+}
 impl TreePay {
     then! {
         fn expand(self, ctx) {
-        let mut builder = ctx.template();
-        if self.participants.len() > self.radix {
 
-            for c in self.participants.chunks(self.participants.len()/self.radix) {
-                let mut amt =  bitcoin::util::amount::Amount::from_sat(0);
-                for Payment{amount, ..}  in c {
-                    amt += *amount;
+            let mut queue : VecDeque<(Amount, Box<dyn Compilable>)> = self.participants.iter().map(|payment| {
+                let mut amt = AmountRange::new();
+                amt.update_range(payment.amount);
+                let b : Box::<dyn Compilable> = Box::new(Compiled::from_address(payment.address.clone(), Some(amt)));
+                (payment.amount, b)
+            }).collect();
+
+            loop {
+                let v : Vec<_> = queue.drain(0..std::cmp::min(self.radix, queue.len())).collect();
+                if queue.len() == 0 {
+                    let mut builder = ctx.template();
+                    for pay in v.iter() {
+                        builder = builder.add_output(pay.0, pay.1.as_ref(), None)?;
+                    }
+                    builder =builder.add_fees(self.fee_sats_per_tx)?;
+                    return builder.into();
+                } else {
+                    let pay = Box::new(PayThese{contracts:v, fees: self.fee_sats_per_tx});
+                    queue.push_back((pay.total_to_pay(), pay))
                 }
-                builder = builder.add_output(amt, &TreePay {participants: c.to_vec(), radix: self.radix}, None)?;
             }
-        } else {
-            for Payment{amount, address} in self.participants.iter() {
-                builder = builder.add_output(*amount, &Compiled::from_address(address.clone(), None), None)?;
-            }
-        }
-        builder.into()
     }}
 }
 impl Contract for TreePay {
