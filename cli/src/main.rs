@@ -74,6 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             (@subcommand bind =>
                 (about: "Bind Contract to a specific UTXO")
                 (@arg mock: --mock "Create a fake output for this txn.")
+                (@arg outpoint: --outpoint +takes_value "Use this specific outpoint")
                 (@arg json: "JSON to Bind")
             )
             (@subcommand for_tux =>
@@ -198,8 +199,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         vout: 0,
                     }
                 }
-
                 let use_mock = args.is_present("mock");
+                let outpoint: Option<bitcoin::OutPoint> = args
+                    .value_of("outpoint")
+                    .map(serde_json::from_str)
+                    .transpose()?;
                 let client =
                     rpc::Client::new(cfg.api_node.url.clone(), cfg.api_node.auth.clone()).await?;
                 let j: Compiled = if let Some(json) = args.value_of("json") {
@@ -218,6 +222,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .get_tx();
                     tx.input[0].previous_output = create_mock_output();
                     (tx, 0)
+                } else if let Some(outpoint) = outpoint {
+                    let res = client.get_raw_transaction(&outpoint.txid, None).await?;
+                    (res, outpoint.vout)
                 } else {
                     let mut spends = HashMap::new();
                     spends.insert(format!("{}", j.address), j.amount_range.max());
@@ -230,7 +237,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let tx = psbt.extract_tx();
                     // if change pos is -1, then +1%len == 0. If it is 0, then 1. If 1, then 2 % len == 0.
                     let vout = ((res.change_position + 1) as usize) % tx.output.len();
-                    (tx, vout)
+                    (tx, vout as u32)
                 };
                 let logger = Rc::new(TxIndexLogger::new());
                 (*logger).add_tx(Arc::new(tx.clone()))?;
@@ -241,12 +248,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     logger,
                     emulator.as_ref(),
                 )?;
-                txns.push(PartiallySignedTransaction::from_unsigned_tx(tx)?);
-                meta.push(serde_json::json!({
-                    "color": "black",
-                    "metadata": {"label":"funding"},
-                    "utxo_metadata": {}
-                }));
+                if outpoint.is_none() {
+                    txns.push(PartiallySignedTransaction::from_unsigned_tx(tx)?);
+                    meta.push(serde_json::json!({
+                        "color": "black",
+                        "metadata": {"label":"funding"},
+                        "utxo_metadata": {}
+                    }));
+                }
                 println!("{}", serde_json::to_string_pretty(&(txns, meta))?);
             }
             Some(("for_tux", args)) => {
@@ -288,7 +297,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .map(|(mut u, mut v)| {
                             if finalize_psbt {
                                 miniscript::psbt::finalize(&mut u, &secp)
-                                    .map_err(|e| println!("{:?}", e)).ok();
+                                    .map_err(|e| println!("{:?}", e))
+                                    .ok();
                             }
                             let h = if encode_as_psbt {
                                 let bytes = serialize(&u);
