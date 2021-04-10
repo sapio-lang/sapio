@@ -173,12 +173,12 @@
                         <h1 id="guard"><a class="header" href="#guard">Guard</a></h1>
 <p>Guards are central to any Sapio contract. The allow declaring a piece of
 miniscript logic.</p>
-<p>These guards can either be used standalone as unlocking condtions or as a
+<p>These guards can either be used standalone as unlocking conditions or as a
 requirement on a <code>finish!</code> or <code>then!</code> function.</p>
 <p>If a <code>guard!</code> is marked as cached, the compiler will make an effort to only
 invoke the <code>guard!</code> once during compilation. This is helpful in contexts
 where a <code>guard!</code> might be expensive to call, e.g. if it is programmed to
-retreive a <code>Clause</code> from a remote server. It is not guaranteed that the
+retrieve a <code>Clause</code> from a remote server. It is not guaranteed that the
 <code>guard!</code> is only invoked once.</p>
 <h2 id="guard-macro"><a class="header" href="#guard-macro">guard! macro</a></h2>
 <pre><pre class="playground"><code class="language-rust">

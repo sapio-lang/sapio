@@ -180,7 +180,7 @@
 improvements or suggestions.</p>
 <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
 <p>Welcome to <em>Designing Bitcoin Contracts with Sapio</em>, the official manual and
-best starting place ro learn how to make Smart Contracts for Bitcoin. Sapio
+best starting place to learn how to make Smart Contracts for Bitcoin. Sapio
 is an in-development tool that empowers Bitcoin Developers to craft smart
 contracts in an intuitive, safe, and composable way. Sapio challenges the
 notion that you can't make complex smart contracts for Bitcoin, and opens the
@@ -191,7 +191,7 @@ demonstrating research concepts, corporations working on custody solutions,
 and developers improving open source solutions. Sapio is not a Solidity
 equivalent. The programming model is <em>very</em> different. But it does help
 anyone trying to solve a transactional protocol for Bitcoin solve it
-elegently.</p>
+elegantly.</p>
 <p>Sapio is currently alpha quality software. You should think very carefully
 before using Sapio with any real money. There will be kinks to untwist,
 wrinkles to iron out, and bugs to squash. Hopefully you, dear reader, will
@@ -349,7 +349,7 @@ rather than just being the key to a car, you could think of it a bit more
 like the keys to train -- still required to start the engine, but you have to
 stay on the tracks and there is a finite number of tracks to pick at any
 juncture.</p>
-<p>That's all a bit abstract. This back to the Hello World example we gave. We
+<p>That's all a bit abstract. Think back to the Hello World example we saw earlier. We
 created a coin with the following options:</p>
 <ol>
 <li>Alice and Bob Agree \( \rightarrow \) coin goes anywhere</li>
@@ -437,7 +437,7 @@ generate valid Policies, and compatible with PSBT signing devices that
 understand how to satisfy miniscripts.</p>
 <p>A limitation of this approach is that there are certain types of script which
 are possible, but not yet supported in Sapio. For example, the <code>OP_SIZE</code>
-coinflip script is not currently possible with Miniscript.</p>
+coin flip script is not currently possible with Miniscript.</p>
 <h1 id="template-builder"><a class="header" href="#template-builder">Template Builder</a></h1>
 <p>The Template builder is one of the most important parts of a Sapio contract.
 It is how you define and build a transaction step.</p>
@@ -609,12 +609,12 @@ in the future.</p>
 <h1 id="guard"><a class="header" href="#guard">Guard</a></h1>
 <p>Guards are central to any Sapio contract. The allow declaring a piece of
 miniscript logic.</p>
-<p>These guards can either be used standalone as unlocking condtions or as a
+<p>These guards can either be used standalone as unlocking conditions or as a
 requirement on a <code>finish!</code> or <code>then!</code> function.</p>
 <p>If a <code>guard!</code> is marked as cached, the compiler will make an effort to only
 invoke the <code>guard!</code> once during compilation. This is helpful in contexts
 where a <code>guard!</code> might be expensive to call, e.g. if it is programmed to
-retreive a <code>Clause</code> from a remote server. It is not guaranteed that the
+retrieve a <code>Clause</code> from a remote server. It is not guaranteed that the
 <code>guard!</code> is only invoked once.</p>
 <h2 id="guard-macro"><a class="header" href="#guard-macro">guard! macro</a></h2>
 <pre><pre class="playground"><code class="language-rust">
@@ -636,7 +636,7 @@ value-based logic before evaluating a path function.</p>
 skipped.</p>
 <h2 id="when-to-use-conditionallycompileif"><a class="header" href="#when-to-use-conditionallycompileif">When to Use ConditionallyCompileIf</a></h2>
 <p>Suppose we're creating a super secure wallet vault, and we want a recovery
-path that's only acessible if the amount of funds being sent to the contract is &lt; an amount.</p>
+path that's only accessible if the amount of funds being sent to the contract is &lt; an amount.</p>
 <p>We could write:</p>
 <pre><pre class="playground"><code class="language-rust">
 <span class="boring">#![allow(unused)]
@@ -798,7 +798,7 @@ need to be static logic, a <code>compile_if</code> can be used.</p>
 <h1 id="contract-declarations"><a class="header" href="#contract-declarations">Contract Declarations</a></h1>
 <h2 id="static-contracts"><a class="header" href="#static-contracts">Static Contracts</a></h2>
 <p>This is the usual way to declare a contract for Sapio.</p>
-<p>Once a contract and all relevent logic has been defined, a <code>impl Contract</code>
+<p>Once a contract and all relevant logic has been defined, a <code>impl Contract</code>
 should be written. This binds the functionality to the compiler interface.</p>
 <pre><pre class="playground"><code class="language-rust">
 <span class="boring">#![allow(unused)]
@@ -849,7 +849,7 @@ either the arguments differed, someone cheated, or there was unexpected
 non-determinism.</p>
 <h1 id="sapio-for-fun-and-profit"><a class="header" href="#sapio-for-fun-and-profit">Sapio for Fun (and Profit)</a></h1>
 <p>In this section, we're going to build a simple option contract. This sort of
-contract could be used, for example, to make an on-chain asyncronous offer to
+contract could be used, for example, to make an on-chain asynchronous offer to
 someone to enter a bet with you.</p>
 <p>Then, you'll have some challenges to modify the contract to extend it's
 functionality meaningfully.</p>
@@ -932,7 +932,7 @@ contract may not be too useful, but it should be a good exercise to learn
 more about writing Sapio contracts.</p>
 <ol>
 <li>Write a contract designed to be put into the <code>strike_into</code> field which
-sends funds to one party or othe other based on a third-party revealing a
+sends funds to one party or the other based on a third-party revealing a
 hash preimage <code>A</code> or <code>B</code>.</li>
 <li>Modify the contract so that there is a <code>expire_A</code> and a <code>expire_B</code> path
 that go to different addresses, and <code>expire_A</code> requires a signature or hash
