@@ -9,7 +9,7 @@ skipped.
 ## When to Use ConditionallyCompileIf
 
 Suppose we're creating a super secure wallet vault, and we want a recovery
-path that's only acessible if the amount of funds being sent to the contract is < an amount.
+path that's only accessible if the amount of funds being sent to the contract is < an amount.
 
 We could write:
 

@@ -4,7 +4,7 @@
 
 This is the usual way to declare a contract for Sapio.
 
-Once a contract and all relevent logic has been defined, a `impl Contract`
+Once a contract and all relevant logic has been defined, a `impl Contract`
 should be written. This binds the functionality to the compiler interface.
 
 ```rust

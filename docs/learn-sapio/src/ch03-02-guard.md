@@ -3,13 +3,13 @@
 Guards are central to any Sapio contract. The allow declaring a piece of
 miniscript logic.
 
-These guards can either be used standalone as unlocking condtions or as a
+These guards can either be used standalone as unlocking conditions or as a
 requirement on a `finish!` or `then!` function.
 
 If a `guard!` is marked as cached, the compiler will make an effort to only
 invoke the `guard!` once during compilation. This is helpful in contexts
 where a `guard!` might be expensive to call, e.g. if it is programmed to
-retreive a `Clause` from a remote server. It is not guaranteed that the
+retrieve a `Clause` from a remote server. It is not guaranteed that the
 `guard!` is only invoked once.
 
 ## guard! macro

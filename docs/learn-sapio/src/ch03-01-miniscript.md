@@ -42,4 +42,4 @@ understand how to satisfy miniscripts.
 
 A limitation of this approach is that there are certain types of script which
 are possible, but not yet supported in Sapio. For example, the `OP_SIZE`
-coinflip script is not currently possible with Miniscript.
+coin flip script is not currently possible with Miniscript.
