@@ -1,7 +1,7 @@
 # Introduction
 
 Welcome to _Designing Bitcoin Contracts with Sapio_, the official manual and
-best starting place ro learn how to make Smart Contracts for Bitcoin. Sapio
+best starting place to learn how to make Smart Contracts for Bitcoin. Sapio
 is an in-development tool that empowers Bitcoin Developers to craft smart
 contracts in an intuitive, safe, and composable way. Sapio challenges the
 notion that you can't make complex smart contracts for Bitcoin, and opens the
@@ -14,7 +14,7 @@ demonstrating research concepts, corporations working on custody solutions,
 and developers improving open source solutions. Sapio is not a Solidity
 equivalent. The programming model is _very_ different. But it does help
 anyone trying to solve a transactional protocol for Bitcoin solve it
-elegently.
+elegantly.
 
 Sapio is currently alpha quality software. You should think very carefully
 before using Sapio with any real money. There will be kinks to untwist,
