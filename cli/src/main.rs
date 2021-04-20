@@ -227,7 +227,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     (res, outpoint.vout)
                 } else {
                     let mut spends = HashMap::new();
-                    spends.insert(format!("{}", j.address), j.amount_range.max());
+                    spends.insert(
+                        format!(
+                            "{}",
+                            j.address.clone().map_err(|_| "Must have a valid address")?
+                        ),
+                        j.amount_range.max(),
+                    );
                     let res = client
                         .wallet_create_funded_psbt(&[], &spends, None, None, None)
                         .await?;

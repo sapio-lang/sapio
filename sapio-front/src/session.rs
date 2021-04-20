@@ -172,7 +172,11 @@ impl Action {
                         .collect(),
                 };
                 println!("{:?}", program);
-                Some(Reaction::Created(c.amount_range.max(), a, program))
+                Some(Reaction::Created(
+                    c.amount_range.max(),
+                    a.expect("program must be valid"),
+                    program,
+                ))
             }
             Action::Save(_address) => Some(Reaction::Saved(true)),
             Action::Bind(_out, _address) => Some(Reaction::Bound(vec![])),
