@@ -5,6 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! An interactive compilation session designed to be compatible with sapio-lang/TUX
+use sapio::util::extended_address::ExtendedAddress;
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::Hash;
 use bitcoin::util::amount::Amount;
@@ -127,7 +128,7 @@ pub enum Reaction {
     #[serde(rename = "created")]
     Created(
         #[serde(with = "bitcoin::util::amount::serde::as_sat")] Amount,
-        bitcoin::Address,
+        ExtendedAddress,
         Program,
     ),
     /// if the save request completed successfully
@@ -172,7 +173,11 @@ impl Action {
                         .collect(),
                 };
                 println!("{:?}", program);
-                Some(Reaction::Created(c.amount_range.max(), a, program))
+                Some(Reaction::Created(
+                    c.amount_range.max(),
+                    a,
+                    program,
+                ))
             }
             Action::Save(_address) => Some(Reaction::Saved(true)),
             Action::Bind(_out, _address) => Some(Reaction::Bound(vec![])),

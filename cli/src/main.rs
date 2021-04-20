@@ -23,6 +23,7 @@ use emulator_connect::CTVAvailable;
 use emulator_connect::CTVEmulator;
 use sapio::contract::Compiled;
 use sapio::contract::Context;
+use sapio::util::extended_address::ExtendedAddress;
 use sapio_base::txindex::TxIndex;
 use sapio_base::txindex::TxIndexLogger;
 use sapio_base::util::CTVHash;
@@ -227,7 +228,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     (res, outpoint.vout)
                 } else {
                     let mut spends = HashMap::new();
-                    spends.insert(format!("{}", j.address), j.amount_range.max());
+                    if let ExtendedAddress::Address(ref a) = j.address {
+                        spends.insert(format!("{}", a), j.amount_range.max());
+                    } else {
+                        Err("Must have a valid address")?;
+                    }
                     let res = client
                         .wallet_create_funded_psbt(&[], &spends, None, None, None)
                         .await?;

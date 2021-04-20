@@ -168,7 +168,7 @@ impl Builder {
                 .iter()
                 .map(|out| bitcoin::TxOut {
                     value: TryInto::<Amount>::try_into(out.amount).unwrap().as_sat(),
-                    script_pubkey: out.contract.address.script_pubkey(),
+                    script_pubkey: out.contract.address.clone().into(),
                 })
                 .collect(),
         }

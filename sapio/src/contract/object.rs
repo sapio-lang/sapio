@@ -5,6 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Object is the output of Sapio Compilation & can be linked to a specific coin
+use crate::util::extended_address::ExtendedAddress;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
 use ::miniscript::{self, *};
@@ -31,6 +32,8 @@ pub enum ObjectError {
     Miniscript(miniscript::policy::compiler::CompilerError),
     /// Unknown Script Type
     UnknownScriptType(bitcoin::Script),
+    /// OpReturn Too Long
+    OpReturnTooLong,
     /// The Error was for an unknown/unhandled reason
     Custom(Box<dyn std::error::Error>),
 }
@@ -86,8 +89,8 @@ pub struct Object {
         default
     )]
     pub policy: Option<Clause>,
-    /// The Object's address
-    pub address: bitcoin::Address,
+    /// The Object's address, or a Script if no address is possible
+    pub address: ExtendedAddress,
     /// The Object's descriptor -- if there is one known/available
     #[serde(
         rename = "known_descriptor",
@@ -107,7 +110,7 @@ impl Object {
             ctv_to_tx: HashMap::new(),
             suggested_txs: HashMap::new(),
             policy: None,
-            address,
+            address: address.into(),
             descriptor: None,
             amount_range: a.unwrap_or_else(|| {
                 let mut a = AmountRange::new();
@@ -128,6 +131,20 @@ impl Object {
         bitcoin::Address::from_script(&script, net)
             .ok_or_else(|| ObjectError::UnknownScriptType(script.clone()))
             .map(|m| Object::from_address(m, a))
+    }
+    /// create an op_return of no more than 40 bytes
+    pub fn from_op_return<'a, I: ?Sized>(data: &'a I) -> Result<Object, ObjectError>
+    where
+        &'a [u8]: From<&'a I>,
+    {
+        Ok(Object {
+            ctv_to_tx: HashMap::new(),
+            suggested_txs: HashMap::new(),
+            policy: None,
+            address: ExtendedAddress::make_op_return(data)?,
+            descriptor: None,
+            amount_range: AmountRange::new(),
+        })
     }
 
     /// bind attaches an Object to a specific UTXO and returns a vec of transactions and

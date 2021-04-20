@@ -97,7 +97,7 @@ impl Context {
             ctv_to_tx: HashMap::new(),
             suggested_txs: HashMap::new(),
             policy: None,
-            address: d.address(bitcoin::Network::Bitcoin).unwrap(),
+            address: d.address(bitcoin::Network::Bitcoin).unwrap().into(),
             descriptor: Some(d),
             amount_range: a.unwrap_or_else(|| {
                 let mut a = AmountRange::new();
