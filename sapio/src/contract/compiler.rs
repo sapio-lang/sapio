@@ -272,15 +272,17 @@ where
         };
 
         let miniscript = policy.compile().map_err(Into::<CompilationError>::into)?;
-        let address = bitcoin::Address::p2wsh(&miniscript.encode(), ctx.network);
-        let descriptor = Some(Descriptor::new_wsh(miniscript)?);
+        let descriptor = Descriptor::new_wsh(miniscript)?;
+        let address = descriptor.address(ctx.network)?.into();
+        let descriptor = Some(descriptor);
+        let policy = Some(policy);
 
         Ok(Compiled {
             ctv_to_tx,
             suggested_txs,
-            address: address.into(),
+            address,
             descriptor,
-            policy: Some(policy),
+            policy,
             amount_range,
         })
     }
