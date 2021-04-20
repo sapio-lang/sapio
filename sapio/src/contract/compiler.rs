@@ -278,7 +278,7 @@ where
         Ok(Compiled {
             ctv_to_tx,
             suggested_txs,
-            address: Ok(address),
+            address: address.into(),
             descriptor,
             policy: Some(policy),
             amount_range,

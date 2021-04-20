@@ -5,6 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Object is the output of Sapio Compilation & can be linked to a specific coin
+use crate::util::extended_address::ExtendedAddress;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
 use ::miniscript::{self, *};
@@ -89,7 +90,7 @@ pub struct Object {
     )]
     pub policy: Option<Clause>,
     /// The Object's address, or a Script if no address is possible
-    pub address: Result<bitcoin::Address, bitcoin::Script>,
+    pub address: ExtendedAddress,
     /// The Object's descriptor -- if there is one known/available
     #[serde(
         rename = "known_descriptor",
@@ -109,7 +110,7 @@ impl Object {
             ctv_to_tx: HashMap::new(),
             suggested_txs: HashMap::new(),
             policy: None,
-            address: Ok(address),
+            address: address.into(),
             descriptor: None,
             amount_range: a.unwrap_or_else(|| {
                 let mut a = AmountRange::new();
@@ -136,15 +137,11 @@ impl Object {
     where
         &'a [u8]: From<&'a I>,
     {
-        let slice: &[u8] = data.into();
-        if slice.len() > 40 {
-            return Err(ObjectError::OpReturnTooLong);
-        }
         Ok(Object {
             ctv_to_tx: HashMap::new(),
             suggested_txs: HashMap::new(),
             policy: None,
-            address: Err(bitcoin::Script::new_op_return(slice)),
+            address: ExtendedAddress::make_op_return(data)?,
             descriptor: None,
             amount_range: AmountRange::new(),
         })
