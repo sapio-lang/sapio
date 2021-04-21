@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 /// Context is used to track statet during compilation such as remaining value.
 /// Context type is not copyable/clonable externally
+#[derive(Clone)]
 pub struct Context {
     /* TODO: Add Context Fields! */
     available_funds: Amount,
