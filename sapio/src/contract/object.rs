@@ -5,9 +5,9 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Object is the output of Sapio Compilation & can be linked to a specific coin
-use crate::util::extended_address::ExtendedAddress;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
+use crate::util::extended_address::ExtendedAddress;
 use ::miniscript::{self, *};
 
 use bitcoin::hashes::sha256;
