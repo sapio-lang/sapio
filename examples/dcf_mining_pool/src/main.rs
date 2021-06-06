@@ -121,7 +121,7 @@ impl Coordinator {
             v.await;
         }
 
-        let mut tip = *tip_in;
+        let tip = *tip_in;
         let mut known_participants = vec![];
         // ensure our cache has all relevant info
         for _ in 0..n {
