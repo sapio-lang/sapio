@@ -76,7 +76,7 @@ where
 
 impl StakerInterface for Staker<Operational> {
     guard! {
-        fn begin_redeem_key(self, ctx) {
+        fn begin_redeem_key(self, _ctx) {
             Clause::Key(self.redeeming_key)
         }
     }
@@ -91,7 +91,7 @@ impl StakerInterface for Staker<Operational> {
         }
     }
     guard! {
-        fn staking_key(self, ctx) {
+        fn staking_key(self, _ctx) {
             Clause::Key(self.signing_key)
         }
     }
@@ -99,12 +99,12 @@ impl StakerInterface for Staker<Operational> {
 
 impl StakerInterface for Staker<Closing> {
     guard! {
-        fn finish_redeem_key(self, ctx) {
+        fn finish_redeem_key(self, _ctx) {
             Clause::And(vec![Clause::Key(self.redeeming_key), self.timeout.into()])
         }
     }
     guard! {
-        fn staking_key(self, ctx) {
+        fn staking_key(self, _ctx) {
             Clause::Key(self.signing_key)
         }
     }

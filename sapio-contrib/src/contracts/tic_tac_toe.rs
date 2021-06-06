@@ -73,7 +73,7 @@ pub struct TicTacToe {
 
 impl TicTacToe {
     compile_if! {
-        fn no_winner(self, ctx) {
+        fn no_winner(self, _ctx) {
             if self.board.winner().is_none() {
                 ConditionalCompileType::Required
             } else {
@@ -83,7 +83,7 @@ impl TicTacToe {
     }
 
     compile_if! {
-        fn winner(self, ctx) {
+        fn winner(self, _ctx) {
             if self.board.winner().is_none() {
                 ConditionalCompileType::Never
             } else {

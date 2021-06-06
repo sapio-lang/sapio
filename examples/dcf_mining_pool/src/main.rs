@@ -125,7 +125,7 @@ impl Coordinator {
         let mut tip = *tip_in;
         let mut known_participants = vec![];
         // ensure our cache has all relevant info
-        for i in 0..n {
+        for _ in 0..n {
             let note = self.cache[&tip].clone();
             let note_r = note.read().unwrap();
             if note_r.participated == Some(true) {

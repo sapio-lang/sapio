@@ -189,25 +189,25 @@ impl<T: State> Channel<T>
 where
     Channel<T>: Contract,
 {
-    guard! {fn timeout(self, ctx) { Clause::Older(100) }}
-    guard! {cached fn signed(self, ctx) {Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])}}
+    guard! {fn timeout(self, _ctx) { Clause::Older(100) }}
+    guard! {cached fn signed(self, _ctx) {Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])}}
 
     finish! {
         guarded_by: [Self::signed]
-        fn update_state_a(self, ctx, o) {
+        fn update_state_a(self, _ctx, _o) {
             Ok(Box::new(std::iter::empty()))
         }
     }
     finish! {
         guarded_by: [Self::signed]
-        fn update_state_b(self, ctx, o){
+        fn update_state_b(self, _ctx, _o){
             Ok(Box::new(std::iter::empty()))
         }
     }
 
     finish! {
         guarded_by: [Self::signed]
-        fn cooperate(self, ctx, o) {
+        fn cooperate(self, _ctx, _o) {
             Ok(Box::new(std::iter::empty()))
         }
     }

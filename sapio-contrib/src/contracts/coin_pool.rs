@@ -63,7 +63,7 @@ impl CoinPool {
     }
     guard! {
         /// everyone has signed off on the transaction
-        fn all_approve(self, ctx) {
+        fn all_approve(self, _ctx) {
             Clause::Threshold(self.clauses.len(), self.clauses.clone())
         }
     }

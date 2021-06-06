@@ -85,7 +85,7 @@ impl PayThisThing for PayoutBundle {
 }
 impl PayoutBundle {
     guard! {
-        fn cooperate(self, ctx) {
+        fn cooperate(self, _ctx) {
            let v : Vec<_>= self.get_keys().into_iter().map(Clause::Key).collect();
            Clause::Threshold(v.len(), v)
         }
@@ -115,7 +115,7 @@ impl Contract for PayoutBundle {
 }
 impl MiningPayout {
     guard! {
-        fn cooperate(self, ctx) {
+        fn cooperate(self, _ctx) {
            let v : Vec<_>= self.participants.iter().map(|x|Clause::Key(x.key.clone())).collect();
            Clause::Threshold(v.len(), v)
         }

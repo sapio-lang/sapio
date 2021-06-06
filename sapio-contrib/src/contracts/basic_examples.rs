@@ -21,8 +21,8 @@ struct ExampleA {
 }
 
 impl ExampleA {
-    guard! {fn timeout(self, ctx) { Clause::Older(100) }}
-    guard! {cached fn signed(self, ctx) {Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])}}
+    guard! {fn timeout(self, _ctx) { Clause::Older(100) }}
+    guard! {cached fn signed(self, _ctx) {Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])}}
 }
 
 impl Contract for ExampleA {
@@ -63,7 +63,7 @@ struct ExampleB<T: BState> {
 }
 
 impl<T: BState> ExampleB<T> {
-    guard! {cached fn all_signed(self, ctx) {Clause::Threshold(T::get_n(self.threshold, self.participants.len()as u8) as usize, self.participants.iter().map(|k| Clause::Key(*k)).collect())}}
+    guard! {cached fn all_signed(self, _ctx) {Clause::Threshold(T::get_n(self.threshold, self.participants.len()as u8) as usize, self.participants.iter().map(|k| Clause::Key(*k)).collect())}}
 }
 
 impl ExampleBThen for ExampleB<Finish> {}
@@ -106,13 +106,13 @@ pub struct ExampleCompileIf {
 }
 
 impl ExampleCompileIf {
-    guard! { fn cooperate(self, ctx) { Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)]) } }
+    guard! { fn cooperate(self, _ctx) { Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)]) } }
     compile_if!(
         /// `should_escrow` disables any branch depending on it. If not set,
         /// it checks to make the branch required. This is done in a conflict-free way;
         /// that is that  if escrow_required_no_conflict_disabled is set and escrow_disable
         /// is set there is no problem.
-        fn should_escrow(self, ctx) {
+        fn should_escrow(self, _ctx) {
             if self.escrow_disable {
                 ConditionalCompileType::Never
             } else {
@@ -128,7 +128,7 @@ impl ExampleCompileIf {
         /// `must_escrow` requires that any depending branch be taken.
         /// It may conflict with escrow_disable, if they are both set then
         /// compilation will fail.
-        fn must_escrow(self, ctx) {
+        fn must_escrow(self, _ctx) {
             if self.escrow_required_conflict_disabled {
                 ConditionalCompileType::Required
             } else {
@@ -139,7 +139,7 @@ impl ExampleCompileIf {
     compile_if! {
         /// `escrow_nullable_ok` tells the compiler if it is OK if dependents on this
         /// condition return 0 txiter items -- if so, the entire branch is pruned.
-        fn escrow_nullable_ok(self, ctx) {
+        fn escrow_nullable_ok(self, _ctx) {
             if self.escrow_nullable {
                 ConditionalCompileType::Nullable
             } else {
@@ -150,7 +150,7 @@ impl ExampleCompileIf {
 
     compile_if! {
         /// `escrow_error_chk` fails with the provided error, if any
-        fn escrow_error_chk(self, ctx) {
+        fn escrow_error_chk(self, _ctx) {
             if let Some(e) = &self.escrow_error {
                 let mut l = LinkedList::new();
                 l.push_front(e.clone());
