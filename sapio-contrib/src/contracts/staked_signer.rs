@@ -5,7 +5,6 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! A Contract that enables a staked signing protocol
-use bitcoin::util::amount::CoinAmount;
 use bitcoin::PublicKey;
 use sapio::contract::*;
 use sapio::*;
@@ -13,7 +12,6 @@ use sapio_base::timelocks::AnyRelTimeLock;
 use sapio_base::Clause;
 use schemars::*;
 use serde::*;
-use std::convert::TryInto;
 use std::marker::PhantomData;
 
 /// State where stakes should be recognized for voting

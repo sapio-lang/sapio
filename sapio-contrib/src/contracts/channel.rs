@@ -5,7 +5,6 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! An example of how one might begin building a payment channel contract in Sapio
-use contract::actions::*;
 use contract::*;
 use sapio::*;
 use sapio_base::Clause;
@@ -13,8 +12,7 @@ use sapio_base::Clause;
 use bitcoin;
 use bitcoin::secp256k1::*;
 use bitcoin::util::amount::{Amount, CoinAmount};
-use rand::rngs::OsRng;
-use schemars::{schema_for, JsonSchema};
+use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 

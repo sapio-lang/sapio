@@ -13,7 +13,6 @@ use sapio_base::timelocks::RelHeight;
 use schemars::*;
 use serde::*;
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::sync::Arc;
 use std::sync::Mutex;
 

@@ -5,16 +5,11 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! coin_pool has a contract `CoinPool` for sharing a UTXO
-use super::undo_send::UndoSendInternal;
-use bitcoin::util::amount::CoinAmount;
 use bitcoin::Amount;
 use sapio_base::Clause;
 
 use sapio::contract::*;
 use sapio::*;
-use schemars::*;
-use serde::*;
-use std::convert::{TryFrom, TryInto};
 
 use sapio_base::timelocks::AnyRelTimeLock;
 use std::sync::{Arc, Mutex};

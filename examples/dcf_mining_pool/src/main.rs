@@ -7,7 +7,6 @@ use crate::contract::Context;
 use crate::miner_payout::MiningPayout;
 use crate::miner_payout::PoolShare;
 use bitcoin::hash_types::BlockHash;
-use bitcoin::Address;
 use bitcoin::Amount;
 use bitcoin::Block;
 use bitcoin::PublicKey;
@@ -155,7 +154,7 @@ impl Coordinator {
     }
 }
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 struct MiningPool {
     blocks: Vec<Arc<RwLock<BlockNotes>>>,
     tip: Arc<RwLock<BlockNotes>>,
