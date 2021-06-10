@@ -12,7 +12,7 @@ use bitcoin::Amount;
 pub use plugin_handle::PluginHandle;
 pub use plugin_handle::WasmPluginHandle;
 use sapio::contract::Compiled;
-use sapio_ctv_emulator_trait::{CTVEmulator, NullEmulator};
+use sapio_ctv_emulator_trait::CTVEmulator;
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::io::Write;

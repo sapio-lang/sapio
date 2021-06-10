@@ -5,7 +5,6 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! A Contract that enables a staked signing protocol
-use bitcoin::util::amount::CoinAmount;
 use bitcoin::PublicKey;
 use sapio::contract::*;
 use sapio::*;
@@ -13,7 +12,6 @@ use sapio_base::timelocks::AnyRelTimeLock;
 use sapio_base::Clause;
 use schemars::*;
 use serde::*;
-use std::convert::TryInto;
 use std::marker::PhantomData;
 
 /// State where stakes should be recognized for voting
@@ -76,7 +74,7 @@ where
 
 impl StakerInterface for Staker<Operational> {
     guard! {
-        fn begin_redeem_key(self, ctx) {
+        fn begin_redeem_key(self, _ctx) {
             Clause::Key(self.redeeming_key)
         }
     }
@@ -91,7 +89,7 @@ impl StakerInterface for Staker<Operational> {
         }
     }
     guard! {
-        fn staking_key(self, ctx) {
+        fn staking_key(self, _ctx) {
             Clause::Key(self.signing_key)
         }
     }
@@ -99,12 +97,12 @@ impl StakerInterface for Staker<Operational> {
 
 impl StakerInterface for Staker<Closing> {
     guard! {
-        fn finish_redeem_key(self, ctx) {
+        fn finish_redeem_key(self, _ctx) {
             Clause::And(vec![Clause::Key(self.redeeming_key), self.timeout.into()])
         }
     }
     guard! {
-        fn staking_key(self, ctx) {
+        fn staking_key(self, _ctx) {
             Clause::Key(self.signing_key)
         }
     }

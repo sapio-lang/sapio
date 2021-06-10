@@ -5,7 +5,6 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! An example of how one might begin building a payment channel contract in Sapio
-use contract::actions::*;
 use contract::*;
 use sapio::*;
 use sapio_base::Clause;
@@ -13,8 +12,7 @@ use sapio_base::Clause;
 use bitcoin;
 use bitcoin::secp256k1::*;
 use bitcoin::util::amount::{Amount, CoinAmount};
-use rand::rngs::OsRng;
-use schemars::{schema_for, JsonSchema};
+use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 
@@ -189,25 +187,25 @@ impl<T: State> Channel<T>
 where
     Channel<T>: Contract,
 {
-    guard! {fn timeout(self, ctx) { Clause::Older(100) }}
-    guard! {cached fn signed(self, ctx) {Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])}}
+    guard! {fn timeout(self, _ctx) { Clause::Older(100) }}
+    guard! {cached fn signed(self, _ctx) {Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])}}
 
     finish! {
         guarded_by: [Self::signed]
-        fn update_state_a(self, ctx, o) {
+        fn update_state_a(self, _ctx, _o) {
             Ok(Box::new(std::iter::empty()))
         }
     }
     finish! {
         guarded_by: [Self::signed]
-        fn update_state_b(self, ctx, o){
+        fn update_state_b(self, _ctx, _o){
             Ok(Box::new(std::iter::empty()))
         }
     }
 
     finish! {
         guarded_by: [Self::signed]
-        fn cooperate(self, ctx, o) {
+        fn cooperate(self, _ctx, _o) {
             Ok(Box::new(std::iter::empty()))
         }
     }

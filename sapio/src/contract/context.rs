@@ -10,7 +10,7 @@ use crate::util::amountrange::AmountRange;
 use bitcoin::Network;
 use miniscript::Descriptor;
 use miniscript::DescriptorTrait;
-use sapio_ctv_emulator_trait::{CTVEmulator, NullEmulator};
+use sapio_ctv_emulator_trait::CTVEmulator;
 use std::collections::HashMap;
 use std::sync::Arc;
 /// Context is used to track statet during compilation such as remaining value.

@@ -5,7 +5,6 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! tools for caching compilations of wasm plugins to disk
-use std::ffi::OsString;
 use std::path::PathBuf;
 use wasmer::{DeserializeError, Module, SerializeError, Store};
 use wasmer_cache::{Cache, FileSystemCache, Hash};

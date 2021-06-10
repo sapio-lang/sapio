@@ -6,7 +6,7 @@
 
 use bitcoin::consensus::serialize;
 use bitcoin::consensus::Decodable;
-use bitcoin::hashes::{hex::ToHex, Hash};
+use bitcoin::hashes::Hash;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::bip32::ExtendedPrivKey;
 use bitcoin::util::bip32::ExtendedPubKey;
@@ -34,7 +34,6 @@ use std::sync::Arc;
 #[deny(missing_docs)]
 use tokio::io::AsyncReadExt;
 use util::*;
-use wasmer::*;
 
 pub mod config;
 mod util;
@@ -175,7 +174,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => unreachable!(),
         },
         Some(("contract", matches)) => match matches.subcommand() {
-            Some(("list", args)) => {
+            Some(("list", _args)) => {
                 let plugins = WasmPluginHandle::load_all_keys(
                     "org".into(),
                     "judica".into(),

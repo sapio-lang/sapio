@@ -13,7 +13,6 @@ use sapio_base::timelocks::RelHeight;
 use schemars::*;
 use serde::*;
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -73,7 +72,7 @@ pub struct TicTacToe {
 
 impl TicTacToe {
     compile_if! {
-        fn no_winner(self, ctx) {
+        fn no_winner(self, _ctx) {
             if self.board.winner().is_none() {
                 ConditionalCompileType::Required
             } else {
@@ -83,7 +82,7 @@ impl TicTacToe {
     }
 
     compile_if! {
-        fn winner(self, ctx) {
+        fn winner(self, _ctx) {
             if self.board.winner().is_none() {
                 ConditionalCompileType::Never
             } else {
