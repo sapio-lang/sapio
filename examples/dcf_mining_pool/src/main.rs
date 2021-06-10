@@ -37,7 +37,7 @@ impl BlockNotes {
             for out in coinbase.output.iter() {
                 if out.script_pubkey.is_op_return() {
                     match out.script_pubkey.as_bytes() {
-                        [OP_RETURN, 123, 45, 67, 89, tail @ ..] => {
+                        [106, 123, 45, 67, 89, tail @ ..] => {
                             if tail.len() == 33 {
                                 key = PublicKey::from_slice(tail).ok();
                                 if key.is_some() {
