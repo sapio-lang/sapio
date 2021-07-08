@@ -31,7 +31,7 @@ impl StakingState for Closing {}
 /// During it's lifetime, many things can be signed with signing_key,
 /// but should the key ever leak (e.g., via nonce reuse) the bonded
 /// funds can be burned.
-/// 
+///
 /// Burning is important v.s. miner fee because otherwise the staker
 /// can bribe (or be a miner themselves) to cheat.
 #[derive(JsonSchema, Deserialize)]
@@ -52,17 +52,17 @@ where
     Self: Sized,
 {
     guard! {
-        /// The key used to sign messages
-        staking_key}
+    /// The key used to sign messages
+    staking_key}
     guard! {
-        /// the clause to begin a close process
-        begin_redeem_key}
+    /// the clause to begin a close process
+    begin_redeem_key}
     guard! {
-        /// the clause to finish a close process 
-        finish_redeem_key}
+    /// the clause to finish a close process
+    finish_redeem_key}
     then! {
-        /// The transition from Operational to Closing
-        begin_redeem}
+    /// The transition from Operational to Closing
+    begin_redeem}
     then! {
         /// Cheating can be reported at any time
         guarded_by: [Self::staking_key]
