@@ -77,6 +77,8 @@ mod alias {
     pub type RelTime = LockTime<Rel, MTP>;
     pub type AbsHeight = LockTime<Abs, Height>;
     pub type AbsTime = LockTime<Abs, MTP>;
+    pub const BIG_PAST_DATE : AbsTime = LockTime(1_600_000_000u32, PhantomData);
+    pub const START_OF_TIME : AbsTime = LockTime(500_000_000, PhantomData);
 }
 pub use alias::*;
 
@@ -156,7 +158,7 @@ mod trait_impls {
     impl TryFrom<u32> for AbsTime {
         type Error = LockTimeError;
         fn try_from(t: u32) -> Result<Self, Self::Error> {
-            if t < 500_000_000 {
+            if t < START_OF_TIME.get() {
                 Err(LockTimeError::TimeTooFarInPast(Duration::from_secs(
                     t as u64,
                 )))
@@ -168,7 +170,7 @@ mod trait_impls {
     impl TryFrom<u32> for AbsHeight {
         type Error = LockTimeError;
         fn try_from(u: u32) -> Result<Self, Self::Error> {
-            if u < 500_000_000 {
+            if u < START_OF_TIME.get() {
                 Ok(Self(u, Default::default()))
             } else {
                 Err(LockTimeError::HeightTooHigh(u))
