@@ -8,7 +8,7 @@ BIP-119 with signatures.
 
 ## The Default Emulator
 
-Sapio CTV Emulators defines implementations of a local emualator that can be
+Sapio CTV Emulators defines implementations of a local emulator that can be
 used by sapio compiler library users. To use such an emulator, a user can
 generate a seed and create a contract. After creating the contract and
 binding it to a specific UTXO, a user should be able to delete the seed,
@@ -58,7 +58,7 @@ This derivation path is then applied to K to generate a key C. This key is
 added with a CheckSig(SIGHASH_ALL) to the script in place of a CTV clause.
 
 Then, when a user desires to spend an output with such a key, they create the
-entire transaction they want to occur and send it to the the emualtor server.
+entire transaction they want to occur and send it to the the emulator server.
 
 Without even checking to see that the key is used in the transaction, the
 server generates the template hash H' (which should equal H) and then signs,
