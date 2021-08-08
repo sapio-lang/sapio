@@ -77,8 +77,8 @@ mod alias {
     pub type RelTime = LockTime<Rel, MTP>;
     pub type AbsHeight = LockTime<Abs, Height>;
     pub type AbsTime = LockTime<Abs, MTP>;
-    pub const BIG_PAST_DATE : AbsTime = LockTime(1_600_000_000u32, PhantomData);
-    pub const START_OF_TIME : AbsTime = LockTime(500_000_000, PhantomData);
+    pub const BIG_PAST_DATE: AbsTime = LockTime(1_600_000_000u32, PhantomData);
+    pub const START_OF_TIME: AbsTime = LockTime(500_000_000, PhantomData);
 }
 pub use alias::*;
 
