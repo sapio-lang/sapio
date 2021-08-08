@@ -1,6 +1,6 @@
 # Guard
 
-Guards are central to any Sapio contract. The allow declaring a piece of
+Guards are central to any Sapio contract. They allow declaring a piece of
 miniscript logic.
 
 These guards can either be used standalone as unlocking conditions or as a
