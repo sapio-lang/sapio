@@ -607,7 +607,7 @@ in the future.</p>
 </tbody></table>
 <p>This section will teach you then ins and outs of each.</p>
 <h1 id="guard"><a class="header" href="#guard">Guard</a></h1>
-<p>Guards are central to any Sapio contract. The allow declaring a piece of
+<p>Guards are central to any Sapio contract. They allow declaring a piece of
 miniscript logic.</p>
 <p>These guards can either be used standalone as unlocking conditions or as a
 requirement on a <code>finish!</code> or <code>then!</code> function.</p>
@@ -964,7 +964,7 @@ BIP-119, and that might take a while to get merged. To get around this, Sapio
 provides some tools to enable similar functionality today by emulating
 BIP-119 with signatures.</p>
 <h2 id="the-default-emulator"><a class="header" href="#the-default-emulator">The Default Emulator</a></h2>
-<p>Sapio CTV Emulators defines implementations of a local emualator that can be
+<p>Sapio CTV Emulators defines implementations of a local emulator that can be
 used by sapio compiler library users. To use such an emulator, a user can
 generate a seed and create a contract. After creating the contract and
 binding it to a specific UTXO, a user should be able to delete the seed,
@@ -1000,7 +1000,7 @@ u8 for non-hardened derivation (see <code>hash_to_child_vec</code>).</p>
 <p>This derivation path is then applied to K to generate a key C. This key is
 added with a CheckSig(SIGHASH_ALL) to the script in place of a CTV clause.</p>
 <p>Then, when a user desires to spend an output with such a key, they create the
-entire transaction they want to occur and send it to the the emualtor server.</p>
+entire transaction they want to occur and send it to the the emulator server.</p>
 <p>Without even checking to see that the key is used in the transaction, the
 server generates the template hash H' (which should equal H) and then signs,
 returning the signature to the client.</p>
@@ -1135,7 +1135,7 @@ world.</p>
 <p>How should you release it? How should you use it?</p>
 <p>This section covers various ways to deploy and use Sapio contracts.</p>
 <p>In general, it is important to make the code available in an open source way,
-so others can integrate and use your contracts. Rust's <a href="crates.io">crates</a>
+so others can integrate and use your contracts. Rust's <a href="https://crates.io">crates</a>
 system provides a natural place to publish for the time being, although
 in the future we may build a Sapio specific package manager as smart contracts
 have some unique differences.</p>
