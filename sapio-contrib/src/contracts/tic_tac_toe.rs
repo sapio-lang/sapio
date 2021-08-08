@@ -35,7 +35,7 @@ struct Board([[Option<Tile>; 3]; 3]);
 
 impl Board {
     fn winner(&self) -> Option<Tile> {
-        for tile in [Some(Tile::X), Some(Tile::O)].into_iter() {
+        for tile in &[Some(Tile::X), Some(Tile::O)] {
             for i in 0..3 {
                 if self.0[i].iter().all(|t| *t == *tile) {
                     return *tile;
