@@ -12,7 +12,7 @@ use sapio_base::Clause;
 use bitcoin;
 use bitcoin::secp256k1::*;
 use bitcoin::util::amount::{Amount, CoinAmount};
-use schemars::{JsonSchema, schema_for};
+use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 
@@ -24,10 +24,10 @@ use std::convert::TryInto;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ::rand::rngs::OsRng;
     use miniscript::Descriptor;
     use miniscript::DescriptorTrait;
     use sapio_ctv_emulator_trait::CTVAvailable;
-    use ::rand::rngs::OsRng;
     #[test]
     fn it_works() {
         db_serde::register_db("mock".to_string(), |_s| Arc::new(Mutex::new(MockDB {})));
