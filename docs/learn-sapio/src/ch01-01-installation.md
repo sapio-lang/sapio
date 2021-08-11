@@ -11,6 +11,16 @@ Follow this quickstart guide to get going.
 rustup target add wasm32-unknown-unknown
 ```
 1.  Get the [wasm-pack](https://rustwasm.github.io/wasm-pack/) tool.
+
+| Tip: On an M1 Mac you may need to do `cargo install wasm-pack` and `brew install llvm`.
+| Then use:
+| ```
+|    export PATH="/opt/homebrew/opt/llvm/bin:$PATH".
+|    export CC=/opt/homebrew/opt/llvm/bin/clang
+|    export AR=/opt/homebrew/opt/llvm/bin/llvm-ar
+|    rustup toolchain install nightly
+|    rustup toolchain default nightly
+|```
 1.  Clone this repo: 
 ```
 git clone git@github.com:sapio-lang/sapio.git && cd sapio
