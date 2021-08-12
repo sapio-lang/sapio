@@ -35,6 +35,7 @@ pub struct TreePay {
     pub radix: usize,
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
     #[schemars(with = "u64")]
+    /// The amount of fees per transaction to allocate.
     pub fee_sats_per_tx: bitcoin::util::amount::Amount,
 }
 
@@ -97,4 +98,20 @@ impl Contract for TreePay {
     declare! {then, Self::expand}
     declare! {non updatable}
 }
-REGISTER![TreePay];
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+enum Versions{
+    Basic(TreePay),
+    Advanced(TreePay,
+        /// # A Ranomd Field For Example
+        u8),
+}
+impl From<Versions> for TreePay {
+    fn from(v:Versions) -> TreePay {
+        match v {
+            Versions::Basic(v) => v,
+            Versions::Advanced(v, _) => v,
+        }
+    }
+}
+REGISTER![[TreePay, Versions], "logo.png"];

@@ -42,6 +42,8 @@ pub struct HostEnvironmentInner {
     pub get_api: LazyInit<NativeFunc<(), i32>>,
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_get_name"))]
     pub get_name: LazyInit<NativeFunc<(), i32>>,
+    #[wasmer(export(name = "sapio_v1_wasm_plugin_client_get_logo"))]
+    pub get_logo: LazyInit<NativeFunc<(), i32>>,
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_drop_allocation"))]
     pub forget: LazyInit<NativeFunc<i32, ()>>,
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_create"))]
@@ -144,11 +146,11 @@ mod exports {
                 .await
                 .ok()
                 .and_then(|sph| {
-                    sph.create(&CreateArgs(
-                        String::from_utf8_lossy(&v).to_owned().to_string(),
-                        net,
-                        Amount::from_sat(amt as u64),
-                    ))
+                    sph.create(&CreateArgs {
+                        arguments: String::from_utf8_lossy(&v).to_owned().to_string(),
+                        network: net,
+                        amount: Amount::from_sat(amt as u64),
+                    })
                     .ok()
                 })
                 .map(|comp| tx.send(comp))

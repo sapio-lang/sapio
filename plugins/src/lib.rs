@@ -20,15 +20,38 @@ where
     let s = String::deserialize(d)?;
     serde_json::from_str(&s).map_err(serde::de::Error::custom)
 }
-#[derive(Serialize, Deserialize)]
-pub struct CreateArgs<S: for<'t> Deserialize<'t>>(
-    /// We use json_wrapped_string to encode S to allow for a client to pass in
-    /// CreateArgs without knowing the underlying type S.
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(remote = "bitcoin::Network")]
+pub enum NetworkDef {
+    /// Classic Bitcoin
+    Bitcoin,
+    /// Bitcoin's testnet
+    Testnet,
+    /// Bitcoin's signet
+    Signet,
+    /// Bitcoin's regtest
+    Regtest,
+}
+
+// We use json_wrapped_string to encode S to allow for a client to pass in
+// CreateArgs without knowing the underlying type S.
+
+/// # Arguments For Creating this Contract
+/// Provide this information to create an instance of a contract
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct CreateArgs<S: for<'t> Deserialize<'t>> {
     #[serde(deserialize_with = "json_wrapped_string")]
-    pub S,
-    pub bitcoin::Network,
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")] pub bitcoin::util::amount::Amount,
-);
+    /// # The Main Contract Arguments
+    pub arguments: S,
+    #[serde(with = "NetworkDef")]
+    /// # The Network the contract should be created for.
+    pub network: bitcoin::Network,
+    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    #[schemars(with = "f64")]
+    /// # The Amount of Funds Available to the Contract as Bitcoin.
+    pub amount: bitcoin::util::amount::Amount,
+}
 
 #[cfg(feature = "host")]
 pub mod host;
