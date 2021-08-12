@@ -226,6 +226,11 @@ Follow this quickstart guide to get going.</p>
 </code></pre>
 <ol>
 <li>Get the <a href="https://rustwasm.github.io/wasm-pack/">wasm-pack</a> tool.</li>
+</ol>
+<p>| Tip: On an M1 Mac you may need to do <code>cargo install wasm-pack</code> and <code>brew install llvm</code>.
+| Then use:
+| <code> |    export PATH=&quot;/opt/homebrew/opt/llvm/bin:$PATH&quot;. |    export CC=/opt/homebrew/opt/llvm/bin/clang |    export AR=/opt/homebrew/opt/llvm/bin/llvm-ar |    rustup toolchain install nightly |    rustup toolchain default nightly |</code></p>
+<ol>
 <li>Clone this repo: </li>
 </ol>
 <pre><code>git clone git@github.com:sapio-lang/sapio.git &amp;&amp; cd sapio
@@ -273,6 +278,7 @@ use sapio::contract::*;
 use sapio::*;
 use sapio_base::timelocks::RelTime;
 use sapio_base::Clause;
+use std::convert::{TryFrom, TryInto};
 pub struct TrustlessEscrow {
     alice: bitcoin::PublicKey,
     bob: bitcoin::PublicKey,
