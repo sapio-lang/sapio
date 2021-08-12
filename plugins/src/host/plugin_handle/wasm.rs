@@ -113,6 +113,7 @@ impl WasmPluginHandle {
             memory: LazyInit::new(),
             get_api: LazyInit::new(),
             get_name: LazyInit::new(),
+            get_logo: LazyInit::new(),
             forget: LazyInit::new(),
             create: LazyInit::new(),
             init: LazyInit::new(),
@@ -239,6 +240,19 @@ impl PluginHandle for WasmPluginHandle {
             .lock()
             .unwrap()
             .get_name_ref()
+            .ok_or("Uninitialized")?
+            .call()?;
+        let v = self.read_to_vec(p)?;
+        self.forget(p)?;
+        Ok(String::from_utf8_lossy(&v).to_string())
+    }
+
+    fn get_logo(&self) -> Result<String, Box<dyn Error>> {
+        let p = self
+            .env
+            .lock()
+            .unwrap()
+            .get_logo_ref()
             .ok_or("Uninitialized")?
             .call()?;
         let v = self.read_to_vec(p)?;

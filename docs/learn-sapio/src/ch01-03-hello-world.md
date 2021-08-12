@@ -15,6 +15,7 @@ use sapio::contract::*;
 use sapio::*;
 use sapio_base::timelocks::RelTime;
 use sapio_base::Clause;
+use std::convert::{TryFrom, TryInto};
 pub struct TrustlessEscrow {
     alice: bitcoin::PublicKey,
     bob: bitcoin::PublicKey,

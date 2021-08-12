@@ -8,10 +8,11 @@
 use super::*;
 /// The `Plugin` trait is used to provide bindings for a WASM Plugin.
 /// It's not intended to be used internally, just as bindings.
-pub trait Plugin: JsonSchema + Sized + for<'a> Deserialize<'a> + Compilable {
+pub trait Plugin: JsonSchema + Sized + for<'a> Deserialize<'a> {
+    type ToType: Compilable + From<Self>;
     /// gets the jsonschema for the plugin type, which is the API for calling create.
     fn get_api_inner() -> *mut c_char {
-        encode_json(&schemars::schema_for!(Self))
+        encode_json(&schemars::schema_for!(CreateArgs::<Self>))
     }
 
     /// creates an instance of the plugin from a json pointer and outputs a result pointer
@@ -25,15 +26,24 @@ pub trait Plugin: JsonSchema + Sized + for<'a> Deserialize<'a> + Compilable {
     }
     unsafe fn create_result(c: *mut c_char) -> Result<String, Box<dyn Error>> {
         let s = CString::from_raw(c);
-        let CreateArgs::<Self>(s, net, amt) = serde_json::from_slice(s.to_bytes())?;
-        let ctx = Context::new(net, amt, Arc::new(client::WasmHostEmulator));
-        Ok(serde_json::to_string_pretty(&s.compile(&ctx)?)?)
+        let CreateArgs::<Self> {
+            arguments,
+            network,
+            amount,
+        } = serde_json::from_slice(s.to_bytes())?;
+        let ctx = Context::new(network, amount, Arc::new(client::WasmHostEmulator));
+        Ok(serde_json::to_string_pretty(
+            &Self::ToType::from(arguments).compile(&ctx)?,
+        )?)
     }
     /// binds this type to the wasm interface, must be called before the plugin can be used.
-    unsafe fn register(name: &'static str) {
+    unsafe fn register(name: &'static str, logo: Option<&'static [u8]>) {
         sapio_v1_wasm_plugin_client_get_create_arguments_ptr = Self::get_api_inner;
         sapio_v1_wasm_plugin_client_create_ptr = Self::create;
         sapio_plugin_name = name;
+        if let Some(logo) = logo {
+            sapio_plugin_logo = logo;
+        }
     }
 }
 
@@ -52,12 +62,26 @@ fn encode_json<S: Serialize>(s: &S) -> *mut c_char {
 /// U.B. to call REGISTER more than once because of the internal #[no_mangle]
 #[macro_export]
 macro_rules! REGISTER {
-    [$plugin:ident] => {
+    [$plugin:ident$(, $logo:expr)?] => {
+        REGISTER![[$plugin, $plugin]$(, $logo)*];
+    };
+    [[$to:ident,$plugin:ident]$(, $logo:expr)?] => {
         impl Plugin for $plugin {
+            type ToType = $to;
         }
         #[no_mangle]
         unsafe fn sapio_v1_wasm_plugin_entry_point() {
-            $plugin::register(stringify!($plugin));
+            $plugin::register(stringify!($plugin), optional_logo!($($logo)*));
         }
+    };
+}
+
+#[macro_export]
+macro_rules! optional_logo {
+    () => {
+        None
+    };
+    ($logo:expr) => {
+        Some(include_bytes!($logo))
     };
 }

@@ -28,6 +28,7 @@ use sapio_base::txindex::TxIndex;
 use sapio_base::txindex::TxIndexLogger;
 use sapio_base::util::CTVHash;
 use sapio_wasm_plugin::host::{PluginHandle, WasmPluginHandle};
+use sapio_wasm_plugin::CreateArgs;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -85,7 +86,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
             (@subcommand create =>
                 (about: "create a contract to a specific UTXO")
-                (@arg amount: +required "Amount to Send in BTC")
                 (@group from +required =>
                     (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
                     (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
@@ -98,6 +98,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             )
             (@subcommand api =>
                 (about: "Machine Readable API for a plugin, pipe into jq for pretty formatting.")
+                (@group from +required =>
+                    (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
+                    (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
+                )
+            )
+            (@subcommand logo =>
+                (about: "base64 encoded png image")
                 (@group from +required =>
                     (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
                     (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
@@ -361,8 +368,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     return Ok(());
                 }
-                let create_args =
-                    sapio_wasm_plugin::CreateArgs(params.to_string(), config.network, amt);
+
+                let create_args: CreateArgs<String> = serde_json::from_value(params)?;
                 let v = sph.create(&create_args)?;
                 println!("{}", serde_json::to_string(&v)?);
             }
@@ -379,6 +386,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .await?;
                 println!("{}", sph.get_api()?);
+            }
+            Some(("logo", args)) => {
+                let sph = WasmPluginHandle::new(
+                    "org".into(),
+                    "judica".into(),
+                    "sapio-cli".into(),
+                    &emulator,
+                    args.value_of("key"),
+                    args.value_of_os("file"),
+                    config.network,
+                    plugin_map,
+                )
+                .await?;
+                println!("{}", sph.get_logo()?);
             }
             Some(("info", args)) => {
                 let sph = WasmPluginHandle::new(
