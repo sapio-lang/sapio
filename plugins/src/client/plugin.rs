@@ -32,9 +32,9 @@ pub trait Plugin: JsonSchema + Sized + for<'a> Deserialize<'a> {
             amount,
         } = serde_json::from_slice(s.to_bytes())?;
         let ctx = Context::new(network, amount, Arc::new(client::WasmHostEmulator));
-        Ok(serde_json::to_string_pretty(
-            &Self::ToType::from(arguments).compile(&ctx)?,
-        )?)
+        let converted = Self::ToType::from(arguments);
+        let compiled = converted.compile(&ctx)?;
+        Ok(serde_json::to_string(&compiled)?)
     }
     /// binds this type to the wasm interface, must be called before the plugin can be used.
     unsafe fn register(name: &'static str, logo: Option<&'static [u8]>) {
@@ -49,7 +49,7 @@ pub trait Plugin: JsonSchema + Sized + for<'a> Deserialize<'a> {
 
 /// Helper function for encoding a JSON into WASM linear memory
 fn encode_json<S: Serialize>(s: &S) -> *mut c_char {
-    if let Ok(Ok(c)) = serde_json::to_string_pretty(s).map(CString::new) {
+    if let Ok(Ok(c)) = serde_json::to_string(s).map(CString::new) {
         c.into_raw()
     } else {
         0 as *mut c_char

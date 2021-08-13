@@ -208,8 +208,8 @@ impl WasmPluginHandle {
 }
 
 impl PluginHandle for WasmPluginHandle {
-    fn create(&self, c: &CreateArgs<String>) -> Result<Compiled, Box<dyn Error>> {
-        let arg_str = serde_json::to_string_pretty(c)?;
+    fn create(&self, c: &CreateArgs<serde_json::Value>) -> Result<Compiled, Box<dyn Error>> {
+        let arg_str = serde_json::to_string(c)?;
         let offset = self.pass_string(&arg_str)?;
         let create_func = {
             let env = self.env.lock().unwrap();

@@ -142,18 +142,15 @@ mod exports {
         let handle = tokio::runtime::Handle::current();
 
         handle.spawn(async move {
-            WasmPluginHandle::new(typ, org, proj, &emulator, Some(&h), None, net, Some(mmap))
-                .await
-                .ok()
-                .and_then(|sph| {
-                    sph.create(&CreateArgs {
-                        arguments: String::from_utf8_lossy(&v).to_owned().to_string(),
-                        network: net,
-                        amount: Amount::from_sat(amt as u64),
-                    })
+            if let Ok(create_args) =
+                serde_json::from_str(&String::from_utf8_lossy(&v).to_owned().to_string())
+            {
+                WasmPluginHandle::new(typ, org, proj, &emulator, Some(&h), None, net, Some(mmap))
+                    .await
                     .ok()
-                })
-                .map(|comp| tx.send(comp))
+                    .and_then(|sph| sph.create(&create_args).ok())
+                    .map(|comp| tx.send(comp));
+            }
         });
 
         tokio::task::block_in_place(|| loop {

@@ -337,8 +337,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("{}", serde_json::to_string_pretty(&program)?);
             }
             Some(("create", args)) => {
-                let amt =
-                    Amount::from_str_in(args.value_of("amount").unwrap(), Denomination::Bitcoin)?;
                 let sph = WasmPluginHandle::new(
                     "org".into(),
                     "judica".into(),
@@ -368,8 +366,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     return Ok(());
                 }
+                let create_args: CreateArgs<serde_json::Value> = serde_json::from_value(params)?;
 
-                let create_args: CreateArgs<String> = serde_json::from_value(params)?;
                 let v = sph.create(&create_args)?;
                 println!("{}", serde_json::to_string(&v)?);
             }

@@ -12,30 +12,31 @@ rustup target add wasm32-unknown-unknown
 ```
 1.  Get the [wasm-pack](https://rustwasm.github.io/wasm-pack/) tool.
 
-| Tip: On an M1 Mac you may need to do `cargo install wasm-pack` and `brew install llvm`.
-| Then use:
-| ```
-|    export PATH="/opt/homebrew/opt/llvm/bin:$PATH".
-|    export CC=/opt/homebrew/opt/llvm/bin/clang
-|    export AR=/opt/homebrew/opt/llvm/bin/llvm-ar
-|    rustup toolchain install nightly
-|    rustup toolchain default nightly
-|```
+> Tip: On an M1 Mac you may need to:
+> ```bash
+> brew install llvm
+> cargo install wasm-pack
+> rustup toolchain install nightly
+> ```
+> and then load the following before compiling
+> ```bash
+> export PATH="/opt/homebrew/opt/llvm/bin:$PATH".
+> export CC=/opt/homebrew/opt/llvm/bin/clang
+> export AR=/opt/homebrew/opt/llvm/bin/llvm-ar
+> rustup toolchain default nightly
+> ```
+
 1.  Clone this repo: 
 ```
 git clone git@github.com:sapio-lang/sapio.git && cd sapio
 ```
-1.  \[Optional\] To use dependencies from [crates.io](https://crates.io)
+1.  Build a plugin
 ```
-git checkout v0.1.4 && cp plugin-example .. && cd ..
-```
-1.  Build the plugin
-```
-cd plugin-example && wasm-pack build && cd ..
+cd plugin-example/treepay/ && wasm-pack build && cd ..
 ```
 1.  Instantiate a contract from the plugin:
 ```
-cargo run --bin sapio-cli -- contract create 9.99 "{\"participants\": [{\"amount\": 9.99, \"address\": \"bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw\"}], \"radix\": 2}" --file="plugin-example/pkg/sapio_wasm_plugin_example_bg.wasm"
+cargo run --bin sapio-cli -- contract create \{\"amount\":9.99,\"arguments\":\{\"Basic\":\{\"fee_sats_per_tx\":1000,\"participants\":\[\{\"address\":\"bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw\",\"amount\":2.99\}\],\"radix\":2\}\},\"network\":\"Regtest\"\} --file="plugin-example/treepay/pkg/sapio_wasm_plugin_example_bg.wasm"
 ```
 
 You can use `cargo run --bin sapio-cli -- help` to learn more about what a the CLI
