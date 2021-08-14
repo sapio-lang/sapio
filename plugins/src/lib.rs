@@ -40,8 +40,7 @@ pub enum NetworkDef {
 /// # Arguments For Creating this Contract
 /// Provide this information to create an instance of a contract
 #[derive(Serialize, Deserialize, JsonSchema)]
-pub struct CreateArgs<S: for<'t> Deserialize<'t>> {
-    #[serde(deserialize_with = "json_wrapped_string")]
+pub struct CreateArgs<S> {
     /// # The Main Contract Arguments
     pub arguments: S,
     #[serde(with = "NetworkDef")]
