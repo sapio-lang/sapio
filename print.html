@@ -227,28 +227,33 @@ Follow this quickstart guide to get going.</p>
 <ol>
 <li>Get the <a href="https://rustwasm.github.io/wasm-pack/">wasm-pack</a> tool.</li>
 </ol>
-<p>| Tip: On an M1 Mac you may need to do <code>cargo install wasm-pack</code> and <code>brew install llvm</code>.
-| Then use:
-| <code> |    export PATH=&quot;/opt/homebrew/opt/llvm/bin:$PATH&quot;. |    export CC=/opt/homebrew/opt/llvm/bin/clang |    export AR=/opt/homebrew/opt/llvm/bin/llvm-ar |    rustup toolchain install nightly |    rustup toolchain default nightly |</code></p>
+<blockquote>
+<p>Tip: On an M1 Mac you may need to:</p>
+<pre><code class="language-bash">brew install llvm
+cargo install wasm-pack
+rustup toolchain install nightly
+</code></pre>
+<p>and then load the following before compiling</p>
+<pre><code class="language-bash">export PATH=&quot;/opt/homebrew/opt/llvm/bin:$PATH&quot;.
+export CC=/opt/homebrew/opt/llvm/bin/clang
+export AR=/opt/homebrew/opt/llvm/bin/llvm-ar
+rustup toolchain default nightly
+</code></pre>
+</blockquote>
 <ol>
 <li>Clone this repo: </li>
 </ol>
 <pre><code>git clone git@github.com:sapio-lang/sapio.git &amp;&amp; cd sapio
 </code></pre>
 <ol>
-<li>[Optional] To use dependencies from <a href="https://crates.io">crates.io</a></li>
+<li>Build a plugin</li>
 </ol>
-<pre><code>git checkout v0.1.4 &amp;&amp; cp plugin-example .. &amp;&amp; cd ..
-</code></pre>
-<ol>
-<li>Build the plugin</li>
-</ol>
-<pre><code>cd plugin-example &amp;&amp; wasm-pack build &amp;&amp; cd ..
+<pre><code>cd plugin-example/treepay/ &amp;&amp; wasm-pack build &amp;&amp; cd ..
 </code></pre>
 <ol>
 <li>Instantiate a contract from the plugin:</li>
 </ol>
-<pre><code>cargo run --bin sapio-cli -- contract create 9.99 &quot;{\&quot;participants\&quot;: [{\&quot;amount\&quot;: 9.99, \&quot;address\&quot;: \&quot;bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw\&quot;}], \&quot;radix\&quot;: 2}&quot; --file=&quot;plugin-example/pkg/sapio_wasm_plugin_example_bg.wasm&quot;
+<pre><code>cargo run --bin sapio-cli -- contract create \{\&quot;amount\&quot;:9.99,\&quot;arguments\&quot;:\{\&quot;Basic\&quot;:\{\&quot;fee_sats_per_tx\&quot;:1000,\&quot;participants\&quot;:\[\{\&quot;address\&quot;:\&quot;bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw\&quot;,\&quot;amount\&quot;:2.99\}\],\&quot;radix\&quot;:2\}\},\&quot;network\&quot;:\&quot;Regtest\&quot;\} --file=&quot;plugin-example/treepay/pkg/sapio_wasm_plugin_example_bg.wasm&quot;
 </code></pre>
 <p>You can use <code>cargo run --bin sapio-cli -- help</code> to learn more about what a the CLI
 can do! and <code>cargo run --bin sapio-cli -- &lt;subcommand&gt; help</code> to learn about
