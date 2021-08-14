@@ -71,7 +71,7 @@ macro_rules! REGISTER {
         }
         #[no_mangle]
         unsafe fn sapio_v1_wasm_plugin_entry_point() {
-            $plugin::register(stringify!($plugin), optional_logo!($($logo)*));
+            $plugin::register(stringify!($to), optional_logo!($($logo)*));
         }
     };
 }
