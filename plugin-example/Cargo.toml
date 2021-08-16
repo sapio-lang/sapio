@@ -1,2 +1,2 @@
 [workspace]
-members = ["treepay", "batching-trait"]
+members = ["treepay", "trampolinepay", "batching-trait"]

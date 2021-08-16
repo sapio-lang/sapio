@@ -23,11 +23,14 @@ extern "C" {
     ) -> i32;
     /// Get contract API by "trampolining" through the host to use another
     /// plugin identified by key.
-    pub fn sapio_v1_wasm_plugin_get_api(
-        key: i32
-    ) -> i32;
+    pub fn sapio_v1_wasm_plugin_get_api(key: i32) -> i32;
     /// lookup a plugin key from a human reable name.
     /// if ok == 1, result is valid.
     /// out is written and must be 32 bytes of writable memory.
     pub fn sapio_v1_wasm_plugin_lookup_module_name(name: i32, name_len: i32, out: i32, ok: i32);
+}
+
+#[no_mangle]
+fn now()->f64{
+    0.0
 }
