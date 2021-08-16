@@ -8,6 +8,7 @@
 /// Extra functionality for working with Bitcoin types
 pub mod util;
 pub use util::CTVHash;
+pub mod plugin_args;
 
 /// Helpers for making correct time locks
 pub mod timelocks;

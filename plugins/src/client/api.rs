@@ -7,6 +7,9 @@
 ///! Wraps the external API with friendly methods
 use super::*;
 use bitcoin::Amount;
+use core::convert::TryFrom;
+use sapio_trait::SapioJSONTrait;
+use std::marker::PhantomData;
 /// Print a &str to the parent's console.
 pub fn log(s: &str) {
     unsafe {
@@ -50,6 +53,78 @@ pub fn lookup_module_name(key: &str) -> Option<[u8; 32]> {
         } else {
             Some(res)
         }
+    }
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+/// # Lookup Parameters
+/// - either using a hash key (exact); or
+/// - name (user configured)
+enum LookupFrom {
+    HashKey(String),
+    Name(String),
+}
+impl LookupFrom {
+    fn to_key(&self) -> Option<[u8; 32]> {
+        match self {
+            LookupFrom::HashKey(hash) => {
+                let v = hash.as_bytes();
+                if v.len() != 32 {
+                    return None;
+                }
+                let mut r = [0u8; 32];
+                r[..].clone_from_slice(v);
+                Some(r)
+            }
+            LookupFrom::Name(name) => lookup_module_name(name),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(try_from = "SapioHostAPIVerifier<T>")]
+/// # Specify a Plugin to Use
+struct SapioHostAPI<T: SapioJSONTrait> {
+    which_plugin: LookupFrom,
+    key: [u8; 32],
+    api: serde_json::Value,
+    #[serde(default, skip)]
+    _pd: PhantomData<T>,
+}
+
+use std::error::Error;
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct SapioHostAPIVerifier<T: SapioJSONTrait> {
+    which_plugin: LookupFrom,
+    #[serde(default, skip)]
+    _pd: PhantomData<T>,
+}
+impl<T: SapioJSONTrait> TryFrom<SapioHostAPIVerifier<T>> for SapioHostAPI<T> {
+    type Error = Box<dyn Error>;
+    fn try_from(shapv: SapioHostAPIVerifier<T>) -> Result<SapioHostAPI<T>, Box<dyn Error>> {
+        let SapioHostAPIVerifier { which_plugin, _pd } = shapv;
+        let key = match which_plugin.to_key() {
+            Some(key) => key,
+            _ => {
+                return Err("Key Not Found".into());
+            }
+        };
+        let p = key.as_ptr() as i32;
+        let api_buf = unsafe { sapio_v1_wasm_plugin_get_api(p) };
+        if api_buf == 0 {
+            return Err("API Pointer Null".into());
+        }
+        let cs = unsafe { CString::from_raw(api_buf as *mut c_char) };
+        let api = serde_json::from_slice(cs.as_bytes())?;
+        if !T::check_trait_implemented(&api) {
+            return Err("Trait not Implemented Properly".into());
+        }
+        Ok(SapioHostAPI {
+            which_plugin,
+            key,
+            api,
+            _pd,
+        })
     }
 }
 

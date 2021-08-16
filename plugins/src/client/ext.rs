@@ -21,6 +21,11 @@ extern "C" {
         json_len: i32,
         amt: u32,
     ) -> i32;
+    /// Get contract API by "trampolining" through the host to use another
+    /// plugin identified by key.
+    pub fn sapio_v1_wasm_plugin_get_api(
+        key: i32
+    ) -> i32;
     /// lookup a plugin key from a human reable name.
     /// if ok == 1, result is valid.
     /// out is written and must be 32 bytes of writable memory.

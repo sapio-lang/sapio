@@ -19,7 +19,6 @@ package = "sapio-bitcoin"
 version = "^0.26.0"
 features = ['use-serde', 'rand']
 
-[dependencies.sapio-wasm-plugin]
-path = "../plugins"
+[dependencies.sapio-base]
+path = "../sapio-base"
 version = "0.1.0"
-features = ["client"]

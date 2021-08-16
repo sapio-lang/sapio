@@ -4,6 +4,7 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use batching_trait::{BatchingTraitVersion0_1_1, Payment};
 #[deny(missing_docs)]
 use sapio::contract::*;
 use sapio::util::amountrange::*;
@@ -13,8 +14,6 @@ use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
 use std::collections::VecDeque;
-use batching_trait::{Payment, BatchingTraitVersion0_1_1};
-
 
 /// Documentation placed here will be visible to users!
 #[derive(JsonSchema, Serialize, Deserialize)]
@@ -109,7 +108,7 @@ impl From<BatchingTraitVersion0_1_1> for TreePay {
             participants: args.payments,
             radix: 4,
             // estimate fees to be 4 outputs and 1 input + change
-            fee_sats_per_tx: args.feerate_per_byte*((4*41) + 41 +10 )
+            fee_sats_per_tx: args.feerate_per_byte * ((4 * 41) + 41 + 10),
         }
     }
 }

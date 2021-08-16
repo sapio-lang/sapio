@@ -1,15 +1,22 @@
 use bitcoin::*;
 use jsonschema::JSONSchema;
-use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
 use std::error::Error;
-pub trait APIHandle {
+use sapio_base::plugin_args::CreateArgs;
+pub trait SapioAPIHandle {
     fn get_api(&self) -> serde_json::Value;
+}
+impl SapioAPIHandle for serde_json::Value {
+    fn get_api(&self) -> Self {
+        self.clone()
+    }
 }
 pub trait SapioJSONTrait: JsonSchema + Serialize + for<'a> Deserialize<'a> {
     fn get_example_for_api_checking() -> Self;
-    fn check_trait_implemented_inner(&self, api: &dyn APIHandle) -> Result<(), Box<dyn Error>> {
+    fn check_trait_implemented_inner(
+        api: &dyn SapioAPIHandle,
+    ) -> Result<(), Box<dyn Error>> {
         let tag = Self::get_example_for_api_checking();
         let japi = api.get_api();
         let compiled = JSONSchema::compile(&japi).map_err(|_| "Error Compiling Schema")?;
@@ -22,8 +29,7 @@ pub trait SapioJSONTrait: JsonSchema + Serialize + for<'a> Deserialize<'a> {
             .map_err(|_| String::from("Validation Error"))?;
         Ok(())
     }
-    fn check_trait_implemented(&self, api: &dyn APIHandle) -> bool {
-        self.check_trait_implemented_inner(api).is_ok()
+    fn check_trait_implemented(api: &dyn SapioAPIHandle) -> bool {
+        Self::check_trait_implemented_inner(api).is_ok()
     }
 }
-

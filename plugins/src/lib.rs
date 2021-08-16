@@ -21,39 +21,11 @@ where
     serde_json::from_str(&s).map_err(serde::de::Error::custom)
 }
 
-#[derive(Serialize, Deserialize, JsonSchema)]
-#[serde(remote = "bitcoin::Network")]
-pub enum NetworkDef {
-    /// Classic Bitcoin
-    Bitcoin,
-    /// Bitcoin's testnet
-    Testnet,
-    /// Bitcoin's signet
-    Signet,
-    /// Bitcoin's regtest
-    Regtest,
-}
-
-// We use json_wrapped_string to encode S to allow for a client to pass in
-// CreateArgs without knowing the underlying type S.
-
-/// # Arguments For Creating this Contract
-/// Provide this information to create an instance of a contract
-#[derive(Serialize, Deserialize, JsonSchema)]
-pub struct CreateArgs<S> {
-    /// # The Main Contract Arguments
-    pub arguments: S,
-    #[serde(with = "NetworkDef")]
-    /// # The Network the contract should be created for.
-    pub network: bitcoin::Network,
-    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
-    #[schemars(with = "f64")]
-    /// # The Amount of Funds Available to the Contract as Bitcoin.
-    pub amount: bitcoin::util::amount::Amount,
-}
 
 #[cfg(feature = "host")]
 pub mod host;
 
 #[cfg(feature = "client")]
 pub mod client;
+
+pub use sapio_base::plugin_args::*;
