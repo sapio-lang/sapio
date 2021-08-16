@@ -13,18 +13,9 @@ use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
 use std::collections::VecDeque;
+use batching_trait::{Payment, BatchingTraitVersion0_1_1};
 
-/// A payment to a specific address
-#[derive(JsonSchema, Serialize, Deserialize, Clone)]
-pub struct Payment {
-    /// The amount to send
-    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
-    #[schemars(with = "f64")]
-    pub amount: bitcoin::util::amount::Amount,
-    /// # Address
-    /// The Address to send to
-    pub address: bitcoin::Address,
-}
+
 /// Documentation placed here will be visible to users!
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct TreePay {
@@ -100,17 +91,34 @@ impl Contract for TreePay {
 }
 
 #[derive(Serialize, Deserialize, JsonSchema)]
-enum Versions{
-    Basic(TreePay),
-    Advanced(TreePay,
-        /// # A Ranomd Field For Example
-        u8),
+enum Versions {
+    /// # Tree Pay
+    TreePay(TreePay),
+    /// # Advanced Tree Pay
+    Advanced(
+        TreePay,
+        /// # A Random Field For Example
+        u8,
+    ),
+    /// # Batching Trait API
+    BatchingTraitVersion0_1_1(BatchingTraitVersion0_1_1),
+}
+impl From<BatchingTraitVersion0_1_1> for TreePay {
+    fn from(args: BatchingTraitVersion0_1_1) -> Self {
+        TreePay {
+            participants: args.payments,
+            radix: 4,
+            // estimate fees to be 4 outputs and 1 input + change
+            fee_sats_per_tx: args.feerate_per_byte*((4*41) + 41 +10 )
+        }
+    }
 }
 impl From<Versions> for TreePay {
-    fn from(v:Versions) -> TreePay {
+    fn from(v: Versions) -> TreePay {
         match v {
-            Versions::Basic(v) => v,
+            Versions::TreePay(v) => v,
             Versions::Advanced(v, _) => v,
+            Versions::BatchingTraitVersion0_1_1(v) => v.into(),
         }
     }
 }
