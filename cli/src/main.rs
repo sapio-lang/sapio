@@ -46,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         (version: "0.1.0 Beta")
         (author: "Jeremy Rubin <j@rubin.io>")
         (about: "Sapio CLI for Bitcoin Smart Contracts")
-        (@arg config: -c --config +takes_value #{1,2} {check_file} "Sets a custom config file")
+        (@arg config: -c --config +takes_value #{1,1} {check_file} "Sets a custom config file")
         (@arg debug: -d ... "Sets the level of debugging information")
         (@subcommand emulator =>
             (about: "Make Requests to Emulator Servers")
