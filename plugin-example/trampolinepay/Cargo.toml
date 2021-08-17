@@ -1,5 +1,5 @@
 [package]
-name = "sapio-wasm-plugin-example"
+name = "trampolinepay"
 version = "0.1.0"
 license = "MPL-2.0"
 authors = ["Jeremy Rubin <j@rubin.io>"]
@@ -17,9 +17,6 @@ schemars = "0.8.0"
 serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
-
-[dependencies.wasm-bindgen]
-version = "0.2.69"
 
 [dependencies.bitcoin]
 package = "sapio-bitcoin"

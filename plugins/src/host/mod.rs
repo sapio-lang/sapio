@@ -99,6 +99,11 @@ mod exports {
 
     /// Create an instance of a contract by "trampolining" through the host to use another
     /// plugin identified by key.
+    pub fn sapio_v1_wasm_plugin_get_api(env: &HostEnvironment, key: i32) -> i32 {
+        wasm_plugin_action(env, key, Action::GetAPI)
+    }
+    /// Create an instance of a contract by "trampolining" through the host to use another
+    /// plugin identified by key.
     pub fn sapio_v1_wasm_plugin_create_contract(
         env: &HostEnvironment,
         key: i32,
@@ -106,6 +111,22 @@ mod exports {
         json_len: i32,
         amt: u32,
     ) -> i32 {
+        wasm_plugin_action(
+            env,
+            key,
+            Action::Create {
+                json,
+                json_len,
+                amt,
+            },
+        )
+    }
+    enum Action {
+        Create { json: i32, json_len: i32, amt: u32 },
+        GetAPI,
+    }
+
+    fn wasm_plugin_action(env: &HostEnvironment, key: i32, action: Action) -> i32 {
         let env = env.lock().unwrap();
         const KEY_LEN: usize = 32;
         let key = key as usize;
@@ -121,43 +142,60 @@ mod exports {
             buf
         })
         .to_string();
-
-        let mut v = vec![0u8; json_len as usize];
-        for (src, dst) in env.memory_ref().unwrap().view()
-            [json as usize..(json + json_len) as usize]
-            .iter()
-            .map(Cell::get)
-            .zip(v.iter_mut())
-        {
-            *dst = src;
-        }
+        let v = match action {
+            Action::GetAPI => None,
+            Action::Create { json, json_len, .. } => {
+                let mut v = vec![0u8; json_len as usize];
+                for (src, dst) in env.memory_ref().unwrap().view()
+                    [json as usize..(json + json_len) as usize]
+                    .iter()
+                    .map(Cell::get)
+                    .zip(v.iter_mut())
+                {
+                    *dst = src;
+                }
+                Some(serde_json::from_str(
+                    &String::from_utf8_lossy(&v).to_owned().to_string(),
+                ))
+            }
+        };
         let emulator = env.emulator.clone();
         let mmap = env.module_map.clone();
         let typ = env.typ.clone();
         let org = env.org.clone();
         let proj = env.proj.clone();
         let net = env.net;
-        let (tx, mut rx) = tokio::sync::oneshot::channel::<Compiled>();
+        let (tx_json, mut rx_json) =
+            tokio::sync::oneshot::channel::<Result<serde_json::Value, _>>();
 
         let handle = tokio::runtime::Handle::current();
 
         handle.spawn(async move {
-            if let Ok(create_args) =
-                serde_json::from_str(&String::from_utf8_lossy(&v).to_owned().to_string())
-            {
+            let plugin =
                 WasmPluginHandle::new(typ, org, proj, &emulator, Some(&h), None, net, Some(mmap))
                     .await
-                    .ok()
-                    .and_then(|sph| sph.create(&create_args).ok())
-                    .map(|comp| tx.send(comp));
+                    .ok();
+            match action {
+                Action::GetAPI => {
+                    plugin
+                        .and_then(|sph| sph.get_api().ok())
+                        .map(|api| tx_json.send(Ok(api)));
+                }
+                Action::Create { .. } => {
+                    if let Some(Ok(create_args)) = v {
+                        plugin
+                            .and_then(|sph| sph.create(&create_args).ok())
+                            .map(|comp| tx_json.send(serde_json::to_value(comp)));
+                    }
+                }
             }
         });
 
         tokio::task::block_in_place(|| loop {
-            match rx.try_recv() {
-                Ok(comp) => {
+            match rx_json.try_recv() {
+                Ok(value) => {
                     return (move || -> Result<i32, Box<dyn std::error::Error>> {
-                        let comp_s = serde_json::to_string(&comp)?;
+                        let comp_s = serde_json::to_string(&value?)?;
                         let bytes: i32 = env
                             .allocate_wasm_bytes_ref()
                             .unwrap()
