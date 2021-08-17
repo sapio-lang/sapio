@@ -1,9 +1,9 @@
-use serde_json::Value;
 use bitcoin::*;
 use jsonschema::JSONSchema;
 use sapio_base::plugin_args::CreateArgs;
 use schemars::*;
 use serde::*;
+use serde_json::Value;
 use std::error::Error;
 pub trait SapioAPIHandle {
     fn get_api(&self) -> serde_json::Value;

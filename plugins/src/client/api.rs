@@ -83,9 +83,9 @@ impl LookupFrom {
 #[serde(try_from = "SapioHostAPIVerifier<T>")]
 pub struct SapioHostAPI<T: SapioJSONTrait> {
     pub which_plugin: LookupFrom,
-    #[serde(skip,default)]
+    #[serde(skip, default)]
     pub key: [u8; 32],
-    #[serde(skip,default)]
+    #[serde(skip, default)]
     pub api: serde_json::Value,
     #[serde(default, skip)]
     _pd: PhantomData<T>,

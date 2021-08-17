@@ -21,7 +21,6 @@ where
     serde_json::from_str(&s).map_err(serde::de::Error::custom)
 }
 
-
 #[cfg(feature = "host")]
 pub mod host;
 

@@ -31,6 +31,6 @@ extern "C" {
 }
 
 #[no_mangle]
-fn now()->f64{
+fn now() -> f64 {
     0.0
 }
