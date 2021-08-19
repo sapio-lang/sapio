@@ -23,7 +23,7 @@ rustup target add wasm32-unknown-unknown
 > export PATH="/opt/homebrew/opt/llvm/bin:$PATH".
 > export CC=/opt/homebrew/opt/llvm/bin/clang
 > export AR=/opt/homebrew/opt/llvm/bin/llvm-ar
-> rustup toolchain default nightly
+> rustup default nightly
 > ```
 
 1.  Clone this repo: 
