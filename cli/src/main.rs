@@ -313,14 +313,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     .map_err(|e| println!("{:?}", e))
                                     .ok();
                             }
-                            let h = if encode_as_psbt {
+                            let psbt = if encode_as_psbt {
                                 let bytes = serialize(&u);
-                                base64::encode(bytes)
+                                Some(base64::encode(bytes))
                             } else {
-                                bitcoin::consensus::encode::serialize_hex(&u.extract_tx())
+                                None
                             };
+                            let h = bitcoin::consensus::encode::serialize_hex(&u.extract_tx());
                             v.as_object_mut().map(|ref mut m| {
                                 m.insert("hex".into(), h.into());
+                                if let Some(psbt) = psbt {
+                                    m.insert("psbt".into(), psbt.into());
+                                }
                                 m.insert(
                                     "label".into(),
                                     m.get("metadata")
