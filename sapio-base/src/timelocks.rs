@@ -50,23 +50,36 @@ pub struct LockTime<RelOrAbs: Absolutivity, HeightOrTime: TimeType>(
     u32,
     #[serde(skip)] PhantomData<(RelOrAbs, HeightOrTime)>,
 );
-/// Represents a type which can be either type of relative lock
 #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
+/// # Any Relative Time Lock
+/// Represents a type which can be either type of relative lock
 pub enum AnyRelTimeLock {
+    /// # Relative Height
+    /// in number of blocks
     RH(RelHeight),
+    /// # Relative Time
+    /// in chunks of 512 seconds
     RT(RelTime),
 }
 
-/// Represents a type which can be either type of absolute lock
 #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
+/// # Any Absolute Time Lock
+/// Represents a type which can be either type of absolute lock
 pub enum AnyAbsTimeLock {
+    /// # Absolute Height
+    /// in exact block height
     AH(AbsHeight),
+    /// # Absolute Time
+    /// in unix time stamp since epoch
     AT(AbsTime),
 }
-/// Represents a type which can be any type of lock
 #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone)]
+/// # Any Time Lock (Relative, Absolute) x (Height, Time)
+/// Represents a type which can be any type of lock
 pub enum AnyTimeLock {
+    /// # Relative
     R(AnyRelTimeLock),
+    /// # Absolute
     A(AnyAbsTimeLock),
 }
 
