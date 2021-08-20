@@ -179,12 +179,14 @@ mod trait_impls {
     }
     impl From<u16> for RelTime {
         fn from(u: u16) -> Self {
+            // cast to wider type and then set bit 22 to specify relative time
             Self((u as u32) | (1 << 22), Default::default())
         }
     }
     impl From<u16> for RelHeight {
         fn from(u: u16) -> Self {
-            Self((u as u32) | (1 << 22), Default::default())
+            // no bit setting required, direct cast to u32
+            Self(u as u32, Default::default())
         }
     }
 
