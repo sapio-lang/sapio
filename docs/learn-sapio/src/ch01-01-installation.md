@@ -39,9 +39,26 @@ cd plugin-example/treepay/ && wasm-pack build && cd ..
 cargo run --bin sapio-cli -- contract create \{\"amount\":9.99,\"arguments\":\{\"Basic\":\{\"fee_sats_per_tx\":1000,\"participants\":\[\{\"address\":\"bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw\",\"amount\":2.99\}\],\"radix\":2\}\},\"network\":\"Regtest\"\} --file="plugin-example/treepay/pkg/sapio_wasm_plugin_example_bg.wasm"
 ```
 
-You can use `cargo run --bin sapio-cli -- help` to learn more about what a the CLI
-can do! and `cargo run --bin sapio-cli -- <subcommand> help` to learn about
-subcommands like `contract`.
+You can use `cargo run --bin sapio-cli -- help` to learn more about what a the
+CLI can do! and `cargo run --bin sapio-cli -- <subcommand> help` to learn about
+subcommands like `contract`. If you aren't modifying Sapio itself, you'll want
+to run `cargo build --release` and use a release binary as it is much faster.
+1. Install Sapio Studio
+
+[Sapio Studio](https://github.com/sapio-lang/sapio-studio) is an in-development
+graphical user interface for Sapio. It is the recommended way to get started with Sapio development.
+```
+git clone git@github.com:sapio-lang.sapio-studio.git && cd sapio-studio
+yarn install
+```
+and then in separate shells
+```
+yarn start-react
+yarn start-electron
+```
+
+The first time you run it you may have some errors, you will need to ensure
+you've configured your client correctly.
 
 
 ## Docs
