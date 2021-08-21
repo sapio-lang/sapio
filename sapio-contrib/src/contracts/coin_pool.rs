@@ -14,12 +14,13 @@ use sapio::*;
 use sapio_base::timelocks::AnyRelTimeLock;
 use std::sync::{Arc, Mutex};
 type Payouts = Vec<(Arc<Mutex<dyn Compilable>>, Amount)>;
-
 /// A CoinPool is a contract that allows a group of individuals to
 /// cooperatively share a UTXO.
 pub struct CoinPool {
-    clauses: Vec<Clause>,
-    refunds: Payouts,
+    /// The list of stakeholders
+    pub clauses: Vec<Clause>,
+    /// How to refund people if no update agreed on
+    pub refunds: Payouts,
 }
 
 impl CoinPool {
