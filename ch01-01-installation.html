@@ -184,13 +184,13 @@ Follow this quickstart guide to get going.</p>
 <li>Get the <a href="https://rustwasm.github.io/wasm-pack/">wasm-pack</a> tool.</li>
 </ol>
 <blockquote>
-<p>Tip: On an M1 Mac you may need to:</p>
+<p>Tip: On an M1 Mac you may need to do the following:</p>
 <pre><code class="language-bash">brew install llvm
 cargo install wasm-pack
 rustup toolchain install nightly
 </code></pre>
 <p>and then load the following before compiling</p>
-<pre><code class="language-bash">export PATH=&quot;/opt/homebrew/opt/llvm/bin:$PATH&quot;.
+<pre><code class="language-bash">export PATH=&quot;/opt/homebrew/opt/llvm/bin:$PATH&quot;
 export CC=/opt/homebrew/opt/llvm/bin/clang
 export AR=/opt/homebrew/opt/llvm/bin/llvm-ar
 rustup default nightly
