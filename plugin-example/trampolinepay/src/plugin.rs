@@ -8,15 +8,16 @@
 use batching_trait::BatchingTraitVersion0_1_1;
 use bitcoin::util::amount::Amount;
 use sapio::contract::*;
-use sapio::util::amountrange::*;
+
 use sapio::*;
 use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
-use std::collections::VecDeque;
 
-/// Documentation placed here will be visible to users!
+
+/// # Trampolined Payment
+/// A payment which is passed off to another program via a trait-locked plugin
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct TrampolinePay {
     /// # Which Plugin to Use
@@ -27,6 +28,7 @@ pub struct TrampolinePay {
     data: BatchingTraitVersion0_1_1,
 }
 
+/// # Versions Trait Wrapper
 #[derive(Serialize, Deserialize, JsonSchema)]
 enum Versions {
     /// # Batching Trait API

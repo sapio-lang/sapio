@@ -68,14 +68,20 @@ impl Contract for Vault {
     declare! {non updatable}
 }
 
-/// A specialization of `Vault` where cold storage is a regular `bitcoin::Address`
 #[derive(JsonSchema, Deserialize)]
+/// A specialization of `Vault` where cold storage is a regular `bitcoin::Address`
 pub struct VaultAddress {
+    /// # Address for Cold Storage
     cold_storage: bitcoin::Address,
+    /// # Address for Hot Storage
     hot_storage: bitcoin::Address,
+    /// # Number of Steps
     n_steps: u64,
+    /// # Amount per Step
     amount_step: CoinAmount,
+    /// # How long between steps
     timeout: AnyRelTimeLock,
+    /// # How long before hot wallet spendable
     mature: AnyRelTimeLock,
 }
 
@@ -95,17 +101,26 @@ impl From<VaultAddress> for Vault {
     }
 }
 
+#[derive(JsonSchema, Deserialize)]
+/// # Value Split Tree Payment Vault
 /// A specialization of `Vault` where cold storage is a tree payment to a `bitcoin::Address`
 /// split up based on a max amount per address
-#[derive(JsonSchema, Deserialize)]
 pub struct VaultTree {
+    /// # Cold Storage Target
     cold_storage: bitcoin::Address,
+    /// # Max Funds per Cold Storage Addreess
     max_per_address: CoinAmount,
+    /// # Radix for the split tree
     radix: usize,
+    /// # A Hot Storage Address
     hot_storage: bitcoin::Address,
+    /// # How many iterations of the contract to run
     n_steps: u64,
+    /// # How much funds per step
     amount_step: CoinAmount,
+    /// # How long between steps
     timeout: AnyRelTimeLock,
+    /// # How long before hot wallet spendable
     mature: AnyRelTimeLock,
 }
 

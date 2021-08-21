@@ -4,14 +4,13 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use crate::CreateArgs;
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::util::psbt::PartiallySignedTransaction;
-use bitcoin::Amount;
+
 pub use plugin_handle::PluginHandle;
 pub use plugin_handle::WasmPluginHandle;
-use sapio::contract::Compiled;
+
 use sapio_ctv_emulator_trait::CTVEmulator;
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -33,7 +32,7 @@ pub struct HostEnvironmentInner {
     pub module_map: HashMap<Vec<u8>, [u8; 32]>,
     pub store: Arc<Mutex<Store>>,
     pub net: bitcoin::Network,
-    pub emulator: Arc<CTVEmulator>,
+    pub emulator: Arc<dyn CTVEmulator>,
     #[wasmer(export)]
     pub memory: LazyInit<Memory>,
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_allocate_bytes"))]

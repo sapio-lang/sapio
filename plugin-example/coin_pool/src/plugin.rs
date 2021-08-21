@@ -4,32 +4,40 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use batching_trait::{BatchingTraitVersion0_1_1, Payment};
+
 #[deny(missing_docs)]
 use sapio::contract::*;
-use sapio::util::amountrange::*;
+
 use sapio::*;
-use sapio_base::timelocks::{AnyRelTimeLock, RelHeight};
+
 use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
-use std::collections::VecDeque;
-use std::convert::{TryFrom, TryInto};
+
+use std::convert::{TryFrom};
 
 use crate::sapio_base::Clause;
 use sapio_contrib::contracts::coin_pool::CoinPool;
-use serde_json::Value;
+
 use std::sync::{Arc, Mutex};
 
+/// # Payout Instructions
 #[derive(JsonSchema, Deserialize)]
 struct Payout {
+    /// # Amount to Pay (BTC)
     #[serde(with = "bitcoin::util::amount::serde::as_btc")]
     #[schemars(with = "f64")]
     amount: bitcoin::Amount,
+    /// # Payout Plugin ID
     payout_handle: LookupFrom,
+    /// # Arguments (as JSON) for Plugin
     payout_args: String,
 }
+
+/// # Plugin Based Payment Pool
+/// A payment pool where there are a set of governing clauses and a set of
+/// plugins based payouts.
 #[derive(JsonSchema, Deserialize)]
 struct PluginPool {
     clauses: Vec<Clause>,

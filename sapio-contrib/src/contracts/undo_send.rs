@@ -15,6 +15,7 @@ use std::convert::TryInto;
 
 use sapio_base::timelocks::AnyRelTimeLock;
 
+/// # Undoable Sending Contract
 /// UndoSendInternal allows funds to be sent to the to_contract only after a
 /// relative timeout. Otherwise, they can move back to the from_contract.
 #[derive(JsonSchema, Serialize, Deserialize)]
@@ -24,7 +25,7 @@ pub struct UndoSendInternal {
     /// the contract to forward funds to after timeout
     pub to_contract: Compiled,
     /// the amount
-    /// TODO: remove  and use ctx?
+    // TODO: remove  and use ctx?
     pub amount: CoinAmount,
     /// the timeout period (relative height or blocks)
     pub timeout: AnyRelTimeLock,

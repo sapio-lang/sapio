@@ -11,8 +11,7 @@ use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::bip32::ExtendedPrivKey;
 use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoin::util::psbt::PartiallySignedTransaction;
-use bitcoin::Amount;
-use bitcoin::Denomination;
+
 use bitcoin::OutPoint;
 use bitcoincore_rpc_async as rpc;
 use bitcoincore_rpc_async::RpcApi;

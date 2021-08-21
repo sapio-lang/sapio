@@ -1,5 +1,5 @@
 use schemars::JsonSchema;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(remote = "bitcoin::Network")]
 pub enum NetworkDef {
