@@ -28,7 +28,7 @@ struct Payout {
     #[schemars(with = "f64")]
     amount: bitcoin::Amount,
     payout_handle: LookupFrom,
-    payout_args: Value,
+    payout_args: String,
 }
 #[derive(JsonSchema, Deserialize)]
 struct PluginPool {
@@ -42,9 +42,12 @@ impl TryFrom<PluginPool> for CoinPool {
         let mut refunds = vec![];
         for payout in v.refunds.iter() {
             if let Some(key) = payout.payout_handle.to_key() {
-                if let Some(compiled) =
-                    create_contract_by_key(&key, payout.payout_args.clone(), payout.amount)
-                {
+                if let Some(compiled) = create_contract_by_key(
+                    &key,
+                    serde_json::from_str(&payout.payout_args)
+                        .map_err(|_| CompilationError::TerminateCompilation)?,
+                    payout.amount,
+                ) {
                     let compilable: Arc<Mutex<dyn Compilable>> = Arc::new(Mutex::new(compiled));
                     refunds.push((compilable, payout.amount));
                     continue;
