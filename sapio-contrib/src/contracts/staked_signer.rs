@@ -16,12 +16,12 @@ use std::marker::PhantomData;
 
 /// State where stakes should be recognized for voting
 #[derive(JsonSchema, Deserialize)]
-struct Operational;
+pub struct Operational;
 /// State where stakes are closing and waiting evidence of misbehavior
 #[derive(JsonSchema, Deserialize)]
 struct Closing;
 /// enum trait for states
-trait StakingState {}
+pub trait StakingState {}
 impl StakingState for Operational {}
 impl StakingState for Closing {}
 
@@ -33,7 +33,7 @@ impl StakingState for Closing {}
 /// Burning is important v.s. miner fee because otherwise the staker
 /// can bribe (or be a miner themselves) to cheat.
 #[derive(JsonSchema, Deserialize)]
-struct Staker<T: StakingState> {
+pub struct Staker<T: StakingState> {
     /// How long to wait for evidence after closing
     timeout: AnyRelTimeLock,
     /// The key that if leaked can burn funds
