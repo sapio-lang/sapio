@@ -5,14 +5,14 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! binding for making a type into a plugin
-use std::convert::TryFrom;
 use super::*;
+use std::convert::TryFrom;
 /// The `Plugin` trait is used to provide bindings for a WASM Plugin.
 /// It's not intended to be used internally, just as bindings.
-pub trait Plugin: JsonSchema + Sized + for<'a> Deserialize<'a> 
-    where
-        <<Self as client::plugin::Plugin>::ToType as std::convert::TryFrom<Self>>::Error:
-            std::error::Error+'static,
+pub trait Plugin: JsonSchema + Sized + for<'a> Deserialize<'a>
+where
+    <<Self as client::plugin::Plugin>::ToType as std::convert::TryFrom<Self>>::Error:
+        std::error::Error + 'static,
 {
     type ToType: Compilable + TryFrom<Self>;
     /// gets the jsonschema for the plugin type, which is the API for calling create.
