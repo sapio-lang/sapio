@@ -17,14 +17,15 @@ use serde::*;
 use std::collections::VecDeque;
 use std::convert::{TryInto, TryFrom};
 use sapio_contrib::contracts::staked_signer::{Staker, Operational};
-type AStaker = Staker<Operational>;
+/// # Bonded Staker
+type BondedStaker = Staker<Operational>;
 #[derive(JsonSchema, Deserialize)]
 #[serde(transparent)]
-struct Wrapper(AStaker);
+struct Wrapper(BondedStaker);
 
-impl From<Wrapper> for AStaker {
+impl From<Wrapper> for BondedStaker {
     fn from(v: Wrapper) -> Self {
         v.0
     }
 }
-REGISTER![[AStaker, Wrapper], "logo.png"];
+REGISTER![[BondedStaker, Wrapper], "logo.png"];

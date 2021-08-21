@@ -22,16 +22,17 @@ use sapio_contrib::contracts::federated_sidechain::{FederatedPegIn, CanBeginReco
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
 
-type Peg = FederatedPegIn<CanBeginRecovery>;
+/// Federated Peg
+type FederatedPeg = FederatedPegIn<CanBeginRecovery>;
 
 #[derive(JsonSchema, Deserialize)]
 #[serde(transparent)]
-struct Wrap(Peg);
-impl From<Wrap> for Peg{
-    fn from(w:Wrap) -> Peg {
+struct Wrap(FederatedPeg);
+impl From<Wrap> for FederatedPeg{
+    fn from(w:Wrap) -> Self {
         w.0
     }
 }
 
 
-REGISTER![[Peg, Wrap], "logo.png"];
+REGISTER![[FederatedPeg, Wrap], "logo.png"];

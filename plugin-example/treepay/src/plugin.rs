@@ -118,16 +118,18 @@ impl Contract for TreePay {
     declare! {non updatable}
 }
 
+/// # Different Calling Conventions to create a Treepay
 #[derive(Serialize, Deserialize, JsonSchema)]
 enum Versions {
-    /// # Tree Pay
+    /// # Standard Tree Pay
     TreePay(TreePay),
     /// # Advanced Tree Pay
-    Advanced(
-        TreePay,
+    Advanced {
+        /// # Standard Tree Pay
+        main_arguments: TreePay,
         /// # A Random Field For Example
-        u8,
-    ),
+        random_field: u8,
+    },
     /// # Batching Trait API
     BatchingTraitVersion0_1_1(BatchingTraitVersion0_1_1),
 }
@@ -146,7 +148,7 @@ impl From<Versions> for TreePay {
     fn from(v: Versions) -> TreePay {
         match v {
             Versions::TreePay(v) => v,
-            Versions::Advanced(v, _) => v,
+            Versions::Advanced { main_arguments, .. } => main_arguments,
             Versions::BatchingTraitVersion0_1_1(v) => v.into(),
         }
     }

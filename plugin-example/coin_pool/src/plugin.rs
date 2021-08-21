@@ -22,14 +22,22 @@ use sapio_contrib::contracts::coin_pool::CoinPool;
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
 
+/// # Payout Instructions
 #[derive(JsonSchema, Deserialize)]
 struct Payout {
+    /// # Amount to Pay (BTC)
     #[serde(with = "bitcoin::util::amount::serde::as_btc")]
     #[schemars(with = "f64")]
     amount: bitcoin::Amount,
+    /// # Payout Plugin ID
     payout_handle: LookupFrom,
+    /// # Arguments (as JSON) for Plugin
     payout_args: String,
 }
+
+/// # Plugin Based Payment Pool
+/// A payment pool where there are a set of governing clauses and a set of
+/// plugins based payouts.
 #[derive(JsonSchema, Deserialize)]
 struct PluginPool {
     clauses: Vec<Clause>,

@@ -14,17 +14,21 @@ use schemars::*;
 use serde::*;
 use std::marker::PhantomData;
 
+/// # Operational State
 /// State where stakes should be recognized for voting
 #[derive(JsonSchema, Deserialize)]
 pub struct Operational;
+/// # Closing State
 /// State where stakes are closing and waiting evidence of misbehavior
 #[derive(JsonSchema, Deserialize)]
 struct Closing;
+/// # Staking States (Operational, Closing)
 /// enum trait for states
 pub trait StakingState {}
 impl StakingState for Operational {}
 impl StakingState for Closing {}
 
+/// # Staker: A Bonded Signing Contract
 /// Staker is a contract that proceeds from Operational -> Closing
 /// During it's lifetime, many things can be signed with signing_key,
 /// but should the key ever leak (e.g., via nonce reuse) the bonded
@@ -34,18 +38,22 @@ impl StakingState for Closing {}
 /// can bribe (or be a miner themselves) to cheat.
 #[derive(JsonSchema, Deserialize)]
 pub struct Staker<T: StakingState> {
+    /// # Timeout
     /// How long to wait for evidence after closing
     timeout: AnyRelTimeLock,
+    /// # Signing Key
     /// The key that if leaked can burn funds
     signing_key: PublicKey,
+    /// # Redemption Key
     /// The key that will be used to control & return the redeemed funds
     redeeming_key: PublicKey,
     /// current contract state.
+    #[serde(skip, default)]
     state: PhantomData<T>,
 }
 
 /// Functional Interface for Staking Contracts
-trait StakerInterface
+pub trait StakerInterface
 where
     Self: Sized,
 {
