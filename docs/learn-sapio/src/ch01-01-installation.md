@@ -28,8 +28,9 @@ rustup target add wasm32-unknown-unknown
 
 1.  Clone this repo: 
 ```
-git clone git@github.com:sapio-lang/sapio.git && cd sapio
+git clone --depth 1 git@github.com:sapio-lang/sapio.git && cd sapio
 ```
+We recommend a shallow clone unless you want the full history.
 1.  Build a plugin
 ```
 cd plugin-example/treepay/ && wasm-pack build && cd ..
@@ -47,8 +48,9 @@ to run `cargo build --release` and use a release binary as it is much faster.
 
 [Sapio Studio](https://github.com/sapio-lang/sapio-studio) is an in-development
 graphical user interface for Sapio. It is the recommended way to get started with Sapio development.
+We recommend a shallow clone unless you want the full history.
 ```
-git clone git@github.com:sapio-lang.sapio-studio.git && cd sapio-studio
+git clone --depth 1 git@github.com:sapio-lang.sapio-studio.git && cd sapio-studio
 yarn install
 ```
 and then in separate shells
