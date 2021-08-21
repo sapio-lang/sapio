@@ -67,7 +67,7 @@ pub enum LookupFrom {
     Name(String),
 }
 impl LookupFrom {
-    fn to_key(&self) -> Option<[u8; 32]> {
+    pub fn to_key(&self) -> Option<[u8; 32]> {
         match self {
             LookupFrom::HashKey(hash) => {
                 let mut r = [0u8; 32];

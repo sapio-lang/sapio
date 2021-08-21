@@ -5,11 +5,16 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! binding for making a type into a plugin
+use std::convert::TryFrom;
 use super::*;
 /// The `Plugin` trait is used to provide bindings for a WASM Plugin.
 /// It's not intended to be used internally, just as bindings.
-pub trait Plugin: JsonSchema + Sized + for<'a> Deserialize<'a> {
-    type ToType: Compilable + From<Self>;
+pub trait Plugin: JsonSchema + Sized + for<'a> Deserialize<'a> 
+    where
+        <<Self as client::plugin::Plugin>::ToType as std::convert::TryFrom<Self>>::Error:
+            std::error::Error+'static,
+{
+    type ToType: Compilable + TryFrom<Self>;
     /// gets the jsonschema for the plugin type, which is the API for calling create.
     fn get_api_inner() -> *mut c_char {
         encode_json(&schemars::schema_for!(CreateArgs::<Self>))
@@ -32,7 +37,7 @@ pub trait Plugin: JsonSchema + Sized + for<'a> Deserialize<'a> {
             amount,
         } = serde_json::from_slice(s.to_bytes())?;
         let ctx = Context::new(network, amount, Arc::new(client::WasmHostEmulator));
-        let converted = Self::ToType::from(arguments);
+        let converted = Self::ToType::try_from(arguments)?;
         let compiled = converted.compile(&ctx)?;
         Ok(serde_json::to_string(&compiled)?)
     }

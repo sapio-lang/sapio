@@ -12,7 +12,7 @@ rustup target add wasm32-unknown-unknown
 ```
 1.  Get the [wasm-pack](https://rustwasm.github.io/wasm-pack/) tool.
 
-> Tip: On an M1 Mac you may need to:
+> Tip: On an M1 Mac you may need to do the following:
 > ```bash
 > brew install llvm
 > cargo install wasm-pack
@@ -20,7 +20,7 @@ rustup target add wasm32-unknown-unknown
 > ```
 > and then load the following before compiling
 > ```bash
-> export PATH="/opt/homebrew/opt/llvm/bin:$PATH".
+> export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
 > export CC=/opt/homebrew/opt/llvm/bin/clang
 > export AR=/opt/homebrew/opt/llvm/bin/llvm-ar
 > rustup default nightly
