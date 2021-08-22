@@ -36,18 +36,21 @@ Follow this quickstart guide to get going.
 ```bash
 rustup target add wasm32-unknown-unknown
 ```
-1. Tip: On an M1 Mac you may need to do the following:
+> Tip: On macOS you may need to do the following:
+
 > ```bash
 > brew install llvm
 > cargo install wasm-pack
 > rustup toolchain install nightly
+> rustup default nightly
 > ```
 > and then load the following before compiling to use the newer llvm/clang.
 > ```bash
 > export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+> # for older homebrew installs
+> # export PATH="/usr/local/opt/llvm/bin:$PATH"
 > export CC=/opt/homebrew/opt/llvm/bin/clang
 > export AR=/opt/homebrew/opt/llvm/bin/llvm-ar
-> rustup default nightly
 > ```
 
 1.  Clone this repo: 
