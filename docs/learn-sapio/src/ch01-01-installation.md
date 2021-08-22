@@ -12,7 +12,7 @@ rustup target add wasm32-unknown-unknown
 ```
 1.  Get the [wasm-pack](https://rustwasm.github.io/wasm-pack/) tool.
 
-> Tip: On an M1 Mac you may need to do the following:
+> Tip: On macOS you may need to do the following:
 > ```bash
 > brew install llvm
 > cargo install wasm-pack
@@ -21,9 +21,11 @@ rustup target add wasm32-unknown-unknown
 > and then load the following before compiling
 > ```bash
 > export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
+> # for older homebrew installs
+> # export PATH="/usr/local/opt/llvm/bin:$PATH"
 > export CC=/opt/homebrew/opt/llvm/bin/clang
 > export AR=/opt/homebrew/opt/llvm/bin/llvm-ar
-> rustup default nightly
+> echo "nightly" >> sapio/rust-toolchain
 > ```
 
 1.  Clone this repo: 
@@ -37,7 +39,7 @@ cd plugin-example/treepay/ && wasm-pack build && cd ..
 ```
 1.  Instantiate a contract from the plugin:
 ```
-cargo run --bin sapio-cli -- contract create \{\"amount\":9.99,\"arguments\":\{\"Basic\":\{\"fee_sats_per_tx\":1000,\"participants\":\[\{\"address\":\"bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw\",\"amount\":2.99\}\],\"radix\":2\}\},\"network\":\"Regtest\"\} --file="plugin-example/treepay/pkg/sapio_wasm_plugin_example_bg.wasm"
+cargo run --bin sapio-cli -- contract create \{\"amount\":9.99,\"arguments\":\{\"Treepay\":\{\"fee_sats_per_tx\":1000,\"participants\":\[\{\"address\":\"bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw\",\"amount\":2.99\}\],\"radix\":2\}\},\"network\":\"Regtest\"\} --file="plugin-example/treepay/pkg/sapio_wasm_plugin_example_bg.wasm"
 ```
 
 You can use `cargo run --bin sapio-cli -- help` to learn more about what a the
