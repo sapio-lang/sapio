@@ -6,9 +6,9 @@ Sapio should work on all platforms, but is recommend for use with Linux (Ubuntu 
 Follow this quickstart guide to get going.
 
 1.  Get [rust](https://rustup.rs/) if you don't have it already.
-1.  Add the wasm target by running the below command in your terminal:
+1.  Add the wasm target and nightly toolchain by running the below command in your terminal:
 ```bash
-rustup target add wasm32-unknown-unknown
+rustup update
 ```
 1.  Get the [wasm-pack](https://rustwasm.github.io/wasm-pack/) tool.
 
@@ -16,7 +16,6 @@ rustup target add wasm32-unknown-unknown
 > ```bash
 > brew install llvm
 > cargo install wasm-pack
-> rustup toolchain install nightly
 > ```
 > and then load the following before compiling
 > ```bash
@@ -25,7 +24,6 @@ rustup target add wasm32-unknown-unknown
 > # export PATH="/usr/local/opt/llvm/bin:$PATH"
 > export CC=/opt/homebrew/opt/llvm/bin/clang
 > export AR=/opt/homebrew/opt/llvm/bin/llvm-ar
-> echo "nightly" >> sapio/rust-toolchain
 > ```
 
 1.  Clone this repo: 
