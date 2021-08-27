@@ -32,7 +32,7 @@ Sapio should work on all platforms, but is recommended for use with Linux (Ubunt
 Follow this quickstart guide to get going.
 
 1.  Get [rust](https://rustup.rs/) if you don't have it already.
-1.  Add the wasm target by running the below command in your terminal:
+1.  Add the wasm target and nightly toolchain by running the below command in your terminal:
 ```bash
 rustup target add wasm32-unknown-unknown
 ```
