@@ -33,7 +33,7 @@
 # Warnings
 - [Limitations of Sapio](./ch05-00-limitations.md)
     - [BIP-119 Emulation](./ch05-01-ctv-emulator.md)
-    - [No Taproot](./ch05-02-taproot.md)
+    - [Taproot Support](./ch05-02-taproot.md)
     - [Advanced Transaction Handling](./ch05-03-txns.md)
     - [Mempool & Fees](./ch05-04-gas.md)
 
