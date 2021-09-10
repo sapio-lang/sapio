@@ -1,7 +1,7 @@
-# No Taproot
+# Taproot
 
-Currently Taproot is not active on Bitcoin and there is no deployment planned
-for it.
+Currently Taproot is scheduled to active on Bitcoin in November 2021 but there
+is limited support for it across all ecosystem tools.
 
 Sapio scripts can become very large in size, and would greatly benefit from
 being able to split up and merkelize the logic into smaller satisfiable
@@ -9,21 +9,12 @@ chunks. This makes it economical to use Sapio.
 
 The compiler is currently relatively naive about this, and unknown (or worse,
 unchecked) errors might occur as a result of pushing these limits. Hopefully,
-`rust-miniscript` should catch such errors, but a malicious actor might be
+`rust-miniscript` should catch such errors, but a malicious author might be
 able to trigger an unknown unsatisfiable script.
 
-As such, Sapio is probably ill-advisable to use at writing, but this will
-hopefully change in the future.
+Without full Taproot support, Sapio is probably ill-advisable to use at writing,
+but this will hopefully change in the immediate future.
 
-## Emulation?
-
-In theory, Taproot could also be emulated in a similar manner to CTV. You
-would run a server that would send a replacement key to use instead of the
-Taproot key, and then the emulator would sign off on the transaction if the user
-could provide a satisfaction.
-
-Fortunately, it does seem that Taproot will be active within the next year,
-so such measures are not yet required.
 
 ## Taproot Optimizations
 
