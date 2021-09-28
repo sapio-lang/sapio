@@ -160,6 +160,7 @@ impl Object {
     /// bind attaches an Object to a specific UTXO and returns a vec of transactions and
     /// transaction metadata.
     ///
+    #[deprecated]
     pub fn bind(
         &self,
         out_in: bitcoin::OutPoint,
