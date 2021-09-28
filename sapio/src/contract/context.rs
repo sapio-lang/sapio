@@ -13,6 +13,39 @@ use miniscript::DescriptorTrait;
 use sapio_ctv_emulator_trait::CTVEmulator;
 use std::collections::HashMap;
 use std::sync::Arc;
+
+/// Used to Build a Shared Path for all children of a given context.
+pub struct ReversePath {
+    past: Option<Arc<ReversePath>>,
+    this: Arc<String>,
+}
+
+impl From<ReversePath> for Vec<Arc<String>> {
+    fn from(r: ReversePath) -> Self {
+        let mut result = vec![r.this];
+        let mut node = &r.past;
+        while let Some(v) = node {
+            result.push(v.this.clone());
+            node = &v.past;
+        }
+        result
+    }
+}
+struct MK(Option<Arc<ReversePath>>);
+impl From<Vec<Arc<String>>> for MK {
+    fn from(v: Vec<Arc<String>>) -> Self {
+        let mut rp = None;
+        for val in v {
+            rp = Some(ReversePath::push(rp, val));
+        }
+        MK(rp)
+    }
+}
+impl ReversePath {
+    fn push(v: Option<Arc<ReversePath>>, s: Arc<String>) -> Arc<ReversePath> {
+        Arc::new(ReversePath { past: v, this: s })
+    }
+}
 /// Context is used to track statet during compilation such as remaining value.
 pub struct Context {
     /* TODO: Add Context Fields! */
@@ -21,7 +54,7 @@ pub struct Context {
     /// which network is the contract building for?
     pub network: Network,
     /// TODO: reversed linked list of ARCs to better de-duplicate memory.
-    path: Vec<Arc<String>>,
+    path: Arc<ReversePath>,
 }
 
 lazy_static::lazy_static! {
@@ -41,15 +74,16 @@ impl Context {
             available_funds,
             emulator,
             network,
-            path,
+            // TODO: Should return Option Self if path is not length > 0
+            path: MK::from(path).0.unwrap(),
         }
     }
 
     /// Derive a new contextual path
     /// If no path is provided, it will be "cloned"
     pub fn derive<'a>(&self, path: Option<&'a str>) -> Self {
-        let mut new_path = self.path.clone();
-        new_path.push(
+        let new_path = ReversePath::push(
+            Some(self.path.clone()),
             path.map(String::from)
                 .map(Arc::new)
                 .unwrap_or_else(|| CLONED.clone()),
