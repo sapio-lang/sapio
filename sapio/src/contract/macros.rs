@@ -170,19 +170,21 @@ macro_rules! then {
 macro_rules! finish {
     {
         $(#[$meta:meta])*
-        $name:ident
+        $name:ident<$arg_type:ty>
     } => {
 
         $crate::contract::macros::paste!{
 
             $(#[$meta])*
-            fn [<FINISH_ $name>](&self, _ctx:&$crate::contract::Context, $o: $arg_type)-> $crate::contract::TxTmplIt
+            fn [<FINISH_ $name>](&self, _ctx:&$crate::contract::Context, _o: $arg_type)-> $crate::contract::TxTmplIt
             {
                 unimplemented!();
             }
             $(#[$meta])*
             fn $name<'a>() ->
-            $crate::contract::actions::CallableAsFoF<Self, <Self as $crate::contract::Contract>::StatefulArguments>>>{
+            Option<Box<dyn
+            $crate::contract::actions::CallableAsFoF<Self, <Self as $crate::contract::Contract>::StatefulArguments>>>
+            {
                 None
             }
         }
@@ -209,7 +211,7 @@ macro_rules! finish {
                     coerce_args: $coerce_args,
                     guard: &$guard_list,
                     conditional_compile_if: &$conditional_compile_list,
-                    func: Self::[<FINISH_ $name>]
+                    func: Self::[<FINISH_ $name>],
                 };
                 Some(Box::new(f))
             }
@@ -228,8 +230,6 @@ macro_rules! finish {
             coerce_args: $coerce_args
             fn $name($s, $ctx, $o:$arg_type) $b }
     };
-
-
 }
 
 /// The guard macro is used to define a `Guard`. Guards may be cached or uncached.
