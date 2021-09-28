@@ -19,6 +19,7 @@ use config::*;
 use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::CTVAvailable;
 use emulator_connect::CTVEmulator;
+use sapio::contract::object::{LinkedPSBT, SapioStudioFormat};
 use sapio::contract::Compiled;
 use sapio::contract::Context;
 use sapio::template::output::OutputMeta;
@@ -251,7 +252,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let logger = Rc::new(TxIndexLogger::new());
                 (*logger).add_tx(Arc::new(tx.clone()))?;
 
-                let mut results = vec![];
                 let mut bound = j.bind_psbt(
                     OutPoint::new(tx.txid(), vout as u32),
                     HashMap::new(),
@@ -260,33 +260,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )?;
 
                 if outpoint.is_none() {
-                    let out_meta = vec![OutputMeta::new(); tx.output.len()];
+                    let output_metadata = vec![OutputMeta::new(); tx.output.len()];
                     let psbt = PartiallySignedTransaction::from_unsigned_tx(tx)?;
-                    bound.push((
+                    bound.push(LinkedPSBT {
                         psbt,
-                        TemplateMetadata {
+                        metadata: TemplateMetadata {
                             label: Some("funding".into()),
                             color: Some("pink".into()),
                             extra: HashMap::new(),
                         },
-                        out_meta,
-                    ))
+                        output_metadata,
+                    });
                 }
-                for (mut psbt, mut meta, mut out_meta) in bound {
-                    let psbt_v = if use_base64 {
-                        let bytes = serialize(&psbt);
-                        serde_json::Value::from(base64::encode(bytes))
-                    } else {
-                        serde_json::to_value(&psbt)?
-                    };
-                    results.push(serde_json::json!({
-                        "psbt": psbt_v,
-                        "hex": bitcoin::consensus::encode::serialize_hex(&psbt.extract_tx()),
-                        "metadata": serde_json::to_value(meta)?,
-                        "utxo_metadata": serde_json::to_value(out_meta)?
-                    }));
-                }
-
+                let results: Vec<_> = bound.into_iter().map(SapioStudioFormat::from).collect();
                 println!("{}", serde_json::to_string_pretty(&results)?);
             }
             Some(("create", args)) => {

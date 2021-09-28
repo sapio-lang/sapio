@@ -11,6 +11,7 @@ use crate::template::TemplateMetadata;
 use crate::util::amountrange::AmountRange;
 use crate::util::extended_address::ExtendedAddress;
 use ::miniscript::{self, *};
+use bitcoin::consensus::serialize;
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::amount::Amount;
@@ -170,14 +171,7 @@ impl Object {
         output_map: HashMap<Sha256, Vec<Option<bitcoin::OutPoint>>>,
         blockdata: Rc<dyn TxIndex>,
         emulator: &dyn CTVEmulator,
-    ) -> Result<
-        Vec<(
-            bitcoin::util::psbt::PartiallySignedTransaction,
-            TemplateMetadata,
-            Vec<OutputMeta>,
-        )>,
-        ObjectError,
-    > {
+    ) -> Result<Vec<LinkedPSBT>, ObjectError> {
         let mut result = vec![];
         // Could use a queue instead to do BFS linking, but order doesn't matter and stack is
         // faster.
@@ -225,11 +219,15 @@ impl Object {
                 psbtx = emulator.sign(psbtx)?;
                 let final_tx = psbtx.clone().extract_tx();
                 let txid = blockdata.add_tx(Arc::new(final_tx))?;
-                result.push((
-                    psbtx,
-                    metadata_map_s2s.clone(),
-                    outputs.iter().cloned().map(|x| x.metadata).collect::<Vec<_>>(),
-                ));
+                result.push(LinkedPSBT {
+                    psbt: psbtx,
+                    metadata: metadata_map_s2s.clone(),
+                    output_metadata: outputs
+                        .iter()
+                        .cloned()
+                        .map(|x| x.metadata)
+                        .collect::<Vec<_>>(),
+                });
                 stack.reserve(outputs.len());
                 for (vout, v) in outputs.iter().enumerate() {
                     let vout = vout as u32;
@@ -238,5 +236,48 @@ impl Object {
             }
         }
         Ok(result)
+    }
+}
+
+/// Container for data from  `Object::bind_psbt`.
+pub struct LinkedPSBT {
+    /// a PSBT
+    pub psbt: PartiallySignedTransaction,
+    /// tx level metadata
+    pub metadata: TemplateMetadata,
+    /// output specific metadata
+    pub output_metadata: Vec<OutputMeta>,
+}
+
+/// Format for a Linked PSBT in Sapio Studio
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub enum SapioStudioFormat {
+    /// Used for PSBT Return Values
+    #[serde(rename="linked_psbt")]
+    LinkedPSBT {
+        /// Base 64 Encoded PSBT
+        psbt: String,
+        /// Hex encoded TXN
+        hex: String,
+        /// tx level metadata
+        metadata: TemplateMetadata,
+        /// per-Output Metadata
+        output_metadata: Vec<OutputMeta>,
+    },
+}
+
+impl From<LinkedPSBT> for SapioStudioFormat {
+    fn from(l: LinkedPSBT) -> SapioStudioFormat {
+        let psbt = {
+            let bytes = serialize(&l.psbt);
+            base64::encode(bytes)
+        };
+        let hex = bitcoin::consensus::encode::serialize_hex(&l.psbt.extract_tx());
+        SapioStudioFormat::LinkedPSBT {
+            psbt,
+            hex,
+            metadata: l.metadata,
+            output_metadata: l.output_metadata,
+        }
     }
 }

@@ -8,7 +8,7 @@
 use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::Hash;
 use bitcoin::util::amount::Amount;
-use sapio::contract::{Compilable, CompilationError, Compiled, Context};
+use sapio::contract::{object::SapioStudioFormat, Compilable, CompilationError, Compiled, Context};
 use sapio::util::extended_address::ExtendedAddress;
 use sapio_ctv_emulator_trait::CTVAvailable;
 use schemars::schema::RootSchema;
@@ -161,23 +161,21 @@ impl Action {
                     .ok()?;
                 let a = c.address.clone();
                 // todo amount
-                let data = c.bind_psbt(
-                    create_mock_output(),
-                    HashMap::new(),
-                    Rc::new(TxIndexLogger::new()),
-                    &CTVAvailable,
-                ).ok()?;
+                let data = c
+                    .bind_psbt(
+                        create_mock_output(),
+                        HashMap::new(),
+                        Rc::new(TxIndexLogger::new()),
+                        &CTVAvailable,
+                    )
+                    .ok()?;
                 let program = Program {
                     program: data
-                        .iter()
-                        .map(|(a, b,c)| (bitcoin::consensus::encode::serialize(&a.clone().extract_tx()), serde_json::to_value(&b)))
-                        .map(|(h, mut v)| {
-                            let mut o = v.unwrap();
-                            o.as_object_mut()
-                                .map(|ref mut m| m.insert("hex".into(), h.to_hex().into()));
-                            o
-                        })
-                        .collect(),
+                        .into_iter()
+                        .map(SapioStudioFormat::from)
+                        .map(serde_json::to_value)
+                        .collect::<Result<Vec<Value>, _>>()
+                        .ok()?,
                 };
                 println!("{:?}", program);
                 Some(Reaction::Created(c.amount_range.max(), a, program))
