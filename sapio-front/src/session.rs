@@ -18,6 +18,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::Display;
+use std::rc::Rc;
 use std::sync::Arc;
 
 type Key = bitcoin::hashes::sha256::Hash;
@@ -148,6 +149,7 @@ fn create_mock_output() -> bitcoin::OutPoint {
     }
 }
 
+use sapio::sapio_base::txindex::TxIndexLogger;
 impl Action {
     fn react(self, session: &mut Session) -> Option<Reaction> {
         match self {
@@ -159,16 +161,21 @@ impl Action {
                     .ok()?;
                 let a = c.address.clone();
                 // todo amount
-                let (txns, metadata) = c.bind(create_mock_output());
+                let data = c.bind_psbt(
+                    create_mock_output(),
+                    HashMap::new(),
+                    Rc::new(TxIndexLogger::new()),
+                    &CTVAvailable,
+                ).ok()?;
                 let program = Program {
-                    program: txns
+                    program: data
                         .iter()
-                        .map(bitcoin::consensus::encode::serialize)
-                        .zip(metadata.into_iter())
+                        .map(|(a, b,c)| (bitcoin::consensus::encode::serialize(&a.clone().extract_tx()), serde_json::to_value(&b)))
                         .map(|(h, mut v)| {
-                            v.as_object_mut()
+                            let mut o = v.unwrap();
+                            o.as_object_mut()
                                 .map(|ref mut m| m.insert("hex".into(), h.to_hex().into()));
-                            v
+                            o
                         })
                         .collect(),
                 };

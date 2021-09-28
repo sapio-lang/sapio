@@ -5,7 +5,9 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Object is the output of Sapio Compilation & can be linked to a specific coin
+use crate::template::output::OutputMeta;
 use crate::template::Template;
+use crate::template::TemplateMetadata;
 use crate::util::amountrange::AmountRange;
 use crate::util::extended_address::ExtendedAddress;
 use ::miniscript::{self, *};
@@ -157,24 +159,6 @@ impl Object {
         })
     }
 
-    /// bind attaches an Object to a specific UTXO and returns a vec of transactions and
-    /// transaction metadata.
-    ///
-    #[deprecated]
-    pub fn bind(
-        &self,
-        out_in: bitcoin::OutPoint,
-    ) -> (Vec<bitcoin::Transaction>, Vec<serde_json::Value>) {
-        let (a, b) = self
-            .bind_psbt(
-                out_in,
-                HashMap::new(),
-                Rc::new(TxIndexLogger::new()),
-                &CTVAvailable,
-            )
-            .unwrap();
-        (a.into_iter().map(|x| x.extract_tx()).collect(), b)
-    }
     /// bind_psbt attaches and `Object` to a specific UTXO, returning a
     /// Vector of PSBTs and transaction metadata.
     ///
@@ -187,14 +171,14 @@ impl Object {
         blockdata: Rc<dyn TxIndex>,
         emulator: &dyn CTVEmulator,
     ) -> Result<
-        (
-            Vec<bitcoin::util::psbt::PartiallySignedTransaction>,
-            Vec<serde_json::Value>,
-        ),
+        Vec<(
+            bitcoin::util::psbt::PartiallySignedTransaction,
+            TemplateMetadata,
+            Vec<OutputMeta>,
+        )>,
         ObjectError,
     > {
-        let mut txns = vec![];
-        let mut metadata_out = vec![];
+        let mut result = vec![];
         // Could use a queue instead to do BFS linking, but order doesn't matter and stack is
         // faster.
         let mut stack = vec![(out_in, self)];
@@ -209,8 +193,7 @@ impl Object {
             },
         )) = stack.pop()
         {
-            txns.reserve(ctv_to_tx.len() + suggested_txs.len());
-            metadata_out.reserve(ctv_to_tx.len() + suggested_txs.len());
+            result.reserve(ctv_to_tx.len() + suggested_txs.len());
             for (
                 ctv_hash,
                 Template {
@@ -242,12 +225,11 @@ impl Object {
                 psbtx = emulator.sign(psbtx)?;
                 let final_tx = psbtx.clone().extract_tx();
                 let txid = blockdata.add_tx(Arc::new(final_tx))?;
-                txns.push(psbtx);
-                metadata_out.push(json!({
-                    "color" : "green",
-                    "metadata" : metadata_map_s2s,
-                    "utxo_metadata" : outputs.iter().map(|x| &x.metadata).collect::<Vec<_>>()
-                }));
+                result.push((
+                    psbtx,
+                    metadata_map_s2s.clone(),
+                    outputs.iter().cloned().map(|x| x.metadata).collect::<Vec<_>>(),
+                ));
                 stack.reserve(outputs.len());
                 for (vout, v) in outputs.iter().enumerate() {
                     let vout = vout as u32;
@@ -255,6 +237,6 @@ impl Object {
                 }
             }
         }
-        Ok((txns, metadata_out))
+        Ok(result)
     }
 }

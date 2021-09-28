@@ -28,7 +28,7 @@ jsonschema-valid = "0.4.0"
 [dependencies.bitcoin]
 package = "sapio-bitcoin"
 version = "^0.26.0"
-features = ['use-serde', 'rand']
+features = ['use-serde', 'rand', 'base64']
 
 [dependencies.miniscript]
 package = "sapio-miniscript"

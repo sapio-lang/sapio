@@ -21,12 +21,15 @@ pub use builder::Builder;
 /// and can be extended via a hashmap
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 pub struct TemplateMetadata {
+    /// A Label for this transaction
     #[serde(skip_serializing_if = "Option::is_none", default)]
-    label: Option<String>,
+    pub label: Option<String>,
+    /// catch all map for future metadata....
     #[serde(flatten)]
-    extra: HashMap<String, String>,
+    pub extra: HashMap<String, String>,
+    /// A Color to render this node.
     #[serde(skip_serializing_if = "Option::is_none", default)]
-    color: Option<String>,
+    pub color: Option<String>,
 }
 
 impl TemplateMetadata {

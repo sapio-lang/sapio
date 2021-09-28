@@ -11,7 +11,6 @@ use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::bip32::ExtendedPrivKey;
 use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoin::util::psbt::PartiallySignedTransaction;
-
 use bitcoin::OutPoint;
 use bitcoincore_rpc_async as rpc;
 use bitcoincore_rpc_async::RpcApi;
@@ -22,6 +21,8 @@ use emulator_connect::CTVAvailable;
 use emulator_connect::CTVEmulator;
 use sapio::contract::Compiled;
 use sapio::contract::Context;
+use sapio::template::output::OutputMeta;
+use sapio::template::TemplateMetadata;
 use sapio::util::extended_address::ExtendedAddress;
 use sapio_base::txindex::TxIndex;
 use sapio_base::txindex::TxIndexLogger;
@@ -76,14 +77,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             (@subcommand bind =>
                 (about: "Bind Contract to a specific UTXO")
                 (@arg mock: --mock "Create a fake output for this txn.")
+                (@arg base64_psbt: --base64_psbt "Create a fake output for this txn.")
                 (@arg outpoint: --outpoint +takes_value "Use this specific outpoint")
                 (@arg json: "JSON to Bind")
-            )
-            (@subcommand for_tux =>
-                (about: "Translate for TUX viewer")
-                (@arg psbts: --psbt "Output in PSBT format instead of tx hex.")
-                (@arg finalize: --finalize "Attempt finalizing via miniscript...")
-                (@arg json: "JSON to translate")
             )
             (@subcommand create =>
                 (about: "create a contract to a specific UTXO")
@@ -208,6 +204,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 let use_mock = args.is_present("mock");
+                let use_base64 = args.is_present("base64_psbt");
                 let outpoint: Option<bitcoin::OutPoint> = args
                     .value_of("outpoint")
                     .map(serde_json::from_str)
@@ -254,92 +251,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let logger = Rc::new(TxIndexLogger::new());
                 (*logger).add_tx(Arc::new(tx.clone()))?;
 
-                let (mut txns, mut meta) = j.bind_psbt(
+                let mut results = vec![];
+                let mut bound = j.bind_psbt(
                     OutPoint::new(tx.txid(), vout as u32),
                     HashMap::new(),
                     logger,
                     emulator.as_ref(),
                 )?;
+
                 if outpoint.is_none() {
-                    txns.push(PartiallySignedTransaction::from_unsigned_tx(tx)?);
-                    meta.push(serde_json::json!({
-                        "color": "black",
-                        "metadata": {"label":"funding"},
-                        "utxo_metadata": {}
+                    let out_meta = vec![OutputMeta::new(); tx.output.len()];
+                    let psbt = PartiallySignedTransaction::from_unsigned_tx(tx)?;
+                    bound.push((
+                        psbt,
+                        TemplateMetadata {
+                            label: Some("funding".into()),
+                            color: Some("pink".into()),
+                            extra: HashMap::new(),
+                        },
+                        out_meta,
+                    ))
+                }
+                for (mut psbt, mut meta, mut out_meta) in bound {
+                    let psbt_v = if use_base64 {
+                        let bytes = serialize(&psbt);
+                        serde_json::Value::from(base64::encode(bytes))
+                    } else {
+                        serde_json::to_value(&psbt)?
+                    };
+                    results.push(serde_json::json!({
+                        "psbt": psbt_v,
+                        "hex": bitcoin::consensus::encode::serialize_hex(&psbt.extract_tx()),
+                        "metadata": serde_json::to_value(meta)?,
+                        "utxo_metadata": serde_json::to_value(out_meta)?
                     }));
                 }
-                println!("{}", serde_json::to_string_pretty(&(txns, meta))?);
-            }
-            Some(("for_tux", args)) => {
-                use serde::{Deserialize, Serialize};
-                /// A `Program` is a wrapper type for a list of
-                /// JSON objects that should be of form:
-                /// ```json
-                /// {
-                ///     "hex" : Hex Encoded Transaction
-                ///     "color" : HTML Color,
-                ///     "metadata" : JSON Value,
-                ///     "utxo_metadata" : {
-                ///         "key" : "value",
-                ///         ...
-                ///     }
-                /// }
-                /// ```
-                #[derive(Serialize, Deserialize, Debug)]
-                pub struct Program {
-                    program: Vec<serde_json::Value>,
-                }
-                let (txns, metadata): (
-                    Vec<bitcoin::util::psbt::PartiallySignedTransaction>,
-                    Vec<serde_json::Value>,
-                ) = if let Some(json) = args.value_of("json") {
-                    serde_json::from_str(json)?
-                } else {
-                    let mut s = String::new();
-                    tokio::io::stdin().read_to_string(&mut s).await?;
-                    serde_json::from_str(&s)?
-                };
-                let encode_as_psbt = args.is_present("psbts");
-                let finalize_psbt = args.is_present("finalize");
-                let secp = Secp256k1::new();
-                let program = Program {
-                    program: txns
-                        .into_iter()
-                        .zip(metadata.into_iter())
-                        .map(|(mut u, mut v)| {
-                            if finalize_psbt {
-                                miniscript::psbt::finalize(&mut u, &secp)
-                                    .map_err(|e| println!("{:?}", e))
-                                    .ok();
-                            }
-                            let psbt = if encode_as_psbt {
-                                let bytes = serialize(&u);
-                                Some(base64::encode(bytes))
-                            } else {
-                                None
-                            };
-                            let h = bitcoin::consensus::encode::serialize_hex(&u.extract_tx());
-                            v.as_object_mut().map(|ref mut m| {
-                                m.insert("hex".into(), h.into());
-                                if let Some(psbt) = psbt {
-                                    m.insert("psbt".into(), psbt.into());
-                                }
-                                m.insert(
-                                    "label".into(),
-                                    m.get("metadata")
-                                        .unwrap()
-                                        .as_object()
-                                        .unwrap()
-                                        .get("label")
-                                        .unwrap_or(&serde_json::json!("unlabeled"))
-                                        .clone(),
-                                )
-                            });
-                            Ok(v)
-                        })
-                        .collect::<Result<Vec<_>, String>>()?,
-                };
-                println!("{}", serde_json::to_string_pretty(&program)?);
+
+                println!("{}", serde_json::to_string_pretty(&results)?);
             }
             Some(("create", args)) => {
                 let sph = WasmPluginHandle::new(
