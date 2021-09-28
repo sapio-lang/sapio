@@ -9,10 +9,11 @@
 use schemars::schema::RootSchema;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 /// Instructions for how to resume a contract compilation at a given point
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct ContinuationPoint {
     /// The arguments required at this point
     /// TODO: De-Duplicate repeated types?
-    pub schema: RootSchema,
+    pub schema: Arc<RootSchema>,
 }

@@ -6,7 +6,12 @@
 
 //! macros for making defining Sapio contracts less verbose.
 
+use core::any::TypeId;
 pub use paste::paste;
+use schemars::schema::RootSchema;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 /// The declare macro is used to declare the list of pathways in a Contract trait impl.
 /// formats for calling are:
@@ -154,17 +159,34 @@ macro_rules! then {
 
 }
 
+lazy_static::lazy_static! {
+static ref SCHEMA_MAP: Mutex<HashMap<TypeId, Arc<RootSchema>>> =
+Mutex::new(HashMap::new());
+}
+/// `get_schema_for` returns a cached RootSchema for a given type.  this is
+/// useful because we might expect to generate the same RootSchema many times,
+/// and they can use a decent amount of memory.
+pub fn get_schema_for<T: schemars::JsonSchema + 'static + Sized>(
+) -> Arc<schemars::schema::RootSchema> {
+    SCHEMA_MAP
+        .lock()
+        .unwrap()
+        .entry(TypeId::of::<T>())
+        .or_insert_with(|| Arc::new(schemars::schema_for!(T)))
+        .clone()
+}
+
 /// Internal Helper for finish! macro, not to be used directly.
 #[macro_export]
 macro_rules! web_api {
     {web{},$name:ident,$type:ty} => {
         $crate::contract::macros::paste!{
-            const [<FINISH_API_FOR_ $name >] : Option<$crate::schemars::schema::RootSchema> = Some($crate::schemars::schema_for!($type));
+            const [<FINISH_API_FOR_ $name >] : Option<std::sync::Arc<$crate::schemars::schema::RootSchema>> = Some($crate::contract::macros::get_schema_for::<$type>());
         }
     };
     {$name:ident,$type:ty} => {
         $crate::contract::macros::paste!{
-            const [<FINISH_API_FOR_ $name >] : Option<$crate::schemars::schema::RootSchema> = None;
+            const [<FINISH_API_FOR_ $name >] : Option<std::sync::Arc<$crate::schemars::schema::RootSchema>> = None;
         }
     }
 }

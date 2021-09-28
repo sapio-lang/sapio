@@ -5,6 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! The different types of functionality a contract can define.
+use std::sync::Arc;
 use super::CompilationError;
 use super::Context;
 use super::TxTmplIt;
@@ -150,7 +151,7 @@ pub struct FinishOrFunc<'a, ContractSelf: 'a, StatefulArguments, SpecificArgs> {
     /// to be filled in if SpecificArgs has a schema, which it might not.
     /// because negative trait bounds do not exists, that is up to the
     /// implementation to decide if the trait exists.
-    pub schema: Option<RootSchema>,
+    pub schema: Option<Arc<RootSchema>>,
     /// name derived from Function Name.
     pub name: String,
 }
@@ -170,7 +171,7 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     /// Get the name for this function
     fn get_name(&self) -> &str;
     /// Get the RootSchema for calling this with an update
-    fn get_schema(&self) -> &Option<RootSchema>;
+    fn get_schema(&self) -> &Option<Arc<RootSchema>>;
 }
 impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, StatefulArguments>
     for FinishOrFunc<'_, ContractSelf, StatefulArguments, SpecificArgs>
@@ -188,7 +189,7 @@ impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, 
     fn get_name(&self) -> &str {
         &self.name
     }
-    fn get_schema(&self) -> &Option<RootSchema> {
+    fn get_schema(&self) -> &Option<Arc<RootSchema>> {
         &self.schema
     }
 }
