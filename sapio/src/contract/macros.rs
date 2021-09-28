@@ -227,7 +227,8 @@ macro_rules! finish {
                     guard: &$guard_list,
                     conditional_compile_if: &$conditional_compile_list,
                     func: Self::[<FINISH_ $name>],
-                    schema: Self::[<FINISH_API_FOR_ $name >]
+                    schema: Self::[<FINISH_API_FOR_ $name >],
+                    name: std::stringify!($name).into()
                 };
                 Some(Box::new(f))
             }

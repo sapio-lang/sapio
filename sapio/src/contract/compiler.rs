@@ -11,6 +11,7 @@ use super::Compiled;
 use super::Context;
 use crate::contract::empty;
 use crate::util::amountrange::AmountRange;
+use schemars::schema::RootSchema;
 use std::collections::LinkedList;
 
 use super::actions::Guard;
@@ -201,6 +202,12 @@ where
                 }
             });
 
+        let mut continue_apis = self
+            .finish_or_fns()
+            .iter()
+            .filter_map(|x| x())
+            .filter_map(|f| f.get_schema().clone().map(|s| (f.get_name().into(), s)))
+            .collect::<HashMap<String, RootSchema>>();
         let mut ctv_to_tx = HashMap::new();
         let mut suggested_txs = HashMap::new();
         let mut amount_range = AmountRange::new();
@@ -293,6 +300,7 @@ where
         Ok(Compiled {
             ctv_to_tx,
             suggested_txs,
+            continue_apis,
             address,
             descriptor,
             policy,

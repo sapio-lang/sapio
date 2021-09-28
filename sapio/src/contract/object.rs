@@ -9,7 +9,6 @@ use crate::template::Template;
 use crate::util::amountrange::AmountRange;
 use crate::util::extended_address::ExtendedAddress;
 use ::miniscript::{self, *};
-
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::amount::Amount;
@@ -18,6 +17,7 @@ use sapio_base::txindex::TxIndexError;
 use sapio_base::txindex::{TxIndex, TxIndexLogger};
 use sapio_base::Clause;
 use sapio_ctv_emulator_trait::{CTVAvailable, CTVEmulator, EmulatorError};
+use schemars::schema::RootSchema;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -82,6 +82,14 @@ pub struct Object {
         default
     )]
     pub suggested_txs: HashMap<sha256::Hash, Template>,
+    /// A Map of arguments to continue execution and generate an update at this
+    /// point via a passed message
+    #[serde(
+        rename = "jsonschema_continuation_points",
+        skip_serializing_if = "HashMap::is_empty",
+        default
+    )]
+    pub continue_apis: HashMap<String, RootSchema>,
     /// The Object's Policy -- if known
     #[serde(
         rename = "known_policy",
@@ -109,6 +117,7 @@ impl Object {
         Object {
             ctv_to_tx: HashMap::new(),
             suggested_txs: HashMap::new(),
+            continue_apis: Default::default(),
             policy: None,
             address: address.into(),
             descriptor: None,
@@ -140,6 +149,7 @@ impl Object {
         Ok(Object {
             ctv_to_tx: HashMap::new(),
             suggested_txs: HashMap::new(),
+            continue_apis: Default::default(),
             policy: None,
             address: ExtendedAddress::make_op_return(data)?,
             descriptor: None,

@@ -97,6 +97,7 @@ impl Context {
         Compiled {
             ctv_to_tx: HashMap::new(),
             suggested_txs: HashMap::new(),
+            continue_apis: Default::default(),
             policy: None,
             address: d.address(bitcoin::Network::Bitcoin).unwrap().into(),
             descriptor: Some(d),

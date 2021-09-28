@@ -151,6 +151,8 @@ pub struct FinishOrFunc<'a, ContractSelf: 'a, StatefulArguments, SpecificArgs> {
     /// because negative trait bounds do not exists, that is up to the
     /// implementation to decide if the trait exists.
     pub schema: Option<RootSchema>,
+    /// name derived from Function Name.
+    pub name: String,
 }
 
 /// This trait hides the generic parameter `SpecificArgs` in FinishOrFunc
@@ -165,6 +167,10 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     fn get_conditional_compile_if(&self) -> ConditionallyCompileIfList<'_, ContractSelf>;
     /// Getter Method for internal field
     fn get_guard(&self) -> GuardList<'_, ContractSelf>;
+    /// Get the name for this function
+    fn get_name(&self) -> &str;
+    /// Get the RootSchema for calling this with an update
+    fn get_schema(&self) -> &Option<RootSchema>;
 }
 impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, StatefulArguments>
     for FinishOrFunc<'_, ContractSelf, StatefulArguments, SpecificArgs>
@@ -178,5 +184,11 @@ impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, 
     }
     fn get_guard(&self) -> GuardList<'_, ContractSelf> {
         self.guard
+    }
+    fn get_name(&self) -> &str {
+        &self.name
+    }
+    fn get_schema(&self) -> &Option<RootSchema> {
+        &self.schema
     }
 }
