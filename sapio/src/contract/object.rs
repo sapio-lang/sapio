@@ -240,6 +240,8 @@ impl Object {
 }
 
 /// Container for data from  `Object::bind_psbt`.
+#[derive(Serialize, Deserialize)]
+#[serde(rename="linked_psbt")]
 pub struct LinkedPSBT {
     /// a PSBT
     pub psbt: PartiallySignedTransaction,

@@ -272,8 +272,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         output_metadata,
                     });
                 }
-                let results: Vec<_> = bound.into_iter().map(SapioStudioFormat::from).collect();
-                println!("{}", serde_json::to_string_pretty(&results)?);
+                if use_base64 {
+                    let results: Vec<_> = bound.into_iter().map(SapioStudioFormat::from).collect();
+                    println!("{}", serde_json::to_string_pretty(&results)?);
+                } else {
+                    println!("{}", serde_json::to_string_pretty(&bound)?);
+                }
             }
             Some(("create", args)) => {
                 let sph = WasmPluginHandle::new(
