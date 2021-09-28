@@ -11,10 +11,10 @@ use super::AnyContract;
 use super::CompilationError;
 use super::Compiled;
 use super::Context;
+use crate::contract::abi::continuation::ContinuationPoint;
 use crate::util::amountrange::AmountRange;
 use ::miniscript::*;
 use sapio_base::Clause;
-use schemars::schema::RootSchema;
 use std::collections::HashMap;
 use std::collections::LinkedList;
 
@@ -204,8 +204,12 @@ where
             .finish_or_fns()
             .iter()
             .filter_map(|x| x())
-            .filter_map(|f| f.get_schema().clone().map(|s| (f.get_name().into(), s)))
-            .collect::<HashMap<String, RootSchema>>();
+            .filter_map(|f| {
+                f.get_schema()
+                    .clone()
+                    .map(|s| (f.get_name().into(), ContinuationPoint { schema: s }))
+            })
+            .collect::<HashMap<String, ContinuationPoint>>();
         let mut ctv_to_tx = HashMap::new();
         let mut suggested_txs = HashMap::new();
         let mut amount_range = AmountRange::new();

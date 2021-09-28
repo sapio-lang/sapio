@@ -8,3 +8,4 @@
 
 pub mod object;
 pub mod studio;
+pub mod continuation;
