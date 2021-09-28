@@ -7,11 +7,11 @@
 //! An example of how one might begin building a payment channel contract in Sapio
 use bitcoin;
 use bitcoin::secp256k1::*;
-use bitcoin::util::amount::{Amount, CoinAmount};
+use bitcoin::util::amount::CoinAmount;
 use contract::*;
 use sapio::*;
 use sapio_base::Clause;
-use schemars::{schema_for, JsonSchema};
+use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -24,6 +24,7 @@ use std::sync::{Arc, Mutex};
 mod tests {
     use super::*;
     use ::rand::rngs::OsRng;
+    use bitcoin::Amount;
     use miniscript::Descriptor;
     use miniscript::DescriptorTrait;
     use sapio_ctv_emulator_trait::CTVAvailable;
@@ -64,7 +65,7 @@ mod tests {
         };
         println!(
             "{}",
-            serde_json::to_string_pretty(&schema_for!(Channel<Stop, Args>)).unwrap()
+            serde_json::to_string_pretty(&schemars::schema_for!(Channel<Stop, Args>)).unwrap()
         );
         println!("{}", serde_json::to_string_pretty(&y).unwrap());
         let mut ctx = sapio::contract::Context::new(
@@ -78,12 +79,12 @@ mod tests {
 }
 
 /// Main Update to Channel
-#[derive(Debug)]
+#[derive(Debug, JsonSchema)]
 pub struct Update {
     /// hash to revoke
     revoke: bitcoin::hashes::sha256::Hash,
     /// the balances of the channel
-    split: (Amount, Amount),
+    split: (CoinAmount, CoinAmount),
 }
 impl TryFrom<Args> for Update {
     type Error = CompilationError;
@@ -96,7 +97,7 @@ impl TryFrom<Args> for Update {
     }
 }
 /// Args are some messages that can be passed to a Channel instance
-#[derive(Debug)]
+#[derive(Debug, JsonSchema)]
 pub enum Args {
     /// Wrapper around Update
     Update(Update),

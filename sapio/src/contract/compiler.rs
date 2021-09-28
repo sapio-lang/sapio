@@ -5,20 +5,18 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! The primary compilation traits and types
+use super::actions::Guard;
+use super::actions::{ConditionalCompileType, ConditionallyCompileIf};
 use super::AnyContract;
 use super::CompilationError;
 use super::Compiled;
 use super::Context;
-use crate::contract::empty;
 use crate::util::amountrange::AmountRange;
-use schemars::schema::RootSchema;
-use std::collections::LinkedList;
-
-use super::actions::Guard;
-use super::actions::{ConditionalCompileType, ConditionallyCompileIf};
 use ::miniscript::*;
 use sapio_base::Clause;
+use schemars::schema::RootSchema;
 use std::collections::HashMap;
+use std::collections::LinkedList;
 
 enum CacheEntry<T> {
     Cached(Clause),
@@ -113,7 +111,7 @@ where
         }
         let self_ref = self.get_inner_ref();
 
-        let mut guard_clauses = std::cell::RefCell::new(GuardCache::new());
+        let guard_clauses = std::cell::RefCell::new(GuardCache::new());
 
         // The code for then_fns and finish_or_fns is very similar, differing
         // only in that then_fns have a CTV enforcing the contract and
@@ -202,7 +200,7 @@ where
                 }
             });
 
-        let mut continue_apis = self
+        let continue_apis = self
             .finish_or_fns()
             .iter()
             .filter_map(|x| x())

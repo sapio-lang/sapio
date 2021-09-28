@@ -6,7 +6,6 @@
 
 //! macros for making defining Sapio contracts less verbose.
 
-use crate::contract::CompilationError;
 pub use paste::paste;
 
 /// The declare macro is used to declare the list of pathways in a Contract trait impl.
@@ -160,7 +159,7 @@ macro_rules! then {
 macro_rules! web_api {
     {web{},$name:ident,$type:ty} => {
         $crate::contract::macros::paste!{
-            const [<FINISH_API_FOR_ $name >] : Option<$crate::schemars::schema::RootSchema> = Some(schema_for!($type));
+            const [<FINISH_API_FOR_ $name >] : Option<$crate::schemars::schema::RootSchema> = Some($crate::schemars::schema_for!($type));
         }
     };
     {$name:ident,$type:ty} => {

@@ -5,7 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! An interactive compilation session designed to be compatible with sapio-lang/TUX
-use bitcoin::hashes::hex::ToHex;
+
 use bitcoin::hashes::Hash;
 use bitcoin::util::amount::Amount;
 use sapio::contract::{object::SapioStudioFormat, Compilable, CompilationError, Compiled, Context};

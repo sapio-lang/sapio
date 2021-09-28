@@ -6,25 +6,21 @@
 
 //! Object is the output of Sapio Compilation & can be linked to a specific coin
 pub use super::studio::*;
-use crate::template::output::OutputMeta;
 use crate::template::Template;
-use crate::template::TemplateMetadata;
 use crate::util::amountrange::AmountRange;
 use crate::util::extended_address::ExtendedAddress;
 use ::miniscript::{self, *};
-use bitcoin::consensus::serialize;
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::amount::Amount;
 use bitcoin::util::psbt::PartiallySignedTransaction;
+use sapio_base::txindex::TxIndex;
 use sapio_base::txindex::TxIndexError;
-use sapio_base::txindex::{TxIndex, TxIndexLogger};
 use sapio_base::Clause;
-use sapio_ctv_emulator_trait::{CTVAvailable, CTVEmulator, EmulatorError};
+use sapio_ctv_emulator_trait::{CTVEmulator, EmulatorError};
 use schemars::schema::RootSchema;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;

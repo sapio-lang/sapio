@@ -11,7 +11,6 @@ use crate::contract::{CompilationError, Context};
 use bitcoin::util::amount::Amount;
 use sapio_base::timelocks::*;
 use sapio_base::CTVHash;
-use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::convert::TryInto;
 

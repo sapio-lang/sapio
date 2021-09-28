@@ -9,7 +9,7 @@ use super::CompilationError;
 use super::Context;
 use super::TxTmplIt;
 use sapio_base::Clause;
-use schemars::{schema::RootSchema, schema_for, JsonSchema};
+use schemars::schema::RootSchema;
 use std::collections::LinkedList;
 /// A Guard is a function which generates some condition that must be met to unlock a script.
 /// If bool = true, the computation of the guard is cached, which is useful if e.g. Guard

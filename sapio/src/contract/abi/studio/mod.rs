@@ -7,7 +7,7 @@
 //! Formats for Sapio Studio
 use crate::template::output::OutputMeta;
 use crate::template::TemplateMetadata;
-use ::miniscript::{self, *};
+use ::miniscript::*;
 use bitcoin::consensus::serialize;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use schemars::JsonSchema;
