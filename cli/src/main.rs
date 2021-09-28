@@ -221,7 +221,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
 
                 let (tx, vout) = if use_mock {
-                    let ctx = Context::new(config.network, j.amount_range.max(), emulator.clone());
+                    let ctx = Context::new(
+                        config.network,
+                        j.amount_range.max(),
+                        emulator.clone(),
+                        vec![Arc::new("MOCK".into())],
+                    );
                     let mut tx = ctx
                         .template()
                         .add_output(j.amount_range.max(), &j, None)?

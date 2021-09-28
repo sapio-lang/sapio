@@ -14,23 +14,50 @@ use sapio_ctv_emulator_trait::CTVEmulator;
 use std::collections::HashMap;
 use std::sync::Arc;
 /// Context is used to track statet during compilation such as remaining value.
-/// Context type is not copyable/clonable externally
-#[derive(Clone)]
 pub struct Context {
     /* TODO: Add Context Fields! */
     available_funds: Amount,
     emulator: Arc<dyn CTVEmulator>,
     /// which network is the contract building for?
     pub network: Network,
+    path: Vec<Arc<String>>,
+}
+
+lazy_static::lazy_static! {
+    static ref CLONED : Arc<String> = Arc::new("cloned".into());
 }
 
 impl Context {
-    /// create a context instance
-    pub fn new(network: Network, amount: Amount, emulator: Arc<dyn CTVEmulator>) -> Self {
+    /// create a context instance. Should only happen *once* at the very top
+    /// level.
+    pub fn new(
+        network: Network,
+        available_funds: Amount,
+        emulator: Arc<dyn CTVEmulator>,
+        path: Vec<Arc<String>>,
+    ) -> Self {
         Context {
-            available_funds: amount,
-            emulator: emulator,
+            available_funds,
+            emulator,
             network,
+            path,
+        }
+    }
+
+    /// Derive a new contextual path
+    /// If no path is provided, it will be "cloned"
+    pub fn derive(&self, path: Option<&'static str>) -> Self {
+        let mut new_path = self.path.clone();
+        new_path.push(
+            path.map(String::from)
+                .map(Arc::new)
+                .unwrap_or_else(|| CLONED.clone()),
+        );
+        Context {
+            available_funds: self.available_funds,
+            emulator: self.emulator.clone(),
+            path: new_path,
+            network: self.network,
         }
     }
 
@@ -61,7 +88,8 @@ impl Context {
             Ok(Context {
                 available_funds: amount,
                 emulator: self.emulator.clone(),
-                ..*self
+                path: self.path.clone(),
+                network: self.network,
             })
         }
     }
@@ -83,8 +111,10 @@ impl Context {
     /// Get a template builder from this context object
     pub fn template(&self) -> crate::template::Builder {
         crate::template::Builder::new(Context {
+            available_funds: self.available_funds,
             emulator: self.emulator.clone(),
-            ..*self
+            path: self.path.clone(),
+            network: self.network,
         })
     }
 

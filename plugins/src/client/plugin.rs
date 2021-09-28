@@ -36,7 +36,8 @@ where
             network,
             amount,
         } = serde_json::from_slice(s.to_bytes())?;
-        let ctx = Context::new(network, amount, Arc::new(client::WasmHostEmulator));
+        /// TODO: Get The wasm ID here?
+        let ctx = Context::new(network, amount, Arc::new(client::WasmHostEmulator), vec![Arc::new("PLUGIN_TRAMPOLINE".into())]);
         let converted = Self::ToType::try_from(arguments)?;
         let compiled = converted.compile(&ctx)?;
         Ok(serde_json::to_string(&compiled)?)

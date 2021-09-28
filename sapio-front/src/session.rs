@@ -335,6 +335,7 @@ impl Session {
             self.network,
             Amount::from_sat(100_000_000_000),
             Arc::new(CTVAvailable),
+            vec![Arc::new("Frontend Session".into())]
         )
     }
 
