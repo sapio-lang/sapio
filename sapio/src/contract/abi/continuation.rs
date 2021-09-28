@@ -21,21 +21,22 @@ pub struct ContinuationPoint {
 }
 
 mod rs {
-    use schemars::schema::RootSchema;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use std::borrow::Borrow;
     use std::sync::Arc;
-    pub fn serializer<S>(v: &Arc<RootSchema>, s: S) -> Result<S::Ok, S::Error>
+    pub fn serializer<T, S>(v: &Arc<T>, s: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
+        T: Serialize
     {
-        let b: &RootSchema = v.borrow();
+        let b: &T = v.borrow();
         b.serialize(s)
     }
-    pub fn deserializer<'de, D>(d: D) -> Result<Arc<RootSchema>, D::Error>
+    pub fn deserializer<'de, T, D>(d: D) -> Result<Arc<T>, D::Error>
     where
         D: Deserializer<'de>,
+        T: Deserialize<'de>
     {
-        Ok(Arc::new(RootSchema::deserialize(d)?))
+        Ok(Arc::new(T::deserialize(d)?))
     }
 }
