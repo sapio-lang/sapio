@@ -26,7 +26,7 @@ pub struct TemplateMetadata {
     pub label: Option<String>,
     /// catch all map for future metadata....
     #[serde(flatten)]
-    pub extra: HashMap<String, String>,
+    pub extra: HashMap<String, serde_json::Value>,
     /// A Color to render this node.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub color: Option<String>,

@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 pub struct OutputMeta {
     /// Additional non-standard fields for future upgrades
     #[serde(flatten)]
-    pub extra: HashMap<String, String>,
+    pub extra: HashMap<String, serde_json::Value>,
 }
 impl OutputMeta {
     fn is_empty(&self) -> bool {
