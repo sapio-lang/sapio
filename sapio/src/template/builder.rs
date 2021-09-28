@@ -71,7 +71,7 @@ impl Builder {
         self.outputs.push(Output {
             amount: amount,
             contract: contract.compile(&self.ctx.with_amount(amount)?)?,
-            metadata: metadata.unwrap_or_else(HashMap::new),
+            metadata: metadata.unwrap_or_else(Default::default),
         });
         self.spend_amount(amount)
     }

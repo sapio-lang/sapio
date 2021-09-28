@@ -260,7 +260,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )?;
 
                 if outpoint.is_none() {
-                    let output_metadata = vec![OutputMeta::new(); tx.output.len()];
+                    let output_metadata = vec![OutputMeta::default(); tx.output.len()];
                     let psbt = PartiallySignedTransaction::from_unsigned_tx(tx)?;
                     bound.push(LinkedPSBT {
                         psbt,

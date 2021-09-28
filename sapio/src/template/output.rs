@@ -6,8 +6,26 @@
 
 //! Template Output container
 use super::*;
+use serde::{Deserialize, Serialize};
 /// Metadata for outputs, arbitrary KV set.
-pub type OutputMeta = HashMap<String, String>;
+#[derive(Serialize, Deserialize, Clone, JsonSchema, Debug)]
+pub struct OutputMeta {
+    /// Additional non-standard fields for future upgrades
+    #[serde(flatten)]
+    pub extra: HashMap<String, String>,
+}
+impl OutputMeta {
+    fn is_empty(&self) -> bool {
+        self.extra.is_empty()
+    }
+}
+impl Default for OutputMeta {
+    fn default() -> Self {
+        OutputMeta {
+            extra: Default::default(),
+        }
+    }
+}
 
 /// An Output is not a literal Bitcoin Output, but contains data needed to construct one, and
 /// metadata for linking & ABI building
@@ -24,7 +42,7 @@ pub struct Output {
     /// any metadata relevant to this contract
     #[serde(
         rename = "metadata_map_s2s",
-        skip_serializing_if = "HashMap::is_empty",
+        skip_serializing_if = "OutputMeta::is_empty",
         default
     )]
     pub metadata: OutputMeta,

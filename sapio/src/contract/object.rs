@@ -241,7 +241,7 @@ impl Object {
 
 /// Container for data from  `Object::bind_psbt`.
 #[derive(Serialize, Deserialize)]
-#[serde(rename="linked_psbt")]
+#[serde(rename = "linked_psbt")]
 pub struct LinkedPSBT {
     /// a PSBT
     pub psbt: PartiallySignedTransaction,
@@ -255,7 +255,7 @@ pub struct LinkedPSBT {
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub enum SapioStudioFormat {
     /// Used for PSBT Return Values
-    #[serde(rename="linked_psbt")]
+    #[serde(rename = "linked_psbt")]
     LinkedPSBT {
         /// Base 64 Encoded PSBT
         psbt: String,
