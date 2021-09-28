@@ -6,12 +6,10 @@
 
 //! coin_pool has a contract `CoinPool` for sharing a UTXO
 use bitcoin::Amount;
-use sapio_base::Clause;
-
 use sapio::contract::*;
 use sapio::*;
-
 use sapio_base::timelocks::AnyRelTimeLock;
+use sapio_base::Clause;
 use std::sync::{Arc, Mutex};
 type Payouts = Vec<(Arc<Mutex<dyn Compilable>>, Amount)>;
 /// A CoinPool is a contract that allows a group of individuals to
@@ -21,6 +19,12 @@ pub struct CoinPool {
     pub clauses: Vec<Clause>,
     /// How to refund people if no update agreed on
     pub refunds: Payouts,
+}
+/// Helper
+fn default_coerce(
+    k: <CoinPool as Contract>::StatefulArguments,
+) -> Result<Option<CoinPoolUpdate>, CompilationError> {
+    Ok(k)
 }
 
 impl CoinPool {
@@ -66,7 +70,8 @@ impl CoinPool {
     finish! {
         /// move the coins to the next state -- payouts may recursively contain pools itself
         guarded_by: [Self::all_approve]
-        fn next_pool(self, ctx, o) {
+        coerce_args: default_coerce
+        fn next_pool(self, ctx, o: Option<CoinPoolUpdate>) {
             if let Some(coin_pool) = o {
                 let mut tmpl = ctx.template().add_amount(coin_pool.external_amount);
                 for (to, amt) in coin_pool.payouts.iter() {
@@ -99,5 +104,5 @@ pub struct CoinPoolUpdate {
 impl Contract for CoinPool {
     declare! {then, Self::bisect_offline}
     declare! {finish, Self::all_approve}
-    declare! {updatable<CoinPoolUpdate>, Self::next_pool}
+    declare! {updatable<Option<CoinPoolUpdate>>, Self::next_pool}
 }

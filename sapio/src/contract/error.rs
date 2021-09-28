@@ -46,6 +46,13 @@ pub enum CompilationError {
     /// Unknown Error type -- either from a user or from some unhandled dependency
     Custom(Box<dyn std::error::Error>),
 }
+
+impl From<std::convert::Infallible> for CompilationError {
+    fn from(_s: std::convert::Infallible) -> CompilationError {
+        unimplemented!("Impossible, Just to make Type System Happy...");
+    }
+}
+
 impl CompilationError {
     /// Create a custom compilation error instance
     pub fn custom<E: std::error::Error + 'static>(e: E) -> Self {

@@ -6,6 +6,7 @@
 
 //! macros for making defining Sapio contracts less verbose.
 
+use crate::contract::CompilationError;
 pub use paste::paste;
 
 /// The declare macro is used to declare the list of pathways in a Contract trait impl.
@@ -44,7 +45,7 @@ macro_rules! declare {
     {updatable<$($i:ty)?> $(,$a:expr)*} => {
         /// binds the list of `FinishOrFunc`'s to this impl.
         /// Any fn() which returns None is ignored (useful for type-level state machines)
-        const FINISH_OR_FUNCS: &'static [fn() -> Option<$crate::contract::actions::FinishOrFunc<'static, Self, Self::StatefulArguments>>] = &[$($a,)*];
+        const FINISH_OR_FUNCS: &'static [fn() -> Option<Box<dyn $crate::contract::actions::CallableAsFoF<Self, Self::StatefulArguments>>>] = &[$($a,)*];
         declare![state $($i)?];
     };
     {non updatable} => {
@@ -175,47 +176,57 @@ macro_rules! finish {
         $crate::contract::macros::paste!{
 
             $(#[$meta])*
-            fn [<FINISH_ $name>](&self, _ctx:&$crate::contract::Context, $o: Option<&<Self as $crate::contract::AnyContract>::StatefulArguments>)-> $crate::contract::TxTmplIt
+            fn [<FINISH_ $name>](&self, _ctx:&$crate::contract::Context, $o: $arg_type)-> $crate::contract::TxTmplIt
             {
                 unimplemented!();
             }
             $(#[$meta])*
-            fn $name<'a>() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, <Self as $crate::contract::AnyContract>::StatefulArguments>> {None}
+            fn $name<'a>() ->
+            $crate::contract::actions::CallableAsFoF<Self, <Self as $crate::contract::Contract>::StatefulArguments>>>{
+                None
+            }
         }
     };
     {
         $(#[$meta:meta])*
         compile_if: $conditional_compile_list:tt
         guarded_by: $guard_list:tt
-        fn $name:ident($s:ident, $ctx:ident, $o:ident)
+        coerce_args: $coerce_args:ident
+        fn $name:ident($s:ident, $ctx:ident, $o:ident : $arg_type:ty)
         $b:block
     } => {
 
         $crate::contract::macros::paste!{
 
             $(#[$meta])*
-            fn [<FINISH_ $name>](&$s, $ctx:&$crate::contract::Context, $o: Option<&<Self as $crate::contract::AnyContract>::StatefulArguments>) -> $crate::contract::TxTmplIt
+            fn [<FINISH_ $name>](&$s, $ctx:&$crate::contract::Context, $o: $arg_type) -> $crate::contract::TxTmplIt
             $b
             $(#[$meta])*
-            fn $name<'a>() -> Option<$crate::contract::actions::FinishOrFunc<'a, Self, <Self as $crate::contract::AnyContract>::StatefulArguments>>{
-                Some($crate::contract::actions::FinishOrFunc{
+            fn $name<'a>() -> Option<Box<dyn
+            $crate::contract::actions::CallableAsFoF<Self, <Self as $crate::contract::Contract>::StatefulArguments>>>
+            {
+                let f = $crate::contract::actions::FinishOrFunc{
+                    coerce_args: $coerce_args,
                     guard: &$guard_list,
                     conditional_compile_if: &$conditional_compile_list,
                     func: Self::[<FINISH_ $name>]
-                })
+                };
+                Some(Box::new(f))
             }
         }
     };
     {
         $(#[$meta:meta])*
         guarded_by: $guard_list:tt
-        fn $name:ident($s:ident, $ctx:ident, $o:ident) $b:block
+        coerce_args: $coerce_args:ident
+        fn $name:ident($s:ident, $ctx:ident, $o:ident:$arg_type:ty) $b:block
     } => {
         finish!{
             $(#[$meta])*
             compile_if: []
             guarded_by: $guard_list
-            fn $name($s, $ctx, $o) $b }
+            coerce_args: $coerce_args
+            fn $name($s, $ctx, $o:$arg_type) $b }
     };
 
 

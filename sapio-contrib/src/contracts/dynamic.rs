@@ -28,7 +28,7 @@ impl AnyContract for D<'static> {
     }
     fn finish_or_fns<'a>(
         &'a self,
-    ) -> &'a [fn() -> Option<actions::FinishOrFunc<'a, Self, Self::StatefulArguments>>] {
+    ) -> &'a [fn() -> Option<Box<dyn actions::CallableAsFoF<Self, Self::StatefulArguments>>>] {
         &[]
     }
     fn finish_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::Guard<Self>>] {

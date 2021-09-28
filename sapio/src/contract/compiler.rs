@@ -9,6 +9,7 @@ use super::AnyContract;
 use super::CompilationError;
 use super::Compiled;
 use super::Context;
+use crate::contract::empty;
 use crate::util::amountrange::AmountRange;
 use std::collections::LinkedList;
 
@@ -76,6 +77,21 @@ impl Compilable for Compiled {
     }
 }
 
+fn create_guards<T>(
+    self_ref: &T,
+    ctx: &Context,
+    guards: &[fn() -> Option<Guard<T>>],
+    gc: &mut GuardCache<T>,
+) -> Clause {
+    guards
+        .iter()
+        .filter_map(|x| gc.get(self_ref, *x, ctx))
+        .filter(|x| *x != Clause::Trivial) // no point in using any Trivials
+        .fold(Clause::Trivial, |acc, item| match acc {
+            Clause::Trivial => item,
+            _ => Clause::And(vec![acc, item]),
+        })
+}
 impl<'a, T> Compilable for T
 where
     T: AnyContract + 'a,
@@ -95,6 +111,8 @@ where
             No,
         }
         let self_ref = self.get_inner_ref();
+
+        let mut guard_clauses = std::cell::RefCell::new(GuardCache::new());
 
         // The code for then_fns and finish_or_fns is very similar, differing
         // only in that then_fns have a CTV enforcing the contract and
@@ -121,18 +139,19 @@ where
                 }
             })
             .map(|(errors, nullability, x)| {
+                let guards = create_guards(self_ref, ctx, x.guard, &mut guard_clauses.borrow_mut());
                 if errors.is_empty() {
                     (
                         nullability,
                         CTVRequired::Yes,
-                        x.guard,
+                        guards,
                         (x.func)(self_ref, ctx),
                     )
                 } else {
                     (
                         nullability,
                         CTVRequired::Yes,
-                        x.guard,
+                        guards,
                         Err(CompilationError::ConditionalCompilationFailed(errors)),
                     )
                 }
@@ -140,7 +159,6 @@ where
         // finish_or_fns may be used to compute additional transactions with
         // a given argument, but for building the ABI we only precompute with
         // the default argument.
-        let arg: Option<&T::StatefulArguments> = Default::default();
         let finish_or_fns = self
             .finish_or_fns()
             .iter()
@@ -148,7 +166,7 @@ where
             // TODO: De-duplicate this code?
             .filter_map(|x| {
                 let mut v = ConditionalCompileType::NoConstraint;
-                for cond in x.conditional_compile_if.iter().filter_map(|x| x()) {
+                for cond in x.get_conditional_compile_if().iter().filter_map(|x| x()) {
                     let ConditionallyCompileIf::Fresh(f) = cond;
                     v = v.merge(f(self_ref, ctx));
                 }
@@ -163,24 +181,26 @@ where
                 }
             })
             .map(|(errors, x)| {
+                let guard = create_guards(
+                    self_ref,
+                    ctx,
+                    x.get_guard(),
+                    &mut guard_clauses.borrow_mut(),
+                );
                 if errors.is_empty() {
-                    (
-                        Nullable::Yes,
-                        CTVRequired::No,
-                        x.guard,
-                        (x.func)(self_ref, ctx, arg),
-                    )
+                    let arg: T::StatefulArguments = Default::default();
+                    let res = x.call(self_ref, ctx, arg);
+                    (Nullable::Yes, CTVRequired::No, guard, res)
                 } else {
                     (
                         Nullable::Yes,
                         CTVRequired::No,
-                        x.guard,
+                        guard,
                         Err(CompilationError::ConditionalCompilationFailed(errors)),
                     )
                 }
             });
 
-        let mut guard_clauses = GuardCache::new();
         let mut ctv_to_tx = HashMap::new();
         let mut suggested_txs = HashMap::new();
         let mut amount_range = AmountRange::new();
@@ -194,14 +214,7 @@ where
                 // Compute all guard clauses.
                 // Don't use a threshold here because then miniscript will just
                 // re-compile it into the And for again, causing extra allocations.
-                let mut guard = guards
-                    .iter()
-                    .filter_map(|x| guard_clauses.get(self_ref, *x, ctx))
-                    .filter(|x| *x != Clause::Trivial) // no point in using any Trivials
-                    .fold(Clause::Trivial, |acc, item| match acc {
-                        Clause::Trivial => item,
-                        _ => Clause::And(vec![acc, item]),
-                    });
+                let mut guard = guards;
 
                 // it would be an error if any of r_txtmpls is an error instead of just an empty
                 // iterator.
@@ -255,7 +268,7 @@ where
         let finish_fns: Vec<_> = self
             .finish_fns()
             .iter()
-            .filter_map(|x| guard_clauses.get(self_ref, *x, ctx))
+            .filter_map(|x| guard_clauses.borrow_mut().get(self_ref, *x, ctx))
             .collect();
         // If any clauses are returned, use a Threshold with n = 1
         // It compiles equivalently to a tree of ORs.

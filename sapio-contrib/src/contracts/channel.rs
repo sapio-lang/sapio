@@ -5,21 +5,20 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! An example of how one might begin building a payment channel contract in Sapio
-use contract::*;
-use sapio::*;
-use sapio_base::Clause;
-
 use bitcoin;
 use bitcoin::secp256k1::*;
 use bitcoin::util::amount::{Amount, CoinAmount};
+use contract::*;
+use sapio::*;
+use sapio_base::Clause;
 use schemars::{schema_for, JsonSchema};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
-
+use std::convert::TryFrom;
+use std::convert::TryInto;
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
-
-use std::convert::TryInto;
+/// Helper
 
 #[cfg(test)]
 mod tests {
@@ -47,7 +46,7 @@ mod tests {
         );
 
         let db = Arc::new(Mutex::new(MockDB {}));
-        let x: Channel<Start> = Channel {
+        let x: Channel<Start, Args> = Channel {
             pd: PhantomData,
             alice: public_keys[0],
             bob: public_keys[1],
@@ -55,7 +54,7 @@ mod tests {
             resolution: resolution.clone(),
             db: db.clone(),
         };
-        let y: Channel<Stop> = Channel {
+        let y: Channel<Stop, Args> = Channel {
             pd: PhantomData,
             alice: public_keys[0],
             bob: public_keys[1],
@@ -65,7 +64,7 @@ mod tests {
         };
         println!(
             "{}",
-            serde_json::to_string_pretty(&schema_for!(Channel<Stop>)).unwrap()
+            serde_json::to_string_pretty(&schema_for!(Channel<Stop, Args>)).unwrap()
         );
         println!("{}", serde_json::to_string_pretty(&y).unwrap());
         let mut ctx = sapio::contract::Context::new(
@@ -78,17 +77,38 @@ mod tests {
     }
 }
 
+/// Main Update to Channel
+#[derive(Debug)]
+pub struct Update {
+    /// hash to revoke
+    revoke: bitcoin::hashes::sha256::Hash,
+    /// the balances of the channel
+    split: (Amount, Amount),
+}
+impl TryFrom<Args> for Update {
+    type Error = CompilationError;
+    fn try_from(a: Args) -> Result<Update, CompilationError> {
+        if let Args::Update(u) = a {
+            Ok(u)
+        } else {
+            Err(CompilationError::Custom("Unmatched".into()))
+        }
+    }
+}
 /// Args are some messages that can be passed to a Channel instance
 #[derive(Debug)]
 pub enum Args {
+    /// Wrapper around Update
+    Update(Update),
     /// Revoke a hash and move to the next state...
-    Update {
-        /// hash to revoke
-        revoke: bitcoin::hashes::sha256::Hash,
-        /// the balances of the channel
-        split: (Amount, Amount),
-    },
+    None,
 }
+impl Default for Args {
+    fn default() -> Self {
+        Args::None
+    }
+}
+impl StatefulArgumentsTrait for Args {}
 
 /// Handle for DB Types
 #[derive(JsonSchema, Serialize, Deserialize)]
@@ -111,6 +131,7 @@ impl DB for MockDB {
     fn save(&self, a: Args) {
         match a {
             Args::Update { .. } => {}
+            Args::None => {}
         }
     }
     fn link(&self) -> DBHandle {
@@ -171,8 +192,8 @@ impl State for Start {}
 impl State for Stop {}
 
 #[derive(JsonSchema, Serialize, Deserialize)]
-struct Channel<T: State> {
-    pd: PhantomData<T>,
+struct Channel<T: State, ArgsT: TryInto<Update>> {
+    pd: PhantomData<(T, ArgsT)>,
     alice: bitcoin::PublicKey,
     bob: bitcoin::PublicKey,
     amount: CoinAmount,
@@ -183,30 +204,41 @@ struct Channel<T: State> {
     db: Arc<Mutex<dyn DB>>,
 }
 
-/// Functionality Available for a channel regardless of state
-impl<T: State> Channel<T>
+fn coerce_args<T>(t: T) -> Result<Update, CompilationError>
 where
-    Channel<T>: Contract,
+    T: TryInto<Update, Error = CompilationError>,
+{
+    t.try_into()
+}
+
+/// Functionality Available for a channel regardless of state
+impl<T: State> Channel<T, Args>
+where
+    Self: Contract,
+    <Self as Contract>::StatefulArguments: TryInto<Update, Error = CompilationError>,
 {
     guard! {fn timeout(self, _ctx) { Clause::Older(100) }}
     guard! {cached fn signed(self, _ctx) {Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])}}
 
     finish! {
         guarded_by: [Self::signed]
-        fn update_state_a(self, _ctx, _o) {
+        coerce_args: coerce_args
+        fn update_state_a(self, _ctx, _o: Update) {
             Ok(Box::new(std::iter::empty()))
         }
     }
     finish! {
         guarded_by: [Self::signed]
-        fn update_state_b(self, _ctx, _o){
+        coerce_args: coerce_args
+        fn update_state_b(self, _ctx, _o: Update){
             Ok(Box::new(std::iter::empty()))
         }
     }
 
     finish! {
         guarded_by: [Self::signed]
-        fn cooperate(self, _ctx, _o) {
+        coerce_args: coerce_args
+        fn cooperate(self, _ctx, _o: Update) {
             Ok(Box::new(std::iter::empty()))
         }
     }
@@ -216,17 +248,18 @@ where
 trait FunctionalityAtState
 where
     Self: Sized + Contract,
+    <Self as Contract>::StatefulArguments: TryInto<Update>,
 {
     then! {begin_contest}
     then! {finish_contest}
 }
 
 /// Override begin_contest when state = Start
-impl FunctionalityAtState for Channel<Start> {
+impl FunctionalityAtState for Channel<Start, Args> {
     then! {fn begin_contest(self, ctx) {
         ctx.template().add_output(
             self.amount.try_into()?,
-            &Channel::<Stop> {
+            &Channel::<Stop, Args> {
                 pd: Default::default(),
                 alice: self.alice,
                 bob: self.bob,
@@ -240,7 +273,7 @@ impl FunctionalityAtState for Channel<Start> {
 }
 
 /// Override finish_contest when state = Start
-impl FunctionalityAtState for Channel<Stop> {
+impl FunctionalityAtState for Channel<Stop, Args> {
     then! {
         guarded_by: [Self::timeout]
         fn finish_contest (self, ctx) {
@@ -251,10 +284,13 @@ impl FunctionalityAtState for Channel<Stop> {
 
 /// Implement Contract for Channel<T> and functionality will be correctly assembled for different
 /// States.
-impl<T: State> Contract for Channel<T>
-where
-    Channel<T>: FunctionalityAtState + 'static,
-{
+impl Contract for Channel<Start, Args> {
+    declare! {then, Self::begin_contest, Self::finish_contest}
+    declare! {updatable<Args>, Self::update_state_a, Self::update_state_b }
+    declare! {finish, Self::signed}
+}
+
+impl Contract for Channel<Stop, Args> {
     declare! {then, Self::begin_contest, Self::finish_contest}
     declare! {updatable<Args>, Self::update_state_a, Self::update_state_b }
     declare! {finish, Self::signed}
