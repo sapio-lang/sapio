@@ -30,6 +30,7 @@ impl<'a> TryFrom<Put<'a>> for GenericBetArguments<'a> {
         let strike = v.strike_x_one_unit;
         let max_amount_bitcoin = v.amount * strike;
         // Increment 1 dollar per step
+        let strike_ctx = v.ctx.derive(Some("strike"));
         for price in (0..=strike).step_by(ONE_UNIT as usize) {
             let mut profit = Amount::from_sat(strike) - Amount::from_sat(price);
             let mut refund = max_amount_bitcoin - profit;
@@ -38,7 +39,7 @@ impl<'a> TryFrom<Put<'a>> for GenericBetArguments<'a> {
             }
             outcomes.push((
                 price as i64,
-                v.ctx
+                strike_ctx.derive(Some(&format!("{}", price)))
                     .template()
                     .add_output(profit, &v.user_api.receive_payment(profit), None)?
                     .add_output(refund, &v.operator_api.receive_payment(refund), None)?

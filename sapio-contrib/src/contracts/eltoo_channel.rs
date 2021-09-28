@@ -74,10 +74,12 @@ impl OpenChannel {
                 if update.sequence <= prior_seq {
                     Err(CompilationError::TerminateCompilation)?;
                 }
+
+                let f = ctx.funds();
                 ctx.template()
                 .set_lock_time(AnyAbsTimeLock::from(update.sequence.clone()))?
                 .add_output(
-                    ctx.funds(),
+                    f,
                     &OpenChannel {
                         pending_update: Some(update.clone()), ..self.clone()
                     },

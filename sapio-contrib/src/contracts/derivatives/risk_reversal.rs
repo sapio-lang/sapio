@@ -115,6 +115,7 @@ impl<'a> TryFrom<RiskReversal<'a>> for GenericBetArguments<'a> {
             return Err(CompilationError::TerminateCompilation);
         }
 
+        let strike_ctx = v.ctx.derive(Some("strike"));
         // Increment 1 dollar per step
         for strike in (bottom..=top).step_by(ONE_UNIT as usize) {
             // Value Conservation Property:
@@ -126,7 +127,8 @@ impl<'a> TryFrom<RiskReversal<'a>> for GenericBetArguments<'a> {
 
             outcomes.push((
                 strike as i64,
-                v.ctx
+                strike_ctx
+                    .derive(Some(&format!("{}", strike)))
                     .template()
                     .add_output(profit, &v.user_api.receive_payment(profit), None)?
                     .add_output(refund, &v.operator_api.receive_payment(refund), None)?

@@ -136,7 +136,7 @@ impl Coordinator {
             blocks: known_participants,
             tip: self.cache[tip_in].clone(),
         };
-        let output = mp.compile(&self.ctx.with_amount(mp.tip.read().unwrap().reward)?)?;
+        let output = mp.compile(self.ctx.with_amount(mp.tip.read().unwrap().reward)?)?;
         let script: Script = output.address.into();
 
         let mut result = false;
@@ -187,8 +187,7 @@ impl MiningPool {
                     radix: 4,
                     fee_sats_per_tx: Amount::from_sat(100),
                 };
-            let fee_estimate =
-                contract.compile(ctx)?.amount_range.max();
+            let fee_estimate = contract.compile(ctx.derive(Some("FAKE")))?.amount_range.max();
             let reward = self.tip.read().unwrap().reward - fee_estimate;
             let reward_per_miner = ( reward) / (blocks.len() as u64);
 

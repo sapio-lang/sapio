@@ -68,13 +68,14 @@ mod tests {
             serde_json::to_string_pretty(&schemars::schema_for!(Channel<Stop, Args>)).unwrap()
         );
         println!("{}", serde_json::to_string_pretty(&y).unwrap());
-        let mut ctx = sapio::contract::Context::new(
+        let ctx = sapio::contract::Context::new(
             bitcoin::Network::Regtest,
             Amount::from_sat(10000),
             std::sync::Arc::new(CTVAvailable),
+            vec![Arc::new("ROOT".into())]
         );
-        Compilable::compile(&x, &mut ctx);
-        Compilable::compile(&y, &mut ctx);
+        Compilable::compile(&x, ctx.derive(Some("X")));
+        Compilable::compile(&y, ctx.derive(Some("Y")));
     }
 }
 

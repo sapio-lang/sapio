@@ -20,7 +20,7 @@ use std::collections::LinkedList;
 
 enum CacheEntry<T> {
     Cached(Clause),
-    Fresh(fn(&T, &Context) -> Clause),
+    Fresh(fn(&T, Context) -> Clause),
 }
 
 /// GuardCache assists with caching the computation of guard functions
@@ -34,18 +34,18 @@ impl<T> GuardCache<T> {
             cache: HashMap::new(),
         }
     }
-    fn create_entry(g: Option<Guard<T>>, t: &T, ctx: &Context) -> Option<CacheEntry<T>> {
+    fn create_entry(g: Option<Guard<T>>, t: &T, ctx: Context) -> Option<CacheEntry<T>> {
         Some(match g? {
             Guard::Cache(f) => CacheEntry::Cached(f(t, ctx)),
             Guard::Fresh(f) => CacheEntry::Fresh(f),
         })
     }
-    fn get(&mut self, t: &T, f: fn() -> Option<Guard<T>>, ctx: &Context) -> Option<Clause> {
+    fn get(&mut self, t: &T, f: fn() -> Option<Guard<T>>, ctx: Context) -> Option<Clause> {
         Some(
             match self
                 .cache
                 .entry(f as usize)
-                .or_insert_with(|| Self::create_entry(f(), t, ctx))
+                .or_insert_with(|| Self::create_entry(f(), t, ctx.internal_clone()))
                 .as_ref()?
             {
                 CacheEntry::Cached(s) => s.clone(),
@@ -66,25 +66,26 @@ mod private {
 /// Compilable is a trait for anything which can be compiled
 pub trait Compilable: private::ImplSeal {
     /// Compile a compilable object returning errors, if any.
-    fn compile(&self, ctx: &Context) -> Result<Compiled, CompilationError>;
+    fn compile(&self, ctx: Context) -> Result<Compiled, CompilationError>;
 }
 
 /// Implements a basic identity
 impl Compilable for Compiled {
-    fn compile(&self, _ctx: &Context) -> Result<Compiled, CompilationError> {
+    fn compile(&self, _ctx: Context) -> Result<Compiled, CompilationError> {
         Ok(self.clone())
     }
 }
 
 fn create_guards<T>(
     self_ref: &T,
-    ctx: &Context,
+    ctx: Context,
     guards: &[fn() -> Option<Guard<T>>],
     gc: &mut GuardCache<T>,
 ) -> Clause {
     guards
         .iter()
-        .filter_map(|x| gc.get(self_ref, *x, ctx))
+        .enumerate()
+        .filter_map(|(i, x)| gc.get(self_ref, *x, ctx.derive(Some(&format!("{}", i)))))
         .filter(|x| *x != Clause::Trivial) // no point in using any Trivials
         .fold(Clause::Trivial, |acc, item| match acc {
             Clause::Trivial => item,
@@ -98,7 +99,7 @@ where
 {
     /// The main Compilation Logic for a Contract.
     /// TODO: Better Document Semantics
-    fn compile(&self, ctx: &Context) -> Result<Compiled, CompilationError> {
+    fn compile(&self, ctx: Context) -> Result<Compiled, CompilationError> {
         #[derive(PartialEq, Eq)]
         enum CTVRequired {
             Yes,
@@ -117,15 +118,25 @@ where
         // only in that then_fns have a CTV enforcing the contract and
         // finish_or_fns do not. We can lazily chain iterators to process them
         // in a row.
+        let then_fn_ctx = ctx.derive(Some("then_fn"));
         let then_fns = self
             .then_fns()
             .iter()
             .filter_map(|x| x())
             .filter_map(|x| {
                 let mut v = ConditionalCompileType::NoConstraint;
-                for cond in x.conditional_compile_if.iter().filter_map(|x| x()) {
+                let conditional_compile_ctx = then_fn_ctx.derive(Some("conditional_compile_if"));
+                for (i, cond) in x
+                    .conditional_compile_if
+                    .iter()
+                    .filter_map(|x| x())
+                    .enumerate()
+                {
                     let ConditionallyCompileIf::Fresh(f) = cond;
-                    v = v.merge(f(self_ref, ctx));
+                    v = v.merge(f(
+                        self_ref,
+                        conditional_compile_ctx.derive(Some(&format!("{}", i))),
+                    ));
                 }
                 match v {
                     ConditionalCompileType::Fail(v) => Some((v, Nullable::No, x)),
@@ -138,13 +149,18 @@ where
                 }
             })
             .map(|(errors, nullability, x)| {
-                let guards = create_guards(self_ref, ctx, x.guard, &mut guard_clauses.borrow_mut());
+                let guards = create_guards(
+                    self_ref,
+                    then_fn_ctx.derive(Some("guards")),
+                    x.guard,
+                    &mut guard_clauses.borrow_mut(),
+                );
                 if errors.is_empty() {
                     (
                         nullability,
                         CTVRequired::Yes,
                         guards,
-                        (x.func)(self_ref, ctx),
+                        (x.func)(self_ref, then_fn_ctx.derive(Some("next_tx"))),
                     )
                 } else {
                     (
@@ -158,6 +174,7 @@ where
         // finish_or_fns may be used to compute additional transactions with
         // a given argument, but for building the ABI we only precompute with
         // the default argument.
+        let finish_or_fns_ctx = ctx.derive(Some("finish_or_fn"));
         let finish_or_fns = self
             .finish_or_fns()
             .iter()
@@ -165,9 +182,18 @@ where
             // TODO: De-duplicate this code?
             .filter_map(|x| {
                 let mut v = ConditionalCompileType::NoConstraint;
-                for cond in x.get_conditional_compile_if().iter().filter_map(|x| x()) {
+                let conditional_compile_ctx = then_fn_ctx.derive(Some("conditional_compile_if"));
+                for (i, cond) in x
+                    .get_conditional_compile_if()
+                    .iter()
+                    .filter_map(|x| x())
+                    .enumerate()
+                {
                     let ConditionallyCompileIf::Fresh(f) = cond;
-                    v = v.merge(f(self_ref, ctx));
+                    v = v.merge(f(
+                        self_ref,
+                        conditional_compile_ctx.derive(Some(&format!("{}", i))),
+                    ));
                 }
                 match v {
                     ConditionalCompileType::Fail(v) => Some((v, x)),
@@ -182,13 +208,17 @@ where
             .map(|(errors, x)| {
                 let guard = create_guards(
                     self_ref,
-                    ctx,
+                    finish_or_fns_ctx.derive(Some("guards")),
                     x.get_guard(),
                     &mut guard_clauses.borrow_mut(),
                 );
                 if errors.is_empty() {
                     let arg: T::StatefulArguments = Default::default();
-                    let res = x.call(self_ref, ctx, arg);
+                    let res = x.call(
+                        self_ref,
+                        finish_or_fns_ctx.derive(Some("suggested_txs")),
+                        arg,
+                    );
                     (Nullable::Yes, CTVRequired::No, guard, res)
                 } else {
                     (
@@ -273,11 +303,19 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
 
+        let finish_fns_ctx = ctx.derive(Some("finish_fn"));
         // Compute all finish_functions at this level, caching if requested.
         let finish_fns: Vec<_> = self
             .finish_fns()
             .iter()
-            .filter_map(|x| guard_clauses.borrow_mut().get(self_ref, *x, ctx))
+            .enumerate()
+            .filter_map(|(i, x)| {
+                guard_clauses.borrow_mut().get(
+                    self_ref,
+                    *x,
+                    finish_fns_ctx.derive(Some(&format!("{}", i))),
+                )
+            })
             .collect();
         // If any clauses are returned, use a Threshold with n = 1
         // It compiles equivalently to a tree of ORs.

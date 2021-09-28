@@ -46,7 +46,7 @@ impl Context {
 
     /// Derive a new contextual path
     /// If no path is provided, it will be "cloned"
-    pub fn derive(&self, path: Option<&'static str>) -> Self {
+    pub fn derive<'a>(&self, path: Option<&'a str>) -> Self {
         let mut new_path = self.path.clone();
         new_path.push(
             path.map(String::from)
@@ -57,6 +57,14 @@ impl Context {
             available_funds: self.available_funds,
             emulator: self.emulator.clone(),
             path: new_path,
+            network: self.network,
+        }
+    }
+    pub(crate) fn internal_clone(&self) -> Self {
+        Context {
+            available_funds: self.available_funds,
+            emulator: self.emulator.clone(),
+            path: self.path.clone(),
             network: self.network,
         }
     }
@@ -75,8 +83,8 @@ impl Context {
     }
 
     /// Compile the compilable item with this context.
-    pub fn compile<A: Compilable>(&self, a: A) -> Result<Compiled, CompilationError> {
-        a.compile(&self)
+    pub fn compile<A: Compilable>(self, a: A) -> Result<Compiled, CompilationError> {
+        a.compile(self)
     }
 
     // TODO: Fix
@@ -109,13 +117,8 @@ impl Context {
     }
 
     /// Get a template builder from this context object
-    pub fn template(&self) -> crate::template::Builder {
-        crate::template::Builder::new(Context {
-            available_funds: self.available_funds,
-            emulator: self.emulator.clone(),
-            path: self.path.clone(),
-            network: self.network,
-        })
+    pub fn template(self) -> crate::template::Builder {
+        crate::template::Builder::new(self)
     }
 
     /// converts a descriptor and an optional AmountRange to a Object object.

@@ -19,7 +19,7 @@ use std::rc::Rc;
 /// The funds in `hot_storage` are in an UndoSend contract for a timeout of
 /// `mature`. At any time the remaining funds can be moved to `cold_storage`, which may vary based on the amount.
 pub struct Vault {
-    cold_storage: Rc<dyn Fn(CoinAmount, &Context) -> Result<Compiled, CompilationError>>,
+    cold_storage: Rc<dyn Fn(CoinAmount, Context) -> Result<Compiled, CompilationError>>,
     hot_storage: bitcoin::Address,
     n_steps: u64,
     amount_step: CoinAmount,
@@ -29,15 +29,17 @@ pub struct Vault {
 
 impl Vault {
     then! {fn step(self, ctx) {
-        let builder = ctx.template()
-        .add_output(self.amount_step.try_into()?,
-                &UndoSendInternal {
-                    from_contract: (self.cold_storage)(self.amount_step, ctx)?,
-                    to_contract: Compiled::from_address(self.hot_storage.clone(), None),
-                    timeout: self.mature,
-                    amount: self.amount_step.into(),
-                }, None)?
-       .set_sequence(0, self.timeout)?;
+        let cold_storage_ctx = ctx.derive(Some("cold"));
+        let mut builder = ctx.template();
+        builder = builder
+                    .add_output(self.amount_step.try_into()?,
+                                &UndoSendInternal {
+                                    from_contract: (self.cold_storage)(self.amount_step, cold_storage_ctx)?,
+                                    to_contract: Compiled::from_address(self.hot_storage.clone(), None),
+                                    timeout: self.mature,
+                                    amount: self.amount_step.into(),
+                                }, None)?
+                    .set_sequence(0, self.timeout)?;
 
         if self.n_steps > 1 {
             let sub_amount = bitcoin::Amount::try_from(self.amount_step).map_err(|_e| contract::CompilationError::TerminateCompilation)?.checked_mul(self.n_steps - 1).ok_or(contract::CompilationError::TerminateCompilation)?;
@@ -57,8 +59,9 @@ impl Vault {
     }}
     then! {fn to_cold (self, ctx) {
         let amount = bitcoin::Amount::try_from(self.amount_step).map_err(|_e| contract::CompilationError::TerminateCompilation)?.checked_mul(self.n_steps).ok_or(contract::CompilationError::TerminateCompilation)?;
+        let cold_storage_ctx = ctx.derive(Some("cold"));
         ctx.template()
-            .add_output(amount, &(self.cold_storage)(amount.into(), ctx)?, None)?
+            .add_output(amount, &(self.cold_storage)(amount.into(), cold_storage_ctx)?, None)?
             .into()
     }}
 }

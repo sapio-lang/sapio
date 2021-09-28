@@ -18,9 +18,9 @@ use std::collections::LinkedList;
 /// instance*.
 pub enum Guard<ContractSelf> {
     /// Cache Variant should only be called one time per contract and the result saved
-    Cache(fn(&ContractSelf, &Context) -> Clause),
+    Cache(fn(&ContractSelf, Context) -> Clause),
     /// Fresh Variant may be called repeatedly
-    Fresh(fn(&ContractSelf, &Context) -> Clause),
+    Fresh(fn(&ContractSelf, Context) -> Clause),
 }
 
 /// A List of Guards, for convenience
@@ -111,7 +111,7 @@ impl ConditionalCompileType {
 /// running the actual `ThenFunc`.
 pub enum ConditionallyCompileIf<ContractSelf> {
     /// Fresh Variant may be called repeatedly
-    Fresh(fn(&ContractSelf, &Context) -> ConditionalCompileType),
+    Fresh(fn(&ContractSelf, Context) -> ConditionalCompileType),
 }
 
 /// A List of ConditionallyCompileIfs, for convenience
@@ -129,7 +129,7 @@ pub struct ThenFunc<'a, ContractSelf: 'a> {
     /// func returns an iterator of possible transactions
     /// Implementors should aim to return as few `TxTmpl`s as possible for enhanced
     /// semantics, preferring to split across multiple `ThenFunc`'s
-    pub func: fn(&ContractSelf, &Context) -> TxTmplIt,
+    pub func: fn(&ContractSelf, Context) -> TxTmplIt,
 }
 
 /// A function which by default finishes, but may receive some context object which can induce the
@@ -147,7 +147,7 @@ pub struct FinishOrFunc<'a, ContractSelf: 'a, StatefulArguments, SpecificArgs> {
     /// Implementors should aim to return as few `TxTmpl`s as possible for enhanced
     /// semantics, preferring to split across multiple `FinishOrFunc`'s.
     /// These `TxTmpl`s are non-binding, merely suggested.
-    pub func: fn(&ContractSelf, &Context, SpecificArgs) -> TxTmplIt,
+    pub func: fn(&ContractSelf, Context, SpecificArgs) -> TxTmplIt,
     /// to be filled in if SpecificArgs has a schema, which it might not.
     /// because negative trait bounds do not exists, that is up to the
     /// implementation to decide if the trait exists.
@@ -163,7 +163,7 @@ pub struct FinishOrFunc<'a, ContractSelf: 'a, StatefulArguments, SpecificArgs> {
 /// presently done through `std::convert::TryInto::try_into`.
 pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     /// Calls the internal function, should convert `StatefulArguments` to `SpecificArgs`.
-    fn call(&self, cself: &ContractSelf, ctx: &Context, o: StatefulArguments) -> TxTmplIt;
+    fn call(&self, cself: &ContractSelf, ctx: Context, o: StatefulArguments) -> TxTmplIt;
     /// Getter Method for internal field
     fn get_conditional_compile_if(&self) -> ConditionallyCompileIfList<'_, ContractSelf>;
     /// Getter Method for internal field
@@ -176,7 +176,7 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
 impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, StatefulArguments>
     for FinishOrFunc<'_, ContractSelf, StatefulArguments, SpecificArgs>
 {
-    fn call(&self, cself: &ContractSelf, ctx: &Context, o: StatefulArguments) -> TxTmplIt {
+    fn call(&self, cself: &ContractSelf, ctx: Context, o: StatefulArguments) -> TxTmplIt {
         let args = (self.coerce_args)(o)?;
         (self.func)(cself, ctx, args)
     }

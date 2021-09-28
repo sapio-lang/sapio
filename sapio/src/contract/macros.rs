@@ -90,7 +90,7 @@ macro_rules! then {
         $crate::contract::macros::paste!{
 
             $(#[$meta])*
-            fn [<THEN_ $name>](&self, _ctx:&$crate::contract::Context)-> $crate::contract::TxTmplIt
+            fn [<THEN_ $name>](&self, _ctx:$crate::contract::Context)-> $crate::contract::TxTmplIt
             {
                 unimplemented!();
             }
@@ -109,7 +109,7 @@ macro_rules! then {
         $crate::contract::macros::paste!{
 
             $(#[$meta])*
-            fn [<THEN_ $name>](&$s, $ctx:&$crate::contract::Context) -> $crate::contract::TxTmplIt
+            fn [<THEN_ $name>](&$s, $ctx:$crate::contract::Context) -> $crate::contract::TxTmplIt
             $b
             $(#[$meta])*
             fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<'a, Self>>{
@@ -211,7 +211,7 @@ macro_rules! finish {
         $crate::contract::macros::paste!{
             web_api!($(web$web_enable,)* $name,$arg_type);
             $(#[$meta])*
-            fn [<FINISH_ $name>](&self, _ctx:&$crate::contract::Context, _o: $arg_type)-> $crate::contract::TxTmplIt
+            fn [<FINISH_ $name>](&self, _ctx:$crate::contract::Context, _o: $arg_type)-> $crate::contract::TxTmplIt
             {
                 unimplemented!();
             }
@@ -237,7 +237,7 @@ macro_rules! finish {
         $crate::contract::macros::paste!{
             web_api!($(web$web_enable,)* $name,$arg_type);
             $(#[$meta])*
-            fn [<FINISH_ $name>](&$s, $ctx:&$crate::contract::Context, $o: $arg_type) -> $crate::contract::TxTmplIt
+            fn [<FINISH_ $name>](&$s, $ctx:$crate::contract::Context, $o: $arg_type) -> $crate::contract::TxTmplIt
             $b
             $(#[$meta])*
             fn $name<'a>() -> Option<Box<dyn
@@ -286,7 +286,7 @@ macro_rules! guard {
         $name:ident} => {
             $crate::contract::macros::paste!{
                 $(#[$meta])*
-                fn [<GUARD_ $name>](&self, _ctx:&$crate::contract::Context) -> $crate::sapio_base::Clause {
+                fn [<GUARD_ $name>](&self, _ctx:$crate::contract::Context) -> $crate::sapio_base::Clause {
                     unimplemented!();
                 }
                 $(#[$meta])*
@@ -300,7 +300,7 @@ macro_rules! guard {
         fn $name:ident($s:ident, $ctx:ident) $b:block} => {
             $crate::contract::macros::paste!{
                 $(#[$meta])*
-                fn [<GUARD_ $name>](&$s, $ctx:&$crate::contract::Context) -> $crate::sapio_base::Clause
+                fn [<GUARD_ $name>](&$s, $ctx:$crate::contract::Context) -> $crate::sapio_base::Clause
                 $b
                 $(#[$meta])*
                 fn  $name() -> Option<$crate::contract::actions::Guard<Self>> {
@@ -315,7 +315,7 @@ macro_rules! guard {
         fn $name:ident($s:ident, $ctx:ident) $b:block} => {
             $crate::contract::macros::paste!{
                 $(#[$meta])*
-                fn [<GUARD_ $name>](&$s, $ctx:&$crate::contract::Context) -> $crate::sapio_base::Clause
+                fn [<GUARD_ $name>](&$s, $ctx:$crate::contract::Context) -> $crate::sapio_base::Clause
                 $b
 
                 $(#[$meta])*
@@ -339,7 +339,7 @@ macro_rules! compile_if {
     } => {
             $crate::contract::macros::paste!{
                 $(#[$meta])*
-                fn [<COMPILE_IF $name>](&self, _ctx: &$crate::contract::Context) -> $crate::contract::actions::ConditionalCompileType {
+                fn [<COMPILE_IF $name>](&self, _ctx: $crate::contract::Context) -> $crate::contract::actions::ConditionalCompileType {
                     unimplemented!()
                 }
                 $(#[$meta])*
@@ -354,7 +354,7 @@ macro_rules! compile_if {
     } => {
             $crate::contract::macros::paste!{
                 $(#[$meta])*
-                fn [<COMPILE_IF $name>](&$s, $ctx: &$crate::contract::Context) -> $crate::contract::actions::ConditionalCompileType
+                fn [<COMPILE_IF $name>](&$s, $ctx: $crate::contract::Context) -> $crate::contract::actions::ConditionalCompileType
                 $b
                 $(#[$meta])*
                 fn $name() -> Option<$crate::contract::actions::ConditionallyCompileIf<Self>> {

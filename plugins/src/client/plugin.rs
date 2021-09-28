@@ -36,10 +36,12 @@ where
             network,
             amount,
         } = serde_json::from_slice(s.to_bytes())?;
-        /// TODO: Get The wasm ID here?
+        // TODO: Get The wasm ID here?
+        // TODO: In theory, these trampoline bounds are robust/serialization safe...
+        // But the API needs stiching to the parent in a sane way...
         let ctx = Context::new(network, amount, Arc::new(client::WasmHostEmulator), vec![Arc::new("PLUGIN_TRAMPOLINE".into())]);
         let converted = Self::ToType::try_from(arguments)?;
-        let compiled = converted.compile(&ctx)?;
+        let compiled = converted.compile(ctx)?;
         Ok(serde_json::to_string(&compiled)?)
     }
     /// binds this type to the wasm interface, must be called before the plugin can be used.

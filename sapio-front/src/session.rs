@@ -53,7 +53,7 @@ impl From<CompilationError> for SessionError {
 }
 
 /// Create a compiled object of type `T` from a JSON
-pub fn from_json<T>(s: serde_json::Value, ctx: &Context) -> Result<Compiled, SessionError>
+pub fn from_json<T>(s: serde_json::Value, ctx: Context) -> Result<Compiled, SessionError>
 where
     T: for<'a> Deserialize<'a> + Compilable,
 {
@@ -66,7 +66,7 @@ where
 /// type `C`.
 pub fn from_json_convert<C, T, E>(
     s: serde_json::Value,
-    ctx: &Context,
+    ctx: Context,
 ) -> Result<Compiled, SessionError>
 where
     C: for<'a> Deserialize<'a>,
@@ -157,7 +157,7 @@ impl Action {
             Action::Create { type_, args } => {
                 let c = session
                     .menu
-                    .compile(type_, args, &session.get_context())
+                    .compile(type_, args, session.get_context())
                     .ok()?;
                 let a = c.address.clone();
                 // todo amount
@@ -190,7 +190,7 @@ impl Action {
 pub struct MenuBuilder {
     menu: Vec<RootSchema>,
     gen: schemars::gen::SchemaGenerator,
-    internal_menu: HashMap<String, fn(Value, &Context) -> Result<Compiled, SessionError>>,
+    internal_menu: HashMap<String, fn(Value, Context) -> Result<Compiled, SessionError>>,
     schemas: HashMap<String, String>,
 }
 impl MenuBuilder {
@@ -273,7 +273,7 @@ impl From<MenuBuilder> for Menu {
 /// A precompiled menu of available contract options
 pub struct Menu {
     menu: String,
-    internal_menu: HashMap<String, fn(Value, &Context) -> Result<Compiled, SessionError>>,
+    internal_menu: HashMap<String, fn(Value, Context) -> Result<Compiled, SessionError>>,
     schemas: HashMap<String, String>,
 }
 impl Menu {
@@ -282,7 +282,7 @@ impl Menu {
         &self,
         name: String,
         args: Value,
-        ctx: &Context,
+        ctx: Context,
     ) -> Result<Compiled, SessionError> {
         let f = self
             .internal_menu
