@@ -20,6 +20,7 @@ pub struct Context {
     emulator: Arc<dyn CTVEmulator>,
     /// which network is the contract building for?
     pub network: Network,
+    /// TODO: reversed linked list of ARCs to better de-duplicate memory.
     path: Vec<Arc<String>>,
 }
 

@@ -118,117 +118,128 @@ where
         // only in that then_fns have a CTV enforcing the contract and
         // finish_or_fns do not. We can lazily chain iterators to process them
         // in a row.
-        let then_fn_ctx = ctx.derive(Some("then_fn"));
-        let then_fns = self
-            .then_fns()
-            .iter()
-            .filter_map(|x| x())
-            .filter_map(|x| {
-                let mut v = ConditionalCompileType::NoConstraint;
-                let conditional_compile_ctx = then_fn_ctx.derive(Some("conditional_compile_if"));
-                for (i, cond) in x
-                    .conditional_compile_if
-                    .iter()
-                    .filter_map(|x| x())
-                    .enumerate()
-                {
-                    let ConditionallyCompileIf::Fresh(f) = cond;
-                    v = v.merge(f(
-                        self_ref,
-                        conditional_compile_ctx.derive(Some(&format!("{}", i))),
-                    ));
-                }
-                match v {
-                    ConditionalCompileType::Fail(v) => Some((v, Nullable::No, x)),
-                    ConditionalCompileType::Required | ConditionalCompileType::NoConstraint => {
-                        Some((LinkedList::new(), Nullable::No, x))
+        let then_fns: Vec<_> = {
+            let then_fn_ctx = ctx.derive(Some("then_fn"));
+            let conditional_compile_ctx = then_fn_ctx.derive(Some("conditional_compile_if"));
+            let guards_ctx = then_fn_ctx.derive(Some("guards"));
+            let next_tx_ctx = then_fn_ctx.derive(Some("next_tx"));
+            self.then_fns()
+                .iter()
+                .filter_map(|x| x())
+                .enumerate()
+                .filter_map(|(i, x)| {
+                    let s = format!("{}", i);
+                    let mut v = ConditionalCompileType::NoConstraint;
+                    let this_ctx = conditional_compile_ctx.derive(Some(&s));
+                    for (j, cond) in x
+                        .conditional_compile_if
+                        .iter()
+                        .filter_map(|x| x())
+                        .enumerate()
+                    {
+                        let ConditionallyCompileIf::Fresh(f) = cond;
+                        v = v.merge(f(self_ref, this_ctx.derive(Some(&format!("{}", j)))));
                     }
-                    ConditionalCompileType::Skippable => None,
-                    ConditionalCompileType::Never => None,
-                    ConditionalCompileType::Nullable => Some((LinkedList::new(), Nullable::Yes, x)),
-                }
-            })
-            .map(|(errors, nullability, x)| {
-                let guards = create_guards(
-                    self_ref,
-                    then_fn_ctx.derive(Some("guards")),
-                    x.guard,
-                    &mut guard_clauses.borrow_mut(),
-                );
-                if errors.is_empty() {
-                    (
-                        nullability,
-                        CTVRequired::Yes,
-                        guards,
-                        (x.func)(self_ref, then_fn_ctx.derive(Some("next_tx"))),
-                    )
-                } else {
-                    (
-                        nullability,
-                        CTVRequired::Yes,
-                        guards,
-                        Err(CompilationError::ConditionalCompilationFailed(errors)),
-                    )
-                }
-            });
+                    match v {
+                        ConditionalCompileType::Fail(v) => Some((s, v, Nullable::No, x)),
+                        ConditionalCompileType::Required | ConditionalCompileType::NoConstraint => {
+                            Some((s, LinkedList::new(), Nullable::No, x))
+                        }
+                        ConditionalCompileType::Skippable => None,
+                        ConditionalCompileType::Never => None,
+                        ConditionalCompileType::Nullable => {
+                            Some((s, LinkedList::new(), Nullable::Yes, x))
+                        }
+                    }
+                })
+                .map(|(s, errors, nullability, x)| {
+                    let guards = create_guards(
+                        self_ref,
+                        guards_ctx.derive(Some(&s)),
+                        x.guard,
+                        &mut guard_clauses.borrow_mut(),
+                    );
+                    if errors.is_empty() {
+                        (
+                            nullability,
+                            CTVRequired::Yes,
+                            guards,
+                            (x.func)(self_ref, next_tx_ctx.derive(Some(&s))),
+                        )
+                    } else {
+                        (
+                            nullability,
+                            CTVRequired::Yes,
+                            guards,
+                            Err(CompilationError::ConditionalCompilationFailed(errors)),
+                        )
+                    }
+                })
+                .collect()
+        };
         // finish_or_fns may be used to compute additional transactions with
         // a given argument, but for building the ABI we only precompute with
         // the default argument.
-        let finish_or_fns_ctx = ctx.derive(Some("finish_or_fn"));
-        let finish_or_fns = self
-            .finish_or_fns()
-            .iter()
-            .filter_map(|x| x())
-            // TODO: De-duplicate this code?
-            .filter_map(|x| {
-                let mut v = ConditionalCompileType::NoConstraint;
-                let conditional_compile_ctx = then_fn_ctx.derive(Some("conditional_compile_if"));
-                for (i, cond) in x
-                    .get_conditional_compile_if()
-                    .iter()
-                    .filter_map(|x| x())
-                    .enumerate()
-                {
-                    let ConditionallyCompileIf::Fresh(f) = cond;
-                    v = v.merge(f(
-                        self_ref,
-                        conditional_compile_ctx.derive(Some(&format!("{}", i))),
-                    ));
-                }
-                match v {
-                    ConditionalCompileType::Fail(v) => Some((v, x)),
-                    ConditionalCompileType::Required | ConditionalCompileType::NoConstraint => {
-                        Some((LinkedList::new(), x))
+        let finish_or_fns: Vec<_> = {
+            let finish_or_fns_ctx = ctx.derive(Some("finish_or_fn"));
+            let conditional_compile_ctx = finish_or_fns_ctx.derive(Some("conditional_compile_if"));
+            let guard_ctx = finish_or_fns_ctx.derive(Some("guards"));
+            let suggested_tx_ctx = finish_or_fns_ctx.derive(Some("suggested_txs"));
+            self.finish_or_fns()
+                .iter()
+                .filter_map(|x| x())
+                // TODO: De-duplicate this code?
+                .enumerate()
+                .filter_map(|(i, x)| {
+                    let mut v = ConditionalCompileType::NoConstraint;
+                    let s = format!("{}", i);
+                    /// TODO: name?
+                    let this_ctx = conditional_compile_ctx.derive(Some(&s));
+                    for (i, cond) in x
+                        .get_conditional_compile_if()
+                        .iter()
+                        .filter_map(|x| x())
+                        .enumerate()
+                    {
+                        let ConditionallyCompileIf::Fresh(f) = cond;
+                        v = v.merge(f(self_ref, this_ctx.derive(Some(&format!("{}", i)))));
                     }
-                    ConditionalCompileType::Skippable => None,
-                    ConditionalCompileType::Never => None,
-                    ConditionalCompileType::Nullable => Some((LinkedList::new(), x)),
-                }
-            })
-            .map(|(errors, x)| {
-                let guard = create_guards(
-                    self_ref,
-                    finish_or_fns_ctx.derive(Some("guards")),
-                    x.get_guard(),
-                    &mut guard_clauses.borrow_mut(),
-                );
-                if errors.is_empty() {
-                    let arg: T::StatefulArguments = Default::default();
-                    let res = x.call(
+                    match v {
+                        ConditionalCompileType::Fail(v) => Some((s, v, x)),
+                        ConditionalCompileType::Required | ConditionalCompileType::NoConstraint => {
+                            Some((s, LinkedList::new(), x))
+                        }
+                        ConditionalCompileType::Skippable => None,
+                        ConditionalCompileType::Never => None,
+                        ConditionalCompileType::Nullable => Some((s, LinkedList::new(), x)),
+                    }
+                })
+                .map(|(s, errors, x)| {
+                    let guard = create_guards(
                         self_ref,
-                        finish_or_fns_ctx.derive(Some("suggested_txs")),
-                        arg,
+                        guard_ctx.derive(Some(&s)),
+                        x.get_guard(),
+                        &mut guard_clauses.borrow_mut(),
                     );
-                    (Nullable::Yes, CTVRequired::No, guard, res)
-                } else {
-                    (
-                        Nullable::Yes,
-                        CTVRequired::No,
-                        guard,
-                        Err(CompilationError::ConditionalCompilationFailed(errors)),
-                    )
-                }
-            });
+                    if errors.is_empty() {
+                        let arg: T::StatefulArguments = Default::default();
+                        let res = x.call(
+                            self_ref,
+                            suggested_tx_ctx.derive(Some(&s)),
+                            arg,
+                        );
+                        (Nullable::Yes, CTVRequired::No, guard, res)
+                    } else {
+                        (
+                            Nullable::Yes,
+                            CTVRequired::No,
+                            guard,
+                            Err(CompilationError::ConditionalCompilationFailed(errors)),
+                        )
+                    }
+                })
+                .collect()
+        };
 
         let continue_apis = self
             .finish_or_fns()
@@ -248,7 +259,8 @@ where
         // If CTV and no guards, just CTV added.
         // If CTV and guards, CTV & guards added.
         let mut clause_accumulator = then_fns
-            .chain(finish_or_fns)
+            .into_iter()
+            .chain(finish_or_fns.into_iter())
             .map(|(nullability, uses_ctv, guards, r_txtmpls)| {
                 // Compute all guard clauses.
                 // Don't use a threshold here because then miniscript will just
@@ -302,21 +314,21 @@ where
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;
-
-        let finish_fns_ctx = ctx.derive(Some("finish_fn"));
-        // Compute all finish_functions at this level, caching if requested.
-        let finish_fns: Vec<_> = self
-            .finish_fns()
-            .iter()
-            .enumerate()
-            .filter_map(|(i, x)| {
-                guard_clauses.borrow_mut().get(
-                    self_ref,
-                    *x,
-                    finish_fns_ctx.derive(Some(&format!("{}", i))),
-                )
-            })
-            .collect();
+        let finish_fns: Vec<_> = {
+            let finish_fns_ctx = ctx.derive(Some("finish_fn"));
+            // Compute all finish_functions at this level, caching if requested.
+            self.finish_fns()
+                .iter()
+                .enumerate()
+                .filter_map(|(i, x)| {
+                    guard_clauses.borrow_mut().get(
+                        self_ref,
+                        *x,
+                        finish_fns_ctx.derive(Some(&format!("{}", i))),
+                    )
+                })
+                .collect()
+        };
         // If any clauses are returned, use a Threshold with n = 1
         // It compiles equivalently to a tree of ORs.
         if finish_fns.len() > 0 {
