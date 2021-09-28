@@ -9,6 +9,7 @@ use super::CompilationError;
 use super::Context;
 use super::TxTmplIt;
 use sapio_base::Clause;
+use schemars::{schema::RootSchema, schema_for, JsonSchema};
 use std::collections::LinkedList;
 /// A Guard is a function which generates some condition that must be met to unlock a script.
 /// If bool = true, the computation of the guard is cached, which is useful if e.g. Guard
@@ -146,6 +147,10 @@ pub struct FinishOrFunc<'a, ContractSelf: 'a, StatefulArguments, SpecificArgs> {
     /// semantics, preferring to split across multiple `FinishOrFunc`'s.
     /// These `TxTmpl`s are non-binding, merely suggested.
     pub func: fn(&ContractSelf, &Context, SpecificArgs) -> TxTmplIt,
+    /// to be filled in if SpecificArgs has a schema, which it might not.
+    /// because negative trait bounds do not exists, that is up to the
+    /// implementation to decide if the trait exists.
+    pub schema: Option<RootSchema>,
 }
 
 /// This trait hides the generic parameter `SpecificArgs` in FinishOrFunc

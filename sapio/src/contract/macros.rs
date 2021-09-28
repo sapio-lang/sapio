@@ -155,6 +155,20 @@ macro_rules! then {
 
 }
 
+/// Internal Helper for finish! macro, not to be used directly.
+#[macro_export]
+macro_rules! web_api {
+    {web{},$name:ident,$type:ty} => {
+        $crate::contract::macros::paste!{
+            const [<FINISH_API_FOR_ $name >] : Option<$crate::schemars::schema::RootSchema> = Some(schema_for!($type));
+        }
+    };
+    {$name:ident,$type:ty} => {
+        $crate::contract::macros::paste!{
+            const [<FINISH_API_FOR_ $name >] : Option<$crate::schemars::schema::RootSchema> = None;
+        }
+    }
+}
 /// The finish macro is used to define a `FinishFunc` or a `FinishOrFunc`
 /// formats for calling are:
 /// ```ignore
@@ -170,11 +184,11 @@ macro_rules! then {
 macro_rules! finish {
     {
         $(#[$meta:meta])*
+        $(web$web_enable:block)?
         $name:ident<$arg_type:ty>
     } => {
-
         $crate::contract::macros::paste!{
-
+            web_api!($(web$web_enable,)* $name,$arg_type);
             $(#[$meta])*
             fn [<FINISH_ $name>](&self, _ctx:&$crate::contract::Context, _o: $arg_type)-> $crate::contract::TxTmplIt
             {
@@ -191,6 +205,7 @@ macro_rules! finish {
     };
     {
         $(#[$meta:meta])*
+        $(web$web_enable:block)?
         compile_if: $conditional_compile_list:tt
         guarded_by: $guard_list:tt
         coerce_args: $coerce_args:ident
@@ -199,7 +214,7 @@ macro_rules! finish {
     } => {
 
         $crate::contract::macros::paste!{
-
+            web_api!($(web$web_enable,)* $name,$arg_type);
             $(#[$meta])*
             fn [<FINISH_ $name>](&$s, $ctx:&$crate::contract::Context, $o: $arg_type) -> $crate::contract::TxTmplIt
             $b
@@ -212,6 +227,7 @@ macro_rules! finish {
                     guard: &$guard_list,
                     conditional_compile_if: &$conditional_compile_list,
                     func: Self::[<FINISH_ $name>],
+                    schema: Self::[<FINISH_API_FOR_ $name >]
                 };
                 Some(Box::new(f))
             }
@@ -219,12 +235,14 @@ macro_rules! finish {
     };
     {
         $(#[$meta:meta])*
+        $(web$web_enable:block)?
         guarded_by: $guard_list:tt
         coerce_args: $coerce_args:ident
         fn $name:ident($s:ident, $ctx:ident, $o:ident:$arg_type:ty) $b:block
     } => {
         finish!{
             $(#[$meta])*
+            $(web$web_enable)*
             compile_if: []
             guarded_by: $guard_list
             coerce_args: $coerce_args

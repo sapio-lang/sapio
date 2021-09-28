@@ -15,3 +15,4 @@ pub mod template;
 pub mod util;
 
 pub use sapio_base;
+pub use schemars;
