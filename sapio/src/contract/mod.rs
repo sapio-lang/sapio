@@ -6,19 +6,19 @@
 
 //! Functionality comprising the language base, macros, and compiler internals.
 use crate::template::Template as TransactionTemplate;
-
 #[macro_use]
 pub mod macros;
+pub mod abi;
+// TODO: get rid of this rexport?
+pub use abi::object;
 pub mod actions;
 pub mod compiler;
 pub mod error;
-pub mod object;
 pub use error::CompilationError;
 pub mod context;
-pub use context::Context;
-
 use bitcoin::util::amount::Amount;
 pub use compiler::Compilable;
+pub use context::Context;
 pub use object::Object as Compiled;
 
 /// An Iterator which yields TransactionTemplates.
