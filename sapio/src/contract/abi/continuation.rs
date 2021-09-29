@@ -27,7 +27,7 @@ mod rs {
     pub fn serializer<T, S>(v: &Arc<T>, s: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
-        T: Serialize
+        T: Serialize,
     {
         let b: &T = v.borrow();
         b.serialize(s)
@@ -35,7 +35,7 @@ mod rs {
     pub fn deserializer<'de, T, D>(d: D) -> Result<Arc<T>, D::Error>
     where
         D: Deserializer<'de>,
-        T: Deserialize<'de>
+        T: Deserialize<'de>,
     {
         Ok(Arc::new(T::deserialize(d)?))
     }

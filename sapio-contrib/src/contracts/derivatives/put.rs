@@ -39,7 +39,8 @@ impl<'a> TryFrom<Put<'a>> for GenericBetArguments<'a> {
             }
             outcomes.push((
                 price as i64,
-                strike_ctx.derive(Some(&format!("{}", price)))
+                strike_ctx
+                    .derive(Some(&format!("{}", price)))
                     .template()
                     .add_output(profit, &v.user_api.receive_payment(profit), None)?
                     .add_output(refund, &v.operator_api.receive_payment(refund), None)?

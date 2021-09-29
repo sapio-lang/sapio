@@ -5,13 +5,13 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! The different types of functionality a contract can define.
-use std::sync::Arc;
 use super::CompilationError;
 use super::Context;
 use super::TxTmplIt;
 use sapio_base::Clause;
 use schemars::schema::RootSchema;
 use std::collections::LinkedList;
+use std::sync::Arc;
 /// A Guard is a function which generates some condition that must be met to unlock a script.
 /// If bool = true, the computation of the guard is cached, which is useful if e.g. Guard
 /// must contact a remote server or it should be the same across calls *for a given contract

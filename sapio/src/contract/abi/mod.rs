@@ -6,6 +6,6 @@
 
 //! ABI contains the output formats of Sapio Compilatios
 
+pub mod continuation;
 pub mod object;
 pub mod studio;
-pub mod continuation;

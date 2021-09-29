@@ -11,15 +11,47 @@ use bitcoin::Network;
 use miniscript::Descriptor;
 use miniscript::DescriptorTrait;
 use sapio_ctv_emulator_trait::CTVEmulator;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-
 /// Used to Build a Shared Path for all children of a given context.
+#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone)]
+#[serde(try_from = "Vec<String>")]
+#[serde(into = "Vec<String>")]
 pub struct ReversePath {
     past: Option<Arc<ReversePath>>,
     this: Arc<String>,
 }
 
+use std::convert::TryFrom;
+impl TryFrom<Vec<String>> for ReversePath {
+    type Error = &'static str;
+    fn try_from(v: Vec<String>) -> Result<ReversePath, Self::Error> {
+        let mut rp = None;
+        for val in v {
+            rp = Some(ReversePath::push(rp, Arc::new(val)));
+        }
+        if let Option::Some(v) = rp {
+            // Arc unwrap never fail!
+            Ok(Arc::try_unwrap(v).unwrap())
+        } else {
+            Err("Reverse Path must have at least one element.")
+        }
+    }
+}
+impl From<ReversePath> for Vec<String> {
+    fn from(r: ReversePath) -> Self {
+        let mut result: Vec<String> = vec![(*r.this).clone()];
+        let mut node = &r.past;
+        while let Some(v) = node {
+            result.push((*v.this).clone());
+            node = &v.past;
+        }
+        result.reverse();
+        result
+    }
+}
 impl From<ReversePath> for Vec<Arc<String>> {
     fn from(r: ReversePath) -> Self {
         let mut result = vec![r.this];
@@ -28,15 +60,26 @@ impl From<ReversePath> for Vec<Arc<String>> {
             result.push(v.this.clone());
             node = &v.past;
         }
+        result.reverse();
         result
     }
 }
 struct MK(Option<Arc<ReversePath>>);
+impl MK {
+    fn unwrap(self) -> Arc<ReversePath> {
+        if let Some(x) = self.0 {
+            x
+        } else {
+            panic!("Vector must have at least one root path")
+        }
+    }
+}
 impl From<Vec<Arc<String>>> for MK {
     fn from(v: Vec<Arc<String>>) -> Self {
-        let mut rp = None;
+        let mut rp: Option<Arc<ReversePath>> = None;
         for val in v {
-            rp = Some(ReversePath::push(rp, val));
+            let new: Arc<ReversePath> = ReversePath::push(rp, val);
+            rp = Some(new);
         }
         MK(rp)
     }
@@ -75,7 +118,7 @@ impl Context {
             emulator,
             network,
             // TODO: Should return Option Self if path is not length > 0
-            path: MK::from(path).0.unwrap(),
+            path: MK::from(path).unwrap(),
         }
     }
 
@@ -83,7 +126,7 @@ impl Context {
     /// If no path is provided, it will be "cloned"
     pub fn derive<'a>(&self, path: Option<&'a str>) -> Self {
         let new_path = ReversePath::push(
-            Some(self.path.clone()),
+            Option::Some(self.path.clone()),
             path.map(String::from)
                 .map(Arc::new)
                 .unwrap_or_else(|| CLONED.clone()),

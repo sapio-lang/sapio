@@ -223,11 +223,7 @@ where
                     );
                     if errors.is_empty() {
                         let arg: T::StatefulArguments = Default::default();
-                        let res = x.call(
-                            self_ref,
-                            suggested_tx_ctx.derive(Some(&s)),
-                            arg,
-                        );
+                        let res = x.call(self_ref, suggested_tx_ctx.derive(Some(&s)), arg);
                         (Nullable::Yes, CTVRequired::No, guard, res)
                     } else {
                         (

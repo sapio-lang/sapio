@@ -72,7 +72,7 @@ mod tests {
             bitcoin::Network::Regtest,
             Amount::from_sat(10000),
             std::sync::Arc::new(CTVAvailable),
-            vec![Arc::new("ROOT".into())]
+            vec![Arc::new("ROOT".into())],
         );
         Compilable::compile(&x, ctx.derive(Some("X")));
         Compilable::compile(&y, ctx.derive(Some("Y")));
