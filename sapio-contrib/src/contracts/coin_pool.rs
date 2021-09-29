@@ -7,11 +7,15 @@
 //! coin_pool has a contract `CoinPool` for sharing a UTXO
 use bitcoin::Amount;
 use sapio::contract::*;
+use sapio::util::amountrange::AmountF64;
 use sapio::*;
 use sapio_base::timelocks::AnyRelTimeLock;
 use sapio_base::Clause;
+use schemars::JsonSchema;
+use serde::Deserialize;
+use std::convert::TryFrom;
 use std::sync::{Arc, Mutex};
-type Payouts = Vec<(Arc<Mutex<dyn Compilable>>, Amount)>;
+type Payouts = Vec<(Arc<Mutex<dyn Compilable>>, AmountF64)>;
 /// A CoinPool is a contract that allows a group of individuals to
 /// cooperatively share a UTXO.
 pub struct CoinPool {
@@ -44,18 +48,18 @@ impl CoinPool {
                 };
 
                 ctx.template().add_output(
-                    Amount::from_sat(a.refunds.iter().map(|x| x.1.as_sat()).sum()),
+                    Amount::from_sat(a.refunds.iter().map(|x| Amount::from(x.1).as_sat()).sum()),
                     &a,
                     None
                 )?.add_output(
-                    Amount::from_sat(b.refunds.iter().map(|x| x.1.as_sat()).sum()),
+                    Amount::from_sat(b.refunds.iter().map(|x| Amount::from(x.1).as_sat()).sum()),
                     &b,
                     None
                 )?.into()
             } else {
                 let mut builder = ctx.template();
                 for (cmp, amt) in self.refunds.iter() {
-                builder = builder.add_output(*amt, &*cmp.lock().unwrap(), None)?;
+                builder = builder.add_output((*amt).into(), &*cmp.lock().unwrap(), None)?;
                 }
                 builder.into()
             }
@@ -69,13 +73,14 @@ impl CoinPool {
     }
     finish! {
         /// move the coins to the next state -- payouts may recursively contain pools itself
+        <web={}>
         guarded_by: [Self::all_approve]
         coerce_args: default_coerce
         fn next_pool(self, ctx, o: Option<CoinPoolUpdate>) {
             if let Some(coin_pool) = o {
-                let mut tmpl = ctx.template().add_amount(coin_pool.external_amount);
+                let mut tmpl = ctx.template().add_amount(coin_pool.external_amount.into());
                 for (to, amt) in coin_pool.payouts.iter() {
-                    tmpl = tmpl.add_output(*amt, &*to.lock().unwrap(), None)?;
+                    tmpl = tmpl.add_output((*amt).into(), &*to.lock().unwrap(), None)?;
                 }
                 for seq in coin_pool.add_inputs.iter() {
                     tmpl = tmpl.add_sequence().set_sequence(-1, *seq)?;
@@ -89,8 +94,11 @@ impl CoinPool {
 }
 
 /// `CoinPoolUpdate` allows updating a `CoinPool` to a new state.
+#[derive(Deserialize, JsonSchema)]
+#[serde(try_from = "UpdateTypes")]
 pub struct CoinPoolUpdate {
     /// the contracts to pay into
+    #[schemars(with = "Vec<(bitcoin::Address, AmountF64)>")]
     payouts: Payouts,
     /// if we should add any inputs to the transaction, and if so, what the
     /// sequences should be set to.
@@ -98,7 +106,38 @@ pub struct CoinPoolUpdate {
     /// If the external inputs are contributing funds -- this allows two
     /// coinpools to merge.
     /// TODO: Allow different indexes?
-    external_amount: Amount,
+    external_amount: AmountF64,
+}
+
+#[derive(Deserialize, JsonSchema)]
+enum UpdateTypes {
+    Basic {
+        payouts: Vec<(bitcoin::PublicKey, AmountF64)>,
+        external_amount: AmountF64,
+        add_inputs: Vec<AnyRelTimeLock>,
+    },
+}
+impl TryFrom<UpdateTypes> for CoinPoolUpdate {
+    type Error = CompilationError;
+    fn try_from(u: UpdateTypes) -> Result<CoinPoolUpdate, CompilationError> {
+        match u {
+            UpdateTypes::Basic {
+                add_inputs,
+                external_amount,
+                payouts,
+            } => Ok(CoinPoolUpdate {
+                add_inputs: add_inputs,
+                external_amount: external_amount.into(),
+                payouts: payouts
+                    .iter()
+                    .map(|(a, b)| {
+                        let k: Arc<Mutex<dyn Compilable>> = Arc::new(Mutex::new(a.clone()));
+                        (k, (*b).into())
+                    })
+                    .collect(),
+            }),
+        }
+    }
 }
 
 impl Contract for CoinPool {

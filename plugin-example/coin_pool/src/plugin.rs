@@ -8,6 +8,7 @@ use crate::sapio_base::Clause;
 use bitcoin::util::amount::Amount;
 use bitcoin::util::amount::CoinAmount;
 use sapio::contract::*;
+use sapio::util::amountrange::AmountF64;
 use sapio::*;
 use sapio_contrib::contracts::coin_pool::CoinPool;
 use sapio_wasm_plugin::client::*;
@@ -21,9 +22,7 @@ use std::sync::{Arc, Mutex};
 #[derive(JsonSchema, Deserialize)]
 struct Payout {
     /// # Amount to Pay (BTC)
-    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
-    #[schemars(with = "f64")]
-    amount: bitcoin::Amount,
+    amount: AmountF64,
     /// # Payout Plugin ID
     payout_handle: LookupFrom,
     /// # Arguments (as JSON) for Plugin
@@ -47,8 +46,17 @@ enum PoolTypes {
     Basic(
         /// # Add Multiple Payments
         #[schemars(length(min = 1))]
-        Vec<(CoinAmount, bitcoin::PublicKey)>,
+        Vec<SimplePayment>,
     ),
+}
+
+/// # Payment to Key
+#[derive(JsonSchema, Deserialize)]
+pub struct SimplePayment {
+    /// # The Key that Votes & Redeems Funds
+    key: bitcoin::PublicKey,
+    /// # Amount to Pay in BTC
+    amount: AmountF64,
 }
 
 impl TryFrom<PoolTypes> for CoinPool {
@@ -56,18 +64,18 @@ impl TryFrom<PoolTypes> for CoinPool {
     fn try_from(v: PoolTypes) -> Result<CoinPool, CompilationError> {
         match v {
             PoolTypes::Basic(payouts) => {
-                let refunds: Vec<(Arc<Mutex<dyn Compilable>>, Amount)> = payouts
+                let refunds: Vec<(Arc<Mutex<dyn Compilable>>, AmountF64)> = payouts
                     .iter()
-                    .map(|(a, k)| {
+                    .map(|s| {
                         let compilable: Arc<Mutex<dyn Compilable>> =
-                            Arc::new(Mutex::new(k.clone()));
-                        Ok((compilable, Amount::try_from(*a)?))
+                            Arc::new(Mutex::new(s.key.clone()));
+                        Ok((compilable, s.amount))
                     })
                     .collect::<Result<Vec<_>, CompilationError>>()?;
                 Ok(CoinPool {
                     clauses: payouts
                         .iter()
-                        .map(|(_, k)| Clause::Key(k.clone()))
+                        .map(|s| Clause::Key(s.key.clone()))
                         .collect(),
                     refunds,
                 })
@@ -80,7 +88,7 @@ impl TryFrom<PoolTypes> for CoinPool {
                             &key,
                             serde_json::from_str(&payout.payout_args)
                                 .map_err(|_| CompilationError::TerminateCompilation)?,
-                            payout.amount,
+                            payout.amount.into(),
                         ) {
                             let compilable: Arc<Mutex<dyn Compilable>> =
                                 Arc::new(Mutex::new(compiled));
