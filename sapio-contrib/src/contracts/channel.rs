@@ -68,7 +68,7 @@ mod tests {
             serde_json::to_string_pretty(&schemars::schema_for!(Channel<Stop, Args>)).unwrap()
         );
         println!("{}", serde_json::to_string_pretty(&y).unwrap());
-        let ctx = sapio::contract::Context::new(
+        let mut ctx = sapio::contract::Context::new(
             bitcoin::Network::Regtest,
             Amount::from_sat(10000),
             std::sync::Arc::new(CTVAvailable),

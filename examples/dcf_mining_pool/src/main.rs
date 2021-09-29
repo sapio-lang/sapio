@@ -164,6 +164,7 @@ use sapio::contract::error::CompilationError;
 impl MiningPool {
     then! {
         fn pay_miners(self, ctx) {
+            let mut ctx = ctx;
             let mut blocks = self.blocks.clone();
             blocks.push(self.tip.clone());
             blocks.sort_by_cached_key(|a| {

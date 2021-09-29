@@ -78,7 +78,7 @@ impl Compilable for Compiled {
 
 fn create_guards<T>(
     self_ref: &T,
-    ctx: Context,
+    mut ctx: Context,
     guards: &[fn() -> Option<Guard<T>>],
     gc: &mut GuardCache<T>,
 ) -> Clause {
@@ -101,7 +101,7 @@ where
 {
     /// The main Compilation Logic for a Contract.
     /// TODO: Better Document Semantics
-    fn compile(&self, ctx: Context) -> Result<Compiled, CompilationError> {
+    fn compile(&self, mut ctx: Context) -> Result<Compiled, CompilationError> {
         #[derive(PartialEq, Eq)]
         enum CTVRequired {
             Yes,
@@ -121,10 +121,10 @@ where
         // finish_or_fns do not. We can lazily chain iterators to process them
         // in a row.
         let then_fns: Vec<_> = {
-            let then_fn_ctx = ctx.derive(Some("then_fn"));
-            let conditional_compile_ctx = then_fn_ctx.derive(Some("conditional_compile_if"));
-            let guards_ctx = then_fn_ctx.derive(Some("guard_fn"));
-            let next_tx_ctx = then_fn_ctx.derive(Some("next_txs"));
+            let mut then_fn_ctx = ctx.derive(Some("then_fn"));
+            let mut conditional_compile_ctx = then_fn_ctx.derive(Some("conditional_compile_if"));
+            let mut guards_ctx = then_fn_ctx.derive(Some("guard_fn"));
+            let mut next_tx_ctx = then_fn_ctx.derive(Some("next_txs"));
             self.then_fns()
                 .iter()
                 .filter_map(|x| x())
@@ -132,7 +132,7 @@ where
                 .filter_map(|(i, x)| {
                     let s = format!("{}", i);
                     let mut v = ConditionalCompileType::NoConstraint;
-                    let this_ctx = conditional_compile_ctx.derive(Some(&s));
+                    let mut this_ctx = conditional_compile_ctx.derive(Some(&s));
                     for (j, cond) in x
                         .conditional_compile_if
                         .iter()
@@ -183,10 +183,10 @@ where
         // a given argument, but for building the ABI we only precompute with
         // the default argument.
         let finish_or_fns: Vec<_> = {
-            let finish_or_fns_ctx = ctx.derive(Some("finish_or_fn"));
-            let conditional_compile_ctx = finish_or_fns_ctx.derive(Some("conditional_compile_if"));
-            let guard_ctx = finish_or_fns_ctx.derive(Some("guard_fn"));
-            let suggested_tx_ctx = finish_or_fns_ctx.derive(Some("suggested_txs"));
+            let mut finish_or_fns_ctx = ctx.derive(Some("finish_or_fn"));
+            let mut conditional_compile_ctx = finish_or_fns_ctx.derive(Some("conditional_compile_if"));
+            let mut guard_ctx = finish_or_fns_ctx.derive(Some("guard_fn"));
+            let mut suggested_tx_ctx = finish_or_fns_ctx.derive(Some("suggested_txs"));
             self.finish_or_fns()
                 .iter()
                 .filter_map(|x| x())
@@ -196,7 +196,7 @@ where
                     let mut v = ConditionalCompileType::NoConstraint;
                     let s = format!("{}", i);
                     /// TODO: name?
-                    let this_ctx = conditional_compile_ctx.derive(Some(&s));
+                    let mut this_ctx = conditional_compile_ctx.derive(Some(&s));
                     for (i, cond) in x
                         .get_conditional_compile_if()
                         .iter()
@@ -313,7 +313,7 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
         let finish_fns: Vec<_> = {
-            let finish_fns_ctx = ctx.derive(Some("finish_fn"));
+            let mut finish_fns_ctx = ctx.derive(Some("finish_fn"));
             // Compute all finish_functions at this level, caching if requested.
             self.finish_fns()
                 .iter()

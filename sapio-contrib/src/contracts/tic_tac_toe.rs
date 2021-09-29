@@ -93,6 +93,7 @@ impl TicTacToe {
     then! {
         compile_if: [Self::no_winner]
         fn make_move(self, ctx) {
+            let mut ctx = ctx;
             loop {
                 if let Some(entry) = self.cache.lock().unwrap().get(&("make_move", self.board, self.whose_turn)) {
                     return Ok(Box::new(entry.clone().into_iter().map(Ok)));
@@ -100,7 +101,7 @@ impl TicTacToe {
 
                     let mut v = vec![];
                     for i in 0..3 {
-                        let i_ctx = ctx.derive(Some(&format!("{}", i)));
+                        let mut i_ctx = ctx.derive(Some(&format!("{}", i)));
                         for j in 0..3 {
                             if let None = self.board.0[i][j] {
                                 let j_ctx = i_ctx.derive(Some(&format!("{}", j)));

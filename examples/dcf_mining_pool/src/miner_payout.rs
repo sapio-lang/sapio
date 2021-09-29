@@ -122,6 +122,7 @@ impl MiningPayout {
     }
     then! {
         fn expand(self, ctx) {
+            let mut ctx = ctx;
             let mut counter = 0;
             let mut get_ctx = || {counter +=1; return ctx.derive(Some(&format!("{}", counter)))};
             let mut queue : VecDeque<(Amount, Box<dyn PayThisThing>)> = self.participants.iter().map(|payment| {

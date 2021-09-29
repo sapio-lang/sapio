@@ -29,6 +29,7 @@ pub struct Vault {
 
 impl Vault {
     then! {fn step(self, ctx) {
+        let mut ctx = ctx;
         let cold_storage_ctx = ctx.derive(Some("cold"));
         let mut builder = ctx.template();
         builder = builder
@@ -58,6 +59,7 @@ impl Vault {
         }.into()
     }}
     then! {fn to_cold (self, ctx) {
+        let mut ctx = ctx;
         let amount = bitcoin::Amount::try_from(self.amount_step).map_err(|_e| contract::CompilationError::TerminateCompilation)?.checked_mul(self.n_steps).ok_or(contract::CompilationError::TerminateCompilation)?;
         let cold_storage_ctx = ctx.derive(Some("cold"));
         ctx.template()

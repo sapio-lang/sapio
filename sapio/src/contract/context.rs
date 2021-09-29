@@ -26,6 +26,7 @@ pub struct Context {
     pub network: Network,
     /// TODO: reversed linked list of ARCs to better de-duplicate memory.
     path: Arc<ReversePath<String>>,
+    already_derived: HashSet<Arc<String>>,
 }
 
 lazy_static::lazy_static! {
@@ -76,32 +77,39 @@ impl Context {
             network,
             // TODO: Should return Option Self if path is not length > 0
             path: MkReversePath::from(path).unwrap(),
+            already_derived: Default::default(),
         }
     }
 
     /// Derive a new contextual path
     /// If no path is provided, it will be "cloned"
-    pub fn derive<'a>(&self, path: Option<&'a str>) -> Self {
-        let new_path = ReversePath::push(
-            Option::Some(self.path.clone()),
-            path.and_then(get_interned)
-                .cloned()
-                .or_else(|| path.map(String::from).map(Arc::new))
-                .unwrap_or_else(|| CLONED.clone()),
-        );
+    pub fn derive<'a>(&mut self, path: Option<&'a str>) -> Self {
+        let dir = path
+            .and_then(get_interned)
+            .cloned()
+            .or_else(|| path.map(String::from).map(Arc::new))
+            .unwrap_or_else(|| CLONED.clone());
+        if self.already_derived.contains(&dir) {
+            /// TODO: Make this return a Compilation Error
+            panic!("Fatal Error, Path Reuse");
+        }
+        let new_path = ReversePath::push(Some(self.path.clone()), dir);
         Context {
             available_funds: self.available_funds,
             emulator: self.emulator.clone(),
             path: new_path,
             network: self.network,
+            already_derived: Default::default(),
         }
     }
+    /// Method is unsafe!
     pub(crate) fn internal_clone(&self) -> Self {
         Context {
             available_funds: self.available_funds,
             emulator: self.emulator.clone(),
             path: self.path.clone(),
             network: self.network,
+            already_derived: self.already_derived.clone()
         }
     }
 
@@ -134,6 +142,7 @@ impl Context {
                 emulator: self.emulator.clone(),
                 path: self.path.clone(),
                 network: self.network,
+                already_derived: self.already_derived.clone()
             })
         }
     }

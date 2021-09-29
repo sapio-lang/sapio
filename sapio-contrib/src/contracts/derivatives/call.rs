@@ -27,14 +27,14 @@ pub struct Call<'a> {
 const ONE_UNIT: u64 = 10_000;
 impl<'a> TryFrom<Call<'a>> for GenericBetArguments<'a> {
     type Error = CompilationError;
-    fn try_from(v: Call<'a>) -> Result<Self, Self::Error> {
+    fn try_from(mut v: Call<'a>) -> Result<Self, Self::Error> {
         let key = v.operator_api.get_key();
         let user = v.user_api.get_key();
         let mut outcomes = vec![];
         let strike = v.strike_x_one_unit;
         let max_amount_bitcoin = v.amount * v.max_price_x_one_unit;
         // Increment 1 dollar per step
-        let strike_ctx = v.ctx.derive(Some("strike"));
+        let mut strike_ctx = v.ctx.derive(Some("strike"));
         for price in (strike..=v.max_price_x_one_unit).step_by(ONE_UNIT as usize) {
             let mut profit = Amount::from_sat(price) - Amount::from_sat(strike);
             let mut refund = max_amount_bitcoin - profit;

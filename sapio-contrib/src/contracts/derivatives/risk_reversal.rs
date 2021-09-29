@@ -94,7 +94,7 @@ pub struct RiskReversal<'a> {
 const ONE_UNIT: u64 = 10_000;
 impl<'a> TryFrom<RiskReversal<'a>> for GenericBetArguments<'a> {
     type Error = CompilationError;
-    fn try_from(v: RiskReversal<'a>) -> Result<Self, Self::Error> {
+    fn try_from(mut v: RiskReversal<'a>) -> Result<Self, Self::Error> {
         let key = v.operator_api.get_key();
         let user = v.user_api.get_key();
         let mut outcomes = vec![];
@@ -115,7 +115,7 @@ impl<'a> TryFrom<RiskReversal<'a>> for GenericBetArguments<'a> {
             return Err(CompilationError::TerminateCompilation);
         }
 
-        let strike_ctx = v.ctx.derive(Some("strike"));
+        let mut strike_ctx = v.ctx.derive(Some("strike"));
         // Increment 1 dollar per step
         for strike in (bottom..=top).step_by(ONE_UNIT as usize) {
             // Value Conservation Property:
