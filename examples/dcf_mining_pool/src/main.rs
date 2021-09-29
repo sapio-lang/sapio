@@ -62,7 +62,7 @@ impl BlockNotes {
 struct Coordinator {
     cache: HashMap<BlockHash, Arc<RwLock<BlockNotes>>>,
     client: rpc::Client,
-    ctx: Context,
+    ctx: dyn Fn() -> Context,
 }
 
 impl Coordinator {
@@ -136,7 +136,8 @@ impl Coordinator {
             blocks: known_participants,
             tip: self.cache[tip_in].clone(),
         };
-        let output = mp.compile(self.ctx.with_amount(mp.tip.read().unwrap().reward)?)?;
+        let this_ctx = (self.ctx)().with_amount(mp.tip.read().unwrap().reward)?;
+        let output = mp.compile(this_ctx)?;
         let script: Script = output.address.into();
 
         let mut result = false;

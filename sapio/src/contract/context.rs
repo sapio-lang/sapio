@@ -115,7 +115,7 @@ impl Context {
 
     // TODO: Fix
     /// return a context with the new amount if amount is smaller or equal to available
-    pub fn with_amount(&self, amount: Amount) -> Result<Self, CompilationError> {
+    pub fn with_amount(self, amount: Amount) -> Result<Self, CompilationError> {
         if self.available_funds < amount {
             Err(CompilationError::OutOfFunds)
         } else {
@@ -129,18 +129,19 @@ impl Context {
         }
     }
     /// decrease the amount available in this context object.
-    pub fn spend_amount(&mut self, amount: Amount) -> Result<(), CompilationError> {
+    pub fn spend_amount(mut self, amount: Amount) -> Result<Self, CompilationError> {
         if self.available_funds < amount {
             Err(CompilationError::OutOfFunds)
         } else {
             self.available_funds -= amount;
-            Ok(())
+            Ok(self)
         }
     }
 
     /// Add funds to the context object (not typically needed)
-    pub fn add_amount(&mut self, amount: Amount) {
+    pub fn add_amount(mut self, amount: Amount) -> Self{
         self.available_funds += amount;
+        self
     }
 
     /// Get a template builder from this context object

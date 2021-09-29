@@ -29,7 +29,7 @@ pub struct Builder {
 
 impl Builder {
     /// Creates a new transaction template with 1 input and no outputs.
-    pub fn new(ctx: Context) -> Builder {
+    pub fn new(mut ctx: Context) -> Builder {
         Builder {
             sequences: vec![None],
             outputs: vec![],
@@ -48,7 +48,7 @@ impl Builder {
 
     /// reduce the amount availble in the builder's context
     pub fn spend_amount(mut self, amount: Amount) -> Result<Self, CompilationError> {
-        self.ctx.spend_amount(amount)?;
+        self.ctx = self.ctx.spend_amount(amount)?;
         Ok(self)
     }
 
@@ -67,18 +67,23 @@ impl Builder {
         contract: &dyn crate::contract::Compilable,
         metadata: Option<OutputMeta>,
     ) -> Result<Self, CompilationError> {
-        self.outputs.push(Output {
+        let subctx = self
+            .ctx
+            .derive_str(Some(&format!("{}", self.outputs.len())))
+            .with_amount(amount)?;
+        let mut ret = self.spend_amount(amount)?;
+        ret.outputs.push(Output {
             amount: amount,
-            contract: contract.compile(self.ctx.with_amount(amount)?)?,
+            contract: contract.compile(subctx)?,
             metadata: metadata.unwrap_or_else(Default::default),
         });
-        self.spend_amount(amount)
+        Ok(ret)
     }
 
     /// adds available funds to the builder's context object.
     /// TODO: Make guarantee there is some external input?
     pub fn add_amount(mut self, a: Amount) -> Self {
-        self.ctx.add_amount(a);
+        self.ctx = self.ctx.add_amount(a);
         self
     }
 
