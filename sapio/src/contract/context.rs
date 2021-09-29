@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use crate::contract::compiler::InternalCompilerTag;
 /// Context is used to track statet during compilation such as remaining value.
 pub struct Context {
     /* TODO: Add Context Fields! */
@@ -102,8 +103,9 @@ impl Context {
             already_derived: Default::default(),
         }
     }
-    /// Method is unsafe!
-    pub(crate) fn internal_clone(&self) -> Self {
+    /// Method is unsafe, but may (provably!) be only called from within
+    /// compiler.rs where the `InternalCompilerTag` may be generated.
+    pub(crate) fn internal_clone(&self, _i: InternalCompilerTag) -> Self {
         Context {
             available_funds: self.available_funds,
             emulator: self.emulator.clone(),

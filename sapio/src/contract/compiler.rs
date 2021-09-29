@@ -23,6 +23,11 @@ enum CacheEntry<T> {
     Fresh(fn(&T, Context) -> Clause),
 }
 
+/// Used to prevent unintended callers to internal_clone.
+pub struct InternalCompilerTag {
+    _secret: (),
+}
+
 /// GuardCache assists with caching the computation of guard functions
 /// during compilation.
 struct GuardCache<T> {
@@ -45,7 +50,13 @@ impl<T> GuardCache<T> {
             match self
                 .cache
                 .entry(f as usize)
-                .or_insert_with(|| Self::create_entry(f(), t, ctx.internal_clone()))
+                .or_insert_with(|| {
+                    Self::create_entry(
+                        f(),
+                        t,
+                        ctx.internal_clone(InternalCompilerTag { _secret: () }),
+                    )
+                })
                 .as_ref()?
             {
                 CacheEntry::Cached(s) => s.clone(),
@@ -92,7 +103,6 @@ fn create_guards<T>(
             _ => Clause::And(vec![acc, item]),
         })
 }
-
 
 impl<'a, T> Compilable for T
 where
@@ -184,7 +194,8 @@ where
         // the default argument.
         let finish_or_fns: Vec<_> = {
             let mut finish_or_fns_ctx = ctx.derive(Some("finish_or_fn"));
-            let mut conditional_compile_ctx = finish_or_fns_ctx.derive(Some("conditional_compile_if"));
+            let mut conditional_compile_ctx =
+                finish_or_fns_ctx.derive(Some("conditional_compile_if"));
             let mut guard_ctx = finish_or_fns_ctx.derive(Some("guard_fn"));
             let mut suggested_tx_ctx = finish_or_fns_ctx.derive(Some("suggested_txs"));
             self.finish_or_fns()
