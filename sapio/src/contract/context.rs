@@ -7,6 +7,7 @@
 //! general non-parameter compilation state required by all contracts
 use super::{Amount, Compilable, CompilationError, Compiled};
 use crate::util::amountrange::AmountRange;
+use crate::util::reverse_path::{MkReversePath, ReversePath};
 use bitcoin::Network;
 use miniscript::Descriptor;
 use miniscript::DescriptorTrait;
@@ -14,8 +15,8 @@ use sapio_ctv_emulator_trait::CTVEmulator;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
-use crate::util::reverse_path::{ReversePath, MkReversePath};
 /// Context is used to track statet during compilation such as remaining value.
 pub struct Context {
     /* TODO: Add Context Fields! */
@@ -29,6 +30,35 @@ pub struct Context {
 
 lazy_static::lazy_static! {
     static ref CLONED : Arc<String> = Arc::new("cloned".into());
+    static ref THEN_FN : Arc<String> = Arc::new("then_fn".into());
+    static ref FINISH_OR_FN : Arc<String> = Arc::new("finish_or_fn".into());
+    static ref FINISH_FN: Arc<String> = Arc::new("finish_fn".into());
+    static ref CONDITIONAL_COMPILE_IF : Arc<String> = Arc::new("conditional_compile_if".into());
+    static ref GUARD_FN : Arc<String> = Arc::new("guard_fn".into());
+    static ref NEXT_TXS : Arc<String> = Arc::new("next_txs".into());
+    static ref SUGGESTED_TXS : Arc<String> = Arc::new("suggested_txs".into());
+    static ref INTERNED : HashMap<String, Arc<String>> = {
+        let mut m = HashMap::<String, Arc<String>>::new();
+        for s in [
+            CLONED.clone(),
+            THEN_FN.clone(),
+            FINISH_OR_FN.clone(),
+            FINISH_FN.clone(),
+            CONDITIONAL_COMPILE_IF.clone(),
+            GUARD_FN.clone(),
+            NEXT_TXS.clone(),
+            SUGGESTED_TXS.clone()]{
+            m.insert(s.to_string(), s);
+        }
+        for i in 0..100 {
+            m.insert(format!("{}", i),Arc::new(format!("{}", i)));
+        }
+        m
+    };
+
+}
+fn get_interned(s: &str) -> Option<&Arc<String>> {
+    (*INTERNED).get(&*s)
 }
 
 impl Context {
@@ -54,8 +84,9 @@ impl Context {
     pub fn derive<'a>(&self, path: Option<&'a str>) -> Self {
         let new_path = ReversePath::push(
             Option::Some(self.path.clone()),
-            path.map(String::from)
-                .map(Arc::new)
+            path.and_then(get_interned)
+                .cloned()
+                .or_else(|| path.map(String::from).map(Arc::new))
                 .unwrap_or_else(|| CLONED.clone()),
         );
         Context {

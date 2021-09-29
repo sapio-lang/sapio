@@ -92,6 +92,8 @@ fn create_guards<T>(
             _ => Clause::And(vec![acc, item]),
         })
 }
+
+
 impl<'a, T> Compilable for T
 where
     T: AnyContract + 'a,
@@ -121,8 +123,8 @@ where
         let then_fns: Vec<_> = {
             let then_fn_ctx = ctx.derive(Some("then_fn"));
             let conditional_compile_ctx = then_fn_ctx.derive(Some("conditional_compile_if"));
-            let guards_ctx = then_fn_ctx.derive(Some("guards"));
-            let next_tx_ctx = then_fn_ctx.derive(Some("next_tx"));
+            let guards_ctx = then_fn_ctx.derive(Some("guard_fn"));
+            let next_tx_ctx = then_fn_ctx.derive(Some("next_txs"));
             self.then_fns()
                 .iter()
                 .filter_map(|x| x())
@@ -183,7 +185,7 @@ where
         let finish_or_fns: Vec<_> = {
             let finish_or_fns_ctx = ctx.derive(Some("finish_or_fn"));
             let conditional_compile_ctx = finish_or_fns_ctx.derive(Some("conditional_compile_if"));
-            let guard_ctx = finish_or_fns_ctx.derive(Some("guards"));
+            let guard_ctx = finish_or_fns_ctx.derive(Some("guard_fn"));
             let suggested_tx_ctx = finish_or_fns_ctx.derive(Some("suggested_txs"));
             self.finish_or_fns()
                 .iter()
