@@ -101,10 +101,10 @@ impl TicTacToe {
 
                     let mut v = vec![];
                     for i in 0..3 {
-                        let mut i_ctx = ctx.derive(Some(&format!("{}", i)));
+                        let mut i_ctx = ctx.derive_str(Some(&format!("{}", i)));
                         for j in 0..3 {
                             if let None = self.board.0[i][j] {
-                                let j_ctx = i_ctx.derive(Some(&format!("{}", j)));
+                                let j_ctx = i_ctx.derive_str(Some(&format!("{}", j)));
                                 let mut bcopy = self.board.clone();
                                 bcopy.0[i][j] = Some(self.whose_turn);
                                 let tmpl = j_ctx.template()

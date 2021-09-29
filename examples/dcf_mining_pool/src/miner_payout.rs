@@ -124,7 +124,7 @@ impl MiningPayout {
         fn expand(self, ctx) {
             let mut ctx = ctx;
             let mut counter = 0;
-            let mut get_ctx = || {counter +=1; return ctx.derive(Some(&format!("{}", counter)))};
+            let mut get_ctx = || {counter +=1; return ctx.derive_str(Some(&format!("{}", counter)))};
             let mut queue : VecDeque<(Amount, Box<dyn PayThisThing>)> = self.participants.iter().map(|payment| {
                 let b: Box<dyn PayThisThing> = Box::new(JustAKey::new(payment, get_ctx())?);
                 Ok((payment.amount, b))

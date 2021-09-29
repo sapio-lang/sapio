@@ -179,7 +179,7 @@ impl MiningPool {
                     key: note.read().unwrap().key.unwrap()
                 })
             ).collect::<Result<_,CompilationError>>()?;
-            let mut ctx_extra_funding :Context= ctx.derive(Some("unlimited funding"));
+            let mut ctx_extra_funding :Context= ctx.derive_str(Some("unlimited funding"));
             ctx_extra_funding.add_amount(Amount::from_btc(21_000_000.0).unwrap());
 
             let mut contract = MiningPayout {
@@ -188,7 +188,7 @@ impl MiningPool {
                     radix: 4,
                     fee_sats_per_tx: Amount::from_sat(100),
                 };
-            let fee_estimate = contract.compile(ctx.derive(Some("FAKE")))?.amount_range.max();
+            let fee_estimate = contract.compile(ctx.derive_str(Some("FAKE")))?.amount_range.max();
             let reward = self.tip.read().unwrap().reward - fee_estimate;
             let reward_per_miner = ( reward) / (blocks.len() as u64);
 

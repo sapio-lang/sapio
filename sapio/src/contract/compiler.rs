@@ -7,6 +7,7 @@
 //! The primary compilation traits and types
 use super::actions::Guard;
 use super::actions::{ConditionalCompileType, ConditionallyCompileIf};
+use super::interned_strings::*;
 use super::AnyContract;
 use super::CompilationError;
 use super::Compiled;
@@ -96,7 +97,7 @@ fn create_guards<T>(
     guards
         .iter()
         .enumerate()
-        .filter_map(|(i, x)| gc.get(self_ref, *x, ctx.derive(Some(&format!("{}", i)))))
+        .filter_map(|(i, x)| gc.get(self_ref, *x, ctx.derive_str(Some(&format!("{}", i)))))
         .filter(|x| *x != Clause::Trivial) // no point in using any Trivials
         .fold(Clause::Trivial, |acc, item| match acc {
             Clause::Trivial => item,
@@ -131,10 +132,10 @@ where
         // finish_or_fns do not. We can lazily chain iterators to process them
         // in a row.
         let then_fns: Vec<_> = {
-            let mut then_fn_ctx = ctx.derive(Some("then_fn"));
-            let mut conditional_compile_ctx = then_fn_ctx.derive(Some("conditional_compile_if"));
-            let mut guards_ctx = then_fn_ctx.derive(Some("guard_fn"));
-            let mut next_tx_ctx = then_fn_ctx.derive(Some("next_txs"));
+            let mut then_fn_ctx = ctx.derive(&THEN_FN);
+            let mut conditional_compile_ctx = then_fn_ctx.derive(&CONDITIONAL_COMPILE_IF);
+            let mut guards_ctx = then_fn_ctx.derive(&GUARD_FN);
+            let mut next_tx_ctx = then_fn_ctx.derive(&NEXT_TXS);
             self.then_fns()
                 .iter()
                 .filter_map(|x| x())
@@ -142,7 +143,7 @@ where
                 .filter_map(|(i, x)| {
                     let s = format!("{}", i);
                     let mut v = ConditionalCompileType::NoConstraint;
-                    let mut this_ctx = conditional_compile_ctx.derive(Some(&s));
+                    let mut this_ctx = conditional_compile_ctx.derive_str(Some(&s));
                     for (j, cond) in x
                         .conditional_compile_if
                         .iter()
@@ -150,7 +151,7 @@ where
                         .enumerate()
                     {
                         let ConditionallyCompileIf::Fresh(f) = cond;
-                        v = v.merge(f(self_ref, this_ctx.derive(Some(&format!("{}", j)))));
+                        v = v.merge(f(self_ref, this_ctx.derive_str(Some(&format!("{}", j)))));
                     }
                     match v {
                         ConditionalCompileType::Fail(v) => Some((s, v, Nullable::No, x)),
@@ -167,7 +168,7 @@ where
                 .map(|(s, errors, nullability, x)| {
                     let guards = create_guards(
                         self_ref,
-                        guards_ctx.derive(Some(&s)),
+                        guards_ctx.derive_str(Some(&s)),
                         x.guard,
                         &mut guard_clauses.borrow_mut(),
                     );
@@ -176,7 +177,7 @@ where
                             nullability,
                             CTVRequired::Yes,
                             guards,
-                            (x.func)(self_ref, next_tx_ctx.derive(Some(&s))),
+                            (x.func)(self_ref, next_tx_ctx.derive_str(Some(&s))),
                         )
                     } else {
                         (
@@ -193,11 +194,10 @@ where
         // a given argument, but for building the ABI we only precompute with
         // the default argument.
         let finish_or_fns: Vec<_> = {
-            let mut finish_or_fns_ctx = ctx.derive(Some("finish_or_fn"));
-            let mut conditional_compile_ctx =
-                finish_or_fns_ctx.derive(Some("conditional_compile_if"));
-            let mut guard_ctx = finish_or_fns_ctx.derive(Some("guard_fn"));
-            let mut suggested_tx_ctx = finish_or_fns_ctx.derive(Some("suggested_txs"));
+            let mut finish_or_fns_ctx = ctx.derive(&FINISH_OR_FN);
+            let mut conditional_compile_ctx = finish_or_fns_ctx.derive(&CONDITIONAL_COMPILE_IF);
+            let mut guard_ctx = finish_or_fns_ctx.derive(&GUARD_FN);
+            let mut suggested_tx_ctx = finish_or_fns_ctx.derive(&SUGGESTED_TXS);
             self.finish_or_fns()
                 .iter()
                 .filter_map(|x| x())
@@ -207,7 +207,7 @@ where
                     let mut v = ConditionalCompileType::NoConstraint;
                     let s = format!("{}", i);
                     /// TODO: name?
-                    let mut this_ctx = conditional_compile_ctx.derive(Some(&s));
+                    let mut this_ctx = conditional_compile_ctx.derive_str(Some(&s));
                     for (i, cond) in x
                         .get_conditional_compile_if()
                         .iter()
@@ -215,7 +215,7 @@ where
                         .enumerate()
                     {
                         let ConditionallyCompileIf::Fresh(f) = cond;
-                        v = v.merge(f(self_ref, this_ctx.derive(Some(&format!("{}", i)))));
+                        v = v.merge(f(self_ref, this_ctx.derive_str(Some(&format!("{}", i)))));
                     }
                     match v {
                         ConditionalCompileType::Fail(v) => Some((s, v, x)),
@@ -230,13 +230,13 @@ where
                 .map(|(s, errors, x)| {
                     let guard = create_guards(
                         self_ref,
-                        guard_ctx.derive(Some(&s)),
+                        guard_ctx.derive_str(Some(&s)),
                         x.get_guard(),
                         &mut guard_clauses.borrow_mut(),
                     );
                     if errors.is_empty() {
                         let arg: T::StatefulArguments = Default::default();
-                        let res = x.call(self_ref, suggested_tx_ctx.derive(Some(&s)), arg);
+                        let res = x.call(self_ref, suggested_tx_ctx.derive_str(Some(&s)), arg);
                         (Nullable::Yes, CTVRequired::No, guard, res)
                     } else {
                         (
@@ -324,7 +324,7 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
         let finish_fns: Vec<_> = {
-            let mut finish_fns_ctx = ctx.derive(Some("finish_fn"));
+            let mut finish_fns_ctx = ctx.derive(&FINISH_FN);
             // Compute all finish_functions at this level, caching if requested.
             self.finish_fns()
                 .iter()
@@ -333,7 +333,7 @@ where
                     guard_clauses.borrow_mut().get(
                         self_ref,
                         *x,
-                        finish_fns_ctx.derive(Some(&format!("{}", i))),
+                        finish_fns_ctx.derive_str(Some(&format!("{}", i))),
                     )
                 })
                 .collect()

@@ -74,8 +74,8 @@ mod tests {
             std::sync::Arc::new(CTVAvailable),
             vec![Arc::new("ROOT".into())],
         );
-        Compilable::compile(&x, ctx.derive(Some("X")));
-        Compilable::compile(&y, ctx.derive(Some("Y")));
+        Compilable::compile(&x, ctx.derive_str(Some("X")));
+        Compilable::compile(&y, ctx.derive_str(Some("Y")));
     }
 }
 
