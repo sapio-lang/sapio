@@ -15,80 +15,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-/// Used to Build a Shared Path for all children of a given context.
-#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone)]
-#[serde(try_from = "Vec<String>")]
-#[serde(into = "Vec<String>")]
-pub struct ReversePath {
-    past: Option<Arc<ReversePath>>,
-    this: Arc<String>,
-}
-
-use std::convert::TryFrom;
-impl TryFrom<Vec<String>> for ReversePath {
-    type Error = &'static str;
-    fn try_from(v: Vec<String>) -> Result<ReversePath, Self::Error> {
-        let mut rp = None;
-        for val in v {
-            rp = Some(ReversePath::push(rp, Arc::new(val)));
-        }
-        if let Option::Some(v) = rp {
-            // Arc unwrap never fail!
-            Ok(Arc::try_unwrap(v).unwrap())
-        } else {
-            Err("Reverse Path must have at least one element.")
-        }
-    }
-}
-impl From<ReversePath> for Vec<String> {
-    fn from(r: ReversePath) -> Self {
-        let mut result: Vec<String> = vec![(*r.this).clone()];
-        let mut node = &r.past;
-        while let Some(v) = node {
-            result.push((*v.this).clone());
-            node = &v.past;
-        }
-        result.reverse();
-        result
-    }
-}
-impl From<ReversePath> for Vec<Arc<String>> {
-    fn from(r: ReversePath) -> Self {
-        let mut result = vec![r.this];
-        let mut node = &r.past;
-        while let Some(v) = node {
-            result.push(v.this.clone());
-            node = &v.past;
-        }
-        result.reverse();
-        result
-    }
-}
-struct MK(Option<Arc<ReversePath>>);
-impl MK {
-    fn unwrap(self) -> Arc<ReversePath> {
-        if let Some(x) = self.0 {
-            x
-        } else {
-            panic!("Vector must have at least one root path")
-        }
-    }
-}
-impl From<Vec<Arc<String>>> for MK {
-    fn from(v: Vec<Arc<String>>) -> Self {
-        let mut rp: Option<Arc<ReversePath>> = None;
-        for val in v {
-            let new: Arc<ReversePath> = ReversePath::push(rp, val);
-            rp = Some(new);
-        }
-        MK(rp)
-    }
-}
-impl ReversePath {
-    fn push(v: Option<Arc<ReversePath>>, s: Arc<String>) -> Arc<ReversePath> {
-        Arc::new(ReversePath { past: v, this: s })
-    }
-}
+use crate::util::reverse_path::{ReversePath, MkReversePath};
 /// Context is used to track statet during compilation such as remaining value.
 pub struct Context {
     /* TODO: Add Context Fields! */
@@ -97,7 +24,7 @@ pub struct Context {
     /// which network is the contract building for?
     pub network: Network,
     /// TODO: reversed linked list of ARCs to better de-duplicate memory.
-    path: Arc<ReversePath>,
+    path: Arc<ReversePath<String>>,
 }
 
 lazy_static::lazy_static! {
@@ -118,7 +45,7 @@ impl Context {
             emulator,
             network,
             // TODO: Should return Option Self if path is not length > 0
-            path: MK::from(path).unwrap(),
+            path: MkReversePath::from(path).unwrap(),
         }
     }
 
