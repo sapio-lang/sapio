@@ -73,6 +73,7 @@ mod private {
 
     /// Allow Contract to implement Compile
     impl ImplSeal for super::Compiled {}
+    impl ImplSeal for bitcoin::PublicKey {}
     impl<'a, C> ImplSeal for C where C: super::AnyContract {}
 }
 /// Compilable is a trait for anything which can be compiled
@@ -85,6 +86,16 @@ pub trait Compilable: private::ImplSeal {
 impl Compilable for Compiled {
     fn compile(&self, _ctx: Context) -> Result<Compiled, CompilationError> {
         Ok(self.clone())
+    }
+}
+
+impl Compilable for bitcoin::PublicKey {
+    fn compile(&self, ctx: Context) -> Result<Compiled, CompilationError> {
+        let addr = bitcoin::Address::p2wpkh(self, ctx.network)
+            .map_err(|_e| CompilationError::Custom("Invalid Key".into()))?;
+        let mut amt = AmountRange::new();
+        amt.update_range(ctx.funds());
+        Ok(Compiled::from_address(addr, Some(amt)))
     }
 }
 
