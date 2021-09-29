@@ -103,6 +103,5 @@ pub struct CoinPoolUpdate {
 
 impl Contract for CoinPool {
     declare! {then, Self::bisect_offline}
-    declare! {finish, Self::all_approve}
     declare! {updatable<Option<CoinPoolUpdate>>, Self::next_pool}
 }
