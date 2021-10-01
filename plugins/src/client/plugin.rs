@@ -5,6 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! binding for making a type into a plugin
+use sapio::contract::context::MapEffectDB;
 use super::*;
 use std::convert::TryFrom;
 /// The `Plugin` trait is used to provide bindings for a WASM Plugin.
@@ -43,7 +44,10 @@ where
             network,
             amount,
             Arc::new(client::WasmHostEmulator),
+            /// TODO: Carry context's path
             vec![Arc::new("PLUGIN_TRAMPOLINE".into())],
+            /// TODO: load database?
+            Arc::new(MapEffectDB::default())
         );
         let converted = Self::ToType::try_from(arguments)?;
         let compiled = converted.compile(ctx)?;

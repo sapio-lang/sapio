@@ -5,6 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! general non-parameter compilation state required by all contracts
+pub use super::effects::{MapEffectDB, EffectDB};
 use super::interned_strings::get_interned;
 use super::{Amount, Compilable, CompilationError, Compiled};
 use crate::contract::compiler::InternalCompilerTag;
@@ -21,6 +22,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Deref;
 use std::sync::Arc;
+
 /// Context is used to track statet during compilation such as remaining value.
 pub struct Context {
     /* TODO: Add Context Fields! */
@@ -31,6 +33,7 @@ pub struct Context {
     /// TODO: reversed linked list of ARCs to better de-duplicate memory.
     path: Arc<ReversePath<String>>,
     already_derived: HashSet<Arc<String>>,
+    effects: Arc<dyn EffectDB>,
 }
 
 impl Context {
@@ -41,6 +44,7 @@ impl Context {
         available_funds: Amount,
         emulator: Arc<dyn CTVEmulator>,
         path: Vec<Arc<String>>,
+        effects: Arc<dyn EffectDB>,
     ) -> Self {
         Context {
             available_funds,
@@ -49,7 +53,12 @@ impl Context {
             // TODO: Should return Option Self if path is not length > 0
             path: MkReversePath::from(path).unwrap(),
             already_derived: Default::default(),
+            effects,
         }
+    }
+    /// Get this Context's effect database
+    pub fn get_effects(&self) -> &Arc<dyn EffectDB> {
+        &self.effects
     }
     /// Gets this Context's Path, but does not clone (left to caller)
     pub fn path(&self) -> &Arc<ReversePath<String>> {
@@ -84,6 +93,7 @@ impl Context {
             path: new_path,
             network: self.network,
             already_derived: Default::default(),
+            effects: self.effects.clone(),
         }
     }
     /// Method is unsafe, but may (provably!) be only called from within
@@ -95,6 +105,7 @@ impl Context {
             path: self.path.clone(),
             network: self.network,
             already_derived: self.already_derived.clone(),
+            effects: self.effects.clone(),
         }
     }
 
@@ -128,6 +139,7 @@ impl Context {
                 path: self.path.clone(),
                 network: self.network,
                 already_derived: self.already_derived.clone(),
+                effects: self.effects.clone(),
             })
         }
     }

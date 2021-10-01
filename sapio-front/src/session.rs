@@ -6,6 +6,7 @@
 
 //! An interactive compilation session designed to be compatible with sapio-lang/TUX
 
+use sapio::contract::context::MapEffectDB;
 use bitcoin::hashes::Hash;
 use bitcoin::util::amount::Amount;
 use sapio::contract::{object::SapioStudioFormat, Compilable, CompilationError, Compiled, Context};
@@ -336,6 +337,7 @@ impl Session {
             Amount::from_sat(100_000_000_000),
             Arc::new(CTVAvailable),
             vec![Arc::new("Frontend Session".into())],
+            Arc::new(MapEffectDB::default())
         )
     }
 

@@ -4,6 +4,7 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use sapio::contract::context::MapEffectDB;
 use bitcoin::consensus::serialize;
 use bitcoin::consensus::Decodable;
 use bitcoin::hashes::Hash;
@@ -226,6 +227,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         j.amount_range.max(),
                         emulator.clone(),
                         vec![Arc::new("MOCK".into())],
+                        Arc::new(MapEffectDB::default()),
                     );
                     let mut tx = ctx
                         .template()

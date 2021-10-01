@@ -7,6 +7,7 @@
 //! error types that can be returned from Sapio.
 //! Where possible, concrete error types are wrapped, but in order to handle
 //! errors created by the user we allow boxing an error trait.
+use crate::contract::effects::EffectDBError;
 use crate::contract::object::ObjectError;
 use sapio_ctv_emulator_trait::EmulatorError;
 use std::collections::LinkedList;
@@ -43,8 +44,22 @@ pub enum CompilationError {
     CompiledObjectError(ObjectError),
     /// Failure in conditional compilation logic
     ConditionalCompilationFailed(LinkedList<String>),
+    /// Error fromt the Effects system
+    EffectDBError(EffectDBError),
     /// Unknown Error type -- either from a user or from some unhandled dependency
     Custom(Box<dyn std::error::Error>),
+}
+
+impl From<serde_json::Error> for EffectDBError {
+    fn from(e: serde_json::Error) -> Self {
+        EffectDBError::SerializationError(e)
+    }
+}
+
+impl From<EffectDBError> for CompilationError {
+    fn from(e: EffectDBError) -> CompilationError {
+        CompilationError::EffectDBError(e)
+    }
 }
 
 impl From<std::convert::Infallible> for CompilationError {
