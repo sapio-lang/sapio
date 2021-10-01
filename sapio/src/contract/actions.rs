@@ -5,11 +5,11 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! The different types of functionality a contract can define.
-use crate::contract::empty;
 use super::effects::EffectDBError;
 use super::CompilationError;
 use super::Context;
 use super::TxTmplIt;
+use crate::contract::empty;
 use core::marker::PhantomData;
 use sapio_base::Clause;
 use schemars::schema::RootSchema;
@@ -172,7 +172,12 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     /// Calls the internal function, should convert `StatefulArguments` to `SpecificArgs`.
     fn call(&self, cself: &ContractSelf, ctx: Context, o: StatefulArguments) -> TxTmplIt;
     /// Calls the internal function, should convert `StatefulArguments` to `SpecificArgs`.
-    fn call_json(&self, cself: &ContractSelf, ctx: Context, o: serde_json::Value) -> TxTmplIt;
+    fn call_json(
+        &self,
+        cself: &ContractSelf,
+        ctx: Context,
+        o: serde_json::Value,
+    ) -> Option<TxTmplIt>;
     /// Getter Method for internal field
     fn get_conditional_compile_if(&self) -> ConditionallyCompileIfList<'_, ContractSelf>;
     /// Getter Method for internal field
@@ -195,8 +200,13 @@ impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, 
         let args = (self.coerce_args)(o)?;
         (self.func)(cself, ctx, args)
     }
-    fn call_json(&self, _cself: &ContractSelf, _ctx: Context, _o: serde_json::Value) -> TxTmplIt {
-        empty()
+    fn call_json(
+        &self,
+        _cself: &ContractSelf,
+        _ctx: Context,
+        _o: serde_json::Value,
+    ) -> Option<TxTmplIt> {
+        None
     }
     fn get_conditional_compile_if(&self) -> ConditionallyCompileIfList<'_, ContractSelf> {
         self.conditional_compile_if
@@ -221,9 +231,18 @@ where
         let args = (self.coerce_args)(o)?;
         (self.func)(cself, ctx, args)
     }
-    fn call_json(&self, cself: &ContractSelf, ctx: Context, o: serde_json::Value) -> TxTmplIt {
-        let args = serde_json::from_value(o).map_err(EffectDBError::SerializationError)?;
-        (self.func)(cself, ctx, args)
+    fn call_json(
+        &self,
+        cself: &ContractSelf,
+        ctx: Context,
+        o: serde_json::Value,
+    ) -> Option<TxTmplIt> {
+        Some(
+            serde_json::from_value(o)
+                .map_err(EffectDBError::SerializationError)
+                .map_err(CompilationError::EffectDBError)
+                .and_then(|args| (self.func)(cself, ctx, args)),
+        )
     }
     fn get_conditional_compile_if(&self) -> ConditionallyCompileIfList<'_, ContractSelf> {
         self.conditional_compile_if

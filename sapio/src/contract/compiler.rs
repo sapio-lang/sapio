@@ -213,11 +213,10 @@ where
                 .iter()
                 .filter_map(|func| func())
                 // TODO: De-duplicate this code?
-                .zip((0..).map(|i| format!("{}", i)))
-                .filter_map(|(func, string_index)| {
+                .filter_map(|func| {
                     let r = {
                         /// TODO: add name?
-                        let mut this_ctx = conditional_compile_ctx.derive_str(Some(&string_index));
+                        let mut this_ctx = conditional_compile_ctx.derive_str(Some(&func.get_name()));
                         let constraint = func
                             .get_conditional_compile_if()
                             .iter()
@@ -237,32 +236,31 @@ where
                             }
                         }
                     };
-                    Some((string_index, func, r))
+                    Some((func, r))
                 })
-                .map(|(string_index, func, errors)| {
+                .map(|(func, errors)| {
+                    let mut effect_ctx = suggested_tx_ctx.derive_str(Some(func.get_name()));
                     let guard = create_guards(
                         self_ref,
-                        guard_ctx.derive_str(Some(&string_index)),
+                        guard_ctx.derive_str(Some(&func.get_name())),
                         func.get_guard(),
                         &mut guard_clauses.borrow_mut(),
                     );
                     (
                         (
                             func.get_name().into(),
-                            ContinuationPoint::at(func.get_schema().clone(), ctx.path().clone()),
+                            ContinuationPoint::at(func.get_schema().clone(), effect_ctx.path().clone()),
                         ),
                         (
                             Nullable::Yes,
                             CTVRequired::No,
                             guard,
                             if errors.is_empty() {
-                                let mut effect_ctx =
-                                    suggested_tx_ctx.derive_str(Some(&string_index));
                                 let mut effects = effect_ctx.derive(&EFFECTS);
                                 let def = effect_ctx.derive(&DEFAULT_EFFECT);
                                 ctx.get_effects()
                                     .get_value(ctx.path())
-                                    .map(|(k, arg)| {
+                                    .flat_map(|(k, arg)| {
                                         func.call_json(self_ref, effects.derive(&k), arg.clone())
                                     })
                                     // always gets the default expansion, but will also attempt
