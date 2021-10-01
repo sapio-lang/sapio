@@ -184,21 +184,16 @@ where
                         func.guard,
                         &mut guard_clauses.borrow_mut(),
                     );
-                    if errors.is_empty() {
-                        (
-                            nullability,
-                            CTVRequired::Yes,
-                            guards,
-                            (func.func)(self_ref, next_tx_ctx.derive_str(Some(&string_index))),
-                        )
-                    } else {
-                        (
-                            nullability,
-                            CTVRequired::Yes,
-                            guards,
-                            Err(CompilationError::ConditionalCompilationFailed(errors)),
-                        )
-                    }
+                    (
+                        nullability,
+                        CTVRequired::Yes,
+                        guards,
+                        if errors.is_empty() {
+                            (func.func)(self_ref, next_tx_ctx.derive_str(Some(&string_index)))
+                        } else {
+                            Err(CompilationError::ConditionalCompilationFailed(errors))
+                        },
+                    )
                 })
                 .collect()
         };
@@ -252,22 +247,20 @@ where
                             func.get_name().into(),
                             ContinuationPoint::at(func.get_schema().clone(), ctx.path().clone()),
                         ),
-                        if errors.is_empty() {
-                            let arg: T::StatefulArguments = Default::default();
-                            let res = func.call(
-                                self_ref,
-                                suggested_tx_ctx.derive_str(Some(&string_index)),
-                                arg,
-                            );
-                            (Nullable::Yes, CTVRequired::No, guard, res)
-                        } else {
-                            (
-                                Nullable::Yes,
-                                CTVRequired::No,
-                                guard,
-                                Err(CompilationError::ConditionalCompilationFailed(errors)),
-                            )
-                        },
+                        (
+                            Nullable::Yes,
+                            CTVRequired::No,
+                            guard,
+                            if errors.is_empty() {
+                                func.call(
+                                    self_ref,
+                                    suggested_tx_ctx.derive_str(Some(&string_index)),
+                                    Default::default(),
+                                )
+                            } else {
+                                Err(CompilationError::ConditionalCompilationFailed(errors))
+                            },
+                        ),
                     )
                 })
                 .unzip()
