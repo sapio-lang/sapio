@@ -5,6 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Object is the output of Sapio Compilation & can be linked to a specific coin
+use crate::contract::abi::continuation::rs::SArc;
 pub use super::studio::*;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::template::Template;
@@ -89,7 +90,7 @@ pub struct Object {
         skip_serializing_if = "HashMap::is_empty",
         default
     )]
-    pub continue_apis: HashMap<Arc<String>, ContinuationPoint>,
+    pub continue_apis: HashMap<SArc<String>, ContinuationPoint>,
     /// The Object's Policy -- if known
     #[serde(
         rename = "known_policy",

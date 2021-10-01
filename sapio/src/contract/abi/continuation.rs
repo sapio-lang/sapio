@@ -32,13 +32,15 @@ impl ContinuationPoint {
     }
 }
 
-mod rs {
+/// Helpers for serializing Arcs
+pub mod rs {
     use schemars::JsonSchema;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use std::borrow::Borrow;
     use std::sync::Arc;
 
-    #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, PartialOrd)]
+    /// Serializable Arc Type
+    #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, PartialOrd, Eq, Hash)]
     #[serde(
         bound = "T: Serialize + for<'d> Deserialize<'d> + JsonSchema + std::fmt::Debug + Clone "
     )]
@@ -48,6 +50,7 @@ mod rs {
         #[serde(deserialize_with = "deserializer")]
         pub Arc<T>,
     );
+    /// arc serializer
     pub fn serializer<T, S>(v: &Arc<T>, s: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -56,6 +59,7 @@ mod rs {
         let b: &T = v.borrow();
         b.serialize(s)
     }
+    /// arc deserializer
     pub fn deserializer<'de, T, D>(d: D) -> Result<Arc<T>, D::Error>
     where
         D: Deserializer<'de>,

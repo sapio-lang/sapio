@@ -5,7 +5,6 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! The primary compilation traits and types
-use std::sync::Arc;
 use super::actions::Guard;
 use super::actions::{ConditionalCompileType, ConditionallyCompileIf};
 use super::effects::EffectDBError;
@@ -14,6 +13,7 @@ use super::AnyContract;
 use super::CompilationError;
 use super::Compiled;
 use super::Context;
+use crate::contract::abi::continuation::rs::SArc;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::contract::effects::EffectDB;
 use crate::contract::TransactionTemplate;
@@ -23,6 +23,7 @@ use ::miniscript::*;
 use sapio_base::Clause;
 use std::collections::HashMap;
 use std::collections::LinkedList;
+use std::sync::Arc;
 
 enum CacheEntry<T> {
     Cached(Clause),
@@ -205,7 +206,7 @@ where
         // finish_or_fns may be used to compute additional transactions with
         // a given argument, but for building the ABI we only precompute with
         // the default argument.
-        let (continue_apis, finish_or_fns): (HashMap<Arc<String>, ContinuationPoint>, Vec<_>) = {
+        let (continue_apis, finish_or_fns): (HashMap<SArc<String>, ContinuationPoint>, Vec<_>) = {
             let mut finish_or_fns_ctx = ctx.derive(&FINISH_OR_FN);
             let mut conditional_compile_ctx = finish_or_fns_ctx.derive(&CONDITIONAL_COMPILE_IF);
             let mut guard_ctx = finish_or_fns_ctx.derive(&GUARD_FN);
@@ -244,7 +245,7 @@ where
                     );
                     (
                         (
-                            func.get_name().clone(),
+                            SArc(func.get_name().clone()),
                             ContinuationPoint::at(
                                 func.get_schema().clone(),
                                 effect_ctx.path().clone(),

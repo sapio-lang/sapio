@@ -7,6 +7,7 @@
 //! general non-parameter compilation state required by all contracts
 use super::interned_strings::get_interned;
 use super::{Amount, Compilable, CompilationError, Compiled};
+use crate::contract::abi::continuation::rs::SArc;
 use crate::contract::compiler::InternalCompilerTag;
 use crate::contract::interned_strings::CLONED;
 use crate::util::amountrange::AmountRange;
@@ -41,8 +42,8 @@ pub trait EffectDB {
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct MapEffectDB {
     /// # The set of all effects
-    effects: HashMap<Arc<ReversePath<String>>, HashMap<Arc<String>, serde_json::Value>>,
-    empty: HashMap<Arc<String>, serde_json::Value>,
+    effects: HashMap<SArc<ReversePath<String>>, HashMap<SArc<String>, serde_json::Value>>,
+    empty: HashMap<SArc<String>, serde_json::Value>,
 }
 
 impl EffectDB for MapEffectDB {
@@ -50,6 +51,12 @@ impl EffectDB for MapEffectDB {
         &'a self,
         at: &Arc<ReversePath<String>>,
     ) -> Box<dyn Iterator<Item = (&'a Arc<String>, &'a serde_json::Value)> + 'a> {
-        Box::new(self.effects.get(at).unwrap_or(&self.empty).iter())
+        Box::new(
+            self.effects
+                .get(&SArc(at.clone()))
+                .unwrap_or(&self.empty)
+                .iter()
+                .map(|(a, b)| (&a.0, b)),
+        )
     }
 }
