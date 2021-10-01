@@ -266,9 +266,15 @@ where
             .iter()
             .filter_map(|x| x())
             .filter_map(|f| {
-                f.get_schema()
-                    .clone()
-                    .map(|s| (f.get_name().into(), ContinuationPoint { schema: s }))
+                f.get_schema().clone().map(|s| {
+                    (
+                        f.get_name().into(),
+                        ContinuationPoint {
+                            schema: s,
+                            path: ctx.path().clone(),
+                        },
+                    )
+                })
             })
             .collect::<HashMap<String, ContinuationPoint>>();
         let mut ctv_to_tx = HashMap::new();

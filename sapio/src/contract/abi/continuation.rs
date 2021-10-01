@@ -6,6 +6,7 @@
 
 //! ABI for contract resumption
 
+use crate::util::reverse_path::ReversePath;
 use schemars::schema::RootSchema;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -18,6 +19,10 @@ pub struct ContinuationPoint {
     #[serde(serialize_with = "rs::serializer")]
     #[serde(deserialize_with = "rs::deserializer")]
     pub schema: Arc<RootSchema>,
+    /// The path at which this was compiled
+    #[serde(serialize_with = "rs::serializer")]
+    #[serde(deserialize_with = "rs::deserializer")]
+    pub path: Arc<ReversePath<String>>,
 }
 
 mod rs {

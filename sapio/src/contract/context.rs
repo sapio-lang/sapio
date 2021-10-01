@@ -5,10 +5,10 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! general non-parameter compilation state required by all contracts
-use crate::contract::interned_strings::CLONED;
-use std::ops::Deref;
+use super::interned_strings::get_interned;
 use super::{Amount, Compilable, CompilationError, Compiled};
 use crate::contract::compiler::InternalCompilerTag;
+use crate::contract::interned_strings::CLONED;
 use crate::util::amountrange::AmountRange;
 use crate::util::reverse_path::{MkReversePath, ReversePath};
 use bitcoin::Network;
@@ -19,8 +19,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::ops::Deref;
 use std::sync::Arc;
-use super::interned_strings::get_interned;
 /// Context is used to track statet during compilation such as remaining value.
 pub struct Context {
     /* TODO: Add Context Fields! */
@@ -32,7 +32,6 @@ pub struct Context {
     path: Arc<ReversePath<String>>,
     already_derived: HashSet<Arc<String>>,
 }
-
 
 impl Context {
     /// create a context instance. Should only happen *once* at the very top
@@ -52,6 +51,10 @@ impl Context {
             already_derived: Default::default(),
         }
     }
+    /// Gets this Context's Path, but does not clone (left to caller)
+    pub fn path(&self) -> &Arc<ReversePath<String>> {
+        &self.path
+    }
 
     /// Derive a new contextual path
     /// If no path is provided, it will be "cloned"
@@ -64,9 +67,9 @@ impl Context {
         self.derive(&&dir)
     }
     /// Derive a new contextual path
-    pub fn derive<T: Deref<Target=Arc<String>>>(&mut self, path: &T) -> Self {
+    pub fn derive<T: Deref<Target = Arc<String>>>(&mut self, path: &T) -> Self {
         use std::borrow::Borrow;
-        let dir : &Arc<String> = {
+        let dir: &Arc<String> = {
             let s: &String = path.borrow();
             get_interned(&s).unwrap_or(&path)
         };
@@ -139,7 +142,7 @@ impl Context {
     }
 
     /// Add funds to the context object (not typically needed)
-    pub fn add_amount(mut self, amount: Amount) -> Self{
+    pub fn add_amount(mut self, amount: Amount) -> Self {
         self.available_funds += amount;
         self
     }
