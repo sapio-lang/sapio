@@ -204,7 +204,7 @@ where
         // finish_or_fns may be used to compute additional transactions with
         // a given argument, but for building the ABI we only precompute with
         // the default argument.
-        let finish_or_fns: Vec<_> = {
+        let (finish_or_fns, continue_apis): (Vec<_>, HashMap<String, ContinuationPoint>) = {
             let mut finish_or_fns_ctx = ctx.derive(&FINISH_OR_FN);
             let mut conditional_compile_ctx = finish_or_fns_ctx.derive(&CONDITIONAL_COMPILE_IF);
             let mut guard_ctx = finish_or_fns_ctx.derive(&GUARD_FN);
@@ -245,38 +245,29 @@ where
                         x.get_guard(),
                         &mut guard_clauses.borrow_mut(),
                     );
+                    let continue_at = (
+                        x.get_name().into(),
+                        ContinuationPoint::at(x.get_schema().clone(), ctx.path().clone()),
+                    );
                     if errors.is_empty() {
                         let arg: T::StatefulArguments = Default::default();
                         let res = x.call(self_ref, suggested_tx_ctx.derive_str(Some(&s)), arg);
-                        (Nullable::Yes, CTVRequired::No, guard, res)
+                        ((Nullable::Yes, CTVRequired::No, guard, res), continue_at)
                     } else {
                         (
-                            Nullable::Yes,
-                            CTVRequired::No,
-                            guard,
-                            Err(CompilationError::ConditionalCompilationFailed(errors)),
+                            (
+                                Nullable::Yes,
+                                CTVRequired::No,
+                                guard,
+                                Err(CompilationError::ConditionalCompilationFailed(errors)),
+                            ),
+                            continue_at,
                         )
                     }
                 })
-                .collect()
+                .unzip()
         };
 
-        let continue_apis = self
-            .finish_or_fns()
-            .iter()
-            .filter_map(|x| x())
-            .filter_map(|f| {
-                f.get_schema().clone().map(|s| {
-                    (
-                        f.get_name().into(),
-                        ContinuationPoint {
-                            schema: s,
-                            path: ctx.path().clone(),
-                        },
-                    )
-                })
-            })
-            .collect::<HashMap<String, ContinuationPoint>>();
         let mut ctv_to_tx = HashMap::new();
         let mut suggested_txs = HashMap::new();
         let mut amount_range = AmountRange::new();
