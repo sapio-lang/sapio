@@ -33,7 +33,7 @@ pub struct Context {
     /// TODO: reversed linked list of ARCs to better de-duplicate memory.
     path: Arc<ReversePath<String>>,
     already_derived: HashSet<Arc<String>>,
-    effects: Arc<dyn EffectDB>,
+    effects: Arc<MapEffectDB>,
 }
 
 impl Context {
@@ -44,7 +44,7 @@ impl Context {
         available_funds: Amount,
         emulator: Arc<dyn CTVEmulator>,
         path: Vec<Arc<String>>,
-        effects: Arc<dyn EffectDB>,
+        effects: Arc<MapEffectDB>,
     ) -> Self {
         Context {
             available_funds,
@@ -57,7 +57,7 @@ impl Context {
         }
     }
     /// Get this Context's effect database
-    pub fn get_effects(&self) -> &Arc<dyn EffectDB> {
+    pub fn get_effects(&self) -> &Arc<MapEffectDB> {
         &self.effects
     }
     /// Gets this Context's Path, but does not clone (left to caller)

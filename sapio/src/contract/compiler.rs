@@ -7,12 +7,16 @@
 //! The primary compilation traits and types
 use super::actions::Guard;
 use super::actions::{ConditionalCompileType, ConditionallyCompileIf};
+use super::effects::EffectDBError;
 use super::interned_strings::*;
 use super::AnyContract;
 use super::CompilationError;
 use super::Compiled;
 use super::Context;
 use crate::contract::abi::continuation::ContinuationPoint;
+use crate::contract::effects::EffectDB;
+use crate::contract::TransactionTemplate;
+use crate::contract::TxTmplIt;
 use crate::util::amountrange::AmountRange;
 use ::miniscript::*;
 use sapio_base::Clause;
@@ -252,11 +256,25 @@ where
                             CTVRequired::No,
                             guard,
                             if errors.is_empty() {
-                                func.call(
-                                    self_ref,
-                                    suggested_tx_ctx.derive_str(Some(&string_index)),
-                                    Default::default(),
-                                )
+                                let mut effect_ctx =
+                                    suggested_tx_ctx.derive_str(Some(&string_index));
+                                let mut effects = effect_ctx.derive(&EFFECTS);
+                                let def = effect_ctx.derive(&DEFAULT_EFFECT);
+                                ctx.get_effects()
+                                    .get_value(ctx.path())
+                                    .map(|(k, arg)| {
+                                        func.call_json(self_ref, effects.derive(&k), arg.clone())
+                                    })
+                                    // always gets the default expansion, but will also attempt
+                                    // operating with the effects passed in through the Context Object.:write!
+                                    .fold(
+                                        func.call(self_ref, def, Default::default()),
+                                        |a: TxTmplIt, b: TxTmplIt| match (a, b) {
+                                            (Err(x), _) => Err(x),
+                                            (_, Err(y)) => Err(y),
+                                            (Ok(v), Ok(w)) => Ok(Box::new(v.chain(w))),
+                                        },
+                                    )
                             } else {
                                 Err(CompilationError::ConditionalCompilationFailed(errors))
                             },

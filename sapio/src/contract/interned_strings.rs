@@ -16,18 +16,22 @@ lazy_static::lazy_static! {
     pub static ref GUARD_FN : Arc<String> = Arc::new("guard_fn".into());
     pub static ref NEXT_TXS : Arc<String> = Arc::new("next_txs".into());
     pub static ref SUGGESTED_TXS : Arc<String> = Arc::new("suggested_txs".into());
+    pub static ref DEFAULT_EFFECT : Arc<String> = Arc::new("default_effect".into());
+    pub static ref EFFECTS : Arc<String> = Arc::new("effects".into());
     static ref INTERNED : HashMap<String, Arc<String>> = {
         let mut m = HashMap::<String, Arc<String>>::new();
         for s in [
-            CLONED.clone(),
-            THEN_FN.clone(),
-            FINISH_OR_FN.clone(),
-            FINISH_FN.clone(),
-            CONDITIONAL_COMPILE_IF.clone(),
-            GUARD_FN.clone(),
-            NEXT_TXS.clone(),
-            SUGGESTED_TXS.clone()]{
-            m.insert(s.to_string(), s);
+            &*CLONED,
+            &*THEN_FN,
+            &*FINISH_OR_FN,
+            &*FINISH_FN,
+            &*CONDITIONAL_COMPILE_IF,
+            &*GUARD_FN,
+            &*NEXT_TXS,
+            &*SUGGESTED_TXS,
+            &*DEFAULT_EFFECT,
+            &*EFFECTS] {
+            m.insert(s.to_string(), s.clone());
         }
         for i in 0..100 {
             m.insert(format!("{}", i),Arc::new(format!("{}", i)));

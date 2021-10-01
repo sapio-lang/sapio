@@ -27,46 +27,29 @@ use std::sync::Arc;
 pub enum EffectDBError {
     /// Error was from Deserialization
     SerializationError(serde_json::Error),
-    /// Missing effect error
-    NoEffectError(Arc<ReversePath<String>>),
 }
 
 /// A Generic Trait for EffectDB Functionality
 pub trait EffectDB {
     /// internal implementation to retrieve a JSON for the path
-    fn get_value_impl(
-        &self,
+    fn get_value<'a>(
+        &'a self,
         at: &Arc<ReversePath<String>>,
-    ) -> Result<&Vec<serde_json::Value>, EffectDBError>;
-    /// intended to be used function which casts into a native type
-    /// can be overriden to directly get native type.
-    fn get_value<T>(&self, at: &Arc<ReversePath<String>>) -> Result<Vec<T>, EffectDBError>
-    where
-        Self: Sized,
-        T: for<'de> serde::Deserialize<'de>,
-    {
-        Ok(self
-            .get_value_impl(at)?
-            .iter()
-            .cloned()
-            .map(serde_json::from_value)
-            .collect::<Result<Vec<_>, _>>()?)
-    }
+    ) -> Box<dyn Iterator<Item = (&'a Arc<String>, &'a serde_json::Value)> + 'a>;
 }
 /// # A Registry of all Effects to process during compilation.
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct MapEffectDB {
     /// # The set of all effects
-    effects: HashMap<Arc<ReversePath<String>>, Vec<serde_json::Value>>,
+    effects: HashMap<Arc<ReversePath<String>>, HashMap<Arc<String>, serde_json::Value>>,
+    empty: HashMap<Arc<String>, serde_json::Value>,
 }
 
 impl EffectDB for MapEffectDB {
-    fn get_value_impl(
-        &self,
+    fn get_value<'a>(
+        &'a self,
         at: &Arc<ReversePath<String>>,
-    ) -> Result<&Vec<serde_json::Value>, EffectDBError> {
-        self.effects
-            .get(at)
-            .ok_or_else(|| EffectDBError::NoEffectError(at.clone()))
+    ) -> Box<dyn Iterator<Item = (&'a Arc<String>, &'a serde_json::Value)> + 'a> {
+        Box::new(self.effects.get(at).unwrap_or(&self.empty).iter())
     }
 }

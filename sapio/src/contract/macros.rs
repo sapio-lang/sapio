@@ -190,6 +190,19 @@ macro_rules! web_api {
         }
     }
 }
+
+/// Generates a type tag for WebAPI Enabled/Disabled
+#[macro_export]
+macro_rules! is_web_api_type {
+    (
+        $b:block
+    ) => {
+        $crate::contract::actions::WebAPIEnabled
+    };
+    () => {
+        $crate::contract::actions::WebAPIDisabled
+    };
+}
 /// The finish macro is used to define a `FinishFunc` or a `FinishOrFunc`
 /// formats for calling are:
 /// ```ignore
@@ -243,13 +256,14 @@ macro_rules! finish {
             fn $name<'a>() -> Option<Box<dyn
             $crate::contract::actions::CallableAsFoF<Self, <Self as $crate::contract::Contract>::StatefulArguments>>>
             {
-                let f = $crate::contract::actions::FinishOrFunc{
+                let f : $crate::contract::actions::FinishOrFunc<_, _, _, is_web_api_type!($($web_enable)*)>= $crate::contract::actions::FinishOrFunc{
                     coerce_args: $coerce_args,
                     guard: &$guard_list,
                     conditional_compile_if: &$conditional_compile_list,
                     func: Self::[<FINISH_ $name>],
                     schema: Self::[<FINISH_API_FOR_ $name >].map(|f|f()),
-                    name: std::stringify!($name).into()
+                    name: std::stringify!($name).into(),
+                    f: std::default::Default::default()
                 };
                 Some(Box::new(f))
             }

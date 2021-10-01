@@ -5,11 +5,15 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! The different types of functionality a contract can define.
+use crate::contract::empty;
+use super::effects::EffectDBError;
 use super::CompilationError;
 use super::Context;
 use super::TxTmplIt;
+use core::marker::PhantomData;
 use sapio_base::Clause;
 use schemars::schema::RootSchema;
+use serde::Deserialize;
 use std::collections::LinkedList;
 use std::sync::Arc;
 /// A Guard is a function which generates some condition that must be met to unlock a script.
@@ -134,7 +138,7 @@ pub struct ThenFunc<'a, ContractSelf: 'a> {
 
 /// A function which by default finishes, but may receive some context object which can induce the
 /// generation of additional transactions (as a suggestion)
-pub struct FinishOrFunc<'a, ContractSelf: 'a, StatefulArguments, SpecificArgs> {
+pub struct FinishOrFunc<'a, ContractSelf: 'a, StatefulArguments, SpecificArgs, WebAPIStatus> {
     /// StatefulArgs is needed to capture a general API for all calls, but SpecificArgs is required
     /// for a given function.
     pub coerce_args: fn(StatefulArguments) -> Result<SpecificArgs, CompilationError>,
@@ -154,6 +158,9 @@ pub struct FinishOrFunc<'a, ContractSelf: 'a, StatefulArguments, SpecificArgs> {
     pub schema: Option<Arc<RootSchema>>,
     /// name derived from Function Name.
     pub name: String,
+    /// Type switch to enable/disable compilation with serialized fields
+    /// (if negative trait bounds, could remove!)
+    pub f: PhantomData<WebAPIStatus>,
 }
 
 /// This trait hides the generic parameter `SpecificArgs` in FinishOrFunc
@@ -164,6 +171,8 @@ pub struct FinishOrFunc<'a, ContractSelf: 'a, StatefulArguments, SpecificArgs> {
 pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     /// Calls the internal function, should convert `StatefulArguments` to `SpecificArgs`.
     fn call(&self, cself: &ContractSelf, ctx: Context, o: StatefulArguments) -> TxTmplIt;
+    /// Calls the internal function, should convert `StatefulArguments` to `SpecificArgs`.
+    fn call_json(&self, cself: &ContractSelf, ctx: Context, o: serde_json::Value) -> TxTmplIt;
     /// Getter Method for internal field
     fn get_conditional_compile_if(&self) -> ConditionallyCompileIfList<'_, ContractSelf>;
     /// Getter Method for internal field
@@ -173,11 +182,47 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     /// Get the RootSchema for calling this with an update
     fn get_schema(&self) -> &Option<Arc<RootSchema>>;
 }
+
+/// Type Tag for FinishOrFunc Variant
+pub struct WebAPIEnabled;
+/// Type Tag for FinishOrFunc Variant
+pub struct WebAPIDisabled;
+
 impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, StatefulArguments>
-    for FinishOrFunc<'_, ContractSelf, StatefulArguments, SpecificArgs>
+    for FinishOrFunc<'_, ContractSelf, StatefulArguments, SpecificArgs, WebAPIDisabled>
 {
     fn call(&self, cself: &ContractSelf, ctx: Context, o: StatefulArguments) -> TxTmplIt {
         let args = (self.coerce_args)(o)?;
+        (self.func)(cself, ctx, args)
+    }
+    fn call_json(&self, _cself: &ContractSelf, _ctx: Context, _o: serde_json::Value) -> TxTmplIt {
+        empty()
+    }
+    fn get_conditional_compile_if(&self) -> ConditionallyCompileIfList<'_, ContractSelf> {
+        self.conditional_compile_if
+    }
+    fn get_guard(&self) -> GuardList<'_, ContractSelf> {
+        self.guard
+    }
+    fn get_name(&self) -> &str {
+        &self.name
+    }
+    fn get_schema(&self) -> &Option<Arc<RootSchema>> {
+        &self.schema
+    }
+}
+
+impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, StatefulArguments>
+    for FinishOrFunc<'_, ContractSelf, StatefulArguments, SpecificArgs, WebAPIEnabled>
+where
+    SpecificArgs: for<'de> Deserialize<'de>,
+{
+    fn call(&self, cself: &ContractSelf, ctx: Context, o: StatefulArguments) -> TxTmplIt {
+        let args = (self.coerce_args)(o)?;
+        (self.func)(cself, ctx, args)
+    }
+    fn call_json(&self, cself: &ContractSelf, ctx: Context, o: serde_json::Value) -> TxTmplIt {
+        let args = serde_json::from_value(o).map_err(EffectDBError::SerializationError)?;
         (self.func)(cself, ctx, args)
     }
     fn get_conditional_compile_if(&self) -> ConditionallyCompileIfList<'_, ContractSelf> {
