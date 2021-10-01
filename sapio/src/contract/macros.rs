@@ -262,7 +262,7 @@ macro_rules! finish {
                     conditional_compile_if: &$conditional_compile_list,
                     func: Self::[<FINISH_ $name>],
                     schema: Self::[<FINISH_API_FOR_ $name >].map(|f|f()),
-                    name: std::stringify!($name).into(),
+                    name: std::sync::Arc::new(std::stringify!($name).into()),
                     f: std::default::Default::default()
                 };
                 Some(Box::new(f))

@@ -214,42 +214,40 @@ where
                 .filter_map(|func| func())
                 // TODO: De-duplicate this code?
                 .filter_map(|func| {
-                    let r = {
-                        /// TODO: add name?
-                        let mut this_ctx = conditional_compile_ctx.derive_str(Some(&func.get_name()));
-                        let constraint = func
-                            .get_conditional_compile_if()
-                            .iter()
-                            .filter_map(|compf| compf())
-                            .enumerate()
-                            .fold(ConditionalCompileType::NoConstraint, |acc, (i, cond)| {
-                                let ConditionallyCompileIf::Fresh(f) = cond;
-                                acc.merge(f(self_ref, this_ctx.derive_str(Some(&format!("{}", i)))))
-                            });
-                        match constraint {
-                            ConditionalCompileType::Fail(errors) => errors,
-                            ConditionalCompileType::Required
-                            | ConditionalCompileType::NoConstraint
-                            | ConditionalCompileType::Nullable => LinkedList::new(),
-                            ConditionalCompileType::Skippable | ConditionalCompileType::Never => {
-                                return None
-                            }
-                        }
-                    };
-                    Some((func, r))
+                    /// TODO: add name?
+                    let mut this_ctx = conditional_compile_ctx.derive(&func.get_name());
+                    let constraint = func
+                        .get_conditional_compile_if()
+                        .iter()
+                        .filter_map(|compf| compf())
+                        .enumerate()
+                        .fold(ConditionalCompileType::NoConstraint, |acc, (i, cond)| {
+                            let ConditionallyCompileIf::Fresh(f) = cond;
+                            acc.merge(f(self_ref, this_ctx.derive_str(Some(&format!("{}", i)))))
+                        });
+                    match constraint {
+                        ConditionalCompileType::Fail(errors) => Some((func, errors)),
+                        ConditionalCompileType::Required
+                        | ConditionalCompileType::NoConstraint
+                        | ConditionalCompileType::Nullable => Some((func, LinkedList::new())),
+                        ConditionalCompileType::Skippable | ConditionalCompileType::Never => None,
+                    }
                 })
                 .map(|(func, errors)| {
-                    let mut effect_ctx = suggested_tx_ctx.derive_str(Some(func.get_name()));
+                    let mut effect_ctx = suggested_tx_ctx.derive(&func.get_name());
                     let guard = create_guards(
                         self_ref,
-                        guard_ctx.derive_str(Some(&func.get_name())),
+                        guard_ctx.derive(&func.get_name()),
                         func.get_guard(),
                         &mut guard_clauses.borrow_mut(),
                     );
                     (
                         (
-                            func.get_name().into(),
-                            ContinuationPoint::at(func.get_schema().clone(), effect_ctx.path().clone()),
+                            func.get_name().as_ref().into(),
+                            ContinuationPoint::at(
+                                func.get_schema().clone(),
+                                effect_ctx.path().clone(),
+                            ),
                         ),
                         (
                             Nullable::Yes,

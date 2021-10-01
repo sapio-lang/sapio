@@ -157,7 +157,7 @@ pub struct FinishOrFunc<'a, ContractSelf: 'a, StatefulArguments, SpecificArgs, W
     /// implementation to decide if the trait exists.
     pub schema: Option<Arc<RootSchema>>,
     /// name derived from Function Name.
-    pub name: String,
+    pub name: Arc<String>,
     /// Type switch to enable/disable compilation with serialized fields
     /// (if negative trait bounds, could remove!)
     pub f: PhantomData<WebAPIStatus>,
@@ -183,7 +183,7 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     /// Getter Method for internal field
     fn get_guard(&self) -> GuardList<'_, ContractSelf>;
     /// Get the name for this function
-    fn get_name(&self) -> &str;
+    fn get_name(&self) -> &Arc<String>;
     /// Get the RootSchema for calling this with an update
     fn get_schema(&self) -> &Option<Arc<RootSchema>>;
 }
@@ -214,7 +214,7 @@ impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, 
     fn get_guard(&self) -> GuardList<'_, ContractSelf> {
         self.guard
     }
-    fn get_name(&self) -> &str {
+    fn get_name(&self) -> &Arc<String> {
         &self.name
     }
     fn get_schema(&self) -> &Option<Arc<RootSchema>> {
@@ -250,7 +250,7 @@ where
     fn get_guard(&self) -> GuardList<'_, ContractSelf> {
         self.guard
     }
-    fn get_name(&self) -> &str {
+    fn get_name(&self) -> &Arc<String> {
         &self.name
     }
     fn get_schema(&self) -> &Option<Arc<RootSchema>> {
