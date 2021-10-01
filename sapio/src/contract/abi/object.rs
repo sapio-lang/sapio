@@ -85,7 +85,7 @@ pub struct Object {
     /// A Map of arguments to continue execution and generate an update at this
     /// point via a passed message
     #[serde(
-        rename = "jsonschema_continuation_points",
+        rename = "continuation_points",
         skip_serializing_if = "HashMap::is_empty",
         default
     )]
