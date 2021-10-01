@@ -149,38 +149,39 @@ where
             let mut next_tx_ctx = then_fn_ctx.derive(&NEXT_TXS);
             self.then_fns()
                 .iter()
-                .filter_map(|x| x())
-                .enumerate()
-                .filter_map(|(i, x)| {
-                    let s = format!("{}", i);
-                    let mut v = ConditionalCompileType::NoConstraint;
-                    let mut this_ctx = conditional_compile_ctx.derive_str(Some(&s));
-                    for (j, cond) in x
-                        .conditional_compile_if
-                        .iter()
-                        .filter_map(|x| x())
-                        .enumerate()
-                    {
-                        let ConditionallyCompileIf::Fresh(f) = cond;
-                        v = v.merge(f(self_ref, this_ctx.derive_str(Some(&format!("{}", j)))));
-                    }
-                    match v {
-                        ConditionalCompileType::Fail(v) => Some((s, v, Nullable::No, x)),
-                        ConditionalCompileType::Required | ConditionalCompileType::NoConstraint => {
-                            Some((s, LinkedList::new(), Nullable::No, x))
+                .filter_map(|func| func())
+                .zip((0..).map(|i| format!("{}", i)))
+                .filter_map(|(func, string_index)| {
+                    let r = {
+                        let mut this_ctx = conditional_compile_ctx.derive_str(Some(&string_index));
+                        let constraint = func
+                            .conditional_compile_if
+                            .iter()
+                            .filter_map(|compf| compf())
+                            .enumerate()
+                            .fold(ConditionalCompileType::NoConstraint, |acc, (i, cond)| {
+                                let ConditionallyCompileIf::Fresh(f) = cond;
+                                acc.merge(f(self_ref, this_ctx.derive_str(Some(&format!("{}", i)))))
+                            });
+                        match constraint {
+                            ConditionalCompileType::Fail(errors) => (errors, Nullable::No),
+                            ConditionalCompileType::Required
+                            | ConditionalCompileType::NoConstraint => {
+                                (LinkedList::new(), Nullable::No)
+                            }
+                            ConditionalCompileType::Nullable => (LinkedList::new(), Nullable::Yes),
+                            ConditionalCompileType::Skippable | ConditionalCompileType::Never => {
+                                return None
+                            }
                         }
-                        ConditionalCompileType::Skippable => None,
-                        ConditionalCompileType::Never => None,
-                        ConditionalCompileType::Nullable => {
-                            Some((s, LinkedList::new(), Nullable::Yes, x))
-                        }
-                    }
+                    };
+                    Some((string_index, func, r))
                 })
-                .map(|(s, errors, nullability, x)| {
+                .map(|(string_index, func, (errors, nullability))| {
                     let guards = create_guards(
                         self_ref,
-                        guards_ctx.derive_str(Some(&s)),
-                        x.guard,
+                        guards_ctx.derive_str(Some(&string_index)),
+                        func.guard,
                         &mut guard_clauses.borrow_mut(),
                     );
                     if errors.is_empty() {
@@ -188,7 +189,7 @@ where
                             nullability,
                             CTVRequired::Yes,
                             guards,
-                            (x.func)(self_ref, next_tx_ctx.derive_str(Some(&s))),
+                            (func.func)(self_ref, next_tx_ctx.derive_str(Some(&string_index))),
                         )
                     } else {
                         (
@@ -204,66 +205,70 @@ where
         // finish_or_fns may be used to compute additional transactions with
         // a given argument, but for building the ABI we only precompute with
         // the default argument.
-        let (finish_or_fns, continue_apis): (Vec<_>, HashMap<String, ContinuationPoint>) = {
+        let (continue_apis, finish_or_fns): (HashMap<String, ContinuationPoint>, Vec<_>) = {
             let mut finish_or_fns_ctx = ctx.derive(&FINISH_OR_FN);
             let mut conditional_compile_ctx = finish_or_fns_ctx.derive(&CONDITIONAL_COMPILE_IF);
             let mut guard_ctx = finish_or_fns_ctx.derive(&GUARD_FN);
             let mut suggested_tx_ctx = finish_or_fns_ctx.derive(&SUGGESTED_TXS);
             self.finish_or_fns()
                 .iter()
-                .filter_map(|x| x())
+                .filter_map(|func| func())
                 // TODO: De-duplicate this code?
-                .enumerate()
-                .filter_map(|(i, x)| {
-                    let mut v = ConditionalCompileType::NoConstraint;
-                    let s = format!("{}", i);
-                    /// TODO: name?
-                    let mut this_ctx = conditional_compile_ctx.derive_str(Some(&s));
-                    for (i, cond) in x
-                        .get_conditional_compile_if()
-                        .iter()
-                        .filter_map(|x| x())
-                        .enumerate()
-                    {
-                        let ConditionallyCompileIf::Fresh(f) = cond;
-                        v = v.merge(f(self_ref, this_ctx.derive_str(Some(&format!("{}", i)))));
-                    }
-                    match v {
-                        ConditionalCompileType::Fail(v) => Some((s, v, x)),
-                        ConditionalCompileType::Required | ConditionalCompileType::NoConstraint => {
-                            Some((s, LinkedList::new(), x))
+                .zip((0..).map(|i| format!("{}", i)))
+                .filter_map(|(func, string_index)| {
+                    let r = {
+                        /// TODO: add name?
+                        let mut this_ctx = conditional_compile_ctx.derive_str(Some(&string_index));
+                        let constraint = func
+                            .get_conditional_compile_if()
+                            .iter()
+                            .filter_map(|compf| compf())
+                            .enumerate()
+                            .fold(ConditionalCompileType::NoConstraint, |acc, (i, cond)| {
+                                let ConditionallyCompileIf::Fresh(f) = cond;
+                                acc.merge(f(self_ref, this_ctx.derive_str(Some(&format!("{}", i)))))
+                            });
+                        match constraint {
+                            ConditionalCompileType::Fail(errors) => errors,
+                            ConditionalCompileType::Required
+                            | ConditionalCompileType::NoConstraint
+                            | ConditionalCompileType::Nullable => LinkedList::new(),
+                            ConditionalCompileType::Skippable | ConditionalCompileType::Never => {
+                                return None
+                            }
                         }
-                        ConditionalCompileType::Skippable => None,
-                        ConditionalCompileType::Never => None,
-                        ConditionalCompileType::Nullable => Some((s, LinkedList::new(), x)),
-                    }
+                    };
+                    Some((string_index, func, r))
                 })
-                .map(|(s, errors, x)| {
+                .map(|(string_index, func, errors)| {
                     let guard = create_guards(
                         self_ref,
-                        guard_ctx.derive_str(Some(&s)),
-                        x.get_guard(),
+                        guard_ctx.derive_str(Some(&string_index)),
+                        func.get_guard(),
                         &mut guard_clauses.borrow_mut(),
                     );
-                    let continue_at = (
-                        x.get_name().into(),
-                        ContinuationPoint::at(x.get_schema().clone(), ctx.path().clone()),
-                    );
-                    if errors.is_empty() {
-                        let arg: T::StatefulArguments = Default::default();
-                        let res = x.call(self_ref, suggested_tx_ctx.derive_str(Some(&s)), arg);
-                        ((Nullable::Yes, CTVRequired::No, guard, res), continue_at)
-                    } else {
+                    (
                         (
+                            func.get_name().into(),
+                            ContinuationPoint::at(func.get_schema().clone(), ctx.path().clone()),
+                        ),
+                        if errors.is_empty() {
+                            let arg: T::StatefulArguments = Default::default();
+                            let res = func.call(
+                                self_ref,
+                                suggested_tx_ctx.derive_str(Some(&string_index)),
+                                arg,
+                            );
+                            (Nullable::Yes, CTVRequired::No, guard, res)
+                        } else {
                             (
                                 Nullable::Yes,
                                 CTVRequired::No,
                                 guard,
                                 Err(CompilationError::ConditionalCompilationFailed(errors)),
-                            ),
-                            continue_at,
-                        )
-                    }
+                            )
+                        },
+                    )
                 })
                 .unzip()
         };
@@ -323,11 +328,11 @@ where
                 }
                 Ok(guard)
             })
-            .filter_map(|x| {
-                if let Ok(Clause::Unsatisfiable) = x {
+            .filter_map(|func| {
+                if let Ok(Clause::Unsatisfiable) = func {
                     None
                 } else {
-                    Some(x)
+                    Some(func)
                 }
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -337,10 +342,10 @@ where
             self.finish_fns()
                 .iter()
                 .enumerate()
-                .filter_map(|(i, x)| {
+                .filter_map(|(i, func)| {
                     guard_clauses.borrow_mut().get(
                         self_ref,
-                        *x,
+                        *func,
                         finish_fns_ctx.derive_str(Some(&format!("{}", i))),
                     )
                 })
