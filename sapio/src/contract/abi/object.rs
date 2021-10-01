@@ -89,7 +89,7 @@ pub struct Object {
         skip_serializing_if = "HashMap::is_empty",
         default
     )]
-    pub continue_apis: HashMap<String, ContinuationPoint>,
+    pub continue_apis: HashMap<Arc<String>, ContinuationPoint>,
     /// The Object's Policy -- if known
     #[serde(
         rename = "known_policy",
