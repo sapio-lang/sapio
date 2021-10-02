@@ -6,20 +6,12 @@
 
 //! general non-parameter compilation state required by all contracts
 
-
 use crate::contract::abi::continuation::rs::SArc;
 
-
-
-use crate::util::reverse_path::{ReversePath};
-
-
-
-
+use crate::util::reverse_path::ReversePath;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-
 
 use std::sync::Arc;
 

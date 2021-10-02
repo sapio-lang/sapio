@@ -24,7 +24,6 @@ use sapio_base::Clause;
 use std::collections::HashMap;
 use std::collections::LinkedList;
 
-
 enum CacheEntry<T> {
     Cached(Clause),
     Fresh(fn(&T, Context) -> Clause),
