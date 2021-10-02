@@ -50,9 +50,7 @@ fn iter<'a, T>(s: &'a ReversePath<T>) -> RPI<'a, T>
 where
     T: JsonSchema + std::fmt::Debug + Clone,
 {
-    RPI {
-        inner: Some(s),
-    }
+    RPI { inner: Some(s) }
 }
 
 impl<'a, T> Iterator for RPI<'a, T>
@@ -203,9 +201,15 @@ mod test {
             ReversePath::push(Some(ReversePath::push(None, Arc::new(1i64))), Arc::new(5),),
             ReversePath::push(Some(ReversePath::push(None, Arc::new(1i64))), Arc::new(5),)
         );
-        let a = (0..100).map(Arc::new).fold(None, |x,y| Some(ReversePath::push(x, y))).unwrap();
+        let a = (0..100)
+            .map(Arc::new)
+            .fold(None, |x, y| Some(ReversePath::push(x, y)))
+            .unwrap();
         assert_eq!(a, a.clone());
-        let b = (0..100).map(Arc::new).fold(None, |x,y| Some(ReversePath::push(x, y))).unwrap();
+        let b = (0..100)
+            .map(Arc::new)
+            .fold(None, |x, y| Some(ReversePath::push(x, y)))
+            .unwrap();
         assert_eq!(a, b);
     }
     #[test]
@@ -214,8 +218,14 @@ mod test {
             ReversePath::push(Some(ReversePath::push(None, Arc::new(1i64))), Arc::new(5),),
             ReversePath::push(Some(ReversePath::push(None, Arc::new(0i64))), Arc::new(5),)
         );
-        let a = (0..100).map(Arc::new).fold(None, |x,y| Some(ReversePath::push(x, y))).unwrap();
-        let b = (0..101).map(Arc::new).fold(None, |x,y| Some(ReversePath::push(x, y))).unwrap();
+        let a = (0..100)
+            .map(Arc::new)
+            .fold(None, |x, y| Some(ReversePath::push(x, y)))
+            .unwrap();
+        let b = (0..101)
+            .map(Arc::new)
+            .fold(None, |x, y| Some(ReversePath::push(x, y)))
+            .unwrap();
         assert_ne!(a, b);
     }
 }

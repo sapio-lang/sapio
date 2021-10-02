@@ -24,7 +24,6 @@ pub struct CreateArgs<S> {
     pub context: ContextualArguments,
 }
 
-
 /// # Contextual Arguments For Creating this Contract
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ContextualArguments {

@@ -5,8 +5,8 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Strings we only want to keep around once.
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
 lazy_static::lazy_static! {
     pub static ref CLONED : Arc<String> = Arc::new("cloned".into());
     pub static ref THEN_FN : Arc<String> = Arc::new("then_fn".into());

@@ -5,7 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! general non-parameter compilation state required by all contracts
-pub use super::effects::{MapEffectDB, EffectDB};
+pub use super::effects::{EffectDB, MapEffectDB};
 use super::interned_strings::get_interned;
 use super::{Amount, Compilable, CompilationError, Compiled};
 use crate::contract::compiler::InternalCompilerTag;
