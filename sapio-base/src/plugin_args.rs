@@ -19,6 +19,15 @@ pub enum NetworkDef {
 pub struct CreateArgs<S> {
     /// # The Main Contract Arguments
     pub arguments: S,
+    /// # Contextual Arguments
+    /// Others arguments set by general system settings
+    pub context: ContextualArguments,
+}
+
+
+/// # Contextual Arguments For Creating this Contract
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct ContextualArguments {
     #[serde(with = "NetworkDef")]
     /// # The Network the contract should be created for.
     pub network: bitcoin::Network,

@@ -1,5 +1,6 @@
 use bitcoin::*;
 use jsonschema::JSONSchema;
+use sapio_base::plugin_args::ContextualArguments;
 use sapio_base::plugin_args::CreateArgs;
 use schemars::*;
 use serde::*;
@@ -22,8 +23,10 @@ pub trait SapioJSONTrait: JsonSchema + Serialize + for<'a> Deserialize<'a> {
         compiled
             .validate(&serde_json::to_value(CreateArgs {
                 arguments: tag,
-                amount: Amount::from_sat(0),
-                network: Network::Bitcoin,
+                context: ContextualArguments {
+                    amount: Amount::from_sat(0),
+                    network: Network::Bitcoin,
+                },
             })?)
             .map_err(|e| {
                 let mut s = String::from("Validation Errors:");

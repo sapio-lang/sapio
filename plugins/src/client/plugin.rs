@@ -5,8 +5,8 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! binding for making a type into a plugin
-use sapio::contract::context::MapEffectDB;
 use super::*;
+use sapio::contract::context::MapEffectDB;
 use std::convert::TryFrom;
 /// The `Plugin` trait is used to provide bindings for a WASM Plugin.
 /// It's not intended to be used internally, just as bindings.
@@ -34,8 +34,7 @@ where
         let s = CString::from_raw(c);
         let CreateArgs::<Self> {
             arguments,
-            network,
-            amount,
+            context: ContextualArguments { network, amount },
         } = serde_json::from_slice(s.to_bytes())?;
         // TODO: Get The wasm ID here?
         // TODO: In theory, these trampoline bounds are robust/serialization safe...
@@ -47,7 +46,7 @@ where
             /// TODO: Carry context's path
             vec![Arc::new("PLUGIN_TRAMPOLINE".into())],
             /// TODO: load database?
-            Arc::new(MapEffectDB::default())
+            Arc::new(MapEffectDB::default()),
         );
         let converted = Self::ToType::try_from(arguments)?;
         let compiled = converted.compile(ctx)?;
