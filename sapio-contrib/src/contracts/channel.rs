@@ -73,6 +73,7 @@ mod tests {
             Amount::from_sat(10000),
             std::sync::Arc::new(CTVAvailable),
             vec![Arc::new("ROOT".into())],
+            Default::default()
         );
         Compilable::compile(&x, ctx.derive_str(Some("X")));
         Compilable::compile(&y, ctx.derive_str(Some("Y")));
