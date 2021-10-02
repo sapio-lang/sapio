@@ -7,7 +7,7 @@
 //! The primary compilation traits and types
 use super::actions::Guard;
 use super::actions::{ConditionalCompileType, ConditionallyCompileIf};
-use super::effects::EffectDBError;
+
 use super::interned_strings::*;
 use super::AnyContract;
 use super::CompilationError;
@@ -16,14 +16,14 @@ use super::Context;
 use crate::contract::abi::continuation::rs::SArc;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::contract::effects::EffectDB;
-use crate::contract::TransactionTemplate;
+
 use crate::contract::TxTmplIt;
 use crate::util::amountrange::AmountRange;
 use ::miniscript::*;
 use sapio_base::Clause;
 use std::collections::HashMap;
 use std::collections::LinkedList;
-use std::sync::Arc;
+
 
 enum CacheEntry<T> {
     Cached(Clause),

@@ -29,7 +29,7 @@ pub struct Builder {
 
 impl Builder {
     /// Creates a new transaction template with 1 input and no outputs.
-    pub fn new(mut ctx: Context) -> Builder {
+    pub fn new(ctx: Context) -> Builder {
         Builder {
             sequences: vec![None],
             outputs: vec![],

@@ -9,7 +9,7 @@ use super::effects::EffectDBError;
 use super::CompilationError;
 use super::Context;
 use super::TxTmplIt;
-use crate::contract::empty;
+
 use core::marker::PhantomData;
 use sapio_base::Clause;
 use schemars::schema::RootSchema;

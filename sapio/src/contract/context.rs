@@ -16,8 +16,8 @@ use bitcoin::Network;
 use miniscript::Descriptor;
 use miniscript::DescriptorTrait;
 use sapio_ctv_emulator_trait::CTVEmulator;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+
+
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::ops::Deref;

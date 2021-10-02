@@ -180,7 +180,7 @@ impl MiningPool {
                     key: note.read().unwrap().key.unwrap()
                 })
             ).collect::<Result<_,CompilationError>>()?;
-            let mut ctx_extra_funding :Context= ctx.derive_str(Some("unlimited funding"));
+            let ctx_extra_funding :Context= ctx.derive_str(Some("unlimited funding"));
             ctx_extra_funding.add_amount(Amount::from_btc(21_000_000.0).unwrap());
 
             let mut contract = MiningPayout {
