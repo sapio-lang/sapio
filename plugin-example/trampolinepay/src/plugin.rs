@@ -39,7 +39,7 @@ impl TrampolinePay {
             let compiled = create_contract_by_key(
                 &self.handle.key,
                 serde_json::to_value(CreateArgs {
-                    context: ContextualArguments{ amount: ctx.funds(), network: ctx.network,},
+                    context: ContextualArguments{ amount: ctx.funds(), network: ctx.network, effects: ctx.get_effects().as_ref().clone()},
                     arguments: Versions::BatchingTraitVersion0_1_1(self.data.clone()),
                 })
                 .map_err(|_| CompilationError::TerminateCompilation)?,

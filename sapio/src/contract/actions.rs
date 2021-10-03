@@ -5,7 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! The different types of functionality a contract can define.
-use super::effects::EffectDBError;
+use sapio_base::effects::EffectDBError;
 use super::CompilationError;
 use super::Context;
 use super::TxTmplIt;

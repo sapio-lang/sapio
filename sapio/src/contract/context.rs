@@ -5,13 +5,13 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! general non-parameter compilation state required by all contracts
-pub use super::effects::{EffectDB, MapEffectDB};
+pub use sapio_base::effects::{EffectDB, MapEffectDB};
 use super::interned_strings::get_interned;
 use super::{Amount, Compilable, CompilationError, Compiled};
 use crate::contract::compiler::InternalCompilerTag;
 use crate::contract::interned_strings::CLONED;
 use crate::util::amountrange::AmountRange;
-use crate::util::reverse_path::{MkReversePath, ReversePath};
+use sapio_base::reverse_path::{MkReversePath, ReversePath};
 use bitcoin::Network;
 use miniscript::Descriptor;
 use miniscript::DescriptorTrait;

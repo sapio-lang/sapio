@@ -7,4 +7,3 @@
 //! Basic functionality / structs for Sapio
 pub mod amountrange;
 pub mod extended_address;
-pub mod reverse_path;

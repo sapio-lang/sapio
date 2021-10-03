@@ -6,13 +6,11 @@
 
 //! general non-parameter compilation state required by all contracts
 
-use crate::contract::abi::continuation::rs::SArc;
-
-use crate::util::reverse_path::ReversePath;
-
+use crate::reverse_path::ReversePath;
+use crate::serialization_helpers::SArc;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-
 use std::sync::Arc;
 
 /// Error types for EffectDB Accesses
@@ -22,6 +20,11 @@ pub enum EffectDBError {
     SerializationError(serde_json::Error),
 }
 
+impl From<serde_json::Error> for EffectDBError {
+    fn from(e: serde_json::Error) -> Self {
+        EffectDBError::SerializationError(e)
+    }
+}
 /// A Generic Trait for EffectDB Functionality
 pub trait EffectDB {
     /// internal implementation to retrieve a JSON for the path
@@ -30,11 +33,15 @@ pub trait EffectDB {
         at: &Arc<ReversePath<String>>,
     ) -> Box<dyn Iterator<Item = (&'a Arc<String>, &'a serde_json::Value)> + 'a>;
 }
-/// # A Registry of all Effects to process during compilation.
-#[derive(Clone, Default, Serialize, Deserialize)]
+/// #  Effects
+/// Map of all effects to process during compilation.  Each Key represents a
+/// path, each sub-key represents the sub-path name and value.
+#[derive(Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct MapEffectDB {
     /// # The set of all effects
+    /// List of effects to include while compiling.
     effects: HashMap<SArc<ReversePath<String>>, HashMap<SArc<String>, serde_json::Value>>,
+    #[serde(skip, default)]
     empty: HashMap<SArc<String>, serde_json::Value>,
 }
 

@@ -1,3 +1,4 @@
+use crate::effects::MapEffectDB;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -34,4 +35,7 @@ pub struct ContextualArguments {
     #[schemars(with = "f64")]
     /// # The Amount of Funds Available to the Contract as Bitcoin.
     pub amount: bitcoin::util::amount::Amount,
+
+    /// # Effects to augment compilations with
+    pub effects: MapEffectDB
 }

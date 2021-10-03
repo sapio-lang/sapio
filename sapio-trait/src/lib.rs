@@ -26,6 +26,7 @@ pub trait SapioJSONTrait: JsonSchema + Serialize + for<'a> Deserialize<'a> {
                 context: ContextualArguments {
                     amount: Amount::from_sat(0),
                     network: Network::Bitcoin,
+                    effects: Default::default(),
                 },
             })?)
             .map_err(|e| {

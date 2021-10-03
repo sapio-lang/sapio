@@ -16,7 +16,6 @@ pub mod compiler;
 pub mod error;
 pub use error::CompilationError;
 pub mod context;
-pub mod effects;
 use bitcoin::util::amount::Amount;
 pub use compiler::Compilable;
 pub use context::Context;

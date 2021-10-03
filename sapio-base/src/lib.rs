@@ -15,6 +15,10 @@ pub mod timelocks;
 /// Trait & Structs for accessing Chain Data
 pub mod txindex;
 
+pub mod serialization_helpers;
+pub mod effects;
+pub mod reverse_path;
+
 /// Concrete Instantiation of Miniscript Policy. Because we need to be able to generate exact
 /// transactions, we only work with `bitcoin::PublicKey` types.
 pub type Clause = miniscript::policy::concrete::Policy<bitcoin::PublicKey>;

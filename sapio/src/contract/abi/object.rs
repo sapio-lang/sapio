@@ -6,7 +6,7 @@
 
 //! Object is the output of Sapio Compilation & can be linked to a specific coin
 pub use super::studio::*;
-use crate::contract::abi::continuation::rs::SArc;
+use sapio_base::serialization_helpers::SArc;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
