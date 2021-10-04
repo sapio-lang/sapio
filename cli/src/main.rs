@@ -20,6 +20,7 @@ use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::CTVAvailable;
 use emulator_connect::CTVEmulator;
 use sapio::contract::context::MapEffectDB;
+use sapio::contract::object::Program;
 use sapio::contract::object::{LinkedPSBT, SapioStudioFormat};
 use sapio::contract::Compiled;
 use sapio::contract::Context;
@@ -269,7 +270,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if outpoint.is_none() {
                     let output_metadata = vec![OutputMeta::default(); tx.output.len()];
                     let psbt = PartiallySignedTransaction::from_unsigned_tx(tx)?;
-                    bound.push(LinkedPSBT {
+                    bound.push(vec![LinkedPSBT {
                         psbt,
                         metadata: TemplateMetadata {
                             label: Some("funding".into()),
@@ -277,10 +278,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             extra: HashMap::new(),
                         },
                         output_metadata,
-                    });
+                    }]);
                 }
                 if use_base64 {
-                    let results: Vec<_> = bound.into_iter().map(SapioStudioFormat::from).collect();
+                    let results = Program {
+                        program: bound
+                            .into_iter()
+                            .map(|m| m.into_iter().map(SapioStudioFormat::from).collect())
+                            .collect(),
+                    };
                     println!("{}", serde_json::to_string_pretty(&results)?);
                 } else {
                     println!("{}", serde_json::to_string_pretty(&bound)?);

@@ -42,7 +42,7 @@ mod test {
     use super::*;
     #[test]
     fn test_sarc_ser() -> Result<(), Box<dyn std::error::Error>> {
-        assert_eq!(serde_json::to_string(&rs::SArc(Arc::new(1)))?, "1");
+        assert_eq!(serde_json::to_string(&SArc(Arc::new(1)))?, "1");
         Ok(())
     }
 }

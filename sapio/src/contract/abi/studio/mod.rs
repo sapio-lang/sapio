@@ -26,7 +26,7 @@ pub struct LinkedPSBT {
 }
 
 /// Format for a Linked PSBT in Sapio Studio
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Debug)]
 pub enum SapioStudioFormat {
     /// Used for PSBT Return Values
     #[serde(rename = "linked_psbt")]
@@ -56,4 +56,23 @@ impl From<LinkedPSBT> for SapioStudioFormat {
             output_metadata: l.output_metadata,
         }
     }
+}
+
+/// A `Program` is a wrapper type for a list of
+/// JSON objects that should be of form:
+/// ```json
+/// {
+///     "hex" : Hex Encoded Transaction
+///     "color" : HTML Color,
+///     "metadata" : JSON Value,
+///     "utxo_metadata" : {
+///         "key" : "value",
+///         ...
+///     }
+/// }
+/// ```
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Program {
+    /// program contains the list of SapioStudio PSBTs
+    pub program: Vec<Vec<SapioStudioFormat>>,
 }

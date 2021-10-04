@@ -6,7 +6,6 @@
 
 //! Object is the output of Sapio Compilation & can be linked to a specific coin
 pub use super::studio::*;
-use sapio_base::serialization_helpers::SArc;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
@@ -16,6 +15,7 @@ use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::amount::Amount;
 use bitcoin::util::psbt::PartiallySignedTransaction;
+use sapio_base::serialization_helpers::SArc;
 use sapio_base::txindex::TxIndex;
 use sapio_base::txindex::TxIndexError;
 use sapio_base::Clause;
@@ -169,7 +169,7 @@ impl Object {
         output_map: HashMap<Sha256, Vec<Option<bitcoin::OutPoint>>>,
         blockdata: Rc<dyn TxIndex>,
         emulator: &dyn CTVEmulator,
-    ) -> Result<Vec<LinkedPSBT>, ObjectError> {
+    ) -> Result<Vec<Vec<LinkedPSBT>>, ObjectError> {
         let mut result = vec![];
         // Could use a queue instead to do BFS linking, but order doesn't matter and stack is
         // faster.
@@ -185,53 +185,62 @@ impl Object {
             },
         )) = stack.pop()
         {
-            result.reserve(ctv_to_tx.len() + suggested_txs.len());
-            for (
-                ctv_hash,
-                Template {
-                    metadata_map_s2s,
-                    outputs,
-                    tx,
-                    ..
-                },
-            ) in ctv_to_tx.iter().chain(suggested_txs.iter())
-            {
-                let mut tx = tx.clone();
-                tx.input[0].previous_output = out;
-                if let Some(outputs) = output_map.get(ctv_hash) {
-                    for (i, inp) in tx.input.iter_mut().enumerate().skip(1) {
-                        if let Some(out) = outputs[i] {
-                            inp.previous_output = out;
-                        }
-                    }
-                }
-                let mut psbtx = PartiallySignedTransaction::from_unsigned_tx(tx.clone()).unwrap();
-                for (psbt_in, tx_in) in psbtx.inputs.iter_mut().zip(tx.input.iter()) {
-                    psbt_in.witness_utxo = blockdata.lookup_output(&tx_in.previous_output).ok();
-                    psbt_in.sighash_type = Some(bitcoin::blockdata::transaction::SigHashType::All);
-                }
-                // Missing other Witness Info.
-                if let Some(d) = descriptor {
-                    psbtx.inputs[0].witness_script = Some(d.explicit_script());
-                }
-                psbtx = emulator.sign(psbtx)?;
-                let final_tx = psbtx.clone().extract_tx();
-                let txid = blockdata.add_tx(Arc::new(final_tx))?;
-                result.push(LinkedPSBT {
-                    psbt: psbtx,
-                    metadata: metadata_map_s2s.clone(),
-                    output_metadata: outputs
-                        .iter()
-                        .cloned()
-                        .map(|x| x.metadata)
-                        .collect::<Vec<_>>(),
-                });
-                stack.reserve(outputs.len());
-                for (vout, v) in outputs.iter().enumerate() {
-                    let vout = vout as u32;
-                    stack.push((bitcoin::OutPoint { txid, vout }, &v.contract));
-                }
-            }
+            result.push(
+                ctv_to_tx
+                    .iter()
+                    .chain(suggested_txs.iter())
+                    .map(
+                        |(
+                            ctv_hash,
+                            Template {
+                                metadata_map_s2s,
+                                outputs,
+                                tx,
+                                ..
+                            },
+                        )| {
+                            let mut tx = tx.clone();
+                            tx.input[0].previous_output = out;
+                            if let Some(outputs) = output_map.get(ctv_hash) {
+                                for (i, inp) in tx.input.iter_mut().enumerate().skip(1) {
+                                    if let Some(out) = outputs[i] {
+                                        inp.previous_output = out;
+                                    }
+                                }
+                            }
+                            let mut psbtx =
+                                PartiallySignedTransaction::from_unsigned_tx(tx.clone()).unwrap();
+                            for (psbt_in, tx_in) in psbtx.inputs.iter_mut().zip(tx.input.iter()) {
+                                psbt_in.witness_utxo =
+                                    blockdata.lookup_output(&tx_in.previous_output).ok();
+                                psbt_in.sighash_type =
+                                    Some(bitcoin::blockdata::transaction::SigHashType::All);
+                            }
+                            // Missing other Witness Info.
+                            if let Some(d) = descriptor {
+                                psbtx.inputs[0].witness_script = Some(d.explicit_script());
+                            }
+                            psbtx = emulator.sign(psbtx)?;
+                            let final_tx = psbtx.clone().extract_tx();
+                            let txid = blockdata.add_tx(Arc::new(final_tx))?;
+                            stack.reserve(outputs.len());
+                            for (vout, v) in outputs.iter().enumerate() {
+                                let vout = vout as u32;
+                                stack.push((bitcoin::OutPoint { txid, vout }, &v.contract));
+                            }
+                            Ok(LinkedPSBT {
+                                psbt: psbtx,
+                                metadata: metadata_map_s2s.clone(),
+                                output_metadata: outputs
+                                    .iter()
+                                    .cloned()
+                                    .map(|x| x.metadata)
+                                    .collect::<Vec<_>>(),
+                            })
+                        },
+                    )
+                    .collect::<Result<Vec<_>, ObjectError>>()?,
+            );
         }
         Ok(result)
     }

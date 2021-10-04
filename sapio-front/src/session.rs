@@ -9,6 +9,8 @@
 use bitcoin::hashes::Hash;
 use bitcoin::util::amount::Amount;
 use sapio::contract::context::MapEffectDB;
+use sapio::contract::object::LinkedPSBT;
+use sapio::contract::object::Program;
 use sapio::contract::{object::SapioStudioFormat, Compilable, CompilationError, Compiled, Context};
 use sapio::util::extended_address::ExtendedAddress;
 use sapio_ctv_emulator_trait::CTVAvailable;
@@ -81,23 +83,6 @@ where
     c
 }
 
-/// A `Program` is a wrapper type for a list of
-/// JSON objects that should be of form:
-/// ```json
-/// {
-///     "hex" : Hex Encoded Transaction
-///     "color" : HTML Color,
-///     "metadata" : JSON Value,
-///     "utxo_metadata" : {
-///         "key" : "value",
-///         ...
-///     }
-/// }
-/// ```
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Program {
-    program: Vec<Value>,
-}
 /// An action requested by the client
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "action", content = "content")]
@@ -173,10 +158,12 @@ impl Action {
                 let program = Program {
                     program: data
                         .into_iter()
-                        .map(SapioStudioFormat::from)
-                        .map(serde_json::to_value)
-                        .collect::<Result<Vec<Value>, _>>()
-                        .ok()?,
+                        .map(|g: Vec<LinkedPSBT>| {
+                            g.into_iter()
+                                .map(SapioStudioFormat::from)
+                                .collect::<Vec<_>>()
+                        })
+                        .collect::<Vec<Vec<SapioStudioFormat>>>(),
                 };
                 println!("{:?}", program);
                 Some(Reaction::Created(c.amount_range.max(), a, program))
