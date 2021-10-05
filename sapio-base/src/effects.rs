@@ -41,17 +41,17 @@ impl From<PathFragment> for String {
 impl From<&PathFragment> for String {
     fn from(a: &PathFragment) -> Self {
         match a {
-            PathFragment::Cloned => "cloned".into(),
-            PathFragment::ThenFn => "then_fn".into(),
-            PathFragment::FinishOrFn => "finish_or_fn".into(),
-            PathFragment::FinishFn => "finish_fn".into(),
-            PathFragment::CondCompIf => "cond_comp_if".into(),
-            PathFragment::Guard => "guard".into(),
-            PathFragment::Next => "next".into(),
-            PathFragment::Suggested => "suggested".into(),
-            PathFragment::DefaultEffect => "default_effect".into(),
-            PathFragment::Effects => "effects".into(),
-            PathFragment::Branch(u) => u.to_string(),
+            PathFragment::Cloned => "@cloned".into(),
+            PathFragment::ThenFn => "@then_fn".into(),
+            PathFragment::FinishOrFn => "@finish_or_fn".into(),
+            PathFragment::FinishFn => "@finish_fn".into(),
+            PathFragment::CondCompIf => "@cond_comp_if".into(),
+            PathFragment::Guard => "@guard".into(),
+            PathFragment::Next => "@next".into(),
+            PathFragment::Suggested => "@suggested".into(),
+            PathFragment::DefaultEffect => "@default_effect".into(),
+            PathFragment::Effects => "@effects".into(),
+            PathFragment::Branch(u) => format!("#{}", u),
             PathFragment::Named(SArc(a)) => a.as_ref().clone(),
         }
     }
@@ -60,23 +60,25 @@ impl From<&PathFragment> for String {
 impl From<&str> for PathFragment {
     fn from(s: &str) -> Self {
         match s.as_ref() {
-            "cloned" => PathFragment::Cloned,
-            "then_fn" => PathFragment::ThenFn,
-            "finish_or_fn" => PathFragment::FinishOrFn,
-            "finish_fn" => PathFragment::FinishFn,
-            "cond_comp_if" => PathFragment::CondCompIf,
-            "guard" => PathFragment::Guard,
-            "next" => PathFragment::Next,
-            "suggested" => PathFragment::Suggested,
-            "default_effect" => PathFragment::DefaultEffect,
-            "effects" => PathFragment::Effects,
-            v => {
-                if let Ok(i) = FromStr::from_str(v) {
+            "@cloned" => PathFragment::Cloned,
+            "@then_fn" => PathFragment::ThenFn,
+            "@finish_or_fn" => PathFragment::FinishOrFn,
+            "@finish_fn" => PathFragment::FinishFn,
+            "@cond_comp_if" => PathFragment::CondCompIf,
+            "@guard" => PathFragment::Guard,
+            "@next" => PathFragment::Next,
+            "@suggested" => PathFragment::Suggested,
+            "@default_effect" => PathFragment::DefaultEffect,
+            "@effects" => PathFragment::Effects,
+            n if n.starts_with('#') && n[1..].chars().all(|x| char::is_ascii_digit(&x)) => {
+                if let Ok(i) = FromStr::from_str(&n[1..]) {
                     PathFragment::Branch(i)
                 } else {
+                    // should be impossible?
                     PathFragment::Named(SArc(Arc::new(s.into())))
                 }
             }
+            _ => PathFragment::Named(SArc(Arc::new(s.into()))),
         }
     }
 }
@@ -149,19 +151,22 @@ mod test {
     use super::*;
     #[test]
     fn test_string() {
-        let v: Vec<PathFragment> = vec!["hello".into(), "123".into(), PathFragment::FinishFn];
+        let v: Vec<PathFragment> = vec!["hello".into(), "#123".into(), PathFragment::FinishFn];
         let r = ReversePath::try_from(v).unwrap();
-        assert_eq!(String::from(r.clone()), "hello/123/finish_fn");
-        assert_eq!(Ok(r), ReversePath::try_from("hello/123/finish_fn"));
+        assert_eq!(String::from(r.clone()), "hello/#123/@finish_fn");
+        assert_eq!(Ok(r), ReversePath::try_from("hello/#123/@finish_fn"));
     }
     #[test]
     fn test_serde() {
-        let v: Vec<PathFragment> = vec!["hello".into(), "123".into(), PathFragment::FinishFn];
+        let v: Vec<PathFragment> = vec!["hello".into(), PathFragment::Branch(100), PathFragment::FinishFn];
         let r = ReversePath::<PathFragment>::try_from(v).unwrap();
-        assert_eq!(serde_json::to_string(&r).unwrap(), "\"hello/123/finish_fn\"");
+        assert_eq!(
+            serde_json::to_string(&r).unwrap(),
+            "\"hello/#100/@finish_fn\""
+        );
         assert_eq!(
             Ok(r),
-            serde_json::from_str("\"hello/123/finish_fn\"").map_err(|_| ())
+            serde_json::from_str("\"hello/#100/@finish_fn\"").map_err(|_| ())
         );
     }
 }
