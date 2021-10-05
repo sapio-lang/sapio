@@ -112,8 +112,8 @@ fn create_guards<T>(
 ) -> Clause {
     guards
         .iter()
-        .enumerate()
-        .filter_map(|(i, x)| gc.get(self_ref, *x, ctx.derive_str(Some(&format!("{}", i)))))
+        .zip((0..).flat_map(|i| ctx.derive(PathFragment::Branch(i)).ok()))
+        .filter_map(|(x, c)| gc.get(self_ref, *x, c))
         .filter(|x| *x != Clause::Trivial) // no point in using any Trivials
         .fold(Clause::Trivial, |acc, item| match acc {
             Clause::Trivial => item,
@@ -148,25 +148,27 @@ where
         // finish_or_fns do not. We can lazily chain iterators to process them
         // in a row.
         let then_fns: Vec<_> = {
-            let mut then_fn_ctx = ctx.derive(&PathFragment::ThenFn);
-            let mut conditional_compile_ctx = then_fn_ctx.derive(&PathFragment::CondCompIf);
-            let mut guards_ctx = then_fn_ctx.derive(&PathFragment::Guard);
-            let mut next_tx_ctx = then_fn_ctx.derive(&PathFragment::Next);
+            let mut then_fn_ctx = ctx.derive(PathFragment::ThenFn)?;
+            let mut conditional_compile_ctx = then_fn_ctx.derive(PathFragment::CondCompIf)?;
+            let mut guards_ctx = then_fn_ctx.derive(PathFragment::Guard)?;
+            let mut next_tx_ctx = then_fn_ctx.derive(PathFragment::Next)?;
             self.then_fns()
                 .iter()
                 .filter_map(|func| func())
-                .zip((0..).map(|i| format!("{}", i)))
-                .filter_map(|(func, string_index)| {
+                .zip(
+                    (0..)
+                        .flat_map(|i| conditional_compile_ctx.derive(PathFragment::Branch(i)).ok()),
+                )
+                .filter_map(|(func, mut this_ctx)| {
                     let r = {
-                        let mut this_ctx = conditional_compile_ctx.derive_str(Some(&string_index));
                         let constraint = func
                             .conditional_compile_if
                             .iter()
                             .filter_map(|compf| compf())
-                            .enumerate()
-                            .fold(ConditionalCompileType::NoConstraint, |acc, (i, cond)| {
+                            .zip((0..).flat_map(|i| this_ctx.derive(PathFragment::Branch(i)).ok()))
+                            .fold(ConditionalCompileType::NoConstraint, |acc, (cond, c)| {
                                 let ConditionallyCompileIf::Fresh(f) = cond;
-                                acc.merge(f(self_ref, this_ctx.derive_str(Some(&format!("{}", i)))))
+                                acc.merge(f(self_ref, c))
                             });
                         match constraint {
                             ConditionalCompileType::Fail(errors) => (errors, Nullable::No),
@@ -180,21 +182,22 @@ where
                             }
                         }
                     };
-                    Some((string_index, func, r))
+                    Some((func, r))
                 })
-                .map(|(string_index, func, (errors, nullability))| {
-                    let guards = create_guards(
-                        self_ref,
-                        guards_ctx.derive_str(Some(&string_index)),
-                        func.guard,
-                        &mut guard_clauses.borrow_mut(),
-                    );
+                .zip(
+                    (0..)
+                        .flat_map(|i| guards_ctx.derive(PathFragment::Branch(i)).ok())
+                        .zip((0..).flat_map(|i| next_tx_ctx.derive(PathFragment::Branch(i)).ok())),
+                )
+                .map(|((func, (errors, nullability)), (gctx, ntx_ctx))| {
+                    let guards =
+                        create_guards(self_ref, gctx, func.guard, &mut guard_clauses.borrow_mut());
                     (
                         nullability,
                         CTVRequired::Yes,
                         guards,
                         if errors.is_empty() {
-                            (func.func)(self_ref, next_tx_ctx.derive_str(Some(&string_index)))
+                            (func.func)(self_ref, ntx_ctx)
                         } else {
                             Err(CompilationError::ConditionalCompilationFailed(errors))
                         },
@@ -205,27 +208,33 @@ where
         // finish_or_fns may be used to compute additional transactions with
         // a given argument, but for building the ABI we only precompute with
         // the default argument.
-        let (continue_apis, finish_or_fns): (HashMap<SArc<String>, ContinuationPoint>, Vec<_>) = {
-            let mut finish_or_fns_ctx = ctx.derive(&PathFragment::FinishOrFn);
-            let mut conditional_compile_ctx = finish_or_fns_ctx.derive(&PathFragment::CondCompIf);
-            let mut guard_ctx = finish_or_fns_ctx.derive(&PathFragment::Guard);
-            let mut suggested_tx_ctx = finish_or_fns_ctx.derive(&PathFragment::Suggested);
+        let continue_apis_and_finish_or_fns: Result<
+            Vec<(
+                (SArc<String>, ContinuationPoint),
+                (Nullable, CTVRequired, Clause, TxTmplIt),
+            )>,
+            CompilationError,
+        > = {
+            let mut finish_or_fns_ctx = ctx.derive(PathFragment::FinishOrFn)?;
+            let mut conditional_compile_ctx = finish_or_fns_ctx.derive(PathFragment::CondCompIf)?;
+            let mut guard_ctx = finish_or_fns_ctx.derive(PathFragment::Guard)?;
+            let mut suggested_tx_ctx = finish_or_fns_ctx.derive(PathFragment::Suggested)?;
             self.finish_or_fns()
                 .iter()
                 .filter_map(|func| func())
                 // TODO: De-duplicate this code?
                 .filter_map(|func| {
-                    /// TODO: add name?
+                    /// NOTE: Derivation silently passes if name is a duplicate!
                     let mut this_ctx = conditional_compile_ctx
-                        .derive(&PathFragment::Named(SArc(func.get_name().clone())));
+                        .derive(PathFragment::Named(SArc(func.get_name().clone()))).ok()?;
                     let constraint = func
                         .get_conditional_compile_if()
                         .iter()
                         .filter_map(|compf| compf())
-                        .enumerate()
-                        .fold(ConditionalCompileType::NoConstraint, |acc, (i, cond)| {
+                        .zip((0..).flat_map(|i| this_ctx.derive(PathFragment::Branch(i)).ok()))
+                        .fold(ConditionalCompileType::NoConstraint, |acc, (cond, c)| {
                             let ConditionallyCompileIf::Fresh(f) = cond;
-                            acc.merge(f(self_ref, this_ctx.derive_str(Some(&format!("{}", i)))))
+                            acc.merge(f(self_ref, c))
                         });
                     match constraint {
                         ConditionalCompileType::Fail(errors) => Some((func, errors)),
@@ -237,14 +246,14 @@ where
                 })
                 .map(|(func, errors)| {
                     let mut effect_ctx = suggested_tx_ctx
-                        .derive(&PathFragment::Named(SArc(func.get_name().clone())));
+                        .derive(PathFragment::Named(SArc(func.get_name().clone())))?;
                     let guard = create_guards(
                         self_ref,
-                        guard_ctx.derive(&PathFragment::Named(SArc(func.get_name().clone()))),
+                        guard_ctx.derive(PathFragment::Named(SArc(func.get_name().clone())))?,
                         func.get_guard(),
                         &mut guard_clauses.borrow_mut(),
                     );
-                    (
+                    Ok((
                         (
                             SArc(func.get_name().clone()),
                             ContinuationPoint::at(
@@ -257,16 +266,15 @@ where
                             CTVRequired::No,
                             guard,
                             if errors.is_empty() {
-                                let mut effects = effect_ctx.derive(&PathFragment::Effects);
-                                let def = effect_ctx.derive(&PathFragment::DefaultEffect);
+                                let mut effects = effect_ctx.derive(PathFragment::Effects)?;
+                                let def = effect_ctx.derive(PathFragment::DefaultEffect)?;
                                 ctx.get_effects()
                                     .get_value(ctx.path())
                                     .flat_map(|(k, arg)| {
-                                        func.call_json(
-                                            self_ref,
-                                            effects.derive(&PathFragment::Named(SArc(k.clone()))),
-                                            arg.clone(),
-                                        )
+                                        let c = effects
+                                            .derive(PathFragment::Named(SArc(k.clone())))
+                                            .expect("Must be a valid derivation or internal invariant not held");
+                                        func.call_json(self_ref, c, arg.clone())
                                     })
                                     // always gets the default expansion, but will also attempt
                                     // operating with the effects passed in through the Context Object.:write!
@@ -282,10 +290,14 @@ where
                                 Err(CompilationError::ConditionalCompilationFailed(errors))
                             },
                         ),
-                    )
+                    ))
                 })
-                .unzip()
+                .collect()
         };
+        let (continue_apis, finish_or_fns): (
+            HashMap<SArc<String>, ContinuationPoint>,
+            Vec<(Nullable, CTVRequired, Clause, TxTmplIt)>,
+        ) = continue_apis_and_finish_or_fns?.into_iter().unzip();
 
         let mut ctv_to_tx = HashMap::new();
         let mut suggested_txs = HashMap::new();
@@ -351,18 +363,16 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
         let finish_fns: Vec<_> = {
-            let mut finish_fns_ctx = ctx.derive(&PathFragment::FinishFn);
+            let mut finish_fns_ctx = ctx.derive(PathFragment::FinishFn)?;
             // Compute all finish_functions at this level, caching if requested.
             self.finish_fns()
                 .iter()
-                .enumerate()
-                .filter_map(|(i, func)| {
-                    guard_clauses.borrow_mut().get(
-                        self_ref,
-                        *func,
-                        finish_fns_ctx.derive_str(Some(&format!("{}", i))),
-                    )
-                })
+                // note that this zip with would loop forever if there were to be a bug here
+                .zip(
+                    (0..)
+                        .filter_map(|i| finish_fns_ctx.derive(PathFragment::Branch(i as u64)).ok()),
+                )
+                .filter_map(|(func, c)| guard_clauses.borrow_mut().get(self_ref, *func, c))
                 .collect()
         };
         // If any clauses are returned, use a Threshold with n = 1

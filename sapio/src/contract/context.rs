@@ -65,32 +65,28 @@ impl Context {
     }
 
     /// Derive a new contextual path
-    /// If no path is provided, it will be "cloned"
-    pub fn derive_str<'a>(&mut self, path: Option<&'a str>) -> Self {
-        let dir: Arc<PathFragment> = Arc::new(
-            path.map(String::from)
-                .map(Arc::new)
-                .map(SArc)
-                .map(PathFragment::Named)
-                .unwrap_or(PathFragment::Cloned),
-        );
-        self.derive(&dir)
+    pub fn derive_str<'a>(&mut self, path: Arc<String>) -> Result<Self, CompilationError> {
+        self.derive(PathFragment::Named(SArc(path)))
     }
     /// Derive a new contextual path
-    pub fn derive(&mut self, path: &PathFragment) -> Self {
-        if self.already_derived.contains(path) {
-            /// TODO: Make this return a Compilation Error
-            panic!("Fatal Error, Path Reuse");
-        }
-        self.already_derived.insert(path.clone());
-        let new_path = ReversePath::push(Some(self.path.clone()), path.clone());
-        Context {
-            available_funds: self.available_funds,
-            emulator: self.emulator.clone(),
-            path: new_path,
-            network: self.network,
-            already_derived: Default::default(),
-            effects: self.effects.clone(),
+    pub fn derive_num<T: Into<u64>>(&mut self, path: T) -> Result<Self, CompilationError> {
+        self.derive(PathFragment::Branch(path.into()))
+    }
+    /// Derive a new contextual path
+    pub(crate) fn derive(&mut self, path: PathFragment) -> Result<Self, CompilationError> {
+        if self.already_derived.contains(&path) {
+            Err(CompilationError::ContexPathAlreadyDerived)
+        } else {
+            self.already_derived.insert(path.clone());
+            let new_path = ReversePath::push(Some(self.path.clone()), path);
+            Ok(Context {
+                available_funds: self.available_funds,
+                emulator: self.emulator.clone(),
+                path: new_path,
+                network: self.network,
+                already_derived: Default::default(),
+                effects: self.effects.clone(),
+            })
         }
     }
     /// Method is unsafe, but may (provably!) be only called from within

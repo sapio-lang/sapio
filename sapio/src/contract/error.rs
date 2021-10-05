@@ -18,6 +18,8 @@ use std::fmt;
 pub enum CompilationError {
     /// Unspecified Error -- but we should stop compiling
     TerminateCompilation,
+    /// Error when ContextPath has already been used.
+    ContexPathAlreadyDerived,
     /// Error when a `ThenFunc` returns no Templates.
     MissingTemplates,
     /// Error if a Policy is empty

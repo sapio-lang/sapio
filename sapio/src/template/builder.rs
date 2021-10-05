@@ -9,6 +9,7 @@ pub use super::{Output, OutputMeta};
 use super::{Template, TemplateMetadata};
 use crate::contract::{CompilationError, Context};
 use bitcoin::util::amount::Amount;
+use sapio_base::effects::PathFragment;
 use sapio_base::timelocks::*;
 use sapio_base::CTVHash;
 use std::convert::TryFrom;
@@ -69,7 +70,7 @@ impl Builder {
     ) -> Result<Self, CompilationError> {
         let subctx = self
             .ctx
-            .derive_str(Some(&format!("{}", self.outputs.len())))
+            .derive(PathFragment::Branch(self.outputs.len() as u64))?
             .with_amount(amount)?;
         let mut ret = self.spend_amount(amount)?;
         ret.outputs.push(Output {

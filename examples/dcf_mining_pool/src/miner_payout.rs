@@ -123,17 +123,17 @@ impl MiningPayout {
     then! {
         fn expand(self, ctx) {
             let mut ctx = ctx;
-            let mut counter = 0;
-            let mut get_ctx = || {counter +=1; return ctx.derive_str(Some(&format!("{}", counter)))};
+            let mut counter: u64 = 0;
+            let mut get_ctx = || {counter +=1; return ctx.derive_num(counter);};
             let mut queue : VecDeque<(Amount, Box<dyn PayThisThing>)> = self.participants.iter().map(|payment| {
-                let b: Box<dyn PayThisThing> = Box::new(JustAKey::new(payment, get_ctx())?);
+                let b: Box<dyn PayThisThing> = Box::new(JustAKey::new(payment, get_ctx()?)?);
                 Ok((payment.amount, b))
             }).collect::<Result<VecDeque<_>, CompilationError>>()?;
 
             loop {
                 let v : Vec<_> = queue.drain(0..std::cmp::min(self.radix, queue.len())).collect();
                 if queue.len() == 0 {
-                    let mut builder = get_ctx().template();
+                    let mut builder = get_ctx()?.template();
                     for pay in v.iter() {
                         builder = builder.add_output(pay.0, pay.1.as_compilable(), None)?;
                     }

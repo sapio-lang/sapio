@@ -6,6 +6,7 @@
 
 //! RiskReversal represents a specific contract where we specify a set of price ranges that we
 //! want to keep purchasing power flat within.
+use std::sync::Arc;
 use super::*;
 /// RiskReversal represents a specific contract where we specify a set of price ranges that we
 /// want to keep purchasing power flat within. e.g.
@@ -115,7 +116,7 @@ impl<'a> TryFrom<RiskReversal<'a>> for GenericBetArguments<'a> {
             return Err(CompilationError::TerminateCompilation);
         }
 
-        let mut strike_ctx = v.ctx.derive_str(Some("strike"));
+        let mut strike_ctx = v.ctx.derive_str(Arc::new("strike".into()))?;
         // Increment 1 dollar per step
         for strike in (bottom..=top).step_by(ONE_UNIT as usize) {
             // Value Conservation Property:
@@ -128,7 +129,7 @@ impl<'a> TryFrom<RiskReversal<'a>> for GenericBetArguments<'a> {
             outcomes.push((
                 strike as i64,
                 strike_ctx
-                    .derive_str(Some(&format!("{}", strike)))
+                    .derive_num(strike as u64)?
                     .template()
                     .add_output(profit, &v.user_api.receive_payment(profit), None)?
                     .add_output(refund, &v.operator_api.receive_payment(refund), None)?

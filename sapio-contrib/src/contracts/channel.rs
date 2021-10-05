@@ -22,7 +22,9 @@ use std::sync::{Arc, Mutex};
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use sapio_base::effects::PathFragment;
+use sapio_base::serialization_helpers::SArc;
+use super::*;
     use ::rand::rngs::OsRng;
     use bitcoin::Amount;
     use miniscript::Descriptor;
@@ -75,8 +77,16 @@ mod tests {
             "root".try_into().unwrap(),
             Default::default(),
         );
-        Compilable::compile(&x, ctx.derive_str(Some("X")));
-        Compilable::compile(&y, ctx.derive_str(Some("Y")));
+        Compilable::compile(
+            &x,
+            ctx.derive_str(Arc::new("X".into()))
+                .unwrap(),
+        );
+        Compilable::compile(
+            &y,
+            ctx.derive_str(Arc::new("Y".into()))
+                .unwrap(),
+        );
     }
 }
 

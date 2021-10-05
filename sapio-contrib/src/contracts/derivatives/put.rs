@@ -6,6 +6,7 @@
 
 //! Put Contract
 use super::*;
+use std::sync::Arc;
 /// Put Contracts pay out as the price goes down.
 pub struct Put<'a> {
     /// The # of units
@@ -30,7 +31,7 @@ impl<'a> TryFrom<Put<'a>> for GenericBetArguments<'a> {
         let strike = v.strike_x_one_unit;
         let max_amount_bitcoin = v.amount * strike;
         // Increment 1 dollar per step
-        let mut strike_ctx = v.ctx.derive_str(Some("strike"));
+        let mut strike_ctx = v.ctx.derive_str(Arc::new("strike".into()))?;
         for price in (0..=strike).step_by(ONE_UNIT as usize) {
             let mut profit = Amount::from_sat(strike) - Amount::from_sat(price);
             let mut refund = max_amount_bitcoin - profit;
@@ -40,7 +41,7 @@ impl<'a> TryFrom<Put<'a>> for GenericBetArguments<'a> {
             outcomes.push((
                 price as i64,
                 strike_ctx
-                    .derive_str(Some(&format!("{}", price)))
+                    .derive_num(price as u64)?
                     .template()
                     .add_output(profit, &v.user_api.receive_payment(profit), None)?
                     .add_output(refund, &v.operator_api.receive_payment(refund), None)?
