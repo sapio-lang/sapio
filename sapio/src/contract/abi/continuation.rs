@@ -6,6 +6,7 @@
 
 //! ABI for contract resumption
 
+use sapio_base::effects::PathFragment;
 use sapio_base::reverse_path::ReversePath;
 use sapio_base::serialization_helpers::SArc;
 use schemars::schema::RootSchema;
@@ -21,11 +22,11 @@ pub struct ContinuationPoint {
     /// The path at which this was compiled
     #[serde(serialize_with = "sapio_base::serialization_helpers::serializer")]
     #[serde(deserialize_with = "sapio_base::serialization_helpers::deserializer")]
-    pub path: Arc<ReversePath<String>>,
+    pub path: Arc<ReversePath<PathFragment>>,
 }
 impl ContinuationPoint {
     /// Creates a new continuation
-    pub fn at(schema: Option<Arc<RootSchema>>, path: Arc<ReversePath<String>>) -> Self {
+    pub fn at(schema: Option<Arc<RootSchema>>, path: Arc<ReversePath<PathFragment>>) -> Self {
         ContinuationPoint {
             schema: schema.map(SArc),
             path,
@@ -40,7 +41,7 @@ mod test {
     fn test_continuation_point_ser() -> Result<(), Box<dyn std::error::Error>> {
         let a: ContinuationPoint = ContinuationPoint::at(
             Some(Arc::new(schemars::schema_for!(ContinuationPoint))),
-            ReversePath::push(None, Arc::new("one".into())),
+            ReversePath::push(None, PathFragment::Named(SArc(Arc::new("one".into())))),
         );
         let b: ContinuationPoint = serde_json::from_str(&format!(
             "{{\"schema\":{},\"path\":[\"one\"]}}",

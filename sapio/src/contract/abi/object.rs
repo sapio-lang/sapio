@@ -15,6 +15,7 @@ use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::amount::Amount;
 use bitcoin::util::psbt::PartiallySignedTransaction;
+use sapio_base::effects::PathFragment;
 use sapio_base::reverse_path::ReversePath;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::txindex::TxIndex;
@@ -93,7 +94,7 @@ pub struct Object {
     )]
     pub continue_apis: HashMap<SArc<String>, ContinuationPoint>,
     /// The base location for the set of continue_apis.
-    pub root_path: SArc<ReversePath<String>>,
+    pub root_path: SArc<ReversePath<PathFragment>>,
     /// The Object's Policy -- if known
     #[serde(
         rename = "known_policy",
@@ -122,7 +123,10 @@ impl Object {
             ctv_to_tx: HashMap::new(),
             suggested_txs: HashMap::new(),
             continue_apis: Default::default(),
-            root_path: SArc(ReversePath::push(None, Arc::new("".into()))),
+            root_path: SArc(ReversePath::push(
+                None,
+                PathFragment::Named(SArc(Arc::new("".into()))),
+            )),
             policy: None,
             address: address.into(),
             descriptor: None,
@@ -155,7 +159,10 @@ impl Object {
             ctv_to_tx: HashMap::new(),
             suggested_txs: HashMap::new(),
             continue_apis: Default::default(),
-            root_path: SArc(ReversePath::push(None, Arc::new("".into()))),
+            root_path: SArc(ReversePath::push(
+                None,
+                PathFragment::Named(SArc(Arc::new("".into()))),
+            )),
             policy: None,
             address: ExtendedAddress::make_op_return(data)?,
             descriptor: None,

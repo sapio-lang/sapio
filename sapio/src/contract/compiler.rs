@@ -7,8 +7,8 @@
 //! The primary compilation traits and types
 use super::actions::Guard;
 use super::actions::{ConditionalCompileType, ConditionallyCompileIf};
+use sapio_base::effects::PathFragment;
 
-use super::interned_strings::*;
 use super::AnyContract;
 use super::CompilationError;
 use super::Compiled;
@@ -148,10 +148,10 @@ where
         // finish_or_fns do not. We can lazily chain iterators to process them
         // in a row.
         let then_fns: Vec<_> = {
-            let mut then_fn_ctx = ctx.derive(&THEN_FN);
-            let mut conditional_compile_ctx = then_fn_ctx.derive(&CONDITIONAL_COMPILE_IF);
-            let mut guards_ctx = then_fn_ctx.derive(&GUARD_FN);
-            let mut next_tx_ctx = then_fn_ctx.derive(&NEXT_TXS);
+            let mut then_fn_ctx = ctx.derive(&PathFragment::ThenFn);
+            let mut conditional_compile_ctx = then_fn_ctx.derive(&PathFragment::CondCompIf);
+            let mut guards_ctx = then_fn_ctx.derive(&PathFragment::Guard);
+            let mut next_tx_ctx = then_fn_ctx.derive(&PathFragment::Next);
             self.then_fns()
                 .iter()
                 .filter_map(|func| func())
@@ -206,17 +206,18 @@ where
         // a given argument, but for building the ABI we only precompute with
         // the default argument.
         let (continue_apis, finish_or_fns): (HashMap<SArc<String>, ContinuationPoint>, Vec<_>) = {
-            let mut finish_or_fns_ctx = ctx.derive(&FINISH_OR_FN);
-            let mut conditional_compile_ctx = finish_or_fns_ctx.derive(&CONDITIONAL_COMPILE_IF);
-            let mut guard_ctx = finish_or_fns_ctx.derive(&GUARD_FN);
-            let mut suggested_tx_ctx = finish_or_fns_ctx.derive(&SUGGESTED_TXS);
+            let mut finish_or_fns_ctx = ctx.derive(&PathFragment::FinishOrFn);
+            let mut conditional_compile_ctx = finish_or_fns_ctx.derive(&PathFragment::CondCompIf);
+            let mut guard_ctx = finish_or_fns_ctx.derive(&PathFragment::Guard);
+            let mut suggested_tx_ctx = finish_or_fns_ctx.derive(&PathFragment::Suggested);
             self.finish_or_fns()
                 .iter()
                 .filter_map(|func| func())
                 // TODO: De-duplicate this code?
                 .filter_map(|func| {
                     /// TODO: add name?
-                    let mut this_ctx = conditional_compile_ctx.derive(&func.get_name());
+                    let mut this_ctx = conditional_compile_ctx
+                        .derive(&PathFragment::Named(SArc(func.get_name().clone())));
                     let constraint = func
                         .get_conditional_compile_if()
                         .iter()
@@ -235,10 +236,11 @@ where
                     }
                 })
                 .map(|(func, errors)| {
-                    let mut effect_ctx = suggested_tx_ctx.derive(&func.get_name());
+                    let mut effect_ctx = suggested_tx_ctx
+                        .derive(&PathFragment::Named(SArc(func.get_name().clone())));
                     let guard = create_guards(
                         self_ref,
-                        guard_ctx.derive(&func.get_name()),
+                        guard_ctx.derive(&PathFragment::Named(SArc(func.get_name().clone()))),
                         func.get_guard(),
                         &mut guard_clauses.borrow_mut(),
                     );
@@ -255,12 +257,16 @@ where
                             CTVRequired::No,
                             guard,
                             if errors.is_empty() {
-                                let mut effects = effect_ctx.derive(&EFFECTS);
-                                let def = effect_ctx.derive(&DEFAULT_EFFECT);
+                                let mut effects = effect_ctx.derive(&PathFragment::Effects);
+                                let def = effect_ctx.derive(&PathFragment::DefaultEffect);
                                 ctx.get_effects()
                                     .get_value(ctx.path())
                                     .flat_map(|(k, arg)| {
-                                        func.call_json(self_ref, effects.derive(&k), arg.clone())
+                                        func.call_json(
+                                            self_ref,
+                                            effects.derive(&PathFragment::Named(SArc(k.clone()))),
+                                            arg.clone(),
+                                        )
                                     })
                                     // always gets the default expansion, but will also attempt
                                     // operating with the effects passed in through the Context Object.:write!
@@ -345,7 +351,7 @@ where
             })
             .collect::<Result<Vec<_>, _>>()?;
         let finish_fns: Vec<_> = {
-            let mut finish_fns_ctx = ctx.derive(&FINISH_FN);
+            let mut finish_fns_ctx = ctx.derive(&PathFragment::FinishFn);
             // Compute all finish_functions at this level, caching if requested.
             self.finish_fns()
                 .iter()

@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::convert::TryInto;
 use std::fmt::Display;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -313,7 +314,7 @@ impl Session {
             self.network,
             Amount::from_sat(100_000_000_000),
             Arc::new(CTVAvailable),
-            vec![Arc::new("Frontend Session".into())],
+            "frontend_session".try_into().unwrap(),
             Arc::new(MapEffectDB::default()),
         )
     }

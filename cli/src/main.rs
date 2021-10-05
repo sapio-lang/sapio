@@ -20,9 +20,10 @@ use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::CTVAvailable;
 use emulator_connect::CTVEmulator;
 use sapio::contract::context::MapEffectDB;
+use std::convert::TryInto;
 
+use sapio::contract::object::LinkedPSBT;
 use sapio::contract::object::SapioStudioObject;
-use sapio::contract::object::{LinkedPSBT};
 use sapio::contract::Compiled;
 use sapio::contract::Context;
 use sapio::template::output::OutputMeta;
@@ -228,7 +229,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         config.network,
                         j.amount_range.max(),
                         emulator.clone(),
-                        vec![Arc::new("MOCK".into())],
+                        "mock".try_into()?,
                         Arc::new(MapEffectDB::default()),
                     );
                     let mut tx = ctx

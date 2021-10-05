@@ -12,53 +12,33 @@ use std::sync::Arc;
 #[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, Hash)]
 #[serde(try_from = "Vec<T>")]
 #[serde(into = "Vec<T>")]
-#[serde(bound = "T: Serialize + for<'d> Deserialize<'d> + JsonSchema + std::fmt::Debug + Clone ")]
-pub struct ReversePath<T>
-where
-    T: JsonSchema + std::fmt::Debug + Clone,
-{
+#[serde(
+    bound = "T: Serialize + for<'d> Deserialize<'d> + JsonSchema + std::fmt::Debug + Clone, Vec<T> : Serialize"
+)]
+pub struct ReversePath<T> {
     past: Option<Arc<ReversePath<T>>>,
-    this: Arc<T>,
+    this: T,
 }
 
 impl<T> PartialEq for ReversePath<T>
 where
     T: PartialEq,
-    T: JsonSchema + std::fmt::Debug + Clone,
 {
     fn eq(&self, other: &Self) -> bool {
-        iter(self).eq(iter(other))
+        self.iter().eq(other.iter())
     }
 }
-impl<T> Eq for ReversePath<T>
-where
-    T: Eq,
-    T: JsonSchema + std::fmt::Debug + Clone,
-{
-}
+impl<T> Eq for ReversePath<T> where T: Eq {}
 
 /// RPI = ReversePathIterator
 /// This simplifies iterating over a reversepath.
-pub struct RPI<'a, T>
-where
-    T: JsonSchema + std::fmt::Debug + Clone,
-{
+pub struct RPI<'a, T> {
     inner: Option<&'a ReversePath<T>>,
 }
 
-fn iter<'a, T>(s: &'a ReversePath<T>) -> RPI<'a, T>
-where
-    T: JsonSchema + std::fmt::Debug + Clone,
-{
-    RPI { inner: Some(s) }
-}
-
-impl<'a, T> Iterator for RPI<'a, T>
-where
-    T: JsonSchema + std::fmt::Debug + Clone,
-{
+impl<'a, T> Iterator for RPI<'a, T> {
     // we will be counting with usize
-    type Item = &'a Arc<T>;
+    type Item = &'a T;
 
     // next() is the only required method
     fn next(&mut self) -> Option<Self::Item> {
@@ -76,60 +56,29 @@ where
 }
 
 use std::convert::TryFrom;
-impl<T> TryFrom<Vec<T>> for ReversePath<T>
-where
-    T: Serialize + for<'d> Deserialize<'d> + JsonSchema + std::fmt::Debug + Clone,
-{
+impl<T> TryFrom<Vec<T>> for ReversePath<T> {
     type Error = &'static str;
     fn try_from(v: Vec<T>) -> Result<ReversePath<T>, Self::Error> {
-        v.into_iter()
-            .map(Arc::new)
+        match v
+            .into_iter()
             .fold(None, |x, v| Some(ReversePath::push(x, v)))
             .map(Arc::try_unwrap)
-            .map(Result::unwrap)
-            .ok_or("Reverse Path must have at least one element.")
+        {
+            Some(Ok(r)) => Ok(r),
+            _ => Err("Reverse Path must have at least one element."),
+        }
     }
 }
-impl From<ReversePath<String>> for String {
-    fn from(r: ReversePath<String>) -> String {
-        (&Vec::<String>::from(r)).join("/")
-    }
-}
-
-impl TryFrom<String> for ReversePath<String> {
-    type Error = &'static str;
-    fn try_from(r: String) -> Result<ReversePath<String>, Self::Error> {
-        ReversePath::try_from(r.split('/').map(String::from).collect::<Vec<_>>())
-    }
-}
-impl<T> From<ReversePath<T>> for Vec<T>
-where
-    T: JsonSchema + std::fmt::Debug + Clone,
-{
+impl<T: Clone> From<ReversePath<T>> for Vec<T> {
     fn from(r: ReversePath<T>) -> Self {
-        let mut v: Vec<T> = iter(&r).map(|s: &Arc<T>| s.as_ref().clone()).collect();
-        v.reverse();
-        v
-    }
-}
-impl<T> From<ReversePath<T>> for Vec<Arc<T>>
-where
-    T: JsonSchema + std::fmt::Debug + Clone,
-{
-    fn from(r: ReversePath<T>) -> Self {
-        let mut v: Vec<Arc<T>> = iter(&r).map(|s: &Arc<T>| s.clone()).collect();
+        let mut v: Vec<T> = r.iter().map(|s: &T| s.clone()).collect();
         v.reverse();
         v
     }
 }
 /// Helper for making a ReversePath.
-pub struct MkReversePath<
-    T: Serialize + for<'d> Deserialize<'d> + JsonSchema + std::fmt::Debug + Clone,
->(Option<Arc<ReversePath<T>>>);
-impl<T> MkReversePath<T>
-where
-    T: Serialize + for<'d> Deserialize<'d> + JsonSchema + std::fmt::Debug + Clone,
-{
+pub struct MkReversePath<T>(Option<Arc<ReversePath<T>>>);
+impl<T> MkReversePath<T> {
     /// Pop open a ReversePath, assuming one exists.
     pub fn unwrap(self) -> Arc<ReversePath<T>> {
         if let Some(x) = self.0 {
@@ -139,11 +88,8 @@ where
         }
     }
 }
-impl<T> From<Vec<Arc<T>>> for MkReversePath<T>
-where
-    T: Serialize + for<'d> Deserialize<'d> + JsonSchema + std::fmt::Debug + Clone,
-{
-    fn from(v: Vec<Arc<T>>) -> Self {
+impl<T> From<Vec<T>> for MkReversePath<T> {
+    fn from(v: Vec<T>) -> Self {
         let mut rp: Option<Arc<ReversePath<T>>> = None;
         for val in v {
             let new: Arc<ReversePath<T>> = ReversePath::push(rp, val);
@@ -152,13 +98,14 @@ where
         MkReversePath(rp)
     }
 }
-impl<T> ReversePath<T>
-where
-    T: Serialize + for<'d> Deserialize<'d> + JsonSchema + std::fmt::Debug + Clone,
-{
+impl<T> ReversePath<T> {
     /// Add an element to a ReversePath
-    pub fn push(v: Option<Arc<ReversePath<T>>>, s: Arc<T>) -> Arc<ReversePath<T>> {
+    pub fn push(v: Option<Arc<ReversePath<T>>>, s: T) -> Arc<ReversePath<T>> {
         Arc::new(ReversePath { past: v, this: s })
+    }
+    /// iterate over a reversepath
+    pub fn iter(&self) -> RPI<T> {
+        RPI { inner: Some(self) }
     }
 }
 
@@ -170,7 +117,7 @@ mod test {
     fn test_reverse_path_into_vec() {
         assert_eq!(
             Vec::<i64>::from(
-                ReversePath::push(Some(ReversePath::push(None, Arc::new(1i64))), Arc::new(5),)
+                ReversePath::push(Some(ReversePath::push(None, 1i64)), 5i64,)
                     .as_ref()
                     .clone()
             ),
@@ -180,7 +127,7 @@ mod test {
     #[test]
     fn test_reverse_path_from_vec() {
         assert_eq!(
-            ReversePath::push(Some(ReversePath::push(None, Arc::new(1i64))), Arc::new(5),)
+            ReversePath::push(Some(ReversePath::push(None, 1i64)), 5,)
                 .as_ref()
                 .clone(),
             vec![1i64, 5].try_into().unwrap()
@@ -201,7 +148,7 @@ mod test {
     fn test_reverse_path_from_serde() -> Result<(), Box<dyn std::error::Error>> {
         let v: ReversePath<i64> = serde_json::from_str("[1,5]")?;
         assert_eq!(
-            ReversePath::push(Some(ReversePath::push(None, Arc::new(1i64))), Arc::new(5),).as_ref(),
+            ReversePath::push(Some(ReversePath::push(None, 1i64)), 5,).as_ref(),
             &v
         );
         Ok(())

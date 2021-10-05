@@ -6,7 +6,6 @@
 #[deny(missing_docs)]
 use crate::sapio_base::Clause;
 
-
 use sapio::contract::*;
 use sapio::util::amountrange::AmountF64;
 use sapio::*;
@@ -15,7 +14,7 @@ use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
-use std::convert::{TryFrom};
+use std::convert::TryFrom;
 use std::sync::{Arc, Mutex};
 
 /// # Payout Instructions

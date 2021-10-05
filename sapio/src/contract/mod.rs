@@ -20,7 +20,6 @@ use bitcoin::util::amount::Amount;
 pub use compiler::Compilable;
 pub use context::Context;
 pub use object::Object as Compiled;
-mod interned_strings;
 
 /// An Iterator which yields TransactionTemplates.
 /// It is boxed to permit flexibility when returning.

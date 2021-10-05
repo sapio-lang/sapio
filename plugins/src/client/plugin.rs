@@ -6,6 +6,8 @@
 
 //! binding for making a type into a plugin
 use super::*;
+use sapio_base::effects::PathFragment;
+use sapio_base::reverse_path::ReversePath;
 
 use std::convert::TryFrom;
 /// The `Plugin` trait is used to provide bindings for a WASM Plugin.
@@ -49,7 +51,7 @@ where
             amount,
             Arc::new(client::WasmHostEmulator),
             /// TODO: Carry context's path
-            vec![Arc::new("PLUGIN_TRAMPOLINE".into())],
+            ReversePath::<PathFragment>::try_from("plugin_trampoline")?,
             /// TODO: load database?
             Arc::new(effects),
         );

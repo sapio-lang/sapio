@@ -5,22 +5,21 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! general non-parameter compilation state required by all contracts
-use super::interned_strings::get_interned;
 use super::{Amount, Compilable, CompilationError, Compiled};
 use crate::contract::compiler::InternalCompilerTag;
-use crate::contract::interned_strings::CLONED;
 use crate::util::amountrange::AmountRange;
 use bitcoin::Network;
 use miniscript::Descriptor;
 use miniscript::DescriptorTrait;
+use sapio_base::effects::PathFragment;
 pub use sapio_base::effects::{EffectDB, MapEffectDB};
-use sapio_base::reverse_path::{MkReversePath, ReversePath};
+use sapio_base::reverse_path::ReversePath;
 use sapio_base::serialization_helpers::SArc;
 use sapio_ctv_emulator_trait::CTVEmulator;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::ops::Deref;
+
 use std::sync::Arc;
 
 /// Context is used to track statet during compilation such as remaining value.
@@ -31,8 +30,8 @@ pub struct Context {
     /// which network is the contract building for?
     pub network: Network,
     /// TODO: reversed linked list of ARCs to better de-duplicate memory.
-    path: Arc<ReversePath<String>>,
-    already_derived: HashSet<Arc<String>>,
+    path: Arc<ReversePath<PathFragment>>,
+    already_derived: HashSet<PathFragment>,
     effects: Arc<MapEffectDB>,
 }
 
@@ -43,7 +42,7 @@ impl Context {
         network: Network,
         available_funds: Amount,
         emulator: Arc<dyn CTVEmulator>,
-        path: Vec<Arc<String>>,
+        path: ReversePath<PathFragment>,
         effects: Arc<MapEffectDB>,
     ) -> Self {
         Context {
@@ -51,7 +50,7 @@ impl Context {
             emulator,
             network,
             // TODO: Should return Option Self if path is not length > 0
-            path: MkReversePath::from(path).unwrap(),
+            path: Arc::new(path),
             already_derived: Default::default(),
             effects,
         }
@@ -61,32 +60,30 @@ impl Context {
         &self.effects
     }
     /// Gets this Context's Path, but does not clone (left to caller)
-    pub fn path(&self) -> &Arc<ReversePath<String>> {
+    pub fn path(&self) -> &Arc<ReversePath<PathFragment>> {
         &self.path
     }
 
     /// Derive a new contextual path
     /// If no path is provided, it will be "cloned"
     pub fn derive_str<'a>(&mut self, path: Option<&'a str>) -> Self {
-        let dir = path
-            .and_then(get_interned)
-            .cloned()
-            .or_else(|| path.map(String::from).map(Arc::new))
-            .unwrap_or_else(|| CLONED.clone());
-        self.derive(&&dir)
+        let dir: Arc<PathFragment> = Arc::new(
+            path.map(String::from)
+                .map(Arc::new)
+                .map(SArc)
+                .map(PathFragment::Named)
+                .unwrap_or(PathFragment::Cloned),
+        );
+        self.derive(&dir)
     }
     /// Derive a new contextual path
-    pub fn derive<T: Deref<Target = Arc<String>>>(&mut self, path: &T) -> Self {
-        use std::borrow::Borrow;
-        let dir: &Arc<String> = {
-            let s: &String = path.borrow();
-            get_interned(&s).unwrap_or(&path)
-        };
-        if self.already_derived.contains(dir) {
+    pub fn derive(&mut self, path: &PathFragment) -> Self {
+        if self.already_derived.contains(path) {
             /// TODO: Make this return a Compilation Error
             panic!("Fatal Error, Path Reuse");
         }
-        let new_path = ReversePath::push(Some(self.path.clone()), dir.clone());
+        self.already_derived.insert(path.clone());
+        let new_path = ReversePath::push(Some(self.path.clone()), path.clone());
         Context {
             available_funds: self.available_funds,
             emulator: self.emulator.clone(),
@@ -174,7 +171,10 @@ impl Context {
             ctv_to_tx: HashMap::new(),
             suggested_txs: HashMap::new(),
             continue_apis: Default::default(),
-            root_path: SArc(ReversePath::push(None, Arc::new("".into()))),
+            root_path: SArc(ReversePath::push(
+                None,
+                PathFragment::Named(SArc(Arc::new("".into()))),
+            )),
             policy: None,
             address: d.address(bitcoin::Network::Bitcoin).unwrap().into(),
             descriptor: Some(d),
