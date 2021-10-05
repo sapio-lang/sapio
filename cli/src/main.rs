@@ -20,6 +20,9 @@ use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::CTVAvailable;
 use emulator_connect::CTVEmulator;
 use sapio::contract::context::MapEffectDB;
+use sapio_base::effects::PathFragment;
+use sapio_base::reverse_path::ReversePath;
+use sapio_base::serialization_helpers::SArc;
 use std::convert::TryInto;
 
 use sapio::contract::object::LinkedPSBT;
@@ -273,7 +276,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let output_metadata = vec![OutputMeta::default(); tx.output.len()];
                     let psbt = PartiallySignedTransaction::from_unsigned_tx(tx)?;
                     bound.program.insert(
-                        "".into(),
+                        SArc(ReversePath::push(
+                            None,
+                            PathFragment::Named(SArc(Arc::new("funding".into()))),
+                        )),
                         SapioStudioObject {
                             continue_apis: Default::default(),
                             txs: vec![LinkedPSBT {

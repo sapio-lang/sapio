@@ -182,7 +182,7 @@ impl Object {
         blockdata: Rc<dyn TxIndex>,
         emulator: &dyn CTVEmulator,
     ) -> Result<Program, ObjectError> {
-        let mut result = HashMap::<String, SapioStudioObject>::new();
+        let mut result = HashMap::<SArc<ReversePath<PathFragment, String>>, SapioStudioObject>::new();
         // Could use a queue instead to do BFS linking, but order doesn't matter and stack is
         // faster.
         let mut stack = vec![(out_in, self)];
@@ -200,7 +200,7 @@ impl Object {
         )) = stack.pop()
         {
             result.insert(
-                String::from(root_path.0.as_ref().clone()),
+                root_path.clone(),
                 SapioStudioObject {
                     continue_apis: continue_apis.clone(),
                     txs: ctv_to_tx

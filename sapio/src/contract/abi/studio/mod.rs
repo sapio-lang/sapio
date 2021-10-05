@@ -5,6 +5,8 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Formats for Sapio Studio
+use sapio_base::effects::PathFragment;
+use sapio_base::reverse_path::ReversePath;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::template::output::OutputMeta;
 use crate::template::TemplateMetadata;
@@ -78,7 +80,7 @@ impl From<LinkedPSBT> for SapioStudioFormat {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Program {
     /// program contains the list of SapioStudio PSBTs
-    pub program: HashMap<String, SapioStudioObject>,
+    pub program: HashMap<SArc<ReversePath<PathFragment, String>>, SapioStudioObject>,
 }
 
 /// A `SapioStudioObject` is a json-friendly format for a `Object` for use in Sapio Studio
