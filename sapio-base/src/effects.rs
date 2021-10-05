@@ -136,3 +136,15 @@ impl EffectDB for MapEffectDB {
         Box::new(r.iter().map(|(a, b)| (&a.0, b)))
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn test_string() {
+        let v: Vec<PathFragment> = vec!["hello".into(), "123".into(), PathFragment::FinishFn];
+        let r = ReversePath::try_from(v).unwrap();
+        assert_eq!(String::from(r.clone()), "hello/123/finish_fn");
+        assert_eq!(Ok(r), ReversePath::try_from("hello/123/finish_fn"));
+    }
+}
