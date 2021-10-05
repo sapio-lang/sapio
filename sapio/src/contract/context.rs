@@ -5,16 +5,17 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! general non-parameter compilation state required by all contracts
-pub use sapio_base::effects::{EffectDB, MapEffectDB};
+use sapio_base::serialization_helpers::SArc;
 use super::interned_strings::get_interned;
 use super::{Amount, Compilable, CompilationError, Compiled};
 use crate::contract::compiler::InternalCompilerTag;
 use crate::contract::interned_strings::CLONED;
 use crate::util::amountrange::AmountRange;
-use sapio_base::reverse_path::{MkReversePath, ReversePath};
 use bitcoin::Network;
 use miniscript::Descriptor;
 use miniscript::DescriptorTrait;
+pub use sapio_base::effects::{EffectDB, MapEffectDB};
+use sapio_base::reverse_path::{MkReversePath, ReversePath};
 use sapio_ctv_emulator_trait::CTVEmulator;
 
 use std::collections::HashMap;
@@ -173,6 +174,7 @@ impl Context {
             ctv_to_tx: HashMap::new(),
             suggested_txs: HashMap::new(),
             continue_apis: Default::default(),
+            root_path: SArc(ReversePath::push(None, Arc::new("".into()))),
             policy: None,
             address: d.address(bitcoin::Network::Bitcoin).unwrap().into(),
             descriptor: Some(d),

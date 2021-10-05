@@ -21,6 +21,7 @@ use emulator_connect::CTVAvailable;
 use emulator_connect::CTVEmulator;
 use sapio::contract::context::MapEffectDB;
 use sapio::contract::object::Program;
+use sapio::contract::object::SapioStudioObject;
 use sapio::contract::object::{LinkedPSBT, SapioStudioFormat};
 use sapio::contract::Compiled;
 use sapio::contract::Context;
@@ -270,24 +271,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if outpoint.is_none() {
                     let output_metadata = vec![OutputMeta::default(); tx.output.len()];
                     let psbt = PartiallySignedTransaction::from_unsigned_tx(tx)?;
-                    bound.push(vec![LinkedPSBT {
-                        psbt,
-                        metadata: TemplateMetadata {
-                            label: Some("funding".into()),
-                            color: Some("pink".into()),
-                            extra: HashMap::new(),
+                    bound.program.insert(
+                        "".into(),
+                        SapioStudioObject {
+                            continue_apis: Default::default(),
+                            txs: vec![LinkedPSBT {
+                                psbt,
+                                metadata: TemplateMetadata {
+                                    label: Some("funding".into()),
+                                    color: Some("pink".into()),
+                                    extra: HashMap::new(),
+                                },
+                                output_metadata,
+                            }
+                            .into()],
                         },
-                        output_metadata,
-                    }]);
+                    );
                 }
                 if use_base64 {
-                    let results = Program {
-                        program: bound
-                            .into_iter()
-                            .map(|m| m.into_iter().map(SapioStudioFormat::from).collect())
-                            .collect(),
-                    };
-                    println!("{}", serde_json::to_string_pretty(&results)?);
+                    println!("{}", serde_json::to_string_pretty(&bound)?);
                 } else {
                     println!("{}", serde_json::to_string_pretty(&bound)?);
                 }

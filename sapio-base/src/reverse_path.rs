@@ -90,6 +90,18 @@ where
             .ok_or("Reverse Path must have at least one element.")
     }
 }
+impl From<ReversePath<String>> for String {
+    fn from(r: ReversePath<String>) -> String {
+        (&Vec::<String>::from(r)).join("/")
+    }
+}
+
+impl TryFrom<String> for ReversePath<String> {
+    type Error = &'static str;
+    fn try_from(r: String) -> Result<ReversePath<String>, Self::Error> {
+        ReversePath::try_from(r.split('/').map(String::from).collect::<Vec<_>>())
+    }
+}
 impl<T> From<ReversePath<T>> for Vec<T>
 where
     T: JsonSchema + std::fmt::Debug + Clone,

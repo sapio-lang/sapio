@@ -147,7 +147,7 @@ impl Action {
                     .ok()?;
                 let a = c.address.clone();
                 // todo amount
-                let data = c
+                let program = c
                     .bind_psbt(
                         create_mock_output(),
                         HashMap::new(),
@@ -155,16 +155,6 @@ impl Action {
                         &CTVAvailable,
                     )
                     .ok()?;
-                let program = Program {
-                    program: data
-                        .into_iter()
-                        .map(|g: Vec<LinkedPSBT>| {
-                            g.into_iter()
-                                .map(SapioStudioFormat::from)
-                                .collect::<Vec<_>>()
-                        })
-                        .collect::<Vec<Vec<SapioStudioFormat>>>(),
-                };
                 println!("{:?}", program);
                 Some(Reaction::Created(c.amount_range.max(), a, program))
             }

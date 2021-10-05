@@ -378,11 +378,13 @@ where
         let address = descriptor.address(ctx.network)?.into();
         let descriptor = Some(descriptor);
         let policy = Some(policy);
+        let root_path = SArc(ctx.path().clone());
 
         Ok(Compiled {
             ctv_to_tx,
             suggested_txs,
             continue_apis,
+            root_path,
             address,
             descriptor,
             policy,

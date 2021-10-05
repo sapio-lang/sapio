@@ -5,13 +5,17 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Formats for Sapio Studio
+use sapio_base::reverse_path::ReversePath;
+use crate::contract::abi::continuation::ContinuationPoint;
 use crate::template::output::OutputMeta;
 use crate::template::TemplateMetadata;
 use ::miniscript::*;
 use bitcoin::consensus::serialize;
 use bitcoin::util::psbt::PartiallySignedTransaction;
+use sapio_base::serialization_helpers::SArc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Container for data from  `Object::bind_psbt`.
 #[derive(Serialize, Deserialize)]
@@ -74,5 +78,14 @@ impl From<LinkedPSBT> for SapioStudioFormat {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Program {
     /// program contains the list of SapioStudio PSBTs
-    pub program: Vec<Vec<SapioStudioFormat>>,
+    pub program: HashMap<String, SapioStudioObject>,
+}
+
+/// A `SapioStudioObject` is a json-friendly format for a `Object` for use in Sapio Studio
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SapioStudioObject {
+    /// List of SapioStudioFormat PSBTs
+    pub txs: Vec<SapioStudioFormat>,
+    /// List of continue APIs from this point.
+    pub continue_apis: HashMap<SArc<String>, ContinuationPoint>,
 }

@@ -15,6 +15,7 @@ use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::amount::Amount;
 use bitcoin::util::psbt::PartiallySignedTransaction;
+use sapio_base::reverse_path::ReversePath;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::txindex::TxIndex;
 use sapio_base::txindex::TxIndexError;
@@ -91,6 +92,8 @@ pub struct Object {
         default
     )]
     pub continue_apis: HashMap<SArc<String>, ContinuationPoint>,
+    /// The base location for the set of continue_apis.
+    pub root_path: SArc<ReversePath<String>>,
     /// The Object's Policy -- if known
     #[serde(
         rename = "known_policy",
@@ -119,6 +122,7 @@ impl Object {
             ctv_to_tx: HashMap::new(),
             suggested_txs: HashMap::new(),
             continue_apis: Default::default(),
+            root_path: SArc(ReversePath::push(None, Arc::new("".into()))),
             policy: None,
             address: address.into(),
             descriptor: None,
@@ -151,6 +155,7 @@ impl Object {
             ctv_to_tx: HashMap::new(),
             suggested_txs: HashMap::new(),
             continue_apis: Default::default(),
+            root_path: SArc(ReversePath::push(None, Arc::new("".into()))),
             policy: None,
             address: ExtendedAddress::make_op_return(data)?,
             descriptor: None,
@@ -169,8 +174,8 @@ impl Object {
         output_map: HashMap<Sha256, Vec<Option<bitcoin::OutPoint>>>,
         blockdata: Rc<dyn TxIndex>,
         emulator: &dyn CTVEmulator,
-    ) -> Result<Vec<Vec<LinkedPSBT>>, ObjectError> {
-        let mut result = vec![];
+    ) -> Result<Program, ObjectError> {
+        let mut result = HashMap::<String, SapioStudioObject>::new();
         // Could use a queue instead to do BFS linking, but order doesn't matter and stack is
         // faster.
         let mut stack = vec![(out_in, self)];
@@ -178,6 +183,8 @@ impl Object {
         while let Some((
             out,
             Object {
+                root_path,
+                continue_apis,
                 descriptor,
                 ctv_to_tx,
                 suggested_txs,
@@ -185,63 +192,70 @@ impl Object {
             },
         )) = stack.pop()
         {
-            result.push(
-                ctv_to_tx
-                    .iter()
-                    .chain(suggested_txs.iter())
-                    .map(
-                        |(
-                            ctv_hash,
-                            Template {
-                                metadata_map_s2s,
-                                outputs,
-                                tx,
-                                ..
-                            },
-                        )| {
-                            let mut tx = tx.clone();
-                            tx.input[0].previous_output = out;
-                            if let Some(outputs) = output_map.get(ctv_hash) {
-                                for (i, inp) in tx.input.iter_mut().enumerate().skip(1) {
-                                    if let Some(out) = outputs[i] {
-                                        inp.previous_output = out;
+            result.insert(
+                String::from(root_path.0.as_ref().clone()),
+                SapioStudioObject {
+                    continue_apis: continue_apis.clone(),
+                    txs: ctv_to_tx
+                        .iter()
+                        .chain(suggested_txs.iter())
+                        .map(
+                            |(
+                                ctv_hash,
+                                Template {
+                                    metadata_map_s2s,
+                                    outputs,
+                                    tx,
+                                    ..
+                                },
+                            )| {
+                                let mut tx = tx.clone();
+                                tx.input[0].previous_output = out;
+                                if let Some(outputs) = output_map.get(ctv_hash) {
+                                    for (i, inp) in tx.input.iter_mut().enumerate().skip(1) {
+                                        if let Some(out) = outputs[i] {
+                                            inp.previous_output = out;
+                                        }
                                     }
                                 }
-                            }
-                            let mut psbtx =
-                                PartiallySignedTransaction::from_unsigned_tx(tx.clone()).unwrap();
-                            for (psbt_in, tx_in) in psbtx.inputs.iter_mut().zip(tx.input.iter()) {
-                                psbt_in.witness_utxo =
-                                    blockdata.lookup_output(&tx_in.previous_output).ok();
-                                psbt_in.sighash_type =
-                                    Some(bitcoin::blockdata::transaction::SigHashType::All);
-                            }
-                            // Missing other Witness Info.
-                            if let Some(d) = descriptor {
-                                psbtx.inputs[0].witness_script = Some(d.explicit_script());
-                            }
-                            psbtx = emulator.sign(psbtx)?;
-                            let final_tx = psbtx.clone().extract_tx();
-                            let txid = blockdata.add_tx(Arc::new(final_tx))?;
-                            stack.reserve(outputs.len());
-                            for (vout, v) in outputs.iter().enumerate() {
-                                let vout = vout as u32;
-                                stack.push((bitcoin::OutPoint { txid, vout }, &v.contract));
-                            }
-                            Ok(LinkedPSBT {
-                                psbt: psbtx,
-                                metadata: metadata_map_s2s.clone(),
-                                output_metadata: outputs
-                                    .iter()
-                                    .cloned()
-                                    .map(|x| x.metadata)
-                                    .collect::<Vec<_>>(),
-                            })
-                        },
-                    )
-                    .collect::<Result<Vec<_>, ObjectError>>()?,
+                                let mut psbtx =
+                                    PartiallySignedTransaction::from_unsigned_tx(tx.clone())
+                                        .unwrap();
+                                for (psbt_in, tx_in) in psbtx.inputs.iter_mut().zip(tx.input.iter())
+                                {
+                                    psbt_in.witness_utxo =
+                                        blockdata.lookup_output(&tx_in.previous_output).ok();
+                                    psbt_in.sighash_type =
+                                        Some(bitcoin::blockdata::transaction::SigHashType::All);
+                                }
+                                // Missing other Witness Info.
+                                if let Some(d) = descriptor {
+                                    psbtx.inputs[0].witness_script = Some(d.explicit_script());
+                                }
+                                psbtx = emulator.sign(psbtx)?;
+                                let final_tx = psbtx.clone().extract_tx();
+                                let txid = blockdata.add_tx(Arc::new(final_tx))?;
+                                stack.reserve(outputs.len());
+                                for (vout, v) in outputs.iter().enumerate() {
+                                    let vout = vout as u32;
+                                    stack.push((bitcoin::OutPoint { txid, vout }, &v.contract));
+                                }
+                                Ok(LinkedPSBT {
+                                    psbt: psbtx,
+                                    metadata: metadata_map_s2s.clone(),
+                                    output_metadata: outputs
+                                        .iter()
+                                        .cloned()
+                                        .map(|x| x.metadata)
+                                        .collect::<Vec<_>>(),
+                                }
+                                .into())
+                            },
+                        )
+                        .collect::<Result<Vec<SapioStudioFormat>, ObjectError>>()?,
+                },
             );
         }
-        Ok(result)
+        Ok(Program { program: result })
     }
 }
