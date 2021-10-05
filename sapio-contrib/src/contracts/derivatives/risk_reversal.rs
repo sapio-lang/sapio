@@ -6,8 +6,8 @@
 
 //! RiskReversal represents a specific contract where we specify a set of price ranges that we
 //! want to keep purchasing power flat within.
-use std::sync::Arc;
 use super::*;
+use std::sync::Arc;
 /// RiskReversal represents a specific contract where we specify a set of price ranges that we
 /// want to keep purchasing power flat within. e.g.
 ///

@@ -5,7 +5,6 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Contract for managing movement of funds from cold to hot storage
-use std::sync::Arc;
 use super::undo_send::UndoSendInternal;
 use bitcoin::util::amount::CoinAmount;
 use sapio::contract::*;
@@ -15,6 +14,7 @@ use schemars::*;
 use serde::*;
 use std::convert::{TryFrom, TryInto};
 use std::rc::Rc;
+use std::sync::Arc;
 
 /// A Vault makes a "annuity chain" which pays out to `hot_storage` every `timeout` period for `n_steps`.
 /// The funds in `hot_storage` are in an UndoSend contract for a timeout of

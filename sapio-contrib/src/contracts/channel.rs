@@ -22,13 +22,13 @@ use std::sync::{Arc, Mutex};
 
 #[cfg(test)]
 mod tests {
-    use sapio_base::effects::PathFragment;
-use sapio_base::serialization_helpers::SArc;
-use super::*;
+    use super::*;
     use ::rand::rngs::OsRng;
     use bitcoin::Amount;
     use miniscript::Descriptor;
     use miniscript::DescriptorTrait;
+    
+    
     use sapio_ctv_emulator_trait::CTVAvailable;
     #[test]
     fn it_works() {
@@ -77,16 +77,8 @@ use super::*;
             "root".try_into().unwrap(),
             Default::default(),
         );
-        Compilable::compile(
-            &x,
-            ctx.derive_str(Arc::new("X".into()))
-                .unwrap(),
-        );
-        Compilable::compile(
-            &y,
-            ctx.derive_str(Arc::new("Y".into()))
-                .unwrap(),
-        );
+        Compilable::compile(&x, ctx.derive_str(Arc::new("X".into())).unwrap());
+        Compilable::compile(&y, ctx.derive_str(Arc::new("Y".into())).unwrap());
     }
 }
 

@@ -5,8 +5,8 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Call Options
-use std::sync::Arc;
 use super::*;
+use std::sync::Arc;
 /// A Call Option -- the buyer gains money as the price increases.
 pub struct Call<'a> {
     /// The # of units

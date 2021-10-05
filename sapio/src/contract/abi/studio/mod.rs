@@ -5,14 +5,14 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Formats for Sapio Studio
-use sapio_base::effects::PathFragment;
-use sapio_base::reverse_path::ReversePath;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::template::output::OutputMeta;
 use crate::template::TemplateMetadata;
 use ::miniscript::*;
 use bitcoin::consensus::serialize;
 use bitcoin::util::psbt::PartiallySignedTransaction;
+use sapio_base::effects::PathFragment;
+use sapio_base::reverse_path::ReversePath;
 
 use sapio_base::serialization_helpers::SArc;
 use schemars::JsonSchema;

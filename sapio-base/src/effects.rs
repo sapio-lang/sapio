@@ -158,7 +158,11 @@ mod test {
     }
     #[test]
     fn test_serde() {
-        let v: Vec<PathFragment> = vec!["hello".into(), PathFragment::Branch(100), PathFragment::FinishFn];
+        let v: Vec<PathFragment> = vec![
+            "hello".into(),
+            PathFragment::Branch(100),
+            PathFragment::FinishFn,
+        ];
         let r = ReversePath::<PathFragment>::try_from(v).unwrap();
         assert_eq!(
             serde_json::to_string(&r).unwrap(),
