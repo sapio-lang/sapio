@@ -36,7 +36,6 @@ where
     Ok(Arc::new(T::deserialize(d)?))
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;

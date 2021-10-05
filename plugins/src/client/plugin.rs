@@ -6,7 +6,7 @@
 
 //! binding for making a type into a plugin
 use super::*;
-use sapio::contract::context::MapEffectDB;
+
 use std::convert::TryFrom;
 /// The `Plugin` trait is used to provide bindings for a WASM Plugin.
 /// It's not intended to be used internally, just as bindings.
@@ -34,7 +34,12 @@ where
         let s = CString::from_raw(c);
         let CreateArgs::<Self> {
             arguments,
-            context: ContextualArguments { network, amount, effects},
+            context:
+                ContextualArguments {
+                    network,
+                    amount,
+                    effects,
+                },
         } = serde_json::from_slice(s.to_bytes())?;
         // TODO: Get The wasm ID here?
         // TODO: In theory, these trampoline bounds are robust/serialization safe...
@@ -46,7 +51,7 @@ where
             /// TODO: Carry context's path
             vec![Arc::new("PLUGIN_TRAMPOLINE".into())],
             /// TODO: load database?
-            Arc::new(effects)
+            Arc::new(effects),
         );
         let converted = Self::ToType::try_from(arguments)?;
         let compiled = converted.compile(ctx)?;

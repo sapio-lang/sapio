@@ -7,11 +7,11 @@
 //! ABI for contract resumption
 
 use sapio_base::reverse_path::ReversePath;
+use sapio_base::serialization_helpers::SArc;
 use schemars::schema::RootSchema;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use sapio_base::serialization_helpers::SArc;
 /// Instructions for how to resume a contract compilation at a given point
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq)]
 pub struct ContinuationPoint {
@@ -32,8 +32,6 @@ impl ContinuationPoint {
         }
     }
 }
-
-
 
 #[cfg(test)]
 mod test {

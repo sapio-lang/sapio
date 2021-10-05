@@ -5,8 +5,8 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #[deny(missing_docs)]
 use crate::sapio_base::Clause;
-use bitcoin::util::amount::Amount;
-use bitcoin::util::amount::CoinAmount;
+
+
 use sapio::contract::*;
 use sapio::util::amountrange::AmountF64;
 use sapio::*;
@@ -15,7 +15,7 @@ use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
-use std::convert::{TryFrom, TryInto};
+use std::convert::{TryFrom};
 use std::sync::{Arc, Mutex};
 
 /// # Payout Instructions
@@ -73,10 +73,7 @@ impl TryFrom<PoolTypes> for CoinPool {
                     })
                     .collect::<Result<Vec<_>, CompilationError>>()?;
                 Ok(CoinPool {
-                    clauses: payouts
-                        .iter()
-                        .map(|s| Clause::Key(s.key.clone()))
-                        .collect(),
+                    clauses: payouts.iter().map(|s| Clause::Key(s.key.clone())).collect(),
                     refunds,
                 })
             }

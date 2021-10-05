@@ -13,9 +13,9 @@ use super::AnyContract;
 use super::CompilationError;
 use super::Compiled;
 use super::Context;
-use sapio_base::serialization_helpers::SArc;
 use crate::contract::abi::continuation::ContinuationPoint;
 use sapio_base::effects::EffectDB;
+use sapio_base::serialization_helpers::SArc;
 
 use crate::contract::TxTmplIt;
 use crate::util::amountrange::AmountRange;

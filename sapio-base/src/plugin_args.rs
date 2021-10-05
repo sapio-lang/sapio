@@ -37,5 +37,5 @@ pub struct ContextualArguments {
     pub amount: bitcoin::util::amount::Amount,
 
     /// # Effects to augment compilations with
-    pub effects: MapEffectDB
+    pub effects: MapEffectDB,
 }

@@ -15,9 +15,9 @@ pub mod timelocks;
 /// Trait & Structs for accessing Chain Data
 pub mod txindex;
 
-pub mod serialization_helpers;
 pub mod effects;
 pub mod reverse_path;
+pub mod serialization_helpers;
 
 /// Concrete Instantiation of Miniscript Policy. Because we need to be able to generate exact
 /// transactions, we only work with `bitcoin::PublicKey` types.

@@ -20,9 +20,9 @@ use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::CTVAvailable;
 use emulator_connect::CTVEmulator;
 use sapio::contract::context::MapEffectDB;
-use sapio::contract::object::Program;
+
 use sapio::contract::object::SapioStudioObject;
-use sapio::contract::object::{LinkedPSBT, SapioStudioFormat};
+use sapio::contract::object::{LinkedPSBT};
 use sapio::contract::Compiled;
 use sapio::contract::Context;
 use sapio::template::output::OutputMeta;
