@@ -95,6 +95,13 @@ impl TryFrom<&str> for ReversePath<PathFragment> {
         ReversePath::try_from(r.split('/').map(PathFragment::from).collect::<Vec<_>>())
     }
 }
+
+impl TryFrom<String> for ReversePath<PathFragment> {
+    type Error = &'static str;
+    fn try_from(r: String) -> Result<ReversePath<PathFragment>, Self::Error> {
+        Self::try_from(r.as_ref())
+    }
+}
 /// Error types for EffectDB Accesses
 #[derive(Debug)]
 pub enum EffectDBError {
@@ -146,5 +153,15 @@ mod test {
         let r = ReversePath::try_from(v).unwrap();
         assert_eq!(String::from(r.clone()), "hello/123/finish_fn");
         assert_eq!(Ok(r), ReversePath::try_from("hello/123/finish_fn"));
+    }
+    #[test]
+    fn test_serde() {
+        let v: Vec<PathFragment> = vec!["hello".into(), "123".into(), PathFragment::FinishFn];
+        let r = ReversePath::<PathFragment>::try_from(v).unwrap();
+        assert_eq!(serde_json::to_string(&r).unwrap(), "\"hello/123/finish_fn\"");
+        assert_eq!(
+            Ok(r),
+            serde_json::from_str("\"hello/123/finish_fn\"").map_err(|_| ())
+        );
     }
 }

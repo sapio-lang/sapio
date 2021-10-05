@@ -44,7 +44,7 @@ mod test {
             ReversePath::push(None, PathFragment::Named(SArc(Arc::new("one".into())))),
         );
         let b: ContinuationPoint = serde_json::from_str(&format!(
-            "{{\"schema\":{},\"path\":[\"one\"]}}",
+            "{{\"schema\":{},\"path\":\"one\"}}",
             serde_json::to_string(&schemars::schema_for!(ContinuationPoint))?
         ))?;
         assert_eq!(a, b);
