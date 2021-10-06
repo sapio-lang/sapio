@@ -27,8 +27,7 @@ mod tests {
     use bitcoin::Amount;
     use miniscript::Descriptor;
     use miniscript::DescriptorTrait;
-    
-    
+
     use sapio_ctv_emulator_trait::CTVAvailable;
     #[test]
     fn it_works() {

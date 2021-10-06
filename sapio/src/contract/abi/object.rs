@@ -92,7 +92,7 @@ pub struct Object {
         skip_serializing_if = "HashMap::is_empty",
         default
     )]
-    pub continue_apis: HashMap<SArc<String>, ContinuationPoint>,
+    pub continue_apis: HashMap<SArc<ReversePath<PathFragment>>, ContinuationPoint>,
     /// The base location for the set of continue_apis.
     pub root_path: SArc<ReversePath<PathFragment>>,
     /// The Object's Policy -- if known

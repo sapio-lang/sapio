@@ -37,5 +37,6 @@ pub struct ContextualArguments {
     pub amount: bitcoin::util::amount::Amount,
 
     /// # Effects to augment compilations with
+    #[serde(skip_serializing_if = "MapEffectDB::skip_serializing", default)]
     pub effects: MapEffectDB,
 }

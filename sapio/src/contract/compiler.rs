@@ -8,6 +8,8 @@
 use super::actions::Guard;
 use super::actions::{ConditionalCompileType, ConditionallyCompileIf};
 use sapio_base::effects::PathFragment;
+use sapio_base::reverse_path::ReversePath;
+use std::sync::Arc;
 
 use super::AnyContract;
 use super::CompilationError;
@@ -210,7 +212,7 @@ where
         // the default argument.
         let continue_apis_and_finish_or_fns: Result<
             Vec<(
-                (SArc<String>, ContinuationPoint),
+                (SArc<ReversePath<PathFragment>>, ContinuationPoint),
                 (Nullable, CTVRequired, Clause, TxTmplIt),
             )>,
             CompilationError,
@@ -245,7 +247,7 @@ where
                     }
                 })
                 .map(|(func, errors)| {
-                    let mut effect_ctx = suggested_tx_ctx
+                    let mut top_effect_ctx = suggested_tx_ctx
                         .derive(PathFragment::Named(SArc(func.get_name().clone())))?;
                     let guard = create_guards(
                         self_ref,
@@ -255,10 +257,10 @@ where
                     );
                     Ok((
                         (
-                            SArc(func.get_name().clone()),
+                            SArc(top_effect_ctx.path().clone()),
                             ContinuationPoint::at(
                                 func.get_schema().clone(),
-                                effect_ctx.path().clone(),
+                                top_effect_ctx.path().clone(),
                             ),
                         ),
                         (
@@ -266,12 +268,12 @@ where
                             CTVRequired::No,
                             guard,
                             if errors.is_empty() {
-                                let mut effects = effect_ctx.derive(PathFragment::Effects)?;
-                                let def = effect_ctx.derive(PathFragment::DefaultEffect)?;
+                                let mut applied_effects_ctx = top_effect_ctx.derive(PathFragment::Effects)?;
+                                let default_applied_effect_ctx = top_effect_ctx.derive(PathFragment::DefaultEffect)?;
                                 ctx.get_effects()
-                                    .get_value(ctx.path())
+                                    .get_value(top_effect_ctx.path())
                                     .flat_map(|(k, arg)| {
-                                        let c = effects
+                                        let c = applied_effects_ctx
                                             .derive(PathFragment::Named(SArc(k.clone())))
                                             .expect("Must be a valid derivation or internal invariant not held");
                                         func.call_json(self_ref, c, arg.clone())
@@ -279,7 +281,7 @@ where
                                     // always gets the default expansion, but will also attempt
                                     // operating with the effects passed in through the Context Object.:write!
                                     .fold(
-                                        func.call(self_ref, def, Default::default()),
+                                        func.call(self_ref, default_applied_effect_ctx, Default::default()),
                                         |a: TxTmplIt, b: TxTmplIt| match (a, b) {
                                             (Err(x), _) => Err(x),
                                             (_, Err(y)) => Err(y),
@@ -295,7 +297,7 @@ where
                 .collect()
         };
         let (continue_apis, finish_or_fns): (
-            HashMap<SArc<String>, ContinuationPoint>,
+            HashMap<SArc<ReversePath<PathFragment>>, ContinuationPoint>,
             Vec<(Nullable, CTVRequired, Clause, TxTmplIt)>,
         ) = continue_apis_and_finish_or_fns?.into_iter().unzip();
 

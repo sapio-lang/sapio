@@ -131,9 +131,15 @@ pub trait EffectDB {
 pub struct MapEffectDB {
     /// # The set of all effects
     /// List of effects to include while compiling.
+    #[serde(skip_serializing_if = "HashMap::is_empty", default)]
     effects: HashMap<SArc<ReversePath<PathFragment>>, HashMap<SArc<String>, serde_json::Value>>,
     #[serde(skip, default)]
     empty: HashMap<SArc<String>, serde_json::Value>,
+}
+impl MapEffectDB {
+    pub fn skip_serializing(&self) -> bool {
+        self.effects.is_empty()
+    }
 }
 
 impl EffectDB for MapEffectDB {

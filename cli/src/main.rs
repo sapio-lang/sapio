@@ -21,7 +21,6 @@ use emulator_connect::CTVAvailable;
 use emulator_connect::CTVEmulator;
 use sapio::contract::context::MapEffectDB;
 
-
 use sapio_base::serialization_helpers::SArc;
 use std::convert::TryInto;
 

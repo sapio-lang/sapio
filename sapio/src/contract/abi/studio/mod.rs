@@ -89,5 +89,5 @@ pub struct SapioStudioObject {
     /// List of SapioStudioFormat PSBTs
     pub txs: Vec<SapioStudioFormat>,
     /// List of continue APIs from this point.
-    pub continue_apis: HashMap<SArc<String>, ContinuationPoint>,
+    pub continue_apis: HashMap<SArc<ReversePath<PathFragment>>, ContinuationPoint>,
 }
