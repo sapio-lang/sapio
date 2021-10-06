@@ -21,6 +21,7 @@ pub mod dynamic;
 pub mod eltoo_channel;
 pub mod federated_sidechain;
 pub mod hodl_chicken;
+pub mod op_return_chain;
 pub mod readme_contracts;
 pub mod staked_signer;
 pub mod tic_tac_toe;
