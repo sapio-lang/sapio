@@ -76,7 +76,7 @@ impl GenericBet {
     fn recurse_over(
         &self,
         range: std::ops::Range<usize>,
-        ctx: &sapio::contract::Context,
+        ctx: sapio::contract::Context,
     ) -> Result<Option<Template>, CompilationError> {
         match &self.outcomes[range] {
             [] => return Ok(None),

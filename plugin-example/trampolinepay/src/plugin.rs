@@ -15,7 +15,6 @@ use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
 
-
 /// # Trampolined Payment
 /// A payment which is passed off to another program via a trait-locked plugin
 #[derive(JsonSchema, Serialize, Deserialize)]
@@ -40,8 +39,7 @@ impl TrampolinePay {
             let compiled = create_contract_by_key(
                 &self.handle.key,
                 serde_json::to_value(CreateArgs {
-                    amount: ctx.funds(),
-                    network: ctx.network,
+                    context: ContextualArguments{ amount: ctx.funds(), network: ctx.network, effects: ctx.get_effects().as_ref().clone()},
                     arguments: Versions::BatchingTraitVersion0_1_1(self.data.clone()),
                 })
                 .map_err(|_| CompilationError::TerminateCompilation)?,

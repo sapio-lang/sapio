@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
     Serialize, Deserialize, JsonSchema, Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq,
 )]
 #[serde(transparent)]
-struct AmountF64(
+pub struct AmountF64(
     #[schemars(with = "f64")]
     #[serde(with = "bitcoin::util::amount::serde::as_btc")]
     Amount,

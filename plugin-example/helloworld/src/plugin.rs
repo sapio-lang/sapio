@@ -13,9 +13,9 @@ use sapio::contract::*;
 use sapio::*;
 use sapio_base::timelocks::RelTime;
 use sapio_base::Clause;
-use std::convert::{TryFrom, TryInto};
-use serde::Deserialize;
 use schemars::JsonSchema;
+use serde::Deserialize;
+use std::convert::{TryFrom, TryInto};
 
 #[derive(JsonSchema, Deserialize)]
 pub struct TrustlessEscrow {
@@ -29,7 +29,7 @@ pub struct TrustlessEscrow {
 
 impl TrustlessEscrow {
     guard! {
-        fn cooperate(self, ctx) {
+        fn cooperate(self, _ctx) {
             Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
         }
     }

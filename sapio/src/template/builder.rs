@@ -9,9 +9,9 @@ pub use super::{Output, OutputMeta};
 use super::{Template, TemplateMetadata};
 use crate::contract::{CompilationError, Context};
 use bitcoin::util::amount::Amount;
+use sapio_base::effects::PathFragment;
 use sapio_base::timelocks::*;
 use sapio_base::CTVHash;
-use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::convert::TryInto;
 
@@ -22,9 +22,10 @@ pub struct Builder {
     outputs: Vec<Output>,
     version: i32,
     lock_time: Option<AnyAbsTimeLock>,
-    label: Option<String>,
     ctx: Context,
     fees: Amount,
+    // Metadata Fields:
+    metadata: TemplateMetadata,
 }
 
 impl Builder {
@@ -35,7 +36,7 @@ impl Builder {
             outputs: vec![],
             version: 2,
             lock_time: None,
-            label: None,
+            metadata: TemplateMetadata::new(),
             fees: Amount::from_sat(0),
             ctx,
         }
@@ -48,7 +49,7 @@ impl Builder {
 
     /// reduce the amount availble in the builder's context
     pub fn spend_amount(mut self, amount: Amount) -> Result<Self, CompilationError> {
-        self.ctx.spend_amount(amount)?;
+        self.ctx = self.ctx.spend_amount(amount)?;
         Ok(self)
     }
 
@@ -67,18 +68,23 @@ impl Builder {
         contract: &dyn crate::contract::Compilable,
         metadata: Option<OutputMeta>,
     ) -> Result<Self, CompilationError> {
-        self.outputs.push(Output {
+        let subctx = self
+            .ctx
+            .derive(PathFragment::Branch(self.outputs.len() as u64))?
+            .with_amount(amount)?;
+        let mut ret = self.spend_amount(amount)?;
+        ret.outputs.push(Output {
             amount: amount,
-            contract: contract.compile(&self.ctx.with_amount(amount)?)?,
-            metadata: metadata.unwrap_or_else(HashMap::new),
+            contract: contract.compile(subctx)?,
+            metadata: metadata.unwrap_or_else(Default::default),
         });
-        self.spend_amount(amount)
+        Ok(ret)
     }
 
     /// adds available funds to the builder's context object.
     /// TODO: Make guarantee there is some external input?
     pub fn add_amount(mut self, a: Amount) -> Self {
-        self.ctx.add_amount(a);
+        self.ctx = self.ctx.add_amount(a);
         self
     }
 
@@ -139,9 +145,16 @@ impl Builder {
     }
 
     /// overwrite any existing label with the provided string,
-    /// or set a label if non provided thus far.
+    /// or set a label if none provided thus far.
     pub fn set_label(mut self, label: String) -> Self {
-        self.label = Some(label);
+        self.metadata.label = Some(label);
+        self
+    }
+
+    /// overwrite any existing color with the provided string,
+    /// or set a color if none provided thus far.
+    pub fn set_color(mut self, color: String) -> Self {
+        self.metadata.color = Some(color);
         self
     }
 
@@ -177,32 +190,20 @@ impl Builder {
 impl From<Builder> for Template {
     fn from(t: Builder) -> Template {
         let tx = t.get_tx();
-        let mut metadata = TemplateMetadata::new();
-        metadata.label = t.label;
         Template {
             outputs: t.outputs,
             ctv: tx.get_ctv_hash(0),
             ctv_index: 0,
             max: tx.total_amount() + t.fees,
             tx,
-            metadata_map_s2s: metadata,
+            metadata_map_s2s: t.metadata,
         }
-    }
-}
-/// We don't implement TryFrom because this can never actually fail!
-/// We want to be able to use this anywhere we use into
-impl From<Builder> for Result<Template, CompilationError> {
-    fn from(t: Builder) -> Self {
-        Ok(t.into())
     }
 }
 
 impl From<Builder> for crate::contract::TxTmplIt {
     fn from(t: Builder) -> Self {
         // t.into() // works too, but prefer the explicit form so we know what we get concretely
-        Ok(Box::new(std::iter::once(Result::<
-            Template,
-            CompilationError,
-        >::from(t))))
+        Ok(Box::new(std::iter::once(Ok(t.into()))))
     }
 }

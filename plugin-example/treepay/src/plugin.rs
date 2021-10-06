@@ -9,7 +9,7 @@ use batching_trait::{BatchingTraitVersion0_1_1, Payment};
 use sapio::contract::*;
 use sapio::util::amountrange::*;
 use sapio::*;
-use sapio_base::timelocks::{AnyRelTimeLock};
+use sapio_base::timelocks::AnyRelTimeLock;
 use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;

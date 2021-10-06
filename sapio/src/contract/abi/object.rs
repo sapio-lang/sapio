@@ -5,22 +5,25 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Object is the output of Sapio Compilation & can be linked to a specific coin
+pub use super::studio::*;
+use crate::contract::abi::continuation::ContinuationPoint;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
 use crate::util::extended_address::ExtendedAddress;
 use ::miniscript::{self, *};
-
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::amount::Amount;
 use bitcoin::util::psbt::PartiallySignedTransaction;
+use sapio_base::effects::PathFragment;
+use sapio_base::reverse_path::ReversePath;
+use sapio_base::serialization_helpers::SArc;
+use sapio_base::txindex::TxIndex;
 use sapio_base::txindex::TxIndexError;
-use sapio_base::txindex::{TxIndex, TxIndexLogger};
 use sapio_base::Clause;
-use sapio_ctv_emulator_trait::{CTVAvailable, CTVEmulator, EmulatorError};
+use sapio_ctv_emulator_trait::{CTVEmulator, EmulatorError};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -82,6 +85,16 @@ pub struct Object {
         default
     )]
     pub suggested_txs: HashMap<sha256::Hash, Template>,
+    /// A Map of arguments to continue execution and generate an update at this
+    /// point via a passed message
+    #[serde(
+        rename = "continuation_points",
+        skip_serializing_if = "HashMap::is_empty",
+        default
+    )]
+    pub continue_apis: HashMap<SArc<ReversePath<PathFragment>>, ContinuationPoint>,
+    /// The base location for the set of continue_apis.
+    pub root_path: SArc<ReversePath<PathFragment>>,
     /// The Object's Policy -- if known
     #[serde(
         rename = "known_policy",
@@ -109,6 +122,11 @@ impl Object {
         Object {
             ctv_to_tx: HashMap::new(),
             suggested_txs: HashMap::new(),
+            continue_apis: Default::default(),
+            root_path: SArc(ReversePath::push(
+                None,
+                PathFragment::Named(SArc(Arc::new("".into()))),
+            )),
             policy: None,
             address: address.into(),
             descriptor: None,
@@ -140,6 +158,11 @@ impl Object {
         Ok(Object {
             ctv_to_tx: HashMap::new(),
             suggested_txs: HashMap::new(),
+            continue_apis: Default::default(),
+            root_path: SArc(ReversePath::push(
+                None,
+                PathFragment::Named(SArc(Arc::new("".into()))),
+            )),
             policy: None,
             address: ExtendedAddress::make_op_return(data)?,
             descriptor: None,
@@ -147,23 +170,6 @@ impl Object {
         })
     }
 
-    /// bind attaches an Object to a specific UTXO and returns a vec of transactions and
-    /// transaction metadata.
-    ///
-    pub fn bind(
-        &self,
-        out_in: bitcoin::OutPoint,
-    ) -> (Vec<bitcoin::Transaction>, Vec<serde_json::Value>) {
-        let (a, b) = self
-            .bind_psbt(
-                out_in,
-                HashMap::new(),
-                Rc::new(TxIndexLogger::new()),
-                &CTVAvailable,
-            )
-            .unwrap();
-        (a.into_iter().map(|x| x.extract_tx()).collect(), b)
-    }
     /// bind_psbt attaches and `Object` to a specific UTXO, returning a
     /// Vector of PSBTs and transaction metadata.
     ///
@@ -175,15 +181,9 @@ impl Object {
         output_map: HashMap<Sha256, Vec<Option<bitcoin::OutPoint>>>,
         blockdata: Rc<dyn TxIndex>,
         emulator: &dyn CTVEmulator,
-    ) -> Result<
-        (
-            Vec<bitcoin::util::psbt::PartiallySignedTransaction>,
-            Vec<serde_json::Value>,
-        ),
-        ObjectError,
-    > {
-        let mut txns = vec![];
-        let mut metadata_out = vec![];
+    ) -> Result<Program, ObjectError> {
+        let mut result =
+            HashMap::<SArc<ReversePath<PathFragment, String>>, SapioStudioObject>::new();
         // Could use a queue instead to do BFS linking, but order doesn't matter and stack is
         // faster.
         let mut stack = vec![(out_in, self)];
@@ -191,6 +191,8 @@ impl Object {
         while let Some((
             out,
             Object {
+                root_path,
+                continue_apis,
                 descriptor,
                 ctv_to_tx,
                 suggested_txs,
@@ -198,52 +200,70 @@ impl Object {
             },
         )) = stack.pop()
         {
-            txns.reserve(ctv_to_tx.len() + suggested_txs.len());
-            metadata_out.reserve(ctv_to_tx.len() + suggested_txs.len());
-            for (
-                ctv_hash,
-                Template {
-                    metadata_map_s2s,
-                    outputs,
-                    tx,
-                    ..
+            result.insert(
+                root_path.clone(),
+                SapioStudioObject {
+                    continue_apis: continue_apis.clone(),
+                    txs: ctv_to_tx
+                        .iter()
+                        .chain(suggested_txs.iter())
+                        .map(
+                            |(
+                                ctv_hash,
+                                Template {
+                                    metadata_map_s2s,
+                                    outputs,
+                                    tx,
+                                    ..
+                                },
+                            )| {
+                                let mut tx = tx.clone();
+                                tx.input[0].previous_output = out;
+                                if let Some(outputs) = output_map.get(ctv_hash) {
+                                    for (i, inp) in tx.input.iter_mut().enumerate().skip(1) {
+                                        if let Some(out) = outputs[i] {
+                                            inp.previous_output = out;
+                                        }
+                                    }
+                                }
+                                let mut psbtx =
+                                    PartiallySignedTransaction::from_unsigned_tx(tx.clone())
+                                        .unwrap();
+                                for (psbt_in, tx_in) in psbtx.inputs.iter_mut().zip(tx.input.iter())
+                                {
+                                    psbt_in.witness_utxo =
+                                        blockdata.lookup_output(&tx_in.previous_output).ok();
+                                    psbt_in.sighash_type =
+                                        Some(bitcoin::blockdata::transaction::SigHashType::All);
+                                }
+                                // Missing other Witness Info.
+                                if let Some(d) = descriptor {
+                                    psbtx.inputs[0].witness_script = Some(d.explicit_script());
+                                }
+                                psbtx = emulator.sign(psbtx)?;
+                                let final_tx = psbtx.clone().extract_tx();
+                                let txid = blockdata.add_tx(Arc::new(final_tx))?;
+                                stack.reserve(outputs.len());
+                                for (vout, v) in outputs.iter().enumerate() {
+                                    let vout = vout as u32;
+                                    stack.push((bitcoin::OutPoint { txid, vout }, &v.contract));
+                                }
+                                Ok(LinkedPSBT {
+                                    psbt: psbtx,
+                                    metadata: metadata_map_s2s.clone(),
+                                    output_metadata: outputs
+                                        .iter()
+                                        .cloned()
+                                        .map(|x| x.metadata)
+                                        .collect::<Vec<_>>(),
+                                }
+                                .into())
+                            },
+                        )
+                        .collect::<Result<Vec<SapioStudioFormat>, ObjectError>>()?,
                 },
-            ) in ctv_to_tx.iter().chain(suggested_txs.iter())
-            {
-                let mut tx = tx.clone();
-                tx.input[0].previous_output = out;
-                if let Some(outputs) = output_map.get(ctv_hash) {
-                    for (i, inp) in tx.input.iter_mut().enumerate().skip(1) {
-                        if let Some(out) = outputs[i] {
-                            inp.previous_output = out;
-                        }
-                    }
-                }
-                let mut psbtx = PartiallySignedTransaction::from_unsigned_tx(tx.clone()).unwrap();
-                for (psbt_in, tx_in) in psbtx.inputs.iter_mut().zip(tx.input.iter()) {
-                    psbt_in.witness_utxo = blockdata.lookup_output(&tx_in.previous_output).ok();
-                    psbt_in.sighash_type = Some(bitcoin::blockdata::transaction::SigHashType::All);
-                }
-                // Missing other Witness Info.
-                if let Some(d) = descriptor {
-                    psbtx.inputs[0].witness_script = Some(d.explicit_script());
-                }
-                psbtx = emulator.sign(psbtx)?;
-                let final_tx = psbtx.clone().extract_tx();
-                let txid = blockdata.add_tx(Arc::new(final_tx))?;
-                txns.push(psbtx);
-                metadata_out.push(json!({
-                    "color" : "green",
-                    "metadata" : metadata_map_s2s,
-                    "utxo_metadata" : outputs.iter().map(|x| &x.metadata).collect::<Vec<_>>()
-                }));
-                stack.reserve(outputs.len());
-                for (vout, v) in outputs.iter().enumerate() {
-                    let vout = vout as u32;
-                    stack.push((bitcoin::OutPoint { txid, vout }, &v.contract));
-                }
-            }
+            );
         }
-        Ok((txns, metadata_out))
+        Ok(Program { program: result })
     }
 }

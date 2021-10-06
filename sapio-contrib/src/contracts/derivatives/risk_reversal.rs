@@ -7,6 +7,7 @@
 //! RiskReversal represents a specific contract where we specify a set of price ranges that we
 //! want to keep purchasing power flat within.
 use super::*;
+use std::sync::Arc;
 /// RiskReversal represents a specific contract where we specify a set of price ranges that we
 /// want to keep purchasing power flat within. e.g.
 ///
@@ -94,7 +95,7 @@ pub struct RiskReversal<'a> {
 const ONE_UNIT: u64 = 10_000;
 impl<'a> TryFrom<RiskReversal<'a>> for GenericBetArguments<'a> {
     type Error = CompilationError;
-    fn try_from(v: RiskReversal<'a>) -> Result<Self, Self::Error> {
+    fn try_from(mut v: RiskReversal<'a>) -> Result<Self, Self::Error> {
         let key = v.operator_api.get_key();
         let user = v.user_api.get_key();
         let mut outcomes = vec![];
@@ -115,6 +116,7 @@ impl<'a> TryFrom<RiskReversal<'a>> for GenericBetArguments<'a> {
             return Err(CompilationError::TerminateCompilation);
         }
 
+        let mut strike_ctx = v.ctx.derive_str(Arc::new("strike".into()))?;
         // Increment 1 dollar per step
         for strike in (bottom..=top).step_by(ONE_UNIT as usize) {
             // Value Conservation Property:
@@ -126,7 +128,8 @@ impl<'a> TryFrom<RiskReversal<'a>> for GenericBetArguments<'a> {
 
             outcomes.push((
                 strike as i64,
-                v.ctx
+                strike_ctx
+                    .derive_num(strike as u64)?
                     .template()
                     .add_output(profit, &v.user_api.receive_payment(profit), None)?
                     .add_output(refund, &v.operator_api.receive_payment(refund), None)?

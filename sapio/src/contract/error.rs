@@ -8,6 +8,7 @@
 //! Where possible, concrete error types are wrapped, but in order to handle
 //! errors created by the user we allow boxing an error trait.
 use crate::contract::object::ObjectError;
+use sapio_base::effects::EffectDBError;
 use sapio_ctv_emulator_trait::EmulatorError;
 use std::collections::LinkedList;
 use std::error::Error;
@@ -17,6 +18,8 @@ use std::fmt;
 pub enum CompilationError {
     /// Unspecified Error -- but we should stop compiling
     TerminateCompilation,
+    /// Error when ContextPath has already been used.
+    ContexPathAlreadyDerived,
     /// Error when a `ThenFunc` returns no Templates.
     MissingTemplates,
     /// Error if a Policy is empty
@@ -43,9 +46,24 @@ pub enum CompilationError {
     CompiledObjectError(ObjectError),
     /// Failure in conditional compilation logic
     ConditionalCompilationFailed(LinkedList<String>),
+    /// Error fromt the Effects system
+    EffectDBError(EffectDBError),
     /// Unknown Error type -- either from a user or from some unhandled dependency
     Custom(Box<dyn std::error::Error>),
 }
+
+impl From<EffectDBError> for CompilationError {
+    fn from(e: EffectDBError) -> CompilationError {
+        CompilationError::EffectDBError(e)
+    }
+}
+
+impl From<std::convert::Infallible> for CompilationError {
+    fn from(_s: std::convert::Infallible) -> CompilationError {
+        unimplemented!("Impossible, Just to make Type System Happy...");
+    }
+}
+
 impl CompilationError {
     /// Create a custom compilation error instance
     pub fn custom<E: std::error::Error + 'static>(e: E) -> Self {

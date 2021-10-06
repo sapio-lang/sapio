@@ -6,6 +6,7 @@
 
 //! Put Contract
 use super::*;
+use std::sync::Arc;
 /// Put Contracts pay out as the price goes down.
 pub struct Put<'a> {
     /// The # of units
@@ -23,13 +24,14 @@ pub struct Put<'a> {
 const ONE_UNIT: u64 = 10_000;
 impl<'a> TryFrom<Put<'a>> for GenericBetArguments<'a> {
     type Error = CompilationError;
-    fn try_from(v: Put<'a>) -> Result<Self, Self::Error> {
+    fn try_from(mut v: Put<'a>) -> Result<Self, Self::Error> {
         let key = v.operator_api.get_key();
         let user = v.user_api.get_key();
         let mut outcomes = vec![];
         let strike = v.strike_x_one_unit;
         let max_amount_bitcoin = v.amount * strike;
         // Increment 1 dollar per step
+        let mut strike_ctx = v.ctx.derive_str(Arc::new("strike".into()))?;
         for price in (0..=strike).step_by(ONE_UNIT as usize) {
             let mut profit = Amount::from_sat(strike) - Amount::from_sat(price);
             let mut refund = max_amount_bitcoin - profit;
@@ -38,7 +40,8 @@ impl<'a> TryFrom<Put<'a>> for GenericBetArguments<'a> {
             }
             outcomes.push((
                 price as i64,
-                v.ctx
+                strike_ctx
+                    .derive_num(price as u64)?
                     .template()
                     .add_output(profit, &v.user_api.receive_payment(profit), None)?
                     .add_output(refund, &v.operator_api.receive_payment(refund), None)?

@@ -104,16 +104,14 @@ where
 {
     then! {
         fn explodes(self, ctx) {
-            Ok(Box::new(std::iter::once(
-                ctx.template()
-                    .add_output(
-                        self.party_one.into(),
-                        &Compiled::from_address(self.key_p1.clone(), None),
-                        None,
-                    )?
-                    .set_lock_time(self.timeout)?
-                    .into(),
-            )))
+            ctx.template()
+                .add_output(
+                    self.party_one.into(),
+                    &Compiled::from_address(self.key_p1.clone(), None),
+                    None,
+                )?
+                .set_lock_time(self.timeout)?
+                .into()
         }
     }
 

@@ -19,22 +19,28 @@ pub use builder::Builder;
 
 /// Metadata Struct which has some standard defined fields
 /// and can be extended via a hashmap
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 pub struct TemplateMetadata {
+    /// A Label for this transaction
     #[serde(skip_serializing_if = "Option::is_none", default)]
-    label: Option<String>,
+    pub label: Option<String>,
+    /// catch all map for future metadata....
     #[serde(flatten)]
-    extra: HashMap<String, String>,
+    pub extra: HashMap<String, serde_json::Value>,
+    /// A Color to render this node.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub color: Option<String>,
 }
 
 impl TemplateMetadata {
     /// helps determine if a TemplateMetadata has anything worth serializing or not
     pub fn skip_serializing(&self) -> bool {
-        self.label.is_none() && self.extra.is_empty()
+        *self == TemplateMetadata::new()
     }
     /// create a new `TemplateMetadata`
     pub fn new() -> Self {
         TemplateMetadata {
+            color: None,
             label: None,
             extra: HashMap::new(),
         }

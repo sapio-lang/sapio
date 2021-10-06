@@ -6,14 +6,17 @@
 
 //! coin_pool has a contract `CoinPool` for sharing a UTXO
 use bitcoin::Amount;
-use sapio_base::Clause;
-
 use sapio::contract::*;
+use sapio::util::amountrange::AmountF64;
 use sapio::*;
-
 use sapio_base::timelocks::AnyRelTimeLock;
+use sapio_base::Clause;
+use schemars::schema::RootSchema;
+use schemars::JsonSchema;
+use serde::Deserialize;
+use std::convert::{TryFrom, TryInto};
 use std::sync::{Arc, Mutex};
-type Payouts = Vec<(Arc<Mutex<dyn Compilable>>, Amount)>;
+type Payouts = Vec<(Arc<Mutex<dyn Compilable>>, AmountF64)>;
 /// A CoinPool is a contract that allows a group of individuals to
 /// cooperatively share a UTXO.
 pub struct CoinPool {
@@ -21,6 +24,12 @@ pub struct CoinPool {
     pub clauses: Vec<Clause>,
     /// How to refund people if no update agreed on
     pub refunds: Payouts,
+}
+/// Helper
+fn default_coerce(
+    k: <CoinPool as Contract>::StatefulArguments,
+) -> Result<UpdateTypes, CompilationError> {
+    Ok(k)
 }
 
 impl CoinPool {
@@ -40,18 +49,18 @@ impl CoinPool {
                 };
 
                 ctx.template().add_output(
-                    Amount::from_sat(a.refunds.iter().map(|x| x.1.as_sat()).sum()),
+                    Amount::from_sat(a.refunds.iter().map(|x| Amount::from(x.1).as_sat()).sum()),
                     &a,
                     None
                 )?.add_output(
-                    Amount::from_sat(b.refunds.iter().map(|x| x.1.as_sat()).sum()),
+                    Amount::from_sat(b.refunds.iter().map(|x| Amount::from(x.1).as_sat()).sum()),
                     &b,
                     None
                 )?.into()
             } else {
                 let mut builder = ctx.template();
                 for (cmp, amt) in self.refunds.iter() {
-                builder = builder.add_output(*amt, &*cmp.lock().unwrap(), None)?;
+                builder = builder.add_output((*amt).into(), &*cmp.lock().unwrap(), None)?;
                 }
                 builder.into()
             }
@@ -65,19 +74,22 @@ impl CoinPool {
     }
     finish! {
         /// move the coins to the next state -- payouts may recursively contain pools itself
+        <web={}>
         guarded_by: [Self::all_approve]
-        fn next_pool(self, ctx, o) {
-            if let Some(coin_pool) = o {
-                let mut tmpl = ctx.template().add_amount(coin_pool.external_amount);
+        coerce_args: default_coerce
+        fn next_pool(self, ctx, o: UpdateTypes) {
+            let o2: Option<CoinPoolUpdate> =o.try_into()?;
+            if let Some(coin_pool)= o2 {
+                let mut tmpl = ctx.template().add_amount(coin_pool.external_amount.into());
                 for (to, amt) in coin_pool.payouts.iter() {
-                    tmpl = tmpl.add_output(*amt, &*to.lock().unwrap(), None)?;
+                    tmpl = tmpl.add_output((*amt).into(), &*to.lock().unwrap(), None)?;
                 }
                 for seq in coin_pool.add_inputs.iter() {
                     tmpl = tmpl.add_sequence().set_sequence(-1, *seq)?;
                 }
                 tmpl.into()
             } else {
-                Ok(Box::new(std::iter::empty()))
+                empty()
             }
         }
     }
@@ -93,11 +105,61 @@ pub struct CoinPoolUpdate {
     /// If the external inputs are contributing funds -- this allows two
     /// coinpools to merge.
     /// TODO: Allow different indexes?
-    external_amount: Amount,
+    external_amount: AmountF64,
+}
+
+/// `CoinPoolUpdate` allows updating a `CoinPool` to a new state.
+#[derive(Deserialize, JsonSchema)]
+pub enum UpdateTypes {
+    /// # Normal Update
+    Basic {
+        /// the contracts to pay into
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        payouts: Option<Vec<(bitcoin::PublicKey, AmountF64)>>,
+        /// If the external inputs are contributing funds -- this allows two
+        /// coinpools to merge.
+        /// TODO: Allow different indexes?
+        external_amount: AmountF64,
+        /// if we should add any inputs to the transaction, and if so, what the
+        /// sequences should be set to.
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        add_inputs: Option<Vec<AnyRelTimeLock>>,
+    },
+    /// # Update without Args
+    NoUpdate,
+}
+impl Default for UpdateTypes {
+    fn default() -> Self {
+        UpdateTypes::NoUpdate
+    }
+}
+impl StatefulArgumentsTrait for UpdateTypes {}
+impl TryFrom<UpdateTypes> for Option<CoinPoolUpdate> {
+    type Error = CompilationError;
+    fn try_from(u: UpdateTypes) -> Result<Option<CoinPoolUpdate>, CompilationError> {
+        match u {
+            UpdateTypes::Basic {
+                add_inputs,
+                external_amount,
+                payouts,
+            } => Ok(Some(CoinPoolUpdate {
+                add_inputs: add_inputs.unwrap_or(vec![]),
+                external_amount: external_amount.into(),
+                payouts: payouts
+                    .unwrap_or(vec![])
+                    .iter()
+                    .map(|(a, b)| {
+                        let k: Arc<Mutex<dyn Compilable>> = Arc::new(Mutex::new(a.clone()));
+                        (k, (*b).into())
+                    })
+                    .collect(),
+            })),
+            _ => Ok(None),
+        }
+    }
 }
 
 impl Contract for CoinPool {
     declare! {then, Self::bisect_offline}
-    declare! {finish, Self::all_approve}
-    declare! {updatable<CoinPoolUpdate>, Self::next_pool}
+    declare! {updatable<UpdateTypes>, Self::next_pool}
 }

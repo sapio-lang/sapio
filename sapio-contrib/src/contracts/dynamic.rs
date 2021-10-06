@@ -28,7 +28,7 @@ impl AnyContract for D<'static> {
     }
     fn finish_or_fns<'a>(
         &'a self,
-    ) -> &'a [fn() -> Option<actions::FinishOrFunc<'a, Self, Self::StatefulArguments>>] {
+    ) -> &'a [fn() -> Option<Box<dyn actions::CallableAsFoF<Self, Self::StatefulArguments>>>] {
         &[]
     }
     fn finish_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::Guard<Self>>] {
@@ -55,9 +55,11 @@ impl DynamicExample {
             finish_or: vec![],
             data: "E.g., Create a Vault".into(),
         };
-        ctx.template()
-        .add_output(ctx.funds()/2, &d, None)?
-        .add_output(ctx.funds()/2, &d2, None)?
+        let mut bld = ctx.template();
+        let amt = bld.ctx().funds()/2;
+        bld = bld.add_output(amt, &d, None)?;
+        let amt2 = bld.ctx().funds();
+        bld.add_output(amt2, &d2, None)?
         .into()
     }}
 }

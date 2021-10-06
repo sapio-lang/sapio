@@ -73,7 +73,8 @@ where
         /// Cheating can be reported at any time
         guarded_by: [Self::staking_key]
         fn cheated(self, ctx) {
-            ctx.template().add_output(ctx.funds(),
+            let f = ctx.funds();
+            ctx.template().add_output(f,
             &Compiled::from_op_return(b"dirty cheater")?,
             None)?.into()
         }
@@ -89,7 +90,8 @@ impl StakerInterface for Staker<Operational> {
     then! {
         guarded_by: [Self::begin_redeem_key]
         fn begin_redeem(self, ctx) {
-            ctx.template().add_output(ctx.funds(),
+            let f = ctx.funds();
+            ctx.template().add_output(f,
             &Staker::<Closing>{state: Default::default(), timeout:
             self.timeout, signing_key: self.signing_key, redeeming_key:
             self.redeeming_key},

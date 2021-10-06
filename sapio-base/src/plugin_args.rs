@@ -1,3 +1,4 @@
+use crate::effects::MapEffectDB;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -19,6 +20,14 @@ pub enum NetworkDef {
 pub struct CreateArgs<S> {
     /// # The Main Contract Arguments
     pub arguments: S,
+    /// # Contextual Arguments
+    /// Others arguments set by general system settings
+    pub context: ContextualArguments,
+}
+
+/// # Contextual Arguments For Creating this Contract
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct ContextualArguments {
     #[serde(with = "NetworkDef")]
     /// # The Network the contract should be created for.
     pub network: bitcoin::Network,
@@ -26,4 +35,8 @@ pub struct CreateArgs<S> {
     #[schemars(with = "f64")]
     /// # The Amount of Funds Available to the Contract as Bitcoin.
     pub amount: bitcoin::util::amount::Amount,
+
+    /// # Effects to augment compilations with
+    #[serde(skip_serializing_if = "MapEffectDB::skip_serializing", default)]
+    pub effects: MapEffectDB,
 }

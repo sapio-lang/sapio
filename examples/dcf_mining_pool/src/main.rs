@@ -62,7 +62,7 @@ impl BlockNotes {
 struct Coordinator {
     cache: HashMap<BlockHash, Arc<RwLock<BlockNotes>>>,
     client: rpc::Client,
-    ctx: Context,
+    ctx: dyn Fn() -> Context,
 }
 
 impl Coordinator {
@@ -136,7 +136,8 @@ impl Coordinator {
             blocks: known_participants,
             tip: self.cache[tip_in].clone(),
         };
-        let output = mp.compile(&self.ctx.with_amount(mp.tip.read().unwrap().reward)?)?;
+        let this_ctx = (self.ctx)().with_amount(mp.tip.read().unwrap().reward)?;
+        let output = mp.compile(this_ctx)?;
         let script: Script = output.address.into();
 
         let mut result = false;
@@ -164,6 +165,7 @@ use sapio::contract::error::CompilationError;
 impl MiningPool {
     then! {
         fn pay_miners(self, ctx) {
+            let mut ctx = ctx;
             let mut blocks = self.blocks.clone();
             blocks.push(self.tip.clone());
             blocks.sort_by_cached_key(|a| {
@@ -178,7 +180,7 @@ impl MiningPool {
                     key: note.read().unwrap().key.unwrap()
                 })
             ).collect::<Result<_,CompilationError>>()?;
-            let mut ctx_extra_funding :Context= ctx.clone();
+            let ctx_extra_funding :Context= ctx.derive_str(Arc::new("unlimited funding".into()))?;
             ctx_extra_funding.add_amount(Amount::from_btc(21_000_000.0).unwrap());
 
             let mut contract = MiningPayout {
@@ -187,8 +189,7 @@ impl MiningPool {
                     radix: 4,
                     fee_sats_per_tx: Amount::from_sat(100),
                 };
-            let fee_estimate =
-                contract.compile(ctx)?.amount_range.max();
+            let fee_estimate = contract.compile(ctx.derive_str(Arc::new("FAKE".into()))?)?.amount_range.max();
             let reward = self.tip.read().unwrap().reward - fee_estimate;
             let reward_per_miner = ( reward) / (blocks.len() as u64);
 

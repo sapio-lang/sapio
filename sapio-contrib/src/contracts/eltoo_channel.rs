@@ -63,7 +63,8 @@ impl OpenChannel {
     }
     finish! {
         guarded_by: [Self::signed_update, Self::newer_sequence_check]
-        fn update_state(self, ctx, o) {
+        coerce_args: default_coerce
+        fn update_state(self, ctx, o: Option<Update>) {
             if let Some(update) = o {
                 if update.sequence > BIG_PAST_DATE  {
                     Err(CompilationError::TerminateCompilation)?;
@@ -73,10 +74,12 @@ impl OpenChannel {
                 if update.sequence <= prior_seq {
                     Err(CompilationError::TerminateCompilation)?;
                 }
+
+                let f = ctx.funds();
                 ctx.template()
                 .set_lock_time(AnyAbsTimeLock::from(update.sequence.clone()))?
                 .add_output(
-                    ctx.funds(),
+                    f,
                     &OpenChannel {
                         pending_update: Some(update.clone()), ..self.clone()
                     },
@@ -136,13 +139,20 @@ impl OpenChannel {
     finish! {
         compile_if: [Self::untriggered]
         guarded_by: [Self::sign_cooperative_close]
-        fn coop_close(self, _ctx, _o) {
+        coerce_args: default_coerce
+        fn coop_close(self, _ctx, _o: Option<Update>) {
             Ok(Box::new(std::iter::empty()))
         }
     }
 }
+/// Helper
+fn default_coerce(
+    k: <OpenChannel as Contract>::StatefulArguments,
+) -> Result<Option<Update>, CompilationError> {
+    Ok(k)
+}
 
 impl Contract for OpenChannel {
-    declare! {updatable<Update>, Self::update_state,  Self::coop_close}
+    declare! {updatable<Option<Update>>, Self::update_state,  Self::coop_close}
     declare! {then, Self::complete_update}
 }

@@ -5,9 +5,12 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! An interactive compilation session designed to be compatible with sapio-lang/TUX
-use bitcoin::hashes::hex::ToHex;
+
 use bitcoin::hashes::Hash;
 use bitcoin::util::amount::Amount;
+use sapio::contract::context::MapEffectDB;
+
+use sapio::contract::object::Program;
 use sapio::contract::{Compilable, CompilationError, Compiled, Context};
 use sapio::util::extended_address::ExtendedAddress;
 use sapio_ctv_emulator_trait::CTVAvailable;
@@ -17,7 +20,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::convert::TryInto;
 use std::fmt::Display;
+use std::rc::Rc;
 use std::sync::Arc;
 
 type Key = bitcoin::hashes::sha256::Hash;
@@ -52,7 +57,7 @@ impl From<CompilationError> for SessionError {
 }
 
 /// Create a compiled object of type `T` from a JSON
-pub fn from_json<T>(s: serde_json::Value, ctx: &Context) -> Result<Compiled, SessionError>
+pub fn from_json<T>(s: serde_json::Value, ctx: Context) -> Result<Compiled, SessionError>
 where
     T: for<'a> Deserialize<'a> + Compilable,
 {
@@ -65,7 +70,7 @@ where
 /// type `C`.
 pub fn from_json_convert<C, T, E>(
     s: serde_json::Value,
-    ctx: &Context,
+    ctx: Context,
 ) -> Result<Compiled, SessionError>
 where
     C: for<'a> Deserialize<'a>,
@@ -79,23 +84,6 @@ where
     c
 }
 
-/// A `Program` is a wrapper type for a list of
-/// JSON objects that should be of form:
-/// ```json
-/// {
-///     "hex" : Hex Encoded Transaction
-///     "color" : HTML Color,
-///     "metadata" : JSON Value,
-///     "utxo_metadata" : {
-///         "key" : "value",
-///         ...
-///     }
-/// }
-/// ```
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Program {
-    program: Vec<Value>,
-}
 /// An action requested by the client
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "action", content = "content")]
@@ -148,6 +136,7 @@ fn create_mock_output() -> bitcoin::OutPoint {
     }
 }
 
+use sapio::sapio_base::txindex::TxIndexLogger;
 impl Action {
     fn react(self, session: &mut Session) -> Option<Reaction> {
         match self {
@@ -155,23 +144,18 @@ impl Action {
             Action::Create { type_, args } => {
                 let c = session
                     .menu
-                    .compile(type_, args, &session.get_context())
+                    .compile(type_, args, session.get_context())
                     .ok()?;
                 let a = c.address.clone();
                 // todo amount
-                let (txns, metadata) = c.bind(create_mock_output());
-                let program = Program {
-                    program: txns
-                        .iter()
-                        .map(bitcoin::consensus::encode::serialize)
-                        .zip(metadata.into_iter())
-                        .map(|(h, mut v)| {
-                            v.as_object_mut()
-                                .map(|ref mut m| m.insert("hex".into(), h.to_hex().into()));
-                            v
-                        })
-                        .collect(),
-                };
+                let program = c
+                    .bind_psbt(
+                        create_mock_output(),
+                        HashMap::new(),
+                        Rc::new(TxIndexLogger::new()),
+                        &CTVAvailable,
+                    )
+                    .ok()?;
                 println!("{:?}", program);
                 Some(Reaction::Created(c.amount_range.max(), a, program))
             }
@@ -185,7 +169,7 @@ impl Action {
 pub struct MenuBuilder {
     menu: Vec<RootSchema>,
     gen: schemars::gen::SchemaGenerator,
-    internal_menu: HashMap<String, fn(Value, &Context) -> Result<Compiled, SessionError>>,
+    internal_menu: HashMap<String, fn(Value, Context) -> Result<Compiled, SessionError>>,
     schemas: HashMap<String, String>,
 }
 impl MenuBuilder {
@@ -268,7 +252,7 @@ impl From<MenuBuilder> for Menu {
 /// A precompiled menu of available contract options
 pub struct Menu {
     menu: String,
-    internal_menu: HashMap<String, fn(Value, &Context) -> Result<Compiled, SessionError>>,
+    internal_menu: HashMap<String, fn(Value, Context) -> Result<Compiled, SessionError>>,
     schemas: HashMap<String, String>,
 }
 impl Menu {
@@ -277,7 +261,7 @@ impl Menu {
         &self,
         name: String,
         args: Value,
-        ctx: &Context,
+        ctx: Context,
     ) -> Result<Compiled, SessionError> {
         let f = self
             .internal_menu
@@ -330,6 +314,8 @@ impl Session {
             self.network,
             Amount::from_sat(100_000_000_000),
             Arc::new(CTVAvailable),
+            "frontend_session".try_into().unwrap(),
+            Arc::new(MapEffectDB::default()),
         )
     }
 

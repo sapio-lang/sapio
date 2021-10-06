@@ -6,6 +6,9 @@
 
 //! binding for making a type into a plugin
 use super::*;
+use sapio_base::effects::PathFragment;
+use sapio_base::reverse_path::ReversePath;
+
 use std::convert::TryFrom;
 /// The `Plugin` trait is used to provide bindings for a WASM Plugin.
 /// It's not intended to be used internally, just as bindings.
@@ -33,12 +36,27 @@ where
         let s = CString::from_raw(c);
         let CreateArgs::<Self> {
             arguments,
+            context:
+                ContextualArguments {
+                    network,
+                    amount,
+                    effects,
+                },
+        } = serde_json::from_slice(s.to_bytes())?;
+        // TODO: Get The wasm ID here?
+        // TODO: In theory, these trampoline bounds are robust/serialization safe...
+        // But the API needs stiching to the parent in a sane way...
+        let ctx = Context::new(
             network,
             amount,
-        } = serde_json::from_slice(s.to_bytes())?;
-        let ctx = Context::new(network, amount, Arc::new(client::WasmHostEmulator));
+            Arc::new(client::WasmHostEmulator),
+            /// TODO: Carry context's path
+            ReversePath::<PathFragment>::try_from("plugin_trampoline")?,
+            /// TODO: load database?
+            Arc::new(effects),
+        );
         let converted = Self::ToType::try_from(arguments)?;
-        let compiled = converted.compile(&ctx)?;
+        let compiled = converted.compile(ctx)?;
         Ok(serde_json::to_string(&compiled)?)
     }
     /// binds this type to the wasm interface, must be called before the plugin can be used.
