@@ -56,7 +56,7 @@ impl Context {
         }
     }
     /// Get this Context's effect database
-    pub fn get_effects(&self) -> &Arc<MapEffectDB> {
+    pub(crate) fn get_effects(&self, _: InternalCompilerTag) -> &Arc<MapEffectDB> {
         &self.effects
     }
     /// Gets this Context's Path, but does not clone (left to caller)

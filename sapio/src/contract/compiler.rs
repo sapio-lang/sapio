@@ -270,7 +270,7 @@ where
                             if errors.is_empty() {
                                 let mut applied_effects_ctx = top_effect_ctx.derive(PathFragment::Effects)?;
                                 let default_applied_effect_ctx = top_effect_ctx.derive(PathFragment::DefaultEffect)?;
-                                ctx.get_effects()
+                                ctx.get_effects(InternalCompilerTag{_secret:()})
                                     .get_value(top_effect_ctx.path())
                                     .flat_map(|(k, arg)| {
                                         let c = applied_effects_ctx
