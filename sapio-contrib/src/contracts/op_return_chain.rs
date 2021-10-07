@@ -70,11 +70,11 @@ pub enum UpdateTypes {
         fees: AmountF64,
     },
     /// # Update without Args
-    NoUpdate,
+    NoUpdate {},
 }
 impl Default for UpdateTypes {
     fn default() -> Self {
-        UpdateTypes::NoUpdate
+        UpdateTypes::NoUpdate {}
     }
 }
 impl StatefulArgumentsTrait for UpdateTypes {}
