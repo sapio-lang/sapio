@@ -19,12 +19,12 @@ unsafe fn sapio_v1_wasm_plugin_client_create_nullptr(_c: *mut c_char) -> *mut c_
 
 /// a static mut that gets set when a Plugin::register method gets called
 /// in order to enable binding when the type is registered
-pub(crate) static mut sapio_v1_wasm_plugin_client_get_create_arguments_ptr: fn() -> *mut c_char =
+pub(crate) static mut SAPIO_V1_WASM_PLUGIN_CLIENT_GET_CREATE_ARGUMENTS_PTR: fn() -> *mut c_char =
     sapio_v1_wasm_plugin_client_get_create_arguments_nullptr;
 
 /// a static mut that gets set when a Plugin::register method gets called
 /// in order to enable binding when the type is registered
-pub(crate) static mut sapio_v1_wasm_plugin_client_create_ptr: unsafe fn(
+pub(crate) static mut SAPIO_V1_WASM_PLUGIN_CLIENT_CREATE_PTR: unsafe fn(
     *mut c_char,
 ) -> *mut c_char = sapio_v1_wasm_plugin_client_create_nullptr;
 
@@ -32,14 +32,14 @@ pub(crate) static mut sapio_v1_wasm_plugin_client_create_ptr: unsafe fn(
 /// host must drop the returned pointer.
 #[no_mangle]
 extern "C" fn sapio_v1_wasm_plugin_client_get_create_arguments() -> *mut c_char {
-    unsafe { sapio_v1_wasm_plugin_client_get_create_arguments_ptr() }
+    unsafe { SAPIO_V1_WASM_PLUGIN_CLIENT_GET_CREATE_ARGUMENTS_PTR() }
 }
 
 /// create an instance of the plugin's contract from the provided json args
 /// host must drop the returned pointer.
 #[no_mangle]
 unsafe extern "C" fn sapio_v1_wasm_plugin_client_create(c: *mut c_char) -> *mut c_char {
-    sapio_v1_wasm_plugin_client_create_ptr(c)
+    SAPIO_V1_WASM_PLUGIN_CLIENT_CREATE_PTR(c)
 }
 
 /// Drops a pointer that was created in the WASM
@@ -55,23 +55,23 @@ extern "C" fn sapio_v1_wasm_plugin_client_allocate_bytes(len: u32) -> *mut c_cha
     CString::new(vec![1; len as usize]).unwrap().into_raw()
 }
 
-pub(crate) static mut sapio_plugin_name: &'static str = "Unnamed";
+pub(crate) static mut SAPIO_PLUGIN_NAME: &'static str = "Unnamed";
 
 /// Gets a name for the plugin.
 /// host must drop the returned pointer.
 #[no_mangle]
 unsafe extern "C" fn sapio_v1_wasm_plugin_client_get_name() -> *mut c_char {
-    CString::new(sapio_plugin_name.as_bytes())
+    CString::new(SAPIO_PLUGIN_NAME.as_bytes())
         .unwrap()
         .into_raw()
 }
 
-pub(crate) static mut sapio_plugin_logo: &'static [u8] = include_bytes!("logo.png");
+pub(crate) static mut SAPIO_PLUGIN_LOGO: &'static [u8] = include_bytes!("logo.png");
 /// Gets a name for the plugin.
 /// host must drop the returned pointer.
 #[no_mangle]
 unsafe extern "C" fn sapio_v1_wasm_plugin_client_get_logo() -> *mut c_char {
-    CString::new(Vec::<u8>::from(base64::encode(sapio_plugin_logo)))
+    CString::new(Vec::<u8>::from(base64::encode(SAPIO_PLUGIN_LOGO)))
         .unwrap()
         .into_raw()
 }
