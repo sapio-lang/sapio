@@ -6,13 +6,13 @@
 
 //! The primary compilation traits and types
 use super::actions::ConditionalCompileType;
-use super::actions::Guard;
 use super::AnyContract;
 use super::CompilationError;
 use super::Compiled;
 use super::Context;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::contract::actions::conditional_compile::CCILWrapper;
+use crate::contract::actions::CallableAsFoF;
 use crate::contract::TxTmplIt;
 use crate::util::amountrange::AmountRange;
 use ::miniscript::*;
@@ -23,60 +23,17 @@ use sapio_base::serialization_helpers::SArc;
 use sapio_base::Clause;
 use std::collections::HashMap;
 use std::collections::LinkedList;
-
-enum CacheEntry<T> {
-    Cached(Clause),
-    Fresh(fn(&T, Context) -> Clause),
-}
-
+mod cache;
+use cache::*;
 /// Used to prevent unintended callers to internal_clone.
 pub struct InternalCompilerTag {
     _secret: (),
-}
-
-/// GuardCache assists with caching the computation of guard functions
-/// during compilation.
-struct GuardCache<T> {
-    cache: HashMap<usize, Option<CacheEntry<T>>>,
-}
-impl<T> GuardCache<T> {
-    fn new() -> Self {
-        GuardCache {
-            cache: HashMap::new(),
-        }
-    }
-    fn create_entry(g: Option<Guard<T>>, t: &T, ctx: Context) -> Option<CacheEntry<T>> {
-        Some(match g? {
-            Guard::Cache(f) => CacheEntry::Cached(f(t, ctx)),
-            Guard::Fresh(f) => CacheEntry::Fresh(f),
-        })
-    }
-    fn get(&mut self, t: &T, f: fn() -> Option<Guard<T>>, ctx: Context) -> Option<Clause> {
-        Some(
-            match self
-                .cache
-                .entry(f as usize)
-                .or_insert_with(|| {
-                    Self::create_entry(
-                        f(),
-                        t,
-                        ctx.internal_clone(InternalCompilerTag { _secret: () }),
-                    )
-                })
-                .as_ref()?
-            {
-                CacheEntry::Cached(s) => s.clone(),
-                CacheEntry::Fresh(f) => f(t, ctx),
-            },
-        )
-    }
 }
 
 /// private::ImplSeal prevents anyone from implementing Compilable except by
 /// implementing Contract.
 mod private {
     pub trait ImplSeal {}
-
     /// Allow Contract to implement Compile
     impl ImplSeal for super::Compiled {}
     impl ImplSeal for bitcoin::PublicKey {}
@@ -105,21 +62,45 @@ impl Compilable for bitcoin::PublicKey {
     }
 }
 
-fn create_guards<T>(
-    self_ref: &T,
-    mut ctx: Context,
-    guards: &[fn() -> Option<Guard<T>>],
-    gc: &mut GuardCache<T>,
-) -> Clause {
-    guards
-        .iter()
-        .zip((0..).flat_map(|i| ctx.derive(PathFragment::Branch(i)).ok()))
-        .filter_map(|(x, c)| gc.get(self_ref, *x, c))
-        .filter(|x| *x != Clause::Trivial) // no point in using any Trivials
-        .fold(Clause::Trivial, |acc, item| match acc {
-            Clause::Trivial => item,
-            _ => Clause::And(vec![acc, item]),
+#[derive(PartialEq, Eq)]
+enum CTVRequired {
+    Yes,
+    No,
+}
+#[derive(PartialEq, Eq)]
+enum Nullable {
+    Yes,
+    No,
+}
+
+fn compute_all_effects<C, A: Default>(
+    mut top_effect_ctx: Context,
+    self_ref: &C,
+    func: &dyn CallableAsFoF<C, A>,
+) -> TxTmplIt {
+    let mut applied_effects_ctx = top_effect_ctx.derive(PathFragment::Effects)?;
+    let default_applied_effect_ctx = top_effect_ctx.derive(PathFragment::DefaultEffect)?;
+    top_effect_ctx
+        .get_effects(InternalCompilerTag { _secret: () })
+        .get_value(top_effect_ctx.path())
+        .flat_map(|(k, arg)| {
+            let c = applied_effects_ctx
+                .derive(PathFragment::Named(SArc(k.clone())))
+                .expect("Must be a valid derivation or internal invariant not held");
+            func.call_json(self_ref, c, arg.clone())
         })
+        // always gets the default expansion, but will also attempt
+        // operating with the effects passed in through the Context Object.:write!
+        .fold(
+            func.call(self_ref, default_applied_effect_ctx, Default::default()),
+            |a: TxTmplIt, b: TxTmplIt| -> TxTmplIt {
+                match (a, b) {
+                    (Err(x), _) => Err(x),
+                    (_, Err(y)) => Err(y),
+                    (Ok(v), Ok(w)) => Ok(Box::new(v.chain(w))),
+                }
+            },
+        )
 }
 
 impl<'a, T> Compilable for T
@@ -130,16 +111,6 @@ where
     /// The main Compilation Logic for a Contract.
     /// TODO: Better Document Semantics
     fn compile(&self, mut ctx: Context) -> Result<Compiled, CompilationError> {
-        #[derive(PartialEq, Eq)]
-        enum CTVRequired {
-            Yes,
-            No,
-        }
-        #[derive(PartialEq, Eq)]
-        enum Nullable {
-            Yes,
-            No,
-        }
         let self_ref = self.get_inner_ref();
 
         let guard_clauses = std::cell::RefCell::new(GuardCache::new());
@@ -161,26 +132,27 @@ where
                     conditional_compile_ctx
                         .derive(name.clone())
                         .map(|mut this_ctx| {
-                            let r = match CCILWrapper(func.conditional_compile_if)
+                            match CCILWrapper(func.conditional_compile_if)
                                 .assemble(self_ref, &mut this_ctx)
                             {
-                                ConditionalCompileType::Fail(errors) => (errors, Nullable::No),
+                                ConditionalCompileType::Fail(errors) => {
+                                    Some((func, name, (errors, Nullable::No)))
+                                }
                                 ConditionalCompileType::Required
                                 | ConditionalCompileType::NoConstraint => {
-                                    (LinkedList::new(), Nullable::No)
+                                    Some((func, name, (LinkedList::new(), Nullable::No)))
                                 }
                                 ConditionalCompileType::Nullable => {
-                                    (LinkedList::new(), Nullable::Yes)
+                                    Some((func, name, (LinkedList::new(), Nullable::Yes)))
                                 }
                                 ConditionalCompileType::Skippable
-                                | ConditionalCompileType::Never => return None,
-                            };
-                            Some((func, r, name))
+                                | ConditionalCompileType::Never => None,
+                            }
                         })
                         .transpose()
                 })
                 .map(|r| {
-                    r.and_then(|(func, (errors, nullability), name)| {
+                    r.and_then(|(func, name, (errors, nullability))| {
                         let gctx = guards_ctx.derive(name.clone())?;
                         let ntx_ctx = next_tx_ctx.derive(name)?;
                         let guards = create_guards(
@@ -206,13 +178,10 @@ where
         // finish_or_fns may be used to compute additional transactions with
         // a given argument, but for building the ABI we only precompute with
         // the default argument.
-        let continue_apis_and_finish_or_fns: Result<
-            Vec<(
-                (SArc<EffectPath>, ContinuationPoint),
-                (Nullable, CTVRequired, Clause, TxTmplIt),
-            )>,
-            CompilationError,
-        > = {
+        let (continue_apis, finish_or_fns): (
+            HashMap<SArc<EffectPath>, ContinuationPoint>,
+            Vec<(Nullable, CTVRequired, Clause, TxTmplIt)>,
+        ) = {
             let mut finish_or_fns_ctx = ctx.derive(PathFragment::FinishOrFn)?;
             let mut conditional_compile_ctx = finish_or_fns_ctx.derive(PathFragment::CondCompIf)?;
             let mut guard_ctx = finish_or_fns_ctx.derive(PathFragment::Guard)?;
@@ -222,73 +191,65 @@ where
                 .filter_map(|func| func())
                 // TODO: De-duplicate this code?
                 .filter_map(|func| {
-                        conditional_compile_ctx
-                        .derive(PathFragment::Named(SArc(func.get_name().clone())))
-                        .map(|mut this_ctx|{
+                    let name = PathFragment::Named(SArc(func.get_name().clone()));
+                    conditional_compile_ctx
+                        .derive(name.clone())
+                        .map(|mut this_ctx| {
                             let constraint = CCILWrapper(func.get_conditional_compile_if())
                                 .assemble(self_ref, &mut this_ctx);
                             match constraint {
-                                ConditionalCompileType::Fail(errors) => Some((func, errors)),
-                                ConditionalCompileType::Required | ConditionalCompileType::NoConstraint | ConditionalCompileType::Nullable => Some((func, LinkedList::new())),
-                                ConditionalCompileType::Skippable | ConditionalCompileType::Never => None,
+                                ConditionalCompileType::Fail(errors) => Some((func, name, errors)),
+                                ConditionalCompileType::Required
+                                | ConditionalCompileType::NoConstraint
+                                | ConditionalCompileType::Nullable => {
+                                    Some((func, name, LinkedList::new()))
+                                }
+                                ConditionalCompileType::Skippable
+                                | ConditionalCompileType::Never => None,
                             }
-                        }).transpose()
+                        })
+                        .transpose()
                 })
                 .map(|r| {
-                    r.and_then(|(func, errors)| {
-                    let mut top_effect_ctx = suggested_tx_ctx
-                        .derive(PathFragment::Named(SArc(func.get_name().clone())))?;
-                    let guard = create_guards(
-                        self_ref,
-                        guard_ctx.derive(PathFragment::Named(SArc(func.get_name().clone())))?,
-                        func.get_guard(),
-                        &mut guard_clauses.borrow_mut(),
-                    );
-                    Ok((
-                        (
-                            SArc(top_effect_ctx.path().clone()),
-                            ContinuationPoint::at(
-                                func.get_schema().clone(),
-                                top_effect_ctx.path().clone(),
+                    r.and_then(|(func, name, errors)| {
+                        let top_effect_ctx = suggested_tx_ctx.derive(name.clone())?;
+                        let guard = create_guards(
+                            self_ref,
+                            guard_ctx.derive(name)?,
+                            func.get_guard(),
+                            &mut guard_clauses.borrow_mut(),
+                        );
+                        Ok((
+                            (
+                                SArc(top_effect_ctx.path().clone()),
+                                ContinuationPoint::at(
+                                    func.get_schema().clone(),
+                                    top_effect_ctx.path().clone(),
+                                ),
                             ),
-                        ),
-                        (
-                            Nullable::Yes,
-                            CTVRequired::No,
-                            guard,
-                            if errors.is_empty() {
-                                let mut applied_effects_ctx = top_effect_ctx.derive(PathFragment::Effects)?;
-                                let default_applied_effect_ctx = top_effect_ctx.derive(PathFragment::DefaultEffect)?;
-                                ctx.get_effects(InternalCompilerTag{_secret:()})
-                                    .get_value(top_effect_ctx.path())
-                                    .flat_map(|(k, arg)| {
-                                        let c = applied_effects_ctx
-                                            .derive(PathFragment::Named(SArc(k.clone())))
-                                            .expect("Must be a valid derivation or internal invariant not held");
-                                        func.call_json(self_ref, c, arg.clone())
-                                    })
-                                    // always gets the default expansion, but will also attempt
-                                    // operating with the effects passed in through the Context Object.:write!
-                                    .fold(
-                                        func.call(self_ref, default_applied_effect_ctx, Default::default()),
-                                        |a: TxTmplIt, b: TxTmplIt| match (a, b) {
-                                            (Err(x), _) => Err(x),
-                                            (_, Err(y)) => Err(y),
-                                            (Ok(v), Ok(w)) => Ok(Box::new(v.chain(w))),
-                                        },
-                                    )
-                            } else {
-                                Err(CompilationError::ConditionalCompilationFailed(errors))
-                            },
-                        ),
-                    ))
-                })})
-                .collect()
+                            (
+                                Nullable::Yes,
+                                CTVRequired::No,
+                                guard,
+                                if errors.is_empty() {
+                                    compute_all_effects(top_effect_ctx, self_ref, func.as_ref())
+                                } else {
+                                    Err(CompilationError::ConditionalCompilationFailed(errors))
+                                },
+                            ),
+                        ))
+                    })
+                })
+                .collect::<Result<
+                    Vec<(
+                        (SArc<EffectPath>, ContinuationPoint),
+                        (Nullable, CTVRequired, Clause, TxTmplIt),
+                    )>,
+                    CompilationError,
+                >>()?
+                .into_iter()
+                .unzip()
         };
-        let (continue_apis, finish_or_fns): (
-            HashMap<SArc<EffectPath>, ContinuationPoint>,
-            Vec<(Nullable, CTVRequired, Clause, TxTmplIt)>,
-        ) = continue_apis_and_finish_or_fns?.into_iter().unzip();
 
         let mut ctv_to_tx = HashMap::new();
         let mut suggested_txs = HashMap::new();
