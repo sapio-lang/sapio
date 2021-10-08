@@ -104,18 +104,25 @@ impl TrustlessEscrow {
     fn cooperate(self, _ctx: Context) {
         Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
     }
-    then! {fn use_escrow(self, ctx) {
+    #[then]
+    fn use_escrow(self, ctx: sapio::Context) {
         ctx.template()
             .add_output(
                 self.alice_escrow.0.try_into()?,
                 &Compiled::from_address(self.alice_escrow.1.clone(), None),
-                None)?
+                None,
+            )?
             .add_output(
                 self.bob_escrow.0.try_into()?,
                 &Compiled::from_address(self.bob_escrow.1.clone(), None),
-                None)?
-            .set_sequence(0, RelTime::try_from(std::time::Duration::from_secs(10*24*60*60))?.into())?.into()
-    }}
+                None,
+            )?
+            .set_sequence(
+                0,
+                RelTime::try_from(std::time::Duration::from_secs(10 * 24 * 60 * 60))?.into(),
+            )?
+            .into()
+    }
 }
 
 impl Contract for TrustlessEscrow {

@@ -81,7 +81,7 @@ macro_rules! declare {
 /// then!(name);
 /// ```
 #[macro_export]
-macro_rules! then {
+macro_rules! decl_then {
     {
         $(#[$meta:meta])*
         $name:ident
@@ -90,7 +90,7 @@ macro_rules! then {
         $crate::contract::macros::paste!{
 
             $(#[$meta])*
-            fn [<THEN_ $name>](&self, _ctx:$crate::contract::Context)-> $crate::contract::TxTmplIt
+            fn [<then_ $name>](&self, _ctx:$crate::contract::Context)-> $crate::contract::TxTmplIt
             {
                 unimplemented!();
             }
@@ -98,66 +98,6 @@ macro_rules! then {
             fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<'a, Self>> {None}
         }
     };
-    {
-        $(#[$meta:meta])*
-        compile_if: $conditional_compile_list:tt
-        guarded_by: $guard_list:tt
-        fn $name:ident($s:ident, $ctx:ident)
-        $b:block
-    } => {
-
-        $crate::contract::macros::paste!{
-
-            $(#[$meta])*
-            fn [<THEN_ $name>](&$s, $ctx:$crate::contract::Context) -> $crate::contract::TxTmplIt
-            $b
-            $(#[$meta])*
-            fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<'a, Self>>{
-                Some($crate::contract::actions::ThenFunc{
-                    guard: &$guard_list,
-                    conditional_compile_if: &$conditional_compile_list,
-                    func: Self::[<THEN_ $name>],
-                    name: std::sync::Arc::new(std::stringify!($name).into()),
-                })
-            }
-        }
-    };
-    {
-        $(#[$meta:meta])*
-        fn $name:ident($s:ident, $ctx:ident) $b:block
-    } => {
-        then!{
-            $(#[$meta])*
-            compile_if: []
-            guarded_by: []
-            fn $name($s, $ctx) $b
-        }
-    };
-
-    {
-        $(#[$meta:meta])*
-        guarded_by: $guard_list:tt
-        fn $name:ident($s:ident, $ctx:ident) $b:block
-    } => {
-        then!{
-            $(#[$meta])*
-            compile_if: []
-            guarded_by: $guard_list
-            fn $name($s, $ctx) $b }
-    };
-
-    {
-        $(#[$meta:meta])*
-        compile_if: $conditional_compile_list:tt
-        fn $name:ident($s:ident, $ctx:ident) $b:block
-    } => {
-        then!{
-            $(#[$meta])*
-            compile_if: $conditional_compile_list
-            guarded_by: []
-            fn $name($s, $ctx) $b }
-    };
-
 }
 
 lazy_static::lazy_static! {
@@ -312,6 +252,8 @@ macro_rules! decl_guard {
      };
 }
 
+/// declares a compile_if function for a trait interface.
+#[macro_export]
 macro_rules! decl_compile_if {
     {
         $(#[$meta:meta])*

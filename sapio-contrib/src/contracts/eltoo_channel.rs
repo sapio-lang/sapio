@@ -10,12 +10,12 @@
 use contract::*;
 use sapio::contract::actions::ConditionalCompileType;
 use sapio::contract::error::CompilationError;
+
 use sapio::template::Output;
 use sapio::*;
 use sapio_base::timelocks::RelHeight;
 use sapio_base::Clause;
 use sapio_macros::compile_if;
-use sapio::contract::Context;
 
 use bitcoin;
 use sapio_base::timelocks::{AbsTime, AnyAbsTimeLock, BIG_PAST_DATE, START_OF_TIME};
@@ -106,16 +106,22 @@ impl OpenChannel {
     fn timeout(self, _ctx: Context) {
         self.get_maturity().into()
     }
-    then! {
-        compile_if: [Self::triggered]
-        guarded_by: [Self::timeout]
-        fn complete_update(self, ctx) {
-            let mut template = ctx.template().set_sequence(-1, self.get_maturity().into())?;
-            for out in self.pending_update.as_ref().map(|p| &p.resolution).unwrap_or(&vec![]).iter() {
-                template = template.add_output(out.amount, &out.contract, Some(out.metadata.clone()))?;
-            }
-            template.into()
+    #[then(compile_if = "[Self::triggered]", guarded_by = "[Self::timeout]")]
+    fn complete_update(self, ctx: sapio::Context) {
+        let mut template = ctx
+            .template()
+            .set_sequence(-1, self.get_maturity().into())?;
+        for out in self
+            .pending_update
+            .as_ref()
+            .map(|p| &p.resolution)
+            .unwrap_or(&vec![])
+            .iter()
+        {
+            template =
+                template.add_output(out.amount, &out.contract, Some(out.metadata.clone()))?;
         }
+        template.into()
     }
 
     #[guard]

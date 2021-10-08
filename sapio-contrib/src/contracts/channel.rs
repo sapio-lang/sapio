@@ -9,9 +9,10 @@ use bitcoin;
 use bitcoin::secp256k1::*;
 use bitcoin::util::amount::CoinAmount;
 use contract::*;
-use sapio::contract::Context;
+
 use sapio::*;
 use sapio_base::Clause;
+use sapio_macros::guard;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
@@ -19,7 +20,6 @@ use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
-use sapio_macros::guard;
 /// Helper
 
 #[cfg(test)]
@@ -262,35 +262,38 @@ where
     Self: Sized + Contract,
     <Self as Contract>::StatefulArguments: TryInto<Update>,
 {
-    then! {begin_contest}
-    then! {finish_contest}
+    decl_then! {begin_contest}
+    decl_then! {finish_contest}
 }
 
 /// Override begin_contest when state = Start
 impl FunctionalityAtState for Channel<Start, Args> {
-    then! {fn begin_contest(self, ctx) {
-        ctx.template().add_output(
-            self.amount.try_into()?,
-            &Channel::<Stop, Args> {
-                pd: Default::default(),
-                alice: self.alice,
-                bob: self.bob,
-                amount: self.amount.try_into().unwrap(),
-                resolution: self.resolution.clone(),
-                db: self.db.clone(),
-            },
-            None,
-        )?.into()
-    }}
+    #[then]
+    fn begin_contest(self, ctx: sapio::Context) {
+        ctx.template()
+            .add_output(
+                self.amount.try_into()?,
+                &Channel::<Stop, Args> {
+                    pd: Default::default(),
+                    alice: self.alice,
+                    bob: self.bob,
+                    amount: self.amount.try_into().unwrap(),
+                    resolution: self.resolution.clone(),
+                    db: self.db.clone(),
+                },
+                None,
+            )?
+            .into()
+    }
 }
 
 /// Override finish_contest when state = Start
 impl FunctionalityAtState for Channel<Stop, Args> {
-    then! {
-        guarded_by: [Self::timeout]
-        fn finish_contest (self, ctx) {
-            ctx.template().add_output(self.amount.try_into()?, &self.resolution, None)?.into()
-        }
+    #[then(guarded_by = "[Self::timeout]")]
+    fn finish_contest(self, ctx: sapio::Context) {
+        ctx.template()
+            .add_output(self.amount.try_into()?, &self.resolution, None)?
+            .into()
     }
 }
 

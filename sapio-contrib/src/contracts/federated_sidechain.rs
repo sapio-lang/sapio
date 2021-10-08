@@ -9,11 +9,11 @@ use bitcoin::util::amount::CoinAmount;
 use sapio::contract::*;
 use sapio::*;
 use sapio_base::Clause;
+use sapio_macros::guard;
 use schemars::*;
 use serde::*;
 use std::convert::TryInto;
 use std::marker::PhantomData;
-use sapio_macros::guard;
 
 /// State  when recover may start
 #[derive(JsonSchema, Deserialize, Default)]
@@ -54,27 +54,28 @@ where
     /// Should only be defined when RecoveryState is in CanFinishRecovery
     finish_recovery}
 
-    then! {
+    decl_then! {
     /// Should only be defined when RecoveryState is in CanBeginRecovery
     begin_recovery}
 }
 impl StateDependentActions for FederatedPegIn<CanBeginRecovery> {
-    then! {
-        guarded_by: [Self::recovery_signed]
-        fn begin_recovery(self, ctx) {
-        ctx.template().add_output(
-            self.amount.try_into()?,
-            &FederatedPegIn::<CanFinishRecovery> {
-                keys: self.keys.clone(),
-                thresh_normal: self.thresh_normal,
-                keys_recovery: self.keys_recovery.clone(),
-                thresh_recovery: self.thresh_recovery,
-                amount: self.amount,
-                _pd: PhantomData::default()
-            },
-            None
-        )?.into()
-    }}
+    #[then(guarded_by = "[Self::recovery_signed]")]
+    fn begin_recovery(self, ctx: sapio::Context) {
+        ctx.template()
+            .add_output(
+                self.amount.try_into()?,
+                &FederatedPegIn::<CanFinishRecovery> {
+                    keys: self.keys.clone(),
+                    thresh_normal: self.thresh_normal,
+                    keys_recovery: self.keys_recovery.clone(),
+                    thresh_recovery: self.thresh_recovery,
+                    amount: self.amount,
+                    _pd: PhantomData::default(),
+                },
+                None,
+            )?
+            .into()
+    }
 }
 impl StateDependentActions for FederatedPegIn<CanFinishRecovery> {
     #[guard]

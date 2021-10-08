@@ -163,45 +163,42 @@ struct MiningPool {
 
 use sapio::contract::error::CompilationError;
 impl MiningPool {
-    then! {
-        fn pay_miners(self, ctx) {
-            let mut ctx = ctx;
-            let mut blocks = self.blocks.clone();
-            blocks.push(self.tip.clone());
-            blocks.sort_by_cached_key(|a| {
-                a.read().unwrap().block
-                .header
-                .block_hash()
-            });
-            let participants : Vec<PoolShare> = blocks.iter().map(|note|
+    #[then]
+    fn pay_miners(self, ctx: sapio::Context) {
+        let mut ctx = ctx;
+        let mut blocks = self.blocks.clone();
+        blocks.push(self.tip.clone());
+        blocks.sort_by_cached_key(|a| a.read().unwrap().block.header.block_hash());
+        let participants: Vec<PoolShare> = blocks
+            .iter()
+            .map(|note| {
                 Ok(PoolShare {
                     amount: Amount::from_sat(0),
                     // guaranteed if here to have a pk
-                    key: note.read().unwrap().key.unwrap()
+                    key: note.read().unwrap().key.unwrap(),
                 })
-            ).collect::<Result<_,CompilationError>>()?;
-            let ctx_extra_funding :Context= ctx.derive_str(Arc::new("unlimited funding".into()))?;
-            ctx_extra_funding.add_amount(Amount::from_btc(21_000_000.0).unwrap());
+            })
+            .collect::<Result<_, CompilationError>>()?;
+        let ctx_extra_funding: Context = ctx.derive_str(Arc::new("unlimited funding".into()))?;
+        ctx_extra_funding.add_amount(Amount::from_btc(21_000_000.0).unwrap());
 
-            let mut contract = MiningPayout {
-                    /// all of the payments needing to be sent
-                    participants,
-                    radix: 4,
-                    fee_sats_per_tx: Amount::from_sat(100),
-                };
-            let fee_estimate = contract.compile(ctx.derive_str(Arc::new("FAKE".into()))?)?.amount_range.max();
-            let reward = self.tip.read().unwrap().reward - fee_estimate;
-            let reward_per_miner = ( reward) / (blocks.len() as u64);
+        let mut contract = MiningPayout {
+            /// all of the payments needing to be sent
+            participants,
+            radix: 4,
+            fee_sats_per_tx: Amount::from_sat(100),
+        };
+        let fee_estimate = contract
+            .compile(ctx.derive_str(Arc::new("FAKE".into()))?)?
+            .amount_range
+            .max();
+        let reward = self.tip.read().unwrap().reward - fee_estimate;
+        let reward_per_miner = (reward) / (blocks.len() as u64);
 
-            for reward in contract.participants.iter_mut() {
-                reward.amount = reward_per_miner;
-            }
-            ctx.template().add_output(
-                reward,
-                &contract,
-                None
-            )?.into()
+        for reward in contract.participants.iter_mut() {
+            reward.amount = reward_per_miner;
         }
+        ctx.template().add_output(reward, &contract, None)?.into()
     }
 }
 impl Contract for MiningPool {

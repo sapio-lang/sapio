@@ -10,11 +10,11 @@ use sapio_base::timelocks::*;
 use sapio_macros::guard;
 /// Generic functionality required for Exploding contracts
 pub trait Explodes: 'static + Sized {
-    then! {
+    decl_then! {
         /// What to do when the timeout expires
         explodes
     }
-    then! {
+    decl_then! {
         /// what to do when the holder wishes to strike
         strikes
     }
@@ -59,35 +59,32 @@ where
     GenericBet: TryFrom<T, Error = CompilationError>,
     T: Clone,
 {
-    then! {
-        fn explodes (self, ctx) {
-            ctx.template()
-                .add_output(
-                    self.party_one.into(),
-                    &Compiled::from_address(self.key_p1.clone(), None),
-                    None,
-                )?
-                .add_output(
-                    self.party_two.into(),
-                    &Compiled::from_address(self.key_p2.clone(), None),
-                    None,
-                )?
-                .set_lock_time(self.timeout)?
-                .into()
-        }
+    #[then]
+    fn explodes(self, ctx: sapio::Context) {
+        ctx.template()
+            .add_output(
+                self.party_one.into(),
+                &Compiled::from_address(self.key_p1.clone(), None),
+                None,
+            )?
+            .add_output(
+                self.party_two.into(),
+                &Compiled::from_address(self.key_p2.clone(), None),
+                None,
+            )?
+            .set_lock_time(self.timeout)?
+            .into()
     }
 
-    then! {
-        guarded_by: [Self::signed]
-        fn strikes(self, ctx) {
-            ctx.template()
-                .add_output(
-                    (self.party_one + self.party_two).into(),
-                    &GenericBet::try_from(self.opt.clone())?,
-                    None,
-                )?
-                .into()
-        }
+    #[then(guarded_by = "[Self::signed]")]
+    fn strikes(self, ctx: sapio::Context) {
+        ctx.template()
+            .add_output(
+                (self.party_one + self.party_two).into(),
+                &GenericBet::try_from(self.opt.clone())?,
+                None,
+            )?
+            .into()
     }
 }
 
@@ -106,30 +103,28 @@ where
     GenericBet: TryFrom<T, Error = CompilationError>,
     T: Clone,
 {
-    then! {
-        fn explodes(self, ctx) {
-            ctx.template()
-                .add_output(
-                    self.party_one.into(),
-                    &Compiled::from_address(self.key_p1.clone(), None),
-                    None,
-                )?
-                .set_lock_time(self.timeout)?
-                .into()
-        }
+    #[then]
+    fn explodes(self, ctx: sapio::Context) {
+        ctx.template()
+            .add_output(
+                self.party_one.into(),
+                &Compiled::from_address(self.key_p1.clone(), None),
+                None,
+            )?
+            .set_lock_time(self.timeout)?
+            .into()
     }
 
-    then! {
-        fn strikes(self, ctx) {
-            ctx.template()
-                .add_amount(self.party_two)
-                .add_sequence()
-                .add_output(
-                    (self.party_one + self.party_two).into(),
-                    &GenericBet::try_from(self.opt.clone())?,
-                    None,
-                )?
-                .into()
-        }
+    #[then]
+    fn strikes(self, ctx: sapio::Context) {
+        ctx.template()
+            .add_amount(self.party_two)
+            .add_sequence()
+            .add_output(
+                (self.party_one + self.party_two).into(),
+                &GenericBet::try_from(self.opt.clone())?,
+                None,
+            )?
+            .into()
     }
 }

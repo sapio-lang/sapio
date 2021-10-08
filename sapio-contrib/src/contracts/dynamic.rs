@@ -44,8 +44,8 @@ impl AnyContract for D<'static> {
 #[derive(JsonSchema, Deserialize)]
 pub struct DynamicExample;
 impl DynamicExample {
-    then! {
-    fn next(self, ctx) {
+    #[then]
+    fn next(self, ctx: sapio::Context) {
         let v: Vec<fn() -> Option<actions::ThenFunc<'static, D<'static>>>> = vec![];
         let d: D<'_> = D { v };
 
@@ -55,7 +55,7 @@ impl DynamicExample {
                     conditional_compile_if: &[],
                     guard: &[],
                     func: |_s, _ctx| Err(CompilationError::TerminateCompilation),
-                    name: Arc::new("Empty".into())
+                    name: Arc::new("Empty".into()),
                 })
             }],
             finish: vec![],
@@ -67,7 +67,7 @@ impl DynamicExample {
         bld = bld.add_output(amt, &d, None)?;
         let amt2 = bld.ctx().funds();
         bld.add_output(amt2, &d2, None)?.into()
-    }}
+    }
 }
 
 impl Contract for DynamicExample {

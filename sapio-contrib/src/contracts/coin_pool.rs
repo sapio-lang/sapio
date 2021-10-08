@@ -33,37 +33,39 @@ fn default_coerce(
 }
 
 impl CoinPool {
-    then! {
-        /// cuts the pool in half in order to remove an offline or malicious participant
-        fn bisect_offline(self, ctx) {
-            if self.clauses.len() >= 2 {
-                let l = self.clauses.len();
-                let a = CoinPool {
-                    clauses: self.clauses[0..l/2].into(),
-                    refunds: self.refunds[0..l/2].into()
-                };
+    /// cuts the pool in half in order to remove an offline or malicious participant
+    #[then]
+    fn bisect_offline(self, ctx: sapio::Context) {
+        if self.clauses.len() >= 2 {
+            let l = self.clauses.len();
+            let a = CoinPool {
+                clauses: self.clauses[0..l / 2].into(),
+                refunds: self.refunds[0..l / 2].into(),
+            };
 
-                let b = CoinPool {
-                    clauses: self.clauses[l/2..].into(),
-                    refunds: self.refunds[l/2..].into()
-                };
+            let b = CoinPool {
+                clauses: self.clauses[l / 2..].into(),
+                refunds: self.refunds[l / 2..].into(),
+            };
 
-                ctx.template().add_output(
+            ctx.template()
+                .add_output(
                     Amount::from_sat(a.refunds.iter().map(|x| Amount::from(x.1).as_sat()).sum()),
                     &a,
-                    None
-                )?.add_output(
+                    None,
+                )?
+                .add_output(
                     Amount::from_sat(b.refunds.iter().map(|x| Amount::from(x.1).as_sat()).sum()),
                     &b,
-                    None
-                )?.into()
-            } else {
-                let mut builder = ctx.template();
-                for (cmp, amt) in self.refunds.iter() {
+                    None,
+                )?
+                .into()
+        } else {
+            let mut builder = ctx.template();
+            for (cmp, amt) in self.refunds.iter() {
                 builder = builder.add_output((*amt).into(), &*cmp.lock().unwrap(), None)?;
-                }
-                builder.into()
             }
+            builder.into()
         }
     }
     #[guard]

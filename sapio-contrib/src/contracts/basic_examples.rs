@@ -58,7 +58,7 @@ trait ExampleBThen
 where
     Self: Sized,
 {
-    then! {begin_contest}
+    decl_then! {begin_contest}
 }
 
 #[derive(JsonSchema, Serialize, Deserialize)]
@@ -82,18 +82,21 @@ impl<T: BState> ExampleB<T> {
 
 impl ExampleBThen for ExampleB<Finish> {}
 impl ExampleBThen for ExampleB<Start> {
-    then! {fn begin_contest(self, ctx) {
-        ctx.template().add_output(
-            self.amount.try_into()?,
-            &ExampleB::<Finish> {
-                participants: self.participants.clone(),
-                threshold: self.threshold,
-                amount: self.amount,
-                pd: Default::default(),
-            },
-            None,
-        )?.into()
-    }}
+    #[then]
+    fn begin_contest(self, ctx: sapio::Context) {
+        ctx.template()
+            .add_output(
+                self.amount.try_into()?,
+                &ExampleB::<Finish> {
+                    participants: self.participants.clone(),
+                    threshold: self.threshold,
+                    amount: self.amount,
+                    pd: Default::default(),
+                },
+                None,
+            )?
+            .into()
+    }
 }
 
 impl<T: BState> Contract for ExampleB<T>
@@ -173,19 +176,27 @@ impl ExampleCompileIf {
             ConditionalCompileType::NoConstraint
         }
     }
-    then! {compile_if: [Self::should_escrow, Self::must_escrow, Self::escrow_nullable_ok, Self::escrow_error_chk]
-        fn use_escrow(self, ctx) {
+    #[then(
+        compile_if = "[Self::should_escrow, Self::must_escrow, Self::escrow_nullable_ok, Self::escrow_error_chk]"
+    )]
+    fn use_escrow(self, ctx: sapio::Context) {
         ctx.template()
             .add_output(
                 self.alice_escrow.0.try_into()?,
                 &Compiled::from_address(self.alice_escrow.1.clone(), None),
-                None)?
+                None,
+            )?
             .add_output(
                 self.bob_escrow.0.try_into()?,
                 &Compiled::from_address(self.bob_escrow.1.clone(), None),
-                None)?
-            .set_sequence(0, RelTime::try_from(std::time::Duration::from_secs(10*24*60*60))?.into())?.into()
-    }}
+                None,
+            )?
+            .set_sequence(
+                0,
+                RelTime::try_from(std::time::Duration::from_secs(10 * 24 * 60 * 60))?.into(),
+            )?
+            .into()
+    }
 }
 
 impl Contract for ExampleCompileIf {

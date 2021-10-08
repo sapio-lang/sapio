@@ -11,10 +11,10 @@ use contract::*;
 use sapio::template::Template;
 use sapio::*;
 use sapio_base::Clause;
+use sapio_macros::guard;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::rc::Rc;
-use sapio_macros::guard;
 
 pub mod oracle;
 pub use oracle::{Oracle, Symbol};
@@ -103,32 +103,28 @@ impl GenericBet {
     fn gte(self, _ctx: Context) {
         self.price(true)
     }
-    then!(
-        guarded_by: [Self::gte]
-        fn pay_gte(self, ctx) {
-            if let Some(tmpl) = self.recurse_over(self.outcomes.len() / 2..self.outcomes.len(), ctx)? {
-                Ok(Box::new(std::iter::once(Ok(tmpl))))
-            } else {
-                Ok(Box::new(std::iter::empty()))
-            }
+    #[then(guarded_by = "[Self::gte]")]
+    fn pay_gte(self, ctx: sapio::Context) {
+        if let Some(tmpl) = self.recurse_over(self.outcomes.len() / 2..self.outcomes.len(), ctx)? {
+            Ok(Box::new(std::iter::once(Ok(tmpl))))
+        } else {
+            Ok(Box::new(std::iter::empty()))
         }
-    );
+    }
 
     /// Action when the price is less than or equal to the price in the middle
     #[guard]
     fn lt(self, _ctx: Context) {
         self.price(false)
     }
-    then!(
-        guarded_by: [Self::lt]
-        fn pay_lt(self, ctx) {
-            if let Some(tmpl) = self.recurse_over(0..self.outcomes.len() / 2, ctx)? {
-                Ok(Box::new(std::iter::once(Ok(tmpl))))
-            } else {
-                Ok(Box::new(std::iter::empty()))
-            }
+    #[then(guarded_by = "[Self::lt]")]
+    fn pay_lt(self, ctx: sapio::Context) {
+        if let Some(tmpl) = self.recurse_over(0..self.outcomes.len() / 2, ctx)? {
+            Ok(Box::new(std::iter::once(Ok(tmpl))))
+        } else {
+            Ok(Box::new(std::iter::empty()))
         }
-    );
+    }
     /// Allow for both parties to cooperative close
     #[guard]
     fn cooperate(self, _ctx: Context) {
