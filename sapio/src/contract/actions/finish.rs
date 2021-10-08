@@ -5,11 +5,11 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! a function type which is used to wrap a next transaction.
-use crate::contract::actions::GuardList;
-use crate::contract::actions::ConditionallyCompileIfList;
 use super::CompilationError;
 use super::Context;
 use super::TxTmplIt;
+use crate::contract::actions::ConditionallyCompileIfList;
+use crate::contract::actions::GuardList;
 use sapio_base::effects::EffectDBError;
 
 use core::marker::PhantomData;

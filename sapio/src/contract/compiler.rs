@@ -156,55 +156,66 @@ where
             self.then_fns()
                 .iter()
                 .filter_map(|func| func())
-                .zip(
-                    (0..)
-                        .flat_map(|i| conditional_compile_ctx.derive(PathFragment::Branch(i)).ok()),
-                )
-                .filter_map(|(func, mut this_ctx)| {
-                    let r = {
-                        let constraint = func
-                            .conditional_compile_if
-                            .iter()
-                            .filter_map(|compf| compf())
-                            .zip((0..).flat_map(|i| this_ctx.derive(PathFragment::Branch(i)).ok()))
-                            .fold(ConditionalCompileType::NoConstraint, |acc, (cond, c)| {
-                                let ConditionallyCompileIf::Fresh(f) = cond;
-                                acc.merge(f(self_ref, c))
-                            });
-                        match constraint {
-                            ConditionalCompileType::Fail(errors) => (errors, Nullable::No),
-                            ConditionalCompileType::Required
-                            | ConditionalCompileType::NoConstraint => {
-                                (LinkedList::new(), Nullable::No)
-                            }
-                            ConditionalCompileType::Nullable => (LinkedList::new(), Nullable::Yes),
-                            ConditionalCompileType::Skippable | ConditionalCompileType::Never => {
-                                return None
-                            }
+                .flat_map(|func| {
+                    let name = PathFragment::Named(SArc(func.name.clone()));
+                    match conditional_compile_ctx.derive(name.clone()) {
+                        Err(c) => Some(Err(c)),
+                        Ok(mut this_ctx) => {
+                            let r = {
+                                let constraint = func
+                                    .conditional_compile_if
+                                    .iter()
+                                    .filter_map(|compf| compf())
+                                    .zip((0..).flat_map(|i| {
+                                        this_ctx.derive(PathFragment::Branch(i)).ok()
+                                    }))
+                                    .fold(
+                                        ConditionalCompileType::NoConstraint,
+                                        |acc, (cond, c)| {
+                                            let ConditionallyCompileIf::Fresh(f) = cond;
+                                            acc.merge(f(self_ref, c))
+                                        },
+                                    );
+                                match constraint {
+                                    ConditionalCompileType::Fail(errors) => (errors, Nullable::No),
+                                    ConditionalCompileType::Required
+                                    | ConditionalCompileType::NoConstraint => {
+                                        (LinkedList::new(), Nullable::No)
+                                    }
+                                    ConditionalCompileType::Nullable => {
+                                        (LinkedList::new(), Nullable::Yes)
+                                    }
+                                    ConditionalCompileType::Skippable
+                                    | ConditionalCompileType::Never => return None,
+                                }
+                            };
+                            Some(Ok((func, r, name)))
                         }
-                    };
-                    Some((func, r))
+                    }
                 })
-                .zip(
-                    (0..)
-                        .flat_map(|i| guards_ctx.derive(PathFragment::Branch(i)).ok())
-                        .zip((0..).flat_map(|i| next_tx_ctx.derive(PathFragment::Branch(i)).ok())),
-                )
-                .map(|((func, (errors, nullability)), (gctx, ntx_ctx))| {
-                    let guards =
-                        create_guards(self_ref, gctx, func.guard, &mut guard_clauses.borrow_mut());
-                    (
-                        nullability,
-                        CTVRequired::Yes,
-                        guards,
-                        if errors.is_empty() {
-                            (func.func)(self_ref, ntx_ctx)
-                        } else {
-                            Err(CompilationError::ConditionalCompilationFailed(errors))
-                        },
-                    )
+                .map(|r|  {
+                    r.and_then(|(func, (errors, nullability), name)| {
+                        let gctx = guards_ctx.derive(name.clone())?;
+                        let ntx_ctx = next_tx_ctx.derive(name)?;
+                        let guards = create_guards(
+                            self_ref,
+                            gctx,
+                            func.guard,
+                            &mut guard_clauses.borrow_mut(),
+                        );
+                        Ok((
+                            nullability,
+                            CTVRequired::Yes,
+                            guards,
+                            if errors.is_empty() {
+                                (func.func)(self_ref, ntx_ctx)
+                            } else {
+                                Err(CompilationError::ConditionalCompilationFailed(errors))
+                            },
+                        ))
+                    })
                 })
-                .collect()
+                .collect::<Result<Vec<(Nullable, CTVRequired, Clause, TxTmplIt)>, CompilationError>>()?
         };
         // finish_or_fns may be used to compute additional transactions with
         // a given argument, but for building the ABI we only precompute with
@@ -225,27 +236,32 @@ where
                 .filter_map(|func| func())
                 // TODO: De-duplicate this code?
                 .filter_map(|func| {
-                    /// NOTE: Derivation silently passes if name is a duplicate!
-                    let mut this_ctx = conditional_compile_ctx
-                        .derive(PathFragment::Named(SArc(func.get_name().clone()))).ok()?;
-                    let constraint = func
-                        .get_conditional_compile_if()
-                        .iter()
-                        .filter_map(|compf| compf())
-                        .zip((0..).flat_map(|i| this_ctx.derive(PathFragment::Branch(i)).ok()))
-                        .fold(ConditionalCompileType::NoConstraint, |acc, (cond, c)| {
-                            let ConditionallyCompileIf::Fresh(f) = cond;
-                            acc.merge(f(self_ref, c))
-                        });
-                    match constraint {
-                        ConditionalCompileType::Fail(errors) => Some((func, errors)),
-                        ConditionalCompileType::Required
-                        | ConditionalCompileType::NoConstraint
-                        | ConditionalCompileType::Nullable => Some((func, LinkedList::new())),
-                        ConditionalCompileType::Skippable | ConditionalCompileType::Never => None,
+                    let r = conditional_compile_ctx
+                        .derive(PathFragment::Named(SArc(func.get_name().clone())));
+                    match r {
+                        Err(c) => Some(Err(c)),
+                        Ok(mut this_ctx) => {
+                            let constraint = func
+                                .get_conditional_compile_if()
+                                .iter()
+                                .filter_map(|compf| compf())
+                                .zip((0..).flat_map(|i| this_ctx.derive(PathFragment::Branch(i)).ok()))
+                                .fold(ConditionalCompileType::NoConstraint, |acc, (cond, c)| {
+                                    let ConditionallyCompileIf::Fresh(f) = cond;
+                                    acc.merge(f(self_ref, c))
+                                });
+                            match constraint {
+                                ConditionalCompileType::Fail(errors) => Some(Ok((func, errors))),
+                                ConditionalCompileType::Required
+                                | ConditionalCompileType::NoConstraint
+                                | ConditionalCompileType::Nullable => Some(Ok((func, LinkedList::new()))),
+                                ConditionalCompileType::Skippable | ConditionalCompileType::Never => None,
+                            }
+                        }
                     }
                 })
-                .map(|(func, errors)| {
+                .map(|r| {
+                    r.and_then(|(func, errors)| {
                     let mut top_effect_ctx = suggested_tx_ctx
                         .derive(PathFragment::Named(SArc(func.get_name().clone())))?;
                     let guard = create_guards(
@@ -292,7 +308,7 @@ where
                             },
                         ),
                     ))
-                })
+                })})
                 .collect()
         };
         let (continue_apis, finish_or_fns): (

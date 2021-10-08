@@ -10,6 +10,7 @@ use sapio::contract::*;
 use sapio::*;
 use schemars::*;
 use serde::*;
+use std::sync::Arc;
 
 /// Demonstrates how to make a contract object without known functionality at
 /// (rust) compile time. `D` Binds statically to the AnyContract interface though!
@@ -43,24 +44,29 @@ impl AnyContract for D<'static> {
 #[derive(JsonSchema, Deserialize)]
 pub struct DynamicExample;
 impl DynamicExample {
-    then! {fn next (self, ctx) {
-        let v:
-            Vec<fn() -> Option<actions::ThenFunc<'static, D<'static>>>>
-            = vec![];
-        let d : D<'_> = D{v};
+    then! {
+    fn next(self, ctx) {
+        let v: Vec<fn() -> Option<actions::ThenFunc<'static, D<'static>>>> = vec![];
+        let d: D<'_> = D { v };
 
         let d2 = DynamicContract::<(), String> {
-            then: vec![|| None, || Some(sapio::contract::actions::ThenFunc{conditional_compile_if: &[], guard: &[], func: |_s, _ctx| Err(CompilationError::TerminateCompilation)})],
+            then: vec![|| None, || {
+                Some(sapio::contract::actions::ThenFunc {
+                    conditional_compile_if: &[],
+                    guard: &[],
+                    func: |_s, _ctx| Err(CompilationError::TerminateCompilation),
+                    name: Arc::new("Empty".into())
+                })
+            }],
             finish: vec![],
             finish_or: vec![],
             data: "E.g., Create a Vault".into(),
         };
         let mut bld = ctx.template();
-        let amt = bld.ctx().funds()/2;
+        let amt = bld.ctx().funds() / 2;
         bld = bld.add_output(amt, &d, None)?;
         let amt2 = bld.ctx().funds();
-        bld.add_output(amt2, &d2, None)?
-        .into()
+        bld.add_output(amt2, &d2, None)?.into()
     }}
 }
 

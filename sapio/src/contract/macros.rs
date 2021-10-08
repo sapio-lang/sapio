@@ -116,7 +116,8 @@ macro_rules! then {
                 Some($crate::contract::actions::ThenFunc{
                     guard: &$guard_list,
                     conditional_compile_if: &$conditional_compile_list,
-                    func: Self::[<THEN_ $name>]
+                    func: Self::[<THEN_ $name>],
+                    name: std::sync::Arc::new(std::stringify!($name).into()),
                 })
             }
         }

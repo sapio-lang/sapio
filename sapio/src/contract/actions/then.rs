@@ -9,6 +9,7 @@ use super::Context;
 use super::TxTmplIt;
 use crate::contract::actions::ConditionallyCompileIfList;
 use crate::contract::actions::GuardList;
+use std::sync::Arc;
 
 /// A ThenFunc takes a list of Guards and a TxTmplIt generator.  Each TxTmpl returned from the
 /// ThenFunc is Covenant Permitted only if the AND of all guards is satisfied.
@@ -23,4 +24,6 @@ pub struct ThenFunc<'a, ContractSelf> {
     /// Implementors should aim to return as few `TxTmpl`s as possible for enhanced
     /// semantics, preferring to split across multiple `ThenFunc`'s
     pub func: fn(&ContractSelf, Context) -> TxTmplIt,
+    /// name derived from Function Name.
+    pub name: Arc<String>,
 }
