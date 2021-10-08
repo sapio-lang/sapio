@@ -321,7 +321,7 @@ impl Session {
 
     /// process a message from the Session manager (e.g., networking stack)
     /// and react to it.
-    pub fn handle(&mut self, m: Msg) -> Result<Option<Reaction>, serde_json::Error> {
+    pub fn handle(&mut self, m: Msg<'_>) -> Result<Option<Reaction>, serde_json::Error> {
         let action: Action = match m {
             Msg::Text(m) => serde_json::from_str(&m),
             Msg::Bytes(m) => serde_json::from_slice(&m),

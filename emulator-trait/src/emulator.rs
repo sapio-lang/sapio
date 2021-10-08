@@ -20,7 +20,7 @@ pub enum EmulatorError {
     BIP32Error(bitcoin::util::bip32::Error),
 }
 impl fmt::Display for EmulatorError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }

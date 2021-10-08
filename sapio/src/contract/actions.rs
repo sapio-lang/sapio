@@ -123,7 +123,7 @@ pub type ConditionallyCompileIfList<'a, T> = &'a [fn() -> Option<ConditionallyCo
 
 /// A ThenFunc takes a list of Guards and a TxTmplIt generator.  Each TxTmpl returned from the
 /// ThenFunc is Covenant Permitted only if the AND of all guards is satisfied.
-pub struct ThenFunc<'a, ContractSelf: 'a> {
+pub struct ThenFunc<'a, ContractSelf> {
     /// Guards returns Clauses -- if any -- before the internal func's returned
     /// TxTmpls should execute on-chain
     pub guard: GuardList<'a, ContractSelf>,
@@ -138,7 +138,7 @@ pub struct ThenFunc<'a, ContractSelf: 'a> {
 
 /// A function which by default finishes, but may receive some context object which can induce the
 /// generation of additional transactions (as a suggestion)
-pub struct FinishOrFunc<'a, ContractSelf: 'a, StatefulArguments, SpecificArgs, WebAPIStatus> {
+pub struct FinishOrFunc<'a, ContractSelf, StatefulArguments, SpecificArgs, WebAPIStatus> {
     /// StatefulArgs is needed to capture a general API for all calls, but SpecificArgs is required
     /// for a given function.
     pub coerce_args: fn(StatefulArguments) -> Result<SpecificArgs, CompilationError>,

@@ -47,7 +47,7 @@ impl DynamicExample {
         let v:
             Vec<fn() -> Option<actions::ThenFunc<'static, D<'static>>>>
             = vec![];
-        let d : D = D{v};
+        let d : D<'_> = D{v};
 
         let d2 = DynamicContract::<(), String> {
             then: vec![|| None, || Some(sapio::contract::actions::ThenFunc{conditional_compile_if: &[], guard: &[], func: |_s, _ctx| Err(CompilationError::TerminateCompilation)})],

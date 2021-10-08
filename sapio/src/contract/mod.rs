@@ -50,10 +50,7 @@ where
 
 /// DynamicContract wraps a struct S with a set of methods (that can be constructed dynamically)
 /// to form a contract. DynamicContract owns all its methods.
-pub struct DynamicContract<'a, T, S>
-where
-    S: 'a,
-{
+pub struct DynamicContract<'a, T, S> {
     /// the list of `ThenFunc` for this contract.
     pub then: Vec<fn() -> Option<actions::ThenFunc<'a, S>>>,
     /// the list of `FinishOrFunc` for this contract.

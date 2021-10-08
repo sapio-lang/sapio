@@ -40,7 +40,7 @@ struct SafePSBT(usize);
 
 impl<'de> Visitor<'de> for SafePSBT {
     type Value = PSBT;
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&format!(
             "Expecting a PSBT serialized smaller than {}",
             self.0

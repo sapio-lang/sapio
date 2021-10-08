@@ -189,7 +189,7 @@ impl WasmPluginHandle {
     /// helper for string passing
     fn pass_string_inner(&self, s: &str, offset: i32) -> Result<(), Box<dyn Error>> {
         let memory = self.instance.exports.get_memory("memory")?;
-        let mem: MemoryView<u8> = memory.view();
+        let mem: MemoryView<'_, u8> = memory.view();
         for (idx, byte) in s.as_bytes().iter().enumerate() {
             mem[idx + offset as usize].set(*byte);
         }
@@ -199,7 +199,7 @@ impl WasmPluginHandle {
     /// read something from wasm memory, null terminated
     fn read_to_vec(&self, p: i32) -> Result<Vec<u8>, Box<dyn Error>> {
         let memory = self.instance.exports.get_memory("memory")?;
-        let mem: MemoryView<u8> = memory.view();
+        let mem: MemoryView<'_, u8> = memory.view();
         Ok(mem[p as usize..]
             .iter()
             .map(Cell::get)
