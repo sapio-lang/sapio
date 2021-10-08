@@ -16,6 +16,7 @@ pub use sapio_base::effects::{EffectDB, MapEffectDB};
 use sapio_base::reverse_path::ReversePath;
 use sapio_base::serialization_helpers::SArc;
 use sapio_ctv_emulator_trait::CTVEmulator;
+use std::convert::TryInto;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -66,7 +67,12 @@ impl Context {
 
     /// Derive a new contextual path
     pub fn derive_str<'a>(&mut self, path: Arc<String>) -> Result<Self, CompilationError> {
-        self.derive(PathFragment::Named(SArc(path)))
+        let p: PathFragment = path.try_into()?;
+        if matches!(p, PathFragment::Named(_)) {
+            self.derive(p)
+        } else {
+            Err(CompilationError::InvalidPathName)
+        }
     }
     /// Derive a new contextual path
     pub fn derive_num<T: Into<u64>>(&mut self, path: T) -> Result<Self, CompilationError> {
