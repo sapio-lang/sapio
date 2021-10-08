@@ -11,7 +11,7 @@ use sapio::util::amountrange::AmountF64;
 use sapio::*;
 use sapio_base::timelocks::AnyRelTimeLock;
 use sapio_base::Clause;
-use schemars::schema::RootSchema;
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::convert::{TryFrom, TryInto};
@@ -33,64 +33,65 @@ fn default_coerce(
 }
 
 impl CoinPool {
-    then! {
-        /// cuts the pool in half in order to remove an offline or malicious participant
-        fn bisect_offline(self, ctx) {
-            if self.clauses.len() >= 2 {
-                let l = self.clauses.len();
-                let a = CoinPool {
-                    clauses: self.clauses[0..l/2].into(),
-                    refunds: self.refunds[0..l/2].into()
-                };
+    /// cuts the pool in half in order to remove an offline or malicious participant
+    #[then]
+    fn bisect_offline(self, ctx: sapio::Context) {
+        if self.clauses.len() >= 2 {
+            let l = self.clauses.len();
+            let a = CoinPool {
+                clauses: self.clauses[0..l / 2].into(),
+                refunds: self.refunds[0..l / 2].into(),
+            };
 
-                let b = CoinPool {
-                    clauses: self.clauses[l/2..].into(),
-                    refunds: self.refunds[l/2..].into()
-                };
+            let b = CoinPool {
+                clauses: self.clauses[l / 2..].into(),
+                refunds: self.refunds[l / 2..].into(),
+            };
 
-                ctx.template().add_output(
+            ctx.template()
+                .add_output(
                     Amount::from_sat(a.refunds.iter().map(|x| Amount::from(x.1).as_sat()).sum()),
                     &a,
-                    None
-                )?.add_output(
+                    None,
+                )?
+                .add_output(
                     Amount::from_sat(b.refunds.iter().map(|x| Amount::from(x.1).as_sat()).sum()),
                     &b,
-                    None
-                )?.into()
-            } else {
-                let mut builder = ctx.template();
-                for (cmp, amt) in self.refunds.iter() {
+                    None,
+                )?
+                .into()
+        } else {
+            let mut builder = ctx.template();
+            for (cmp, amt) in self.refunds.iter() {
                 builder = builder.add_output((*amt).into(), &*cmp.lock().unwrap(), None)?;
-                }
-                builder.into()
             }
+            builder.into()
         }
     }
-    guard! {
-        /// everyone has signed off on the transaction
-        fn all_approve(self, _ctx) {
-            Clause::Threshold(self.clauses.len(), self.clauses.clone())
-        }
+    #[guard]
+    /// everyone has signed off on the transaction
+    fn all_approve(self, _ctx: Context) {
+        Clause::Threshold(self.clauses.len(), self.clauses.clone())
     }
-    finish! {
-        /// move the coins to the next state -- payouts may recursively contain pools itself
-        <web={}>
-        guarded_by: [Self::all_approve]
-        coerce_args: default_coerce
-        fn next_pool(self, ctx, o: UpdateTypes) {
-            let o2: Option<CoinPoolUpdate> =o.try_into()?;
-            if let Some(coin_pool)= o2 {
-                let mut tmpl = ctx.template().add_amount(coin_pool.external_amount.into());
-                for (to, amt) in coin_pool.payouts.iter() {
-                    tmpl = tmpl.add_output((*amt).into(), &*to.lock().unwrap(), None)?;
-                }
-                for seq in coin_pool.add_inputs.iter() {
-                    tmpl = tmpl.add_sequence().set_sequence(-1, *seq)?;
-                }
-                tmpl.into()
-            } else {
-                empty()
+    /// move the coins to the next state -- payouts may recursively contain pools itself
+    #[continuation(
+        web_api,
+        guarded_by = "[Self::all_approve]",
+        coerce_args = "default_coerce"
+    )]
+    fn next_pool(self, ctx: sapio::Context, o: UpdateTypes) {
+        let o2: Option<CoinPoolUpdate> = o.try_into()?;
+        if let Some(coin_pool) = o2 {
+            let mut tmpl = ctx.template().add_amount(coin_pool.external_amount.into());
+            for (to, amt) in coin_pool.payouts.iter() {
+                tmpl = tmpl.add_output((*amt).into(), &*to.lock().unwrap(), None)?;
             }
+            for seq in coin_pool.add_inputs.iter() {
+                tmpl = tmpl.add_sequence().set_sequence(-1, *seq)?;
+            }
+            tmpl.into()
+        } else {
+            empty()
         }
     }
 }

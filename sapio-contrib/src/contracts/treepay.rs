@@ -7,9 +7,11 @@
 //! contracts for paying a large set of recipients fee efficiently
 use sapio::contract::*;
 use sapio::*;
+
 use schemars::*;
 use serde::*;
 use std::convert::TryInto;
+
 /// instructions to send an amount of coin to an address
 #[derive(JsonSchema, Serialize, Deserialize, Clone)]
 pub struct Payment {
@@ -29,24 +31,38 @@ pub struct TreePay {
 }
 
 impl TreePay {
-    then! {fn expand(self, ctx) {
+    #[then]
+    fn expand(self, ctx: sapio::Context) {
         let mut builder = ctx.template();
         if self.participants.len() > self.radix {
-
-            for c in self.participants.chunks(self.participants.len()/self.radix) {
-                let mut amt =  bitcoin::util::amount::Amount::from_sat(0);
-                for Payment{amount, ..}  in c {
+            for c in self
+                .participants
+                .chunks(self.participants.len() / self.radix)
+            {
+                let mut amt = bitcoin::util::amount::Amount::from_sat(0);
+                for Payment { amount, .. } in c {
                     amt += amount.clone().try_into()?;
                 }
-                builder = builder.add_output(amt, &TreePay {participants: c.to_vec(), radix: self.radix}, None)?;
+                builder = builder.add_output(
+                    amt,
+                    &TreePay {
+                        participants: c.to_vec(),
+                        radix: self.radix,
+                    },
+                    None,
+                )?;
             }
         } else {
-            for Payment{amount, address} in self.participants.iter() {
-                builder = builder.add_output((*amount).try_into()?, &Compiled::from_address(address.clone(), None), None)?;
+            for Payment { amount, address } in self.participants.iter() {
+                builder = builder.add_output(
+                    (*amount).try_into()?,
+                    &Compiled::from_address(address.clone(), None),
+                    None,
+                )?;
             }
         }
         builder.into()
-    }}
+    }
 }
 
 impl Contract for TreePay {

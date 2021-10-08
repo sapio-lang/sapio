@@ -84,20 +84,18 @@ impl PayThisThing for PayoutBundle {
     }
 }
 impl PayoutBundle {
-    guard! {
-        fn cooperate(self, _ctx) {
-           let v : Vec<_>= self.get_keys().into_iter().map(Clause::Key).collect();
-           Clause::Threshold(v.len(), v)
-        }
+    #[guard]
+    fn cooperate(self, _ctx: sapio::Context) {
+        let v: Vec<_> = self.get_keys().into_iter().map(Clause::Key).collect();
+        Clause::Threshold(v.len(), v)
     }
-    then! {
-        fn expand(self, ctx) {
-            let mut bld = ctx.template();
-            for (amt, ct) in self.contracts.iter() {
-                bld = bld.add_output(*amt, ct.as_compilable(), None)?;
-            }
-            bld.add_fees(self.fees)?.into()
+    #[then]
+    fn expand(self, ctx: sapio::Context) {
+        let mut bld = ctx.template();
+        for (amt, ct) in self.contracts.iter() {
+            bld = bld.add_output(*amt, ct.as_compilable(), None)?;
         }
+        bld.add_fees(self.fees)?.into()
     }
 
     fn total_to_pay(&self) -> Amount {
@@ -114,37 +112,52 @@ impl Contract for PayoutBundle {
     declare! {non updatable}
 }
 impl MiningPayout {
-    guard! {
-        fn cooperate(self, _ctx) {
-           let v : Vec<_>= self.participants.iter().map(|x|Clause::Key(x.key.clone())).collect();
-           Clause::Threshold(v.len(), v)
-        }
+    #[guard]
+    fn cooperate(self, _ctx: sapio::Context) {
+        let v: Vec<_> = self
+            .participants
+            .iter()
+            .map(|x| Clause::Key(x.key.clone()))
+            .collect();
+        Clause::Threshold(v.len(), v)
     }
-    then! {
-        fn expand(self, ctx) {
-            let mut ctx = ctx;
-            let mut counter: u64 = 0;
-            let mut get_ctx = || {counter +=1; return ctx.derive_num(counter);};
-            let mut queue : VecDeque<(Amount, Box<dyn PayThisThing>)> = self.participants.iter().map(|payment| {
+    #[then]
+    fn expand(self, ctx: sapio::Context) {
+        let mut ctx = ctx;
+        let mut counter: u64 = 0;
+        let mut get_ctx = || {
+            counter += 1;
+            return ctx.derive_num(counter);
+        };
+        let mut queue: VecDeque<(Amount, Box<dyn PayThisThing>)> = self
+            .participants
+            .iter()
+            .map(|payment| {
                 let b: Box<dyn PayThisThing> = Box::new(JustAKey::new(payment, get_ctx()?)?);
                 Ok((payment.amount, b))
-            }).collect::<Result<VecDeque<_>, CompilationError>>()?;
+            })
+            .collect::<Result<VecDeque<_>, CompilationError>>()?;
 
-            loop {
-                let v : Vec<_> = queue.drain(0..std::cmp::min(self.radix, queue.len())).collect();
-                if queue.len() == 0 {
-                    let mut builder = get_ctx()?.template();
-                    for pay in v.iter() {
-                        builder = builder.add_output(pay.0, pay.1.as_compilable(), None)?;
-                    }
-                    builder =builder.add_fees(self.fee_sats_per_tx)?;
-                    return builder.into();
-                } else {
-                    let pay = Box::new(PayoutBundle{contracts:v, fees: self.fee_sats_per_tx});
-                    queue.push_back((pay.total_to_pay(), pay))
+        loop {
+            let v: Vec<_> = queue
+                .drain(0..std::cmp::min(self.radix, queue.len()))
+                .collect();
+            if queue.len() == 0 {
+                let mut builder = get_ctx()?.template();
+                for pay in v.iter() {
+                    builder = builder.add_output(pay.0, pay.1.as_compilable(), None)?;
                 }
+                builder = builder.add_fees(self.fee_sats_per_tx)?;
+                return builder.into();
+            } else {
+                let pay = Box::new(PayoutBundle {
+                    contracts: v,
+                    fees: self.fee_sats_per_tx,
+                });
+                queue.push_back((pay.total_to_pay(), pay))
             }
-    }}
+        }
+    }
 }
 impl Contract for MiningPayout {
     declare! {then, Self::expand}

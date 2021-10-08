@@ -15,6 +15,7 @@ use sapio::*;
 use sapio::*;
 use sapio_base::timelocks::AnyRelTimeLock;
 use sapio_base::Clause;
+use sapio_macros::guard;
 use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
@@ -67,8 +68,12 @@ impl Contract for TapBet {
 /// The actual logic for each TapBet
 impl TapBet {
     /// The waiting period is over, sample if Taproot is active
-    guard! {period_over |s, ctx| { s.period.into() }}
-    then! {continue_expansion [Self::period_over] |s, ctx| {
+    #[guard]
+    fn period_over(&self, ctx: Context) {
+        self.period.into()
+    }
+    #[then(guarded_by = "[Self::period_over]")]
+    fn continue_expansion(self, ctx: sapio::Context) {
         // creates a new transaction template for the next step
         // of this contract
         let mut builder = ctx.template().set_label("continue_expansion".into());
@@ -81,29 +86,28 @@ impl TapBet {
             builder = builder.add_output(
                 s.amount_per_time,
                 &Compiled::from_script(s.taproot_script.clone(), Some(range), ctx.network)?,
-                None
+                None,
             )?;
         }
         // if we have funds remaining, make a recursive TapBet with the same
         // parameters.
         if builder.ctx().funds() >= s.fees_per_time {
-            let amt =
-                builder.ctx().funds() - s.fees_per_time;
+            let amt = builder.ctx().funds() - s.fees_per_time;
             if amt > Amount::from_sat(0) {
-                builder = builder.add_output(
-                    amt,
-                    s,
-                    None
-                )?;
+                builder = builder.add_output(amt, s, None)?;
             }
         }
         builder.into()
-    }}
+    }
 
     /// The timeout period is over
-    guard! {timeout |s, ctx| { s.cancel_timeout.into() }}
-    then! {stop_expansion [Self::timeout] |s, ctx| {
-        let mut builder  = ctx.template().set_label("stop_expansion".into());
+    #[guard]
+    fn timeout(&self, ctx: Context) {
+        self.cancel_timeout.into()
+    }
+    #[then(guarded_by = "[Self::timeout]")]
+    fn stop_expansion(self, ctx: sapio::Context) {
+        let mut builder = ctx.template().set_label("stop_expansion".into());
         builder = builder.set_sequence(0, s.cancel_timeout.into())?;
         // Pay out to the orginal owner
         if builder.ctx().funds() >= s.fees_per_time {
@@ -112,10 +116,10 @@ impl TapBet {
                 builder = builder.add_output(
                     amt,
                     &Compiled::from_address(s.cancel_to.clone(), None),
-                    None
+                    None,
                 )?;
             }
         }
         builder.into()
-    }}
+    }
 }

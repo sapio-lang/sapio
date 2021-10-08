@@ -9,6 +9,7 @@
 //! errors created by the user we allow boxing an error trait.
 use crate::contract::object::ObjectError;
 use sapio_base::effects::EffectDBError;
+use sapio_base::effects::ValidFragmentError;
 use sapio_ctv_emulator_trait::EmulatorError;
 use std::collections::LinkedList;
 use std::error::Error;
@@ -20,6 +21,10 @@ pub enum CompilationError {
     TerminateCompilation,
     /// Error when ContextPath has already been used.
     ContexPathAlreadyDerived,
+    /// Error when ContextPath attempted
+    InvalidPathName,
+    /// Other Error for Fragment Format
+    PathFragmentError(ValidFragmentError),
     /// Error when a `ThenFunc` returns no Templates.
     MissingTemplates,
     /// Error if a Policy is empty
@@ -52,6 +57,11 @@ pub enum CompilationError {
     Custom(Box<dyn std::error::Error>),
 }
 
+impl From<ValidFragmentError> for CompilationError {
+    fn from(e: ValidFragmentError) -> CompilationError {
+        CompilationError::PathFragmentError(e)
+    }
+}
 impl From<EffectDBError> for CompilationError {
     fn from(e: EffectDBError) -> CompilationError {
         CompilationError::EffectDBError(e)

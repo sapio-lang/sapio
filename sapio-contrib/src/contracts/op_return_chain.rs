@@ -9,14 +9,12 @@ use bitcoin::Amount;
 use sapio::contract::*;
 use sapio::util::amountrange::AmountF64;
 use sapio::*;
-use sapio_base::timelocks::AnyRelTimeLock;
 use sapio_base::Clause;
-use schemars::schema::RootSchema;
+use sapio_macros::guard;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::*;
-use std::convert::{TryFrom, TryInto};
-use std::sync::{Arc, Mutex};
+
 /// Chain of OpReturns
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ChainReturn {
@@ -30,32 +28,35 @@ fn default_coerce(
 }
 
 impl ChainReturn {
-    guard! {
-        /// everyone has signed off on the transaction
-        fn approved(self, _ctx) {
-            Clause::Key(self.pk.clone())
-        }
+    /// everyone has signed off on the transaction
+    #[guard]
+    fn approved(self, _ctx: Context) {
+        Clause::Key(self.pk.clone())
     }
-    finish! {
-            /// move the coins to the next state -- payouts may recursively contain pools itself
-            <web={}>
-            guarded_by: [Self::approved]
-            coerce_args: default_coerce
-            fn next_chain(self, ctx, o: UpdateTypes) {
-                let mut tmpl = ctx.template();
-                if let UpdateTypes::AddData { data, fees } = o {
-                    tmpl = tmpl.spend_amount(fees.into())?;
-                    tmpl = tmpl.add_output(Amount::from_sat(0), &Compiled::from_op_return(&data.as_str().as_bytes())?, None)?;
-                    let funds = tmpl.ctx().funds();
-                    if funds.as_sat() != 0 {
-                        tmpl = tmpl.add_output(funds, self, None)?;
-                    }
-                } else{
-                    let funds = tmpl.ctx().funds();
-                    tmpl = tmpl.add_output(funds, &self.pk, None)?;
-                }
-                tmpl.into()
+    /// move the coins to the next state -- payouts may recursively contain pools itself
+    #[continuation(
+        guarded_by = "[Self::approved]",
+        coerce_args = "default_coerce",
+        web_api
+    )]
+    fn next_chain(self, ctx: sapio::Context, o: UpdateTypes) {
+        let mut tmpl = ctx.template();
+        if let UpdateTypes::AddData { data, fees } = o {
+            tmpl = tmpl.spend_amount(fees.into())?;
+            tmpl = tmpl.add_output(
+                Amount::from_sat(0),
+                &Compiled::from_op_return(&data.as_str().as_bytes())?,
+                None,
+            )?;
+            let funds = tmpl.ctx().funds();
+            if funds.as_sat() != 0 {
+                tmpl = tmpl.add_output(funds, self, None)?;
+            }
+        } else {
+            let funds = tmpl.ctx().funds();
+            tmpl = tmpl.add_output(funds, &self.pk, None)?;
         }
+        tmpl.into()
     }
 }
 
@@ -70,11 +71,11 @@ pub enum UpdateTypes {
         fees: AmountF64,
     },
     /// # Update without Args
-    NoUpdate,
+    NoUpdate {},
 }
 impl Default for UpdateTypes {
     fn default() -> Self {
-        UpdateTypes::NoUpdate
+        UpdateTypes::NoUpdate {}
     }
 }
 impl StatefulArgumentsTrait for UpdateTypes {}

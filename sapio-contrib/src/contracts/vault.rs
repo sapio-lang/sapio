@@ -10,6 +10,7 @@ use bitcoin::util::amount::CoinAmount;
 use sapio::contract::*;
 use sapio::*;
 use sapio_base::timelocks::AnyRelTimeLock;
+
 use schemars::*;
 use serde::*;
 use std::convert::{TryFrom, TryInto};
@@ -29,44 +30,59 @@ pub struct Vault {
 }
 
 impl Vault {
-    then! {fn step(self, ctx) {
+    #[then]
+    fn step(self, ctx: sapio::Context) {
         let mut ctx = ctx;
         let cold_storage_ctx = ctx.derive_str(Arc::new("cold".into()))?;
         let mut builder = ctx.template();
         builder = builder
-                    .add_output(self.amount_step.try_into()?,
-                                &UndoSendInternal {
-                                    from_contract: (self.cold_storage)(self.amount_step, cold_storage_ctx)?,
-                                    to_contract: Compiled::from_address(self.hot_storage.clone(), None),
-                                    timeout: self.mature,
-                                    amount: self.amount_step.into(),
-                                }, None)?
-                    .set_sequence(0, self.timeout)?;
+            .add_output(
+                self.amount_step.try_into()?,
+                &UndoSendInternal {
+                    from_contract: (self.cold_storage)(self.amount_step, cold_storage_ctx)?,
+                    to_contract: Compiled::from_address(self.hot_storage.clone(), None),
+                    timeout: self.mature,
+                    amount: self.amount_step.into(),
+                },
+                None,
+            )?
+            .set_sequence(0, self.timeout)?;
 
         if self.n_steps > 1 {
-            let sub_amount = bitcoin::Amount::try_from(self.amount_step).map_err(|_e| contract::CompilationError::TerminateCompilation)?.checked_mul(self.n_steps - 1).ok_or(contract::CompilationError::TerminateCompilation)?;
+            let sub_amount = bitcoin::Amount::try_from(self.amount_step)
+                .map_err(|_e| contract::CompilationError::TerminateCompilation)?
+                .checked_mul(self.n_steps - 1)
+                .ok_or(contract::CompilationError::TerminateCompilation)?;
             let sub_vault = Vault {
                 cold_storage: self.cold_storage.clone(),
                 hot_storage: self.hot_storage.clone(),
-                n_steps: self.n_steps -1,
+                n_steps: self.n_steps - 1,
                 amount_step: self.amount_step,
                 timeout: self.timeout,
                 mature: self.mature,
-
             };
             builder.add_output(sub_amount, &sub_vault, None)?
         } else {
             builder
-        }.into()
-    }}
-    then! {fn to_cold (self, ctx) {
+        }
+        .into()
+    }
+    #[then]
+    fn to_cold(self, ctx: sapio::Context) {
         let mut ctx = ctx;
-        let amount = bitcoin::Amount::try_from(self.amount_step).map_err(|_e| contract::CompilationError::TerminateCompilation)?.checked_mul(self.n_steps).ok_or(contract::CompilationError::TerminateCompilation)?;
+        let amount = bitcoin::Amount::try_from(self.amount_step)
+            .map_err(|_e| contract::CompilationError::TerminateCompilation)?
+            .checked_mul(self.n_steps)
+            .ok_or(contract::CompilationError::TerminateCompilation)?;
         let cold_storage_ctx = ctx.derive_str(Arc::new("cold".into()))?;
         ctx.template()
-            .add_output(amount, &(self.cold_storage)(amount.into(), cold_storage_ctx)?, None)?
+            .add_output(
+                amount,
+                &(self.cold_storage)(amount.into(), cold_storage_ctx)?,
+                None,
+            )?
             .into()
-    }}
+    }
 }
 
 impl Contract for Vault {

@@ -110,7 +110,7 @@ impl<T, Y> ReversePath<T, Y> {
         })
     }
     /// iterate over a reversepath
-    pub fn iter(&self) -> RPI<T, Y> {
+    pub fn iter(&self) -> RPI<'_, T, Y> {
         RPI { inner: Some(self) }
     }
 }

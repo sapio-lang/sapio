@@ -11,11 +11,12 @@ use crate::util::amountrange::AmountRange;
 use bitcoin::Network;
 use miniscript::Descriptor;
 use miniscript::DescriptorTrait;
+use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
 pub use sapio_base::effects::{EffectDB, MapEffectDB};
-use sapio_base::reverse_path::ReversePath;
 use sapio_base::serialization_helpers::SArc;
 use sapio_ctv_emulator_trait::CTVEmulator;
+use std::convert::TryInto;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -30,7 +31,7 @@ pub struct Context {
     /// which network is the contract building for?
     pub network: Network,
     /// TODO: reversed linked list of ARCs to better de-duplicate memory.
-    path: Arc<ReversePath<PathFragment>>,
+    path: Arc<EffectPath>,
     already_derived: HashSet<PathFragment>,
     effects: Arc<MapEffectDB>,
 }
@@ -42,7 +43,7 @@ impl Context {
         network: Network,
         available_funds: Amount,
         emulator: Arc<dyn CTVEmulator>,
-        path: ReversePath<PathFragment>,
+        path: EffectPath,
         effects: Arc<MapEffectDB>,
     ) -> Self {
         Context {
@@ -56,17 +57,22 @@ impl Context {
         }
     }
     /// Get this Context's effect database
-    pub fn get_effects(&self) -> &Arc<MapEffectDB> {
+    pub(crate) fn get_effects(&self, _: InternalCompilerTag) -> &Arc<MapEffectDB> {
         &self.effects
     }
     /// Gets this Context's Path, but does not clone (left to caller)
-    pub fn path(&self) -> &Arc<ReversePath<PathFragment>> {
+    pub fn path(&self) -> &Arc<EffectPath> {
         &self.path
     }
 
     /// Derive a new contextual path
     pub fn derive_str<'a>(&mut self, path: Arc<String>) -> Result<Self, CompilationError> {
-        self.derive(PathFragment::Named(SArc(path)))
+        let p: PathFragment = path.try_into()?;
+        if matches!(p, PathFragment::Named(_)) {
+            self.derive(p)
+        } else {
+            Err(CompilationError::InvalidPathName)
+        }
     }
     /// Derive a new contextual path
     pub fn derive_num<T: Into<u64>>(&mut self, path: T) -> Result<Self, CompilationError> {
@@ -78,7 +84,7 @@ impl Context {
             Err(CompilationError::ContexPathAlreadyDerived)
         } else {
             self.already_derived.insert(path.clone());
-            let new_path = ReversePath::push(Some(self.path.clone()), path);
+            let new_path = EffectPath::push(Some(self.path.clone()), path);
             Ok(Context {
                 available_funds: self.available_funds,
                 emulator: self.emulator.clone(),
@@ -167,7 +173,7 @@ impl Context {
             ctv_to_tx: HashMap::new(),
             suggested_txs: HashMap::new(),
             continue_apis: Default::default(),
-            root_path: SArc(ReversePath::push(
+            root_path: SArc(EffectPath::push(
                 None,
                 PathFragment::Named(SArc(Arc::new("".into()))),
             )),

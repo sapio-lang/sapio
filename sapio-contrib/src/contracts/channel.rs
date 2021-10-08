@@ -9,8 +9,10 @@ use bitcoin;
 use bitcoin::secp256k1::*;
 use bitcoin::util::amount::CoinAmount;
 use contract::*;
+
 use sapio::*;
 use sapio_base::Clause;
+use sapio_macros::guard;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
@@ -76,8 +78,8 @@ mod tests {
             "root".try_into().unwrap(),
             Default::default(),
         );
-        Compilable::compile(&x, ctx.derive_str(Arc::new("X".into())).unwrap());
-        Compilable::compile(&y, ctx.derive_str(Arc::new("Y".into())).unwrap());
+        Compilable::compile(&x, ctx.derive_str(Arc::new("X".into())).unwrap()).ok();
+        Compilable::compile(&y, ctx.derive_str(Arc::new("Y".into())).unwrap()).ok();
     }
 }
 
@@ -221,30 +223,26 @@ where
     Self: Contract,
     <Self as Contract>::StatefulArguments: TryInto<Update, Error = CompilationError>,
 {
-    guard! {fn timeout(self, _ctx) { Clause::Older(100) }}
-    guard! {cached fn signed(self, _ctx) {Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])}}
-
-    finish! {
-        guarded_by: [Self::signed]
-        coerce_args: coerce_args
-        fn update_state_a(self, _ctx, _o: Update) {
-            Ok(Box::new(std::iter::empty()))
-        }
+    #[guard]
+    fn timeout(self, _ctx: Context) {
+        Clause::Older(100)
     }
-    finish! {
-        guarded_by: [Self::signed]
-        coerce_args: coerce_args
-        fn update_state_b(self, _ctx, _o: Update){
-            Ok(Box::new(std::iter::empty()))
-        }
+    #[guard(cached)]
+    fn signed(self, _ctx: Context) {
+        Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
     }
 
-    finish! {
-        guarded_by: [Self::signed]
-        coerce_args: coerce_args
-        fn cooperate(self, _ctx, _o: Update) {
-            Ok(Box::new(std::iter::empty()))
-        }
+    #[continuation(guarded_by = "[Self::signed]", coerce_args = "coerce_args")]
+    fn update_state_a(self, _ctx: sapio::Context, _o: Update) {
+        Ok(Box::new(std::iter::empty()))
+    }
+    #[continuation(guarded_by = "[Self::signed]", coerce_args = "coerce_args")]
+    fn update_state_b(self, _ctx: sapio::Context, _o: Update) {
+        Ok(Box::new(std::iter::empty()))
+    }
+    #[continuation(guarded_by = "[Self::signed]", coerce_args = "coerce_args")]
+    fn cooperate(self, _ctx: sapio::Context, _o: Update) {
+        Ok(Box::new(std::iter::empty()))
     }
 }
 
@@ -254,35 +252,38 @@ where
     Self: Sized + Contract,
     <Self as Contract>::StatefulArguments: TryInto<Update>,
 {
-    then! {begin_contest}
-    then! {finish_contest}
+    decl_then! {begin_contest}
+    decl_then! {finish_contest}
 }
 
 /// Override begin_contest when state = Start
 impl FunctionalityAtState for Channel<Start, Args> {
-    then! {fn begin_contest(self, ctx) {
-        ctx.template().add_output(
-            self.amount.try_into()?,
-            &Channel::<Stop, Args> {
-                pd: Default::default(),
-                alice: self.alice,
-                bob: self.bob,
-                amount: self.amount.try_into().unwrap(),
-                resolution: self.resolution.clone(),
-                db: self.db.clone(),
-            },
-            None,
-        )?.into()
-    }}
+    #[then]
+    fn begin_contest(self, ctx: sapio::Context) {
+        ctx.template()
+            .add_output(
+                self.amount.try_into()?,
+                &Channel::<Stop, Args> {
+                    pd: Default::default(),
+                    alice: self.alice,
+                    bob: self.bob,
+                    amount: self.amount.try_into().unwrap(),
+                    resolution: self.resolution.clone(),
+                    db: self.db.clone(),
+                },
+                None,
+            )?
+            .into()
+    }
 }
 
 /// Override finish_contest when state = Start
 impl FunctionalityAtState for Channel<Stop, Args> {
-    then! {
-        guarded_by: [Self::timeout]
-        fn finish_contest (self, ctx) {
-            ctx.template().add_output(self.amount.try_into()?, &self.resolution, None)?.into()
-        }
+    #[then(guarded_by = "[Self::timeout]")]
+    fn finish_contest(self, ctx: sapio::Context) {
+        ctx.template()
+            .add_output(self.amount.try_into()?, &self.resolution, None)?
+            .into()
     }
 }
 

@@ -11,8 +11,7 @@ use crate::template::TemplateMetadata;
 use ::miniscript::*;
 use bitcoin::consensus::serialize;
 use bitcoin::util::psbt::PartiallySignedTransaction;
-use sapio_base::effects::PathFragment;
-use sapio_base::reverse_path::ReversePath;
+use sapio_base::effects::EffectPath;
 
 use sapio_base::serialization_helpers::SArc;
 use schemars::JsonSchema;
@@ -80,7 +79,7 @@ impl From<LinkedPSBT> for SapioStudioFormat {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Program {
     /// program contains the list of SapioStudio PSBTs
-    pub program: HashMap<SArc<ReversePath<PathFragment, String>>, SapioStudioObject>,
+    pub program: HashMap<SArc<EffectPath>, SapioStudioObject>,
 }
 
 /// A `SapioStudioObject` is a json-friendly format for a `Object` for use in Sapio Studio
@@ -89,5 +88,5 @@ pub struct SapioStudioObject {
     /// List of SapioStudioFormat PSBTs
     pub txs: Vec<SapioStudioFormat>,
     /// List of continue APIs from this point.
-    pub continue_apis: HashMap<SArc<ReversePath<PathFragment>>, ContinuationPoint>,
+    pub continue_apis: HashMap<SArc<EffectPath>, ContinuationPoint>,
 }

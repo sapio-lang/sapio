@@ -9,11 +9,11 @@ use bitcoin::util::amount::CoinAmount;
 
 use sapio::contract::*;
 use sapio::*;
+use sapio_base::timelocks::AnyRelTimeLock;
+
 use schemars::*;
 use serde::*;
 use std::convert::TryInto;
-
-use sapio_base::timelocks::AnyRelTimeLock;
 
 /// # Undoable Sending Contract
 /// UndoSendInternal allows funds to be sent to the to_contract only after a
@@ -32,21 +32,19 @@ pub struct UndoSendInternal {
 }
 
 impl UndoSendInternal {
-    then!(
-        fn complete(self, ctx) {
-            ctx.template()
-                .add_output(self.amount.try_into()?, &self.to_contract, None)?
-                .set_sequence(0, self.timeout)?
-                .into()
-        }
-    );
-    then!(
-        fn undo (self, ctx) {
-            ctx.template()
-                .add_output(self.amount.try_into()?, &self.from_contract, None)?
-                .into()
-        }
-    );
+    #[then]
+    fn complete(self, ctx: sapio::Context) {
+        ctx.template()
+            .add_output(self.amount.try_into()?, &self.to_contract, None)?
+            .set_sequence(0, self.timeout)?
+            .into()
+    }
+    #[then]
+    fn undo(self, ctx: sapio::Context) {
+        ctx.template()
+            .add_output(self.amount.try_into()?, &self.from_contract, None)?
+            .into()
+    }
 }
 
 impl Contract for UndoSendInternal {

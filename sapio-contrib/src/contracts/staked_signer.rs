@@ -10,6 +10,7 @@ use sapio::contract::*;
 use sapio::*;
 use sapio_base::timelocks::AnyRelTimeLock;
 use sapio_base::Clause;
+use sapio_macros::guard;
 use schemars::*;
 use serde::*;
 use std::marker::PhantomData;
@@ -57,64 +58,71 @@ pub trait StakerInterface
 where
     Self: Sized,
 {
-    guard! {
-    /// The key used to sign messages
-    staking_key}
-    guard! {
-    /// the clause to begin a close process
-    begin_redeem_key}
-    guard! {
-    /// the clause to finish a close process
-    finish_redeem_key}
-    then! {
-    /// The transition from Operational to Closing
-    begin_redeem}
-    then! {
-        /// Cheating can be reported at any time
-        guarded_by: [Self::staking_key]
-        fn cheated(self, ctx) {
-            let f = ctx.funds();
-            ctx.template().add_output(f,
-            &Compiled::from_op_return(b"dirty cheater")?,
-            None)?.into()
-        }
+    decl_guard!(
+        /// The key used to sign messages
+        staking_key
+    );
+    decl_guard!(
+        /// the clause to begin a close process
+        begin_redeem_key
+    );
+    decl_guard!(
+        /// the clause to finish a close process
+        finish_redeem_key
+    );
+    decl_then!(
+        /// The transition from Operational to Closing
+        begin_redeem
+    );
+
+    /// WHY
+    #[then(guarded_by = "[Self::staking_key]")]
+    fn cheated(self, ctx: sapio::Context) {
+        let f = ctx.funds();
+        ctx.template()
+            .add_output(f, &Compiled::from_op_return(b"dirty cheater")?, None)?
+            .into()
     }
 }
 
 impl StakerInterface for Staker<Operational> {
-    guard! {
-        fn begin_redeem_key(self, _ctx) {
-            Clause::Key(self.redeeming_key)
-        }
+    /// redeeming key
+    #[guard]
+    fn begin_redeem_key(self, _ctx: Context) {
+        Clause::Key(self.redeeming_key)
     }
-    then! {
-        guarded_by: [Self::begin_redeem_key]
-        fn begin_redeem(self, ctx) {
-            let f = ctx.funds();
-            ctx.template().add_output(f,
-            &Staker::<Closing>{state: Default::default(), timeout:
-            self.timeout, signing_key: self.signing_key, redeeming_key:
-            self.redeeming_key},
-            None)?.into()
-        }
+    /// begin redemption process
+    #[then(guarded_by = "[Self::begin_redeem_key]")]
+    fn begin_redeem(self, ctx: sapio::Context) {
+        let f = ctx.funds();
+        ctx.template()
+            .add_output(
+                f,
+                &Staker::<Closing> {
+                    state: Default::default(),
+                    timeout: self.timeout,
+                    signing_key: self.signing_key,
+                    redeeming_key: self.redeeming_key,
+                },
+                None,
+            )?
+            .into()
     }
-    guard! {
-        fn staking_key(self, _ctx) {
-            Clause::Key(self.signing_key)
-        }
+    /// staking key
+    #[guard]
+    fn staking_key(self, _ctx: Context) {
+        Clause::Key(self.signing_key)
     }
 }
 
 impl StakerInterface for Staker<Closing> {
-    guard! {
-        fn finish_redeem_key(self, _ctx) {
-            Clause::And(vec![Clause::Key(self.redeeming_key), self.timeout.into()])
-        }
+    #[guard]
+    fn finish_redeem_key(self, _ctx: Context) {
+        Clause::And(vec![Clause::Key(self.redeeming_key), self.timeout.into()])
     }
-    guard! {
-        fn staking_key(self, _ctx) {
-            Clause::Key(self.signing_key)
-        }
+    #[guard]
+    fn staking_key(self, _ctx: Context) {
+        Clause::Key(self.signing_key)
     }
 }
 

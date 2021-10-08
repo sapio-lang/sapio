@@ -6,8 +6,7 @@
 
 //! binding for making a type into a plugin
 use super::*;
-use sapio_base::effects::PathFragment;
-use sapio_base::reverse_path::ReversePath;
+use sapio_base::effects::EffectPath;
 
 use std::convert::TryFrom;
 /// The `Plugin` trait is used to provide bindings for a WASM Plugin.
@@ -50,9 +49,9 @@ where
             network,
             amount,
             Arc::new(client::WasmHostEmulator),
-            /// TODO: Carry context's path
-            ReversePath::<PathFragment>::try_from("plugin_trampoline")?,
-            /// TODO: load database?
+            // TODO: Carry context's path
+            EffectPath::try_from("plugin_trampoline")?,
+            // TODO: load database?
             Arc::new(effects),
         );
         let converted = Self::ToType::try_from(arguments)?;
@@ -61,11 +60,11 @@ where
     }
     /// binds this type to the wasm interface, must be called before the plugin can be used.
     unsafe fn register(name: &'static str, logo: Option<&'static [u8]>) {
-        sapio_v1_wasm_plugin_client_get_create_arguments_ptr = Self::get_api_inner;
-        sapio_v1_wasm_plugin_client_create_ptr = Self::create;
-        sapio_plugin_name = name;
+        SAPIO_V1_WASM_PLUGIN_CLIENT_GET_CREATE_ARGUMENTS_PTR = Self::get_api_inner;
+        SAPIO_V1_WASM_PLUGIN_CLIENT_CREATE_PTR = Self::create;
+        SAPIO_PLUGIN_NAME = name;
         if let Some(logo) = logo {
-            sapio_plugin_logo = logo;
+            SAPIO_PLUGIN_LOGO = logo;
         }
     }
 }

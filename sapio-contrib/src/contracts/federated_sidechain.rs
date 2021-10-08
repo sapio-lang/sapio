@@ -9,6 +9,7 @@ use bitcoin::util::amount::CoinAmount;
 use sapio::contract::*;
 use sapio::*;
 use sapio_base::Clause;
+use sapio_macros::guard;
 use schemars::*;
 use serde::*;
 use std::convert::TryInto;
@@ -49,46 +50,70 @@ pub trait StateDependentActions
 where
     Self: Sized,
 {
-    guard! {
+    decl_guard! {
     /// Should only be defined when RecoveryState is in CanFinishRecovery
     finish_recovery}
 
-    then! {
+    decl_then! {
     /// Should only be defined when RecoveryState is in CanBeginRecovery
     begin_recovery}
 }
 impl StateDependentActions for FederatedPegIn<CanBeginRecovery> {
-    then! {
-        guarded_by: [Self::recovery_signed]
-        fn begin_recovery(self, ctx) {
-        ctx.template().add_output(
-            self.amount.try_into()?,
-            &FederatedPegIn::<CanFinishRecovery> {
-                keys: self.keys.clone(),
-                thresh_normal: self.thresh_normal,
-                keys_recovery: self.keys_recovery.clone(),
-                thresh_recovery: self.thresh_recovery,
-                amount: self.amount,
-                _pd: PhantomData::default()
-            },
-            None
-        )?.into()
-    }}
+    #[then(guarded_by = "[Self::recovery_signed]")]
+    fn begin_recovery(self, ctx: sapio::Context) {
+        ctx.template()
+            .add_output(
+                self.amount.try_into()?,
+                &FederatedPegIn::<CanFinishRecovery> {
+                    keys: self.keys.clone(),
+                    thresh_normal: self.thresh_normal,
+                    keys_recovery: self.keys_recovery.clone(),
+                    thresh_recovery: self.thresh_recovery,
+                    amount: self.amount,
+                    _pd: PhantomData::default(),
+                },
+                None,
+            )?
+            .into()
+    }
 }
 impl StateDependentActions for FederatedPegIn<CanFinishRecovery> {
-    guard! {fn finish_recovery(self, _ctx) {
-        Clause::And(vec![Clause::Older(4725 /* 4 weeks? */), Clause::Threshold(self.thresh_recovery, self.keys_recovery.iter().cloned().map(Clause::Key).collect())])
-    }}
+    #[guard]
+    fn finish_recovery(self, _ctx: Context) {
+        Clause::And(vec![
+            Clause::Older(4725 /* 4 weeks? */),
+            Clause::Threshold(
+                self.thresh_recovery,
+                self.keys_recovery
+                    .iter()
+                    .cloned()
+                    .map(Clause::Key)
+                    .collect(),
+            ),
+        ])
+    }
 }
 
 impl<T: RecoveryState> FederatedPegIn<T> {
-    guard! {fn recovery_signed (self, _ctx) {
-        Clause::Threshold(self.thresh_recovery, self.keys_recovery.iter().cloned().map(Clause::Key).collect())
-    }}
+    #[guard]
+    fn recovery_signed(self, _ctx: Context) {
+        Clause::Threshold(
+            self.thresh_recovery,
+            self.keys_recovery
+                .iter()
+                .cloned()
+                .map(Clause::Key)
+                .collect(),
+        )
+    }
 
-    guard! {fn normal_signed(self, _ctx) {
-        Clause::Threshold(self.thresh_normal, self.keys.iter().cloned().map(Clause::Key).collect())
-    }}
+    #[guard]
+    fn normal_signed(self, _ctx: Context) {
+        Clause::Threshold(
+            self.thresh_normal,
+            self.keys.iter().cloned().map(Clause::Key).collect(),
+        )
+    }
 }
 
 impl<T: RecoveryState> Contract for FederatedPegIn<T>
