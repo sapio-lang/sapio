@@ -76,8 +76,8 @@ mod tests {
             "root".try_into().unwrap(),
             Default::default(),
         );
-        Compilable::compile(&x, ctx.derive_str(Arc::new("X".into())).unwrap());
-        Compilable::compile(&y, ctx.derive_str(Arc::new("Y".into())).unwrap());
+        Compilable::compile(&x, ctx.derive_str(Arc::new("X".into())).unwrap()).ok();
+        Compilable::compile(&y, ctx.derive_str(Arc::new("Y".into())).unwrap()).ok();
     }
 }
 
