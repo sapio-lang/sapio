@@ -6,6 +6,7 @@
 
 //! A decorator which can be used to skip clausesd based on a computation.
 use super::Context;
+use sapio_base::effects::PathFragment;
 
 use std::collections::LinkedList;
 /// Conditional Compilation function has specified that compilation of this
@@ -98,3 +99,19 @@ pub enum ConditionallyCompileIf<ContractSelf> {
 
 /// A List of ConditionallyCompileIfs, for convenience
 pub type ConditionallyCompileIfList<'a, T> = &'a [fn() -> Option<ConditionallyCompileIf<T>>];
+
+pub(crate) struct CCILWrapper<'a, T>(pub ConditionallyCompileIfList<'a, T>);
+
+impl<'a, T> CCILWrapper<'a, T> {
+    /// Assembles the list by folding merge over it
+    pub fn assemble(&self, self_ref: &T, context: &mut Context) -> ConditionalCompileType {
+        self.0
+            .iter()
+            .filter_map(|compf| compf())
+            .zip((0..).flat_map(|i| context.derive(PathFragment::Branch(i)).ok()))
+            .fold(ConditionalCompileType::NoConstraint, |acc, (cond, c)| {
+                let ConditionallyCompileIf::Fresh(f) = cond;
+                acc.merge(f(self_ref, c))
+            })
+    }
+}

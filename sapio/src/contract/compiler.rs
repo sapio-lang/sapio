@@ -7,6 +7,7 @@
 //! The primary compilation traits and types
 use super::actions::Guard;
 use super::actions::{ConditionalCompileType, ConditionallyCompileIf};
+use crate::contract::actions::conditional_compile::CCILWrapper;
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
 
@@ -162,20 +163,7 @@ where
                         Err(c) => Some(Err(c)),
                         Ok(mut this_ctx) => {
                             let r = {
-                                let constraint = func
-                                    .conditional_compile_if
-                                    .iter()
-                                    .filter_map(|compf| compf())
-                                    .zip((0..).flat_map(|i| {
-                                        this_ctx.derive(PathFragment::Branch(i)).ok()
-                                    }))
-                                    .fold(
-                                        ConditionalCompileType::NoConstraint,
-                                        |acc, (cond, c)| {
-                                            let ConditionallyCompileIf::Fresh(f) = cond;
-                                            acc.merge(f(self_ref, c))
-                                        },
-                                    );
+                                let constraint = CCILWrapper(func.conditional_compile_if).assemble(self_ref, &mut this_ctx);
                                 match constraint {
                                     ConditionalCompileType::Fail(errors) => (errors, Nullable::No),
                                     ConditionalCompileType::Required
@@ -241,15 +229,8 @@ where
                     match r {
                         Err(c) => Some(Err(c)),
                         Ok(mut this_ctx) => {
-                            let constraint = func
-                                .get_conditional_compile_if()
-                                .iter()
-                                .filter_map(|compf| compf())
-                                .zip((0..).flat_map(|i| this_ctx.derive(PathFragment::Branch(i)).ok()))
-                                .fold(ConditionalCompileType::NoConstraint, |acc, (cond, c)| {
-                                    let ConditionallyCompileIf::Fresh(f) = cond;
-                                    acc.merge(f(self_ref, c))
-                                });
+                            let constraint = CCILWrapper(func
+                                .get_conditional_compile_if()).assemble(self_ref, &mut this_ctx);
                             match constraint {
                                 ConditionalCompileType::Fail(errors) => Some(Ok((func, errors))),
                                 ConditionalCompileType::Required
