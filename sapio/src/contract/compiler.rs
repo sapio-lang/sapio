@@ -5,23 +5,21 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! The primary compilation traits and types
+use super::actions::ConditionalCompileType;
 use super::actions::Guard;
-use super::actions::{ConditionalCompileType, ConditionallyCompileIf};
-use crate::contract::actions::conditional_compile::CCILWrapper;
-use sapio_base::effects::EffectPath;
-use sapio_base::effects::PathFragment;
-
 use super::AnyContract;
 use super::CompilationError;
 use super::Compiled;
 use super::Context;
 use crate::contract::abi::continuation::ContinuationPoint;
-use sapio_base::effects::EffectDB;
-use sapio_base::serialization_helpers::SArc;
-
+use crate::contract::actions::conditional_compile::CCILWrapper;
 use crate::contract::TxTmplIt;
 use crate::util::amountrange::AmountRange;
 use ::miniscript::*;
+use sapio_base::effects::EffectDB;
+use sapio_base::effects::EffectPath;
+use sapio_base::effects::PathFragment;
+use sapio_base::serialization_helpers::SArc;
 use sapio_base::Clause;
 use std::collections::HashMap;
 use std::collections::LinkedList;
@@ -74,7 +72,8 @@ impl<T> GuardCache<T> {
     }
 }
 
-/// private::ImplSeal prevents anyone from implementing Compilable except by implementing Contract.
+/// private::ImplSeal prevents anyone from implementing Compilable except by
+/// implementing Contract.
 mod private {
     pub trait ImplSeal {}
 
@@ -159,8 +158,12 @@ where
                 .filter_map(|func| func())
                 .flat_map(|func| {
                     let name = PathFragment::Named(SArc(func.name.clone()));
-                    conditional_compile_ctx.derive(name.clone()).map(|mut this_ctx| {
-                        let r = match CCILWrapper(func.conditional_compile_if).assemble(self_ref, &mut this_ctx) {
+                    conditional_compile_ctx
+                        .derive(name.clone())
+                        .map(|mut this_ctx| {
+                            let r = match CCILWrapper(func.conditional_compile_if)
+                                .assemble(self_ref, &mut this_ctx)
+                            {
                                 ConditionalCompileType::Fail(errors) => (errors, Nullable::No),
                                 ConditionalCompileType::Required
                                 | ConditionalCompileType::NoConstraint => {
@@ -172,10 +175,11 @@ where
                                 ConditionalCompileType::Skippable
                                 | ConditionalCompileType::Never => return None,
                             };
-                        Some((func, r, name))
-                        }).transpose()
+                            Some((func, r, name))
+                        })
+                        .transpose()
                 })
-                .map(|r|  {
+                .map(|r| {
                     r.and_then(|(func, (errors, nullability), name)| {
                         let gctx = guards_ctx.derive(name.clone())?;
                         let ntx_ctx = next_tx_ctx.derive(name)?;
@@ -197,7 +201,7 @@ where
                         ))
                     })
                 })
-                .collect::<Result<Vec<(Nullable, CTVRequired, Clause, TxTmplIt)>, CompilationError>>()?
+                .collect::<Result<Vec<_>, CompilationError>>()?
         };
         // finish_or_fns may be used to compute additional transactions with
         // a given argument, but for building the ABI we only precompute with
@@ -218,16 +222,14 @@ where
                 .filter_map(|func| func())
                 // TODO: De-duplicate this code?
                 .filter_map(|func| {
-     conditional_compile_ctx
-                        .derive(PathFragment::Named(SArc(func.get_name().clone()))).map(|mut this_ctx|{
-
-                            let constraint = CCILWrapper(func
-                                .get_conditional_compile_if()).assemble(self_ref, &mut this_ctx);
+                        conditional_compile_ctx
+                        .derive(PathFragment::Named(SArc(func.get_name().clone())))
+                        .map(|mut this_ctx|{
+                            let constraint = CCILWrapper(func.get_conditional_compile_if())
+                                .assemble(self_ref, &mut this_ctx);
                             match constraint {
                                 ConditionalCompileType::Fail(errors) => Some((func, errors)),
-                                ConditionalCompileType::Required
-                                | ConditionalCompileType::NoConstraint
-                                | ConditionalCompileType::Nullable => Some((func, LinkedList::new())),
+                                ConditionalCompileType::Required | ConditionalCompileType::NoConstraint | ConditionalCompileType::Nullable => Some((func, LinkedList::new())),
                                 ConditionalCompileType::Skippable | ConditionalCompileType::Never => None,
                             }
                         }).transpose()
@@ -322,24 +324,27 @@ where
                     // Forces any error to abort the whole thing
                     .collect::<Result<Vec<_>, CompilationError>>()?;
                 if uses_ctv == CTVRequired::Yes {
-                    if nullability == Nullable::Yes && txtmpl_clauses.is_empty() {
-                        // Mark this branch dead.
-                        guard = Clause::Unsatisfiable;
-                    } else {
-                        let hashes = match txtmpl_clauses.len() {
-                            0 => {
-                                return Err(CompilationError::MissingTemplates);
+                    guard = match nullability {
+                        Nullable::Yes if txtmpl_clauses.is_empty() => {
+                            // Mark this branch dead.
+                            Clause::Unsatisfiable
+                        }
+                        _ => {
+                            let hashes = match txtmpl_clauses.len() {
+                                0 => {
+                                    return Err(CompilationError::MissingTemplates);
+                                }
+                                1 => txtmpl_clauses
+                                    .pop()
+                                    .expect("Length of txtmpl_clauses must be at least 1"),
+                                _n => Clause::Threshold(1, txtmpl_clauses),
+                            };
+                            match guard {
+                                Clause::Trivial => hashes,
+                                _ => Clause::And(vec![guard, hashes]),
                             }
-                            1 => txtmpl_clauses
-                                .pop()
-                                .expect("Length of txtmpl_clauses must be at least 1"),
-                            _n => Clause::Threshold(1, txtmpl_clauses),
-                        };
-                        guard = match guard {
-                            Clause::Trivial => hashes,
-                            _ => Clause::And(vec![guard, hashes]),
-                        };
-                    }
+                        }
+                    };
                 }
                 Ok(guard)
             })
