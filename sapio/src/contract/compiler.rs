@@ -7,8 +7,8 @@
 //! The primary compilation traits and types
 use super::actions::Guard;
 use super::actions::{ConditionalCompileType, ConditionallyCompileIf};
+use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
-use sapio_base::reverse_path::ReversePath;
 use std::sync::Arc;
 
 use super::AnyContract;
@@ -212,7 +212,7 @@ where
         // the default argument.
         let continue_apis_and_finish_or_fns: Result<
             Vec<(
-                (SArc<ReversePath<PathFragment>>, ContinuationPoint),
+                (SArc<EffectPath>, ContinuationPoint),
                 (Nullable, CTVRequired, Clause, TxTmplIt),
             )>,
             CompilationError,
@@ -297,7 +297,7 @@ where
                 .collect()
         };
         let (continue_apis, finish_or_fns): (
-            HashMap<SArc<ReversePath<PathFragment>>, ContinuationPoint>,
+            HashMap<SArc<EffectPath>, ContinuationPoint>,
             Vec<(Nullable, CTVRequired, Clause, TxTmplIt)>,
         ) = continue_apis_and_finish_or_fns?.into_iter().unzip();
 

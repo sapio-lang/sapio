@@ -11,13 +11,15 @@ use crate::serialization_helpers::SArc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::str::FromStr;
+
 use std::sync::Arc;
 pub mod path_fragment;
 pub use path_fragment::*;
 pub mod reverse_path;
 pub use reverse_path::*;
+
+pub type EffectPath = ReversePath<PathFragment>;
+
 /// Error types for EffectDB Accesses
 #[derive(Debug)]
 pub enum EffectDBError {
@@ -35,7 +37,7 @@ pub trait EffectDB {
     /// internal implementation to retrieve a JSON for the path
     fn get_value<'a>(
         &'a self,
-        at: &Arc<ReversePath<PathFragment>>,
+        at: &Arc<EffectPath>,
     ) -> Box<dyn Iterator<Item = (&'a Arc<String>, &'a serde_json::Value)> + 'a>;
 }
 /// #  Effects
@@ -46,7 +48,7 @@ pub struct MapEffectDB {
     /// # The set of all effects
     /// List of effects to include while compiling.
     #[serde(skip_serializing_if = "HashMap::is_empty", default)]
-    effects: HashMap<SArc<ReversePath<PathFragment>>, HashMap<SArc<String>, serde_json::Value>>,
+    effects: HashMap<SArc<EffectPath>, HashMap<SArc<String>, serde_json::Value>>,
     #[serde(skip, default)]
     empty: HashMap<SArc<String>, serde_json::Value>,
 }
@@ -59,7 +61,7 @@ impl MapEffectDB {
 impl EffectDB for MapEffectDB {
     fn get_value<'a>(
         &'a self,
-        at: &Arc<ReversePath<PathFragment>>,
+        at: &Arc<EffectPath>,
     ) -> Box<dyn Iterator<Item = (&'a Arc<String>, &'a serde_json::Value)> + 'a> {
         let r: &HashMap<_, _> = self.effects.get(&SArc(at.clone())).unwrap_or(&self.empty);
         Box::new(r.iter().map(|(a, b)| (&a.0, b)))
@@ -69,7 +71,7 @@ impl EffectDB for MapEffectDB {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::convert::TryInto;
+    use std::convert::{TryFrom, TryInto};
     #[test]
     fn test_string() {
         let v: Vec<PathFragment> = vec![
@@ -77,9 +79,9 @@ mod test {
             "#123".try_into().unwrap(),
             PathFragment::FinishFn,
         ];
-        let r = ReversePath::try_from(v).unwrap();
+        let r = EffectPath::try_from(v).unwrap();
         assert_eq!(String::from(r.clone()), "hello/#123/@finish_fn");
-        assert_eq!(Ok(r), ReversePath::try_from("hello/#123/@finish_fn"));
+        assert_eq!(Ok(r), EffectPath::try_from("hello/#123/@finish_fn"));
     }
     #[test]
     fn test_serde() {
@@ -88,7 +90,7 @@ mod test {
             PathFragment::Branch(100),
             PathFragment::FinishFn,
         ];
-        let r = ReversePath::<PathFragment>::try_from(v).unwrap();
+        let r = EffectPath::try_from(v).unwrap();
         assert_eq!(
             serde_json::to_string(&r).unwrap(),
             "\"hello/#100/@finish_fn\""

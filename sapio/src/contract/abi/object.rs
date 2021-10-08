@@ -15,8 +15,8 @@ use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::amount::Amount;
 use bitcoin::util::psbt::PartiallySignedTransaction;
+use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
-use sapio_base::reverse_path::ReversePath;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::txindex::TxIndex;
 use sapio_base::txindex::TxIndexError;
@@ -92,9 +92,9 @@ pub struct Object {
         skip_serializing_if = "HashMap::is_empty",
         default
     )]
-    pub continue_apis: HashMap<SArc<ReversePath<PathFragment>>, ContinuationPoint>,
+    pub continue_apis: HashMap<SArc<EffectPath>, ContinuationPoint>,
     /// The base location for the set of continue_apis.
-    pub root_path: SArc<ReversePath<PathFragment>>,
+    pub root_path: SArc<EffectPath>,
     /// The Object's Policy -- if known
     #[serde(
         rename = "known_policy",
@@ -123,7 +123,7 @@ impl Object {
             ctv_to_tx: HashMap::new(),
             suggested_txs: HashMap::new(),
             continue_apis: Default::default(),
-            root_path: SArc(ReversePath::push(
+            root_path: SArc(EffectPath::push(
                 None,
                 PathFragment::Named(SArc(Arc::new("".into()))),
             )),
@@ -159,7 +159,7 @@ impl Object {
             ctv_to_tx: HashMap::new(),
             suggested_txs: HashMap::new(),
             continue_apis: Default::default(),
-            root_path: SArc(ReversePath::push(
+            root_path: SArc(EffectPath::push(
                 None,
                 PathFragment::Named(SArc(Arc::new("".into()))),
             )),
@@ -182,8 +182,7 @@ impl Object {
         blockdata: Rc<dyn TxIndex>,
         emulator: &dyn CTVEmulator,
     ) -> Result<Program, ObjectError> {
-        let mut result =
-            HashMap::<SArc<ReversePath<PathFragment, String>>, SapioStudioObject>::new();
+        let mut result = HashMap::<SArc<EffectPath>, SapioStudioObject>::new();
         // Could use a queue instead to do BFS linking, but order doesn't matter and stack is
         // faster.
         let mut stack = vec![(out_in, self)];

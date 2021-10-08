@@ -9,7 +9,7 @@ use crate::reverse_path::ReversePath;
 use crate::serialization_helpers::SArc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+
 use std::convert::TryFrom;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -71,7 +71,7 @@ impl std::fmt::Display for ValidFragmentError {
 }
 use std::num::ParseIntError;
 impl From<ParseIntError> for ValidFragmentError {
-    fn from(u: ParseIntError) -> ValidFragmentError {
+    fn from(_u: ParseIntError) -> ValidFragmentError {
         ValidFragmentError::BranchParseError
     }
 }
