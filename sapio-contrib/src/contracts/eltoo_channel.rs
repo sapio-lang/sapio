@@ -58,33 +58,38 @@ impl OpenChannel {
             START_OF_TIME.into()
         }
     }
-    finish! {
-        guarded_by: [Self::signed_update, Self::newer_sequence_check]
-        coerce_args: default_coerce
-        fn update_state(self, ctx, o: Option<Update>) {
-            if let Some(update) = o {
-                if update.sequence > BIG_PAST_DATE  {
-                    Err(CompilationError::TerminateCompilation)?;
-                }
-                let prior_seq =
-                    self.pending_update.as_ref().map(|u|u.sequence).unwrap_or(1u32.try_into()?);
-                if update.sequence <= prior_seq {
-                    Err(CompilationError::TerminateCompilation)?;
-                }
+    #[continuation(
+        guarded_by = "[Self::signed_update, Self::newer_sequence_check]",
+        coerce_args = "default_coerce"
+    )]
+    fn update_state(self, ctx: sapio::Context, o: Option<Update>) {
+        if let Some(update) = o {
+            if update.sequence > BIG_PAST_DATE {
+                Err(CompilationError::TerminateCompilation)?;
+            }
+            let prior_seq = self
+                .pending_update
+                .as_ref()
+                .map(|u| u.sequence)
+                .unwrap_or(1u32.try_into()?);
+            if update.sequence <= prior_seq {
+                Err(CompilationError::TerminateCompilation)?;
+            }
 
-                let f = ctx.funds();
-                ctx.template()
+            let f = ctx.funds();
+            ctx.template()
                 .set_lock_time(AnyAbsTimeLock::from(update.sequence.clone()))?
                 .add_output(
                     f,
                     &OpenChannel {
-                        pending_update: Some(update.clone()), ..self.clone()
+                        pending_update: Some(update.clone()),
+                        ..self.clone()
                     },
-                    None
-                )?.into()
-            } else {
-                Ok(Box::new(std::iter::empty()))
-            }
+                    None,
+                )?
+                .into()
+        } else {
+            Ok(Box::new(std::iter::empty()))
         }
     }
 
@@ -137,13 +142,13 @@ impl OpenChannel {
             ConditionalCompileType::NoConstraint
         }
     }
-    finish! {
-        compile_if: [Self::untriggered]
-        guarded_by: [Self::sign_cooperative_close]
-        coerce_args: default_coerce
-        fn coop_close(self, _ctx, _o: Option<Update>) {
-            Ok(Box::new(std::iter::empty()))
-        }
+    #[continuation(
+        compile_if = "[Self::untriggered]",
+        guarded_by = "[Self::sign_cooperative_close]",
+        coerce_args = "default_coerce"
+    )]
+    fn coop_close(self, _ctx: sapio::Context, _o: Option<Update>) {
+        Ok(Box::new(std::iter::empty()))
     }
 }
 /// Helper

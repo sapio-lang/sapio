@@ -122,12 +122,12 @@ pub fn get_schema_for<T: schemars::JsonSchema + 'static + Sized>(
 macro_rules! web_api {
     {$name:ident,$type:ty,{}} => {
         $crate::contract::macros::paste!{
-            const [<FINISH_API_FOR_ $name >] : Option<&'static dyn Fn() -> std::sync::Arc<$crate::schemars::schema::RootSchema>> = Some(&|| $crate::contract::macros::get_schema_for::<$type>());
+            const [<continue_schema_for_ $name >] : Option<&'static dyn Fn() -> std::sync::Arc<$crate::schemars::schema::RootSchema>> = Some(&|| $crate::contract::macros::get_schema_for::<$type>());
         }
     };
     {$name:ident,$type:ty} => {
         $crate::contract::macros::paste!{
-            const [<FINISH_API_FOR_ $name >] : Option<&'static dyn Fn() -> std::sync::Arc<$crate::schemars::schema::RootSchema>> = None;
+            const [<continue_schema_for_ $name >] : Option<&'static dyn Fn() -> std::sync::Arc<$crate::schemars::schema::RootSchema>> = None;
         }
     }
 }
@@ -156,7 +156,7 @@ macro_rules! is_web_api_type {
 /// ```
 /// Unlike a `then!`, `finish!` must always have guards.
 #[macro_export]
-macro_rules! finish {
+macro_rules! decl_continuation {
     {
         $(#[$meta:meta])*
         $(<web=$web_enable:block>)?
@@ -165,7 +165,7 @@ macro_rules! finish {
         $crate::contract::macros::paste!{
             web_api!($name,$arg_type$(,$web_enable)*);
             $(#[$meta])*
-            fn [<FINISH_ $name>](&self, _ctx:$crate::contract::Context, _o: $arg_type)-> $crate::contract::TxTmplIt
+            fn [<continue_ $name>](&self, _ctx:$crate::contract::Context, _o: $arg_type)-> $crate::contract::TxTmplIt
             {
                 unimplemented!();
             }
@@ -177,53 +177,6 @@ macro_rules! finish {
                 None
             }
         }
-    };
-    {
-        $(#[$meta:meta])*
-        $(<web=$web_enable:block>)?
-        compile_if: $conditional_compile_list:tt
-        guarded_by: $guard_list:tt
-        coerce_args: $coerce_args:ident
-        fn $name:ident($s:ident, $ctx:ident, $o:ident : $arg_type:ty)
-        $b:block
-    } => {
-
-        $crate::contract::macros::paste!{
-            web_api!($name,$arg_type$(,$web_enable)*);
-            $(#[$meta])*
-            fn [<FINISH_ $name>](&$s, $ctx:$crate::contract::Context, $o: $arg_type) -> $crate::contract::TxTmplIt
-            $b
-            $(#[$meta])*
-            fn $name<'a>() -> Option<Box<dyn
-            $crate::contract::actions::CallableAsFoF<Self, <Self as $crate::contract::Contract>::StatefulArguments>>>
-            {
-                let f : $crate::contract::actions::FinishOrFunc<_, _, _, is_web_api_type!($($web_enable)*)>= $crate::contract::actions::FinishOrFunc{
-                    coerce_args: $coerce_args,
-                    guard: &$guard_list,
-                    conditional_compile_if: &$conditional_compile_list,
-                    func: Self::[<FINISH_ $name>],
-                    schema: Self::[<FINISH_API_FOR_ $name >].map(|f|f()),
-                    name: std::sync::Arc::new(std::stringify!($name).into()),
-                    f: std::default::Default::default()
-                };
-                Some(Box::new(f))
-            }
-        }
-    };
-    {
-        $(#[$meta:meta])*
-        $(<web=$web_enable:block>)?
-        guarded_by: $guard_list:tt
-        coerce_args: $coerce_args:ident
-        fn $name:ident($s:ident, $ctx:ident, $o:ident:$arg_type:ty) $b:block
-    } => {
-        finish!{
-            $(#[$meta])*
-            $(<web=$web_enable>)*
-            compile_if: []
-            guarded_by: $guard_list
-            coerce_args: $coerce_args
-            fn $name($s, $ctx, $o:$arg_type) $b }
     };
 }
 

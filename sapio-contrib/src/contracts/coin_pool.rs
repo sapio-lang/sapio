@@ -73,25 +73,25 @@ impl CoinPool {
     fn all_approve(self, _ctx: Context) {
         Clause::Threshold(self.clauses.len(), self.clauses.clone())
     }
-    finish! {
-        /// move the coins to the next state -- payouts may recursively contain pools itself
-        <web={}>
-        guarded_by: [Self::all_approve]
-        coerce_args: default_coerce
-        fn next_pool(self, ctx, o: UpdateTypes) {
-            let o2: Option<CoinPoolUpdate> =o.try_into()?;
-            if let Some(coin_pool)= o2 {
-                let mut tmpl = ctx.template().add_amount(coin_pool.external_amount.into());
-                for (to, amt) in coin_pool.payouts.iter() {
-                    tmpl = tmpl.add_output((*amt).into(), &*to.lock().unwrap(), None)?;
-                }
-                for seq in coin_pool.add_inputs.iter() {
-                    tmpl = tmpl.add_sequence().set_sequence(-1, *seq)?;
-                }
-                tmpl.into()
-            } else {
-                empty()
+    /// move the coins to the next state -- payouts may recursively contain pools itself
+    #[continuation(
+        web_api,
+        guarded_by = "[Self::all_approve]",
+        coerce_args = "default_coerce"
+    )]
+    fn next_pool(self, ctx: sapio::Context, o: UpdateTypes) {
+        let o2: Option<CoinPoolUpdate> = o.try_into()?;
+        if let Some(coin_pool) = o2 {
+            let mut tmpl = ctx.template().add_amount(coin_pool.external_amount.into());
+            for (to, amt) in coin_pool.payouts.iter() {
+                tmpl = tmpl.add_output((*amt).into(), &*to.lock().unwrap(), None)?;
             }
+            for seq in coin_pool.add_inputs.iter() {
+                tmpl = tmpl.add_sequence().set_sequence(-1, *seq)?;
+            }
+            tmpl.into()
+        } else {
+            empty()
         }
     }
 }

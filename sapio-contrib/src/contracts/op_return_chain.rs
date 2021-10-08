@@ -33,26 +33,30 @@ impl ChainReturn {
     fn approved(self, _ctx: Context) {
         Clause::Key(self.pk.clone())
     }
-    finish! {
-            /// move the coins to the next state -- payouts may recursively contain pools itself
-            <web={}>
-            guarded_by: [Self::approved]
-            coerce_args: default_coerce
-            fn next_chain(self, ctx, o: UpdateTypes) {
-                let mut tmpl = ctx.template();
-                if let UpdateTypes::AddData { data, fees } = o {
-                    tmpl = tmpl.spend_amount(fees.into())?;
-                    tmpl = tmpl.add_output(Amount::from_sat(0), &Compiled::from_op_return(&data.as_str().as_bytes())?, None)?;
-                    let funds = tmpl.ctx().funds();
-                    if funds.as_sat() != 0 {
-                        tmpl = tmpl.add_output(funds, self, None)?;
-                    }
-                } else{
-                    let funds = tmpl.ctx().funds();
-                    tmpl = tmpl.add_output(funds, &self.pk, None)?;
-                }
-                tmpl.into()
+    /// move the coins to the next state -- payouts may recursively contain pools itself
+    #[continuation(
+        guarded_by = "[Self::approved]",
+        coerce_args = "default_coerce",
+        web_api
+    )]
+    fn next_chain(self, ctx: sapio::Context, o: UpdateTypes) {
+        let mut tmpl = ctx.template();
+        if let UpdateTypes::AddData { data, fees } = o {
+            tmpl = tmpl.spend_amount(fees.into())?;
+            tmpl = tmpl.add_output(
+                Amount::from_sat(0),
+                &Compiled::from_op_return(&data.as_str().as_bytes())?,
+                None,
+            )?;
+            let funds = tmpl.ctx().funds();
+            if funds.as_sat() != 0 {
+                tmpl = tmpl.add_output(funds, self, None)?;
+            }
+        } else {
+            let funds = tmpl.ctx().funds();
+            tmpl = tmpl.add_output(funds, &self.pk, None)?;
         }
+        tmpl.into()
     }
 }
 

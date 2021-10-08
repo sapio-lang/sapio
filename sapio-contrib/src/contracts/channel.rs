@@ -232,27 +232,17 @@ where
         Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
     }
 
-    finish! {
-        guarded_by: [Self::signed]
-        coerce_args: coerce_args
-        fn update_state_a(self, _ctx, _o: Update) {
-            Ok(Box::new(std::iter::empty()))
-        }
+    #[continuation(guarded_by = "[Self::signed]", coerce_args = "coerce_args")]
+    fn update_state_a(self, _ctx: sapio::Context, _o: Update) {
+        Ok(Box::new(std::iter::empty()))
     }
-    finish! {
-        guarded_by: [Self::signed]
-        coerce_args: coerce_args
-        fn update_state_b(self, _ctx, _o: Update){
-            Ok(Box::new(std::iter::empty()))
-        }
+    #[continuation(guarded_by = "[Self::signed]", coerce_args = "coerce_args")]
+    fn update_state_b(self, _ctx: sapio::Context, _o: Update) {
+        Ok(Box::new(std::iter::empty()))
     }
-
-    finish! {
-        guarded_by: [Self::signed]
-        coerce_args: coerce_args
-        fn cooperate(self, _ctx, _o: Update) {
-            Ok(Box::new(std::iter::empty()))
-        }
+    #[continuation(guarded_by = "[Self::signed]", coerce_args = "coerce_args")]
+    fn cooperate(self, _ctx: sapio::Context, _o: Update) {
+        Ok(Box::new(std::iter::empty()))
     }
 }
 

@@ -63,6 +63,42 @@ pub fn guard(args: TokenStream, input: TokenStream) -> TokenStream {
     })
 }
 
+fn get_arrays(args: &Vec<NestedMeta>) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
+    let mut compile_if_array = None;
+    let mut guarded_by_array = None;
+    for arg in args {
+        match (&compile_if_array, &guarded_by_array, arg) {
+            (_, None, NestedMeta::Meta(Meta::NameValue(v))) if v.path.is_ident("guarded_by") => {
+                match &v.lit {
+                    Lit::Str(l) => {
+                        guarded_by_array = Some(l.parse().expect("Token Stream Parsing"));
+                    }
+                    _ => panic!("Improperly Formatted {:?}", v),
+                }
+            }
+            (_, Some(_), NestedMeta::Meta(Meta::NameValue(v))) if v.path.is_ident("guarded_by") => {
+                panic!("Repeated guarded_by arguments");
+            }
+            (None, _, NestedMeta::Meta(Meta::NameValue(v))) if v.path.is_ident("compile_if") => {
+                match &v.lit {
+                    Lit::Str(l) => {
+                        compile_if_array = Some(l.parse().expect("Token Stream Parsing"))
+                    }
+                    _ => panic!("Improperly Formatted {:?}", v),
+                }
+            }
+            (Some(_), _, NestedMeta::Meta(Meta::NameValue(v))) if v.path.is_ident("compile_if") => {
+                panic!("Repeated compile_if arguments");
+            }
+            v => {}
+        }
+    }
+    (
+        compile_if_array.unwrap_or(quote! {[]}),
+        guarded_by_array.unwrap_or(quote! {[]}),
+    )
+}
+
 #[proc_macro_attribute]
 pub fn then(args: TokenStream, input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(args as AttributeArgs);
@@ -70,33 +106,7 @@ pub fn then(args: TokenStream, input: TokenStream) -> TokenStream {
     let name = input.sig.ident;
     let then_fn_name = format_ident!("then_{}", name);
     let block = input.block;
-    let mut compile_if_array = None;
-    let mut guarded_by_array = None;
-    for arg in args {
-        match (&compile_if_array, &guarded_by_array, arg) {
-            (_, None, NestedMeta::Meta(Meta::NameValue(v))) if v.path.is_ident("guarded_by") => {
-                match v.lit {
-                    Lit::Str(l) => {
-                        guarded_by_array = Some(l.parse().expect("Token Stream Parsing"));
-                    }
-                    _ => panic!("Improperly Formatted {:?}", v),
-                }
-            }
-            (None, _, NestedMeta::Meta(Meta::NameValue(v))) if v.path.is_ident("compile_if") => {
-                match v.lit {
-                    Lit::Str(l) => {
-                        compile_if_array = Some(l.parse().expect("Token Stream Parsing"))
-                    }
-                    _ => panic!("Improperly Formatted {:?}", v),
-                }
-            }
-            v => {
-                panic!("Failed to parse {:?}", v);
-            }
-        }
-    }
-    let cia = compile_if_array.unwrap_or(quote! {[]});
-    let gba = guarded_by_array.unwrap_or(quote! {[]});
+    let (cia, gba) = get_arrays(&args);
     proc_macro::TokenStream::from(quote! {
             /// (missing docs fix)
             fn #name<'a>() -> Option<sapio::contract::actions::ThenFunc<'a, Self>>{
@@ -112,3 +122,145 @@ pub fn then(args: TokenStream, input: TokenStream) -> TokenStream {
             #block
     })
 }
+
+fn web_api(args: &Vec<NestedMeta>) -> proc_macro2::TokenStream {
+    for arg in args {
+        match arg {
+            NestedMeta::Meta(Meta::NameValue(v)) if v.path.is_ident("web_api") => {
+                return quote! { sapio::contract::actions::WebAPIEnabled};
+            }
+            _ => continue,
+        }
+    }
+    return quote! { sapio::contract::actions::WebAPIDisabled};
+}
+fn coerce_args(args: &Vec<NestedMeta>) -> proc_macro2::TokenStream {
+    for arg in args {
+        match arg {
+            NestedMeta::Meta(Meta::NameValue(v)) if v.path.is_ident("coerce_args") => {
+                match &v.lit {
+                    Lit::Str(l) => {
+                        return l.parse().expect("Token Stream Parsing");
+                    }
+                    _ => panic!("Improperly Formatted {:?}", v),
+                }
+            }
+            _ => continue,
+        }
+    }
+    panic!("No Coerce Arguments found");
+}
+
+fn web_api_schema(
+    args: &Vec<NestedMeta>,
+    name: &syn::Ident,
+    typ: &syn::FnArg,
+) -> proc_macro2::TokenStream {
+    if let syn::FnArg::Typed(v) = typ {
+        let ty = &v.ty;
+        for arg in args {
+            match arg {
+                NestedMeta::Meta(Meta::Path(v)) if v.is_ident("web_api") => {
+                    return quote! {
+                    const #name : Option<&'static dyn Fn() -> std::sync::Arc<sapio::schemars::schema::RootSchema>> =
+                        Some(&|| sapio::contract::macros::get_schema_for::<#ty>());
+                    };
+                }
+                _ => continue,
+            }
+        }
+    } else {
+        panic!("Wrong type: {:?}", typ);
+    }
+    quote! {
+        const #name : Option<&'static dyn Fn() -> std::sync::Arc<sapio::schemars::schema::RootSchema>> = None;
+    }
+}
+#[proc_macro_attribute]
+pub fn continuation(args: TokenStream, input: TokenStream) -> TokenStream {
+    let args = parse_macro_input!(args as AttributeArgs);
+    let input = parse_macro_input!(input as ItemFn);
+    let name = input.sig.ident;
+    let continue_name = format_ident!("continue_{}", name);
+    let block = input.block;
+    let arg_type = input
+        .sig
+        .inputs
+        .last()
+        .expect("Must have at least one argument");
+    let (cia, gba) = get_arrays(&args);
+    let web_api_type = web_api(&args);
+    let continue_schema_for_name = format_ident!("continue_schema_for_{}", name);
+    let web_api_schema_s = web_api_schema(&args, &continue_schema_for_name, &arg_type);
+    let coerce_args_f = coerce_args(&args);
+    proc_macro::TokenStream::from(quote! {
+            #web_api_schema_s
+            /// (missing docs fix)
+            fn #continue_name(&self, ctx:sapio::contract::Context, #arg_type) -> sapio::contract::TxTmplIt
+            #block
+            /// (missing docs fix)
+            fn #name<'a>() -> Option<Box<dyn
+                sapio::contract::actions::CallableAsFoF<Self, <Self as sapio::contract::Contract>::StatefulArguments>>>
+            {
+                let f : sapio::contract::actions::FinishOrFunc<_, _, _, #web_api_type>= sapio::contract::actions::FinishOrFunc{
+                    coerce_args: #coerce_args_f,
+                    guard: &#gba,
+                    conditional_compile_if: &#cia,
+                    func: Self::#continue_name,
+                    schema: Self::#continue_schema_for_name.map(|f|f()),
+                    name: std::sync::Arc::new(std::stringify!(#name).into()),
+                    f: std::default::Default::default()
+                };
+                Some(Box::new(f))
+            }
+    })
+}
+
+//    {
+//        $(#[$meta:meta])*
+//        $(<web=$web_enable:block>)?
+//        compile_if: $conditional_compile_list:tt
+//        guarded_by: $guard_list:tt
+//        coerce_args: $coerce_args:ident
+//        fn $name:ident($s:ident, $ctx:ident, $o:ident : $arg_type:ty)
+//        $b:block
+//    } => {
+//
+//        $crate::contract::macros::paste!{
+//            web_api!($name,$arg_type$(,$web_enable)*);
+//            $(#[$meta])*
+//            fn [<FINISH_ $name>](&$s, $ctx:$crate::contract::Context, $o: $arg_type) -> $crate::contract::TxTmplIt
+//            $b
+//            $(#[$meta])*
+//            fn $name<'a>() -> Option<Box<dyn
+//            $crate::contract::actions::CallableAsFoF<Self, <Self as $crate::contract::Contract>::StatefulArguments>>>
+//            {
+//                let f : $crate::contract::actions::FinishOrFunc<_, _, _, is_web_api_type!($($web_enable)*)>= $crate::contract::actions::FinishOrFunc{
+//                    coerce_args: $coerce_args,
+//                    guard: &$guard_list,
+//                    conditional_compile_if: &$conditional_compile_list,
+//                    func: Self::[<FINISH_ $name>],
+//                    schema: Self::[<FINISH_API_FOR_ $name >].map(|f|f()),
+//                    name: std::sync::Arc::new(std::stringify!($name).into()),
+//                    f: std::default::Default::default()
+//                };
+//                Some(Box::new(f))
+//            }
+//        }
+//    };
+//    {
+//        $(#[$meta:meta])*
+//        $(<web=$web_enable:block>)?
+//        guarded_by: $guard_list:tt
+//        coerce_args: $coerce_args:ident
+//        fn $name:ident($s:ident, $ctx:ident, $o:ident:$arg_type:ty) $b:block
+//    } => {
+//        finish!{
+//            $(#[$meta])*
+//            $(<web=$web_enable>)*
+//            compile_if: []
+//            guarded_by: $guard_list
+//            coerce_args: $coerce_args
+//            fn $name($s, $ctx, $o:$arg_type) $b }
+//    };
+//}
