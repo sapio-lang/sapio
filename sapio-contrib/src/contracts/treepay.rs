@@ -10,6 +10,8 @@ use sapio::*;
 use schemars::*;
 use serde::*;
 use std::convert::TryInto;
+use sapio_macros::guard;
+
 /// instructions to send an amount of coin to an address
 #[derive(JsonSchema, Serialize, Deserialize, Clone)]
 pub struct Payment {

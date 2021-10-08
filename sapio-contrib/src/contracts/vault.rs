@@ -15,6 +15,7 @@ use serde::*;
 use std::convert::{TryFrom, TryInto};
 use std::rc::Rc;
 use std::sync::Arc;
+use sapio_macros::guard;
 
 /// A Vault makes a "annuity chain" which pays out to `hot_storage` every `timeout` period for `n_steps`.
 /// The funds in `hot_storage` are in an UndoSend contract for a timeout of

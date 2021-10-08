@@ -15,3 +15,6 @@ pub mod util;
 
 pub use sapio_base;
 pub use schemars;
+
+pub use sapio_macros;
+pub use sapio_macros::*;

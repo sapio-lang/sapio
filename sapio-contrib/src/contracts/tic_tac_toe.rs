@@ -10,6 +10,8 @@ use sapio::contract::*;
 use sapio::template::Template;
 use sapio::*;
 use sapio_base::timelocks::RelHeight;
+use sapio_macros::compile_if;
+use sapio_macros::guard;
 use schemars::*;
 use serde::*;
 use std::collections::HashMap;
@@ -71,23 +73,21 @@ pub struct TicTacToe {
 }
 
 impl TicTacToe {
-    compile_if! {
-        fn no_winner(self, _ctx) {
-            if self.board.winner().is_none() {
-                ConditionalCompileType::Required
-            } else {
-                ConditionalCompileType::Never
-            }
+    #[compile_if]
+    fn no_winner(self, _ctx: Context) {
+        if self.board.winner().is_none() {
+            ConditionalCompileType::Required
+        } else {
+            ConditionalCompileType::Never
         }
     }
 
-    compile_if! {
-        fn winner(self, _ctx) {
-            if self.board.winner().is_none() {
-                ConditionalCompileType::Never
-            } else {
-                ConditionalCompileType::Required
-            }
+    #[compile_if]
+    fn winner(self, _ctx: Context) {
+        if self.board.winner().is_none() {
+            ConditionalCompileType::Never
+        } else {
+            ConditionalCompileType::Required
         }
     }
     then! {

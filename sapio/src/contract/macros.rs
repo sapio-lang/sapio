@@ -295,13 +295,13 @@ macro_rules! finish {
 /// guard!(cached fn name(self, ctx) {/*Clause*/})
 /// ```
 #[macro_export]
-macro_rules! guard {
+macro_rules! decl_guard {
     {
         $(#[$meta:meta])*
         $name:ident} => {
             $crate::contract::macros::paste!{
                 $(#[$meta])*
-                fn [<GUARD_ $name>](&self, _ctx:$crate::contract::Context) -> $crate::sapio_base::Clause {
+                fn [<guard_ $name>](&self, _ctx:$crate::contract::Context) -> $crate::sapio_base::Clause {
                     unimplemented!();
                 }
                 $(#[$meta])*
@@ -310,51 +310,16 @@ macro_rules! guard {
                 }
             }
      };
-    {
-        $(#[$meta:meta])*
-        fn $name:ident($s:ident, $ctx:ident) $b:block} => {
-            $crate::contract::macros::paste!{
-                $(#[$meta])*
-                fn [<GUARD_ $name>](&$s, $ctx:$crate::contract::Context) -> $crate::sapio_base::Clause
-                $b
-                $(#[$meta])*
-                fn  $name() -> Option<$crate::contract::actions::Guard<Self>> {
-                    Some($crate::contract::actions::Guard::Fresh(Self::[<GUARD_ $name>]))
-                }
-
-            }
-        };
-    {
-        $(#[$meta:meta])*
-        cached
-        fn $name:ident($s:ident, $ctx:ident) $b:block} => {
-            $crate::contract::macros::paste!{
-                $(#[$meta])*
-                fn [<GUARD_ $name>](&$s, $ctx:$crate::contract::Context) -> $crate::sapio_base::Clause
-                $b
-
-                $(#[$meta])*
-                fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
-                    Some($crate::contract::actions::Guard::Cache(Self::[<GUARD_ $name>]))
-                }
-            }
-        };
 }
 
-/// The compile_if macro is used to define a `ConditionallyCompileIf`.
-/// formats for calling are:
-/// ```ignore
-/// compile_if!(fn name(self, ctx) {/*ConditionallyCompileType*/})
-/// ```
-#[macro_export]
-macro_rules! compile_if {
+macro_rules! decl_compile_if {
     {
         $(#[$meta:meta])*
         $name:ident
     } => {
             $crate::contract::macros::paste!{
                 $(#[$meta])*
-                fn [<COMPILE_IF $name>](&self, _ctx: $crate::contract::Context) -> $crate::contract::actions::ConditionalCompileType {
+                fn [<compile_if $name>](&self, _ctx: $crate::contract::Context) -> $crate::contract::actions::ConditionalCompileType {
                     unimplemented!()
                 }
                 $(#[$meta])*
@@ -363,18 +328,4 @@ macro_rules! compile_if {
                 }
             }
      };
-    {
-        $(#[$meta:meta])*
-        fn $name:ident($s:ident, $ctx:ident) $b:block
-    } => {
-            $crate::contract::macros::paste!{
-                $(#[$meta])*
-                fn [<COMPILE_IF $name>](&$s, $ctx: $crate::contract::Context) -> $crate::contract::actions::ConditionalCompileType
-                $b
-                $(#[$meta])*
-                fn $name() -> Option<$crate::contract::actions::ConditionallyCompileIf<Self>> {
-                    Some($crate::contract::actions::ConditionallyCompileIf::Fresh(Self::[<COMPILE_IF $name>]))
-                }
-            }
-        };
 }

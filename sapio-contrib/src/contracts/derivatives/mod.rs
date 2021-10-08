@@ -14,6 +14,7 @@ use sapio_base::Clause;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::rc::Rc;
+use sapio_macros::guard;
 
 pub mod oracle;
 pub use oracle::{Oracle, Symbol};
@@ -97,11 +98,10 @@ impl GenericBet {
             )),
         }
     }
-    guard! {
-        /// Action when the price is greater than or equal to the price in the middle
-        fn gte(self, _ctx) {
-            self.price(true)
-        }
+    /// Action when the price is greater than or equal to the price in the middle
+    #[guard]
+    fn gte(self, _ctx: Context) {
+        self.price(true)
     }
     then!(
         guarded_by: [Self::gte]
@@ -114,11 +114,10 @@ impl GenericBet {
         }
     );
 
-    guard! {
-        /// Action when the price is less than or equal to the price in the middle
-        fn lt(self, _ctx) {
-            self.price(false)
-        }
+    /// Action when the price is less than or equal to the price in the middle
+    #[guard]
+    fn lt(self, _ctx: Context) {
+        self.price(false)
     }
     then!(
         guarded_by: [Self::lt]
@@ -130,9 +129,10 @@ impl GenericBet {
             }
         }
     );
-    guard! {
-        /// Allow for both parties to cooperative close
-        fn cooperate(self, _ctx) { self.cooperate.clone() }
+    /// Allow for both parties to cooperative close
+    #[guard]
+    fn cooperate(self, _ctx: Context) {
+        self.cooperate.clone()
     }
 
     // elided: unilateral close initiation after certain relative delay

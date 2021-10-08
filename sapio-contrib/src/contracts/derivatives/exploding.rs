@@ -7,6 +7,7 @@
 //! Contracts which have a expiration date before which they must be executed...
 use super::*;
 use sapio_base::timelocks::*;
+use sapio_macros::guard;
 /// Generic functionality required for Exploding contracts
 pub trait Explodes: 'static + Sized {
     then! {
@@ -48,7 +49,10 @@ pub struct ExplodingOption<T: 'static> {
 }
 
 impl<T> ExplodingOption<T> {
-    guard! {fn signed(self, _ctx) { self.key_p2_pk.clone() }}
+    #[guard]
+    fn signed(self, _ctx: Context) {
+        self.key_p2_pk.clone()
+    }
 }
 impl<T> Explodes for ExplodingOption<T>
 where

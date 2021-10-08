@@ -14,6 +14,8 @@ use sapio::template::Output;
 use sapio::*;
 use sapio_base::timelocks::RelHeight;
 use sapio_base::Clause;
+use sapio_macros::compile_if;
+use sapio::contract::Context;
 
 use bitcoin;
 use sapio_base::timelocks::{AbsTime, AnyAbsTimeLock, BIG_PAST_DATE, START_OF_TIME};
@@ -42,23 +44,18 @@ struct OpenChannel {
     min_maturity: RelHeight,
 }
 impl OpenChannel {
-    guard! {
-        fn signed_update(self, _ctx)
-            {
-                Clause::And(
-                    vec![Clause::Key(self.alice_u),
-                         Clause::Key(self.bob_u)])
-            }
+    #[guard]
+    fn signed_update(self, _ctx: Context) {
+        Clause::And(vec![Clause::Key(self.alice_u), Clause::Key(self.bob_u)])
     }
-    guard! {
-        fn newer_sequence_check(self, _ctx) {
-            if let Some(prior) = self.pending_update.as_ref() {
-                AbsTime::try_from(prior.sequence.get()+1)
-                    .map(Clause::from)
-                    .unwrap_or(Clause::Unsatisfiable)
-            } else {
-                START_OF_TIME.into()
-            }
+    #[guard]
+    fn newer_sequence_check(self, _ctx: Context) {
+        if let Some(prior) = self.pending_update.as_ref() {
+            AbsTime::try_from(prior.sequence.get() + 1)
+                .map(Clause::from)
+                .unwrap_or(Clause::Unsatisfiable)
+        } else {
+            START_OF_TIME.into()
         }
     }
     finish! {
@@ -91,13 +88,12 @@ impl OpenChannel {
         }
     }
 
-    compile_if! {
-        fn triggered(self, _ctx) {
-            if self.pending_update.is_some() {
-                ConditionalCompileType::NoConstraint
-            } else {
-                ConditionalCompileType::Never
-            }
+    #[compile_if]
+    fn triggered(self, _ctx: Context) {
+        if self.pending_update.is_some() {
+            ConditionalCompileType::NoConstraint
+        } else {
+            ConditionalCompileType::Never
         }
     }
     fn get_maturity(&self) -> RelHeight {
@@ -106,7 +102,10 @@ impl OpenChannel {
             .map(|u| std::cmp::max(u.maturity, self.min_maturity))
             .unwrap_or(self.min_maturity)
     }
-    guard! {fn timeout(self, _ctx) { self.get_maturity().into() }}
+    #[guard]
+    fn timeout(self, _ctx: Context) {
+        self.get_maturity().into()
+    }
     then! {
         compile_if: [Self::triggered]
         guarded_by: [Self::timeout]
@@ -119,21 +118,17 @@ impl OpenChannel {
         }
     }
 
-    guard! {
-        fn sign_cooperative_close(self, _ctx) {
-            Clause::And(vec![
-                    Clause::Key(self.alice),
-                    Clause::Key(self.bob) ])
-        }
+    #[guard]
+    fn sign_cooperative_close(self, _ctx: Context) {
+        Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
     }
 
-    compile_if! {
-        fn untriggered(self, _ctx) {
-            if self.pending_update.is_some() {
-                ConditionalCompileType::Never
-            } else {
-                ConditionalCompileType::NoConstraint
-            }
+    #[compile_if]
+    fn untriggered(self, _ctx: Context) {
+        if self.pending_update.is_some() {
+            ConditionalCompileType::Never
+        } else {
+            ConditionalCompileType::NoConstraint
         }
     }
     finish! {

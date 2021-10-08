@@ -9,6 +9,7 @@ use bitcoin;
 use bitcoin::secp256k1::*;
 use bitcoin::util::amount::CoinAmount;
 use contract::*;
+use sapio::contract::Context;
 use sapio::*;
 use sapio_base::Clause;
 use schemars::JsonSchema;
@@ -18,6 +19,7 @@ use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
+use sapio_macros::guard;
 /// Helper
 
 #[cfg(test)]
@@ -221,8 +223,14 @@ where
     Self: Contract,
     <Self as Contract>::StatefulArguments: TryInto<Update, Error = CompilationError>,
 {
-    guard! {fn timeout(self, _ctx) { Clause::Older(100) }}
-    guard! {cached fn signed(self, _ctx) {Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])}}
+    #[guard]
+    fn timeout(self, _ctx: Context) {
+        Clause::Older(100)
+    }
+    #[guard(cached)]
+    fn signed(self, _ctx: Context) {
+        Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
+    }
 
     finish! {
         guarded_by: [Self::signed]

@@ -9,9 +9,8 @@ use bitcoin::Amount;
 use sapio::contract::*;
 use sapio::util::amountrange::AmountF64;
 use sapio::*;
-
 use sapio_base::Clause;
-
+use sapio_macros::guard;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::*;
@@ -29,11 +28,10 @@ fn default_coerce(
 }
 
 impl ChainReturn {
-    guard! {
-        /// everyone has signed off on the transaction
-        fn approved(self, _ctx) {
-            Clause::Key(self.pk.clone())
-        }
+    /// everyone has signed off on the transaction
+    #[guard]
+    fn approved(self, _ctx: Context) {
+        Clause::Key(self.pk.clone())
     }
     finish! {
             /// move the coins to the next state -- payouts may recursively contain pools itself

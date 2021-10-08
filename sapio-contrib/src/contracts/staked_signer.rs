@@ -13,6 +13,7 @@ use sapio_base::Clause;
 use schemars::*;
 use serde::*;
 use std::marker::PhantomData;
+use sapio_macros::guard;
 
 /// # Operational State
 /// State where stakes should be recognized for voting
@@ -57,13 +58,13 @@ pub trait StakerInterface
 where
     Self: Sized,
 {
-    guard! {
+    decl_guard! {
     /// The key used to sign messages
     staking_key}
-    guard! {
+    decl_guard! {
     /// the clause to begin a close process
     begin_redeem_key}
-    guard! {
+    decl_guard! {
     /// the clause to finish a close process
     finish_redeem_key}
     then! {
@@ -82,10 +83,9 @@ where
 }
 
 impl StakerInterface for Staker<Operational> {
-    guard! {
-        fn begin_redeem_key(self, _ctx) {
-            Clause::Key(self.redeeming_key)
-        }
+    #[guard]
+    fn begin_redeem_key(self, _ctx: Context) {
+        Clause::Key(self.redeeming_key)
     }
     then! {
         guarded_by: [Self::begin_redeem_key]
@@ -98,23 +98,20 @@ impl StakerInterface for Staker<Operational> {
             None)?.into()
         }
     }
-    guard! {
-        fn staking_key(self, _ctx) {
-            Clause::Key(self.signing_key)
-        }
+    #[guard]
+    fn staking_key(self, _ctx: Context) {
+        Clause::Key(self.signing_key)
     }
 }
 
 impl StakerInterface for Staker<Closing> {
-    guard! {
-        fn finish_redeem_key(self, _ctx) {
-            Clause::And(vec![Clause::Key(self.redeeming_key), self.timeout.into()])
-        }
+    #[guard]
+    fn finish_redeem_key(self, _ctx: Context) {
+        Clause::And(vec![Clause::Key(self.redeeming_key), self.timeout.into()])
     }
-    guard! {
-        fn staking_key(self, _ctx) {
-            Clause::Key(self.signing_key)
-        }
+    #[guard]
+    fn staking_key(self, _ctx: Context) {
+        Clause::Key(self.signing_key)
     }
 }
 

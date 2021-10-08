@@ -84,11 +84,10 @@ impl PayThisThing for PayoutBundle {
     }
 }
 impl PayoutBundle {
-    guard! {
-        fn cooperate(self, _ctx) {
-           let v : Vec<_>= self.get_keys().into_iter().map(Clause::Key).collect();
-           Clause::Threshold(v.len(), v)
-        }
+    #[guard]
+    fn cooperate(self, _ctx: sapio::Context) {
+        let v: Vec<_> = self.get_keys().into_iter().map(Clause::Key).collect();
+        Clause::Threshold(v.len(), v)
     }
     then! {
         fn expand(self, ctx) {
@@ -114,11 +113,14 @@ impl Contract for PayoutBundle {
     declare! {non updatable}
 }
 impl MiningPayout {
-    guard! {
-        fn cooperate(self, _ctx) {
-           let v : Vec<_>= self.participants.iter().map(|x|Clause::Key(x.key.clone())).collect();
-           Clause::Threshold(v.len(), v)
-        }
+    #[guard]
+    fn cooperate(self, _ctx: sapio::Context) {
+        let v: Vec<_> = self
+            .participants
+            .iter()
+            .map(|x| Clause::Key(x.key.clone()))
+            .collect();
+        Clause::Threshold(v.len(), v)
     }
     then! {
         fn expand(self, ctx) {
