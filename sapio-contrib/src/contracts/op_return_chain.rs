@@ -9,14 +9,13 @@ use bitcoin::Amount;
 use sapio::contract::*;
 use sapio::util::amountrange::AmountF64;
 use sapio::*;
-use sapio_base::timelocks::AnyRelTimeLock;
+
 use sapio_base::Clause;
-use schemars::schema::RootSchema;
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::*;
-use std::convert::{TryFrom, TryInto};
-use std::sync::{Arc, Mutex};
+
 /// Chain of OpReturns
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ChainReturn {

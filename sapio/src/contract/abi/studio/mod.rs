@@ -12,7 +12,6 @@ use ::miniscript::*;
 use bitcoin::consensus::serialize;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use sapio_base::effects::EffectPath;
-use sapio_base::effects::PathFragment;
 
 use sapio_base::serialization_helpers::SArc;
 use schemars::JsonSchema;

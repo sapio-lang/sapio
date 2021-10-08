@@ -11,7 +11,7 @@ use sapio::util::amountrange::AmountF64;
 use sapio::*;
 use sapio_base::timelocks::AnyRelTimeLock;
 use sapio_base::Clause;
-use schemars::schema::RootSchema;
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::convert::{TryFrom, TryInto};

@@ -9,7 +9,6 @@ use super::actions::Guard;
 use super::actions::{ConditionalCompileType, ConditionallyCompileIf};
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
-use std::sync::Arc;
 
 use super::AnyContract;
 use super::CompilationError;
