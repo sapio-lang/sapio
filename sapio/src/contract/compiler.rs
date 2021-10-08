@@ -159,27 +159,21 @@ where
                 .filter_map(|func| func())
                 .flat_map(|func| {
                     let name = PathFragment::Named(SArc(func.name.clone()));
-                    match conditional_compile_ctx.derive(name.clone()) {
-                        Err(c) => Some(Err(c)),
-                        Ok(mut this_ctx) => {
-                            let r = {
-                                let constraint = CCILWrapper(func.conditional_compile_if).assemble(self_ref, &mut this_ctx);
-                                match constraint {
-                                    ConditionalCompileType::Fail(errors) => (errors, Nullable::No),
-                                    ConditionalCompileType::Required
-                                    | ConditionalCompileType::NoConstraint => {
-                                        (LinkedList::new(), Nullable::No)
-                                    }
-                                    ConditionalCompileType::Nullable => {
-                                        (LinkedList::new(), Nullable::Yes)
-                                    }
-                                    ConditionalCompileType::Skippable
-                                    | ConditionalCompileType::Never => return None,
+                    conditional_compile_ctx.derive(name.clone()).map(|mut this_ctx| {
+                        let r = match CCILWrapper(func.conditional_compile_if).assemble(self_ref, &mut this_ctx) {
+                                ConditionalCompileType::Fail(errors) => (errors, Nullable::No),
+                                ConditionalCompileType::Required
+                                | ConditionalCompileType::NoConstraint => {
+                                    (LinkedList::new(), Nullable::No)
                                 }
+                                ConditionalCompileType::Nullable => {
+                                    (LinkedList::new(), Nullable::Yes)
+                                }
+                                ConditionalCompileType::Skippable
+                                | ConditionalCompileType::Never => return None,
                             };
-                            Some(Ok((func, r, name)))
-                        }
-                    }
+                        Some((func, r, name))
+                        }).transpose()
                 })
                 .map(|r|  {
                     r.and_then(|(func, (errors, nullability), name)| {
@@ -224,22 +218,19 @@ where
                 .filter_map(|func| func())
                 // TODO: De-duplicate this code?
                 .filter_map(|func| {
-                    let r = conditional_compile_ctx
-                        .derive(PathFragment::Named(SArc(func.get_name().clone())));
-                    match r {
-                        Err(c) => Some(Err(c)),
-                        Ok(mut this_ctx) => {
+     conditional_compile_ctx
+                        .derive(PathFragment::Named(SArc(func.get_name().clone()))).map(|mut this_ctx|{
+
                             let constraint = CCILWrapper(func
                                 .get_conditional_compile_if()).assemble(self_ref, &mut this_ctx);
                             match constraint {
-                                ConditionalCompileType::Fail(errors) => Some(Ok((func, errors))),
+                                ConditionalCompileType::Fail(errors) => Some((func, errors)),
                                 ConditionalCompileType::Required
                                 | ConditionalCompileType::NoConstraint
-                                | ConditionalCompileType::Nullable => Some(Ok((func, LinkedList::new()))),
+                                | ConditionalCompileType::Nullable => Some((func, LinkedList::new())),
                                 ConditionalCompileType::Skippable | ConditionalCompileType::Never => None,
                             }
-                        }
-                    }
+                        }).transpose()
                 })
                 .map(|r| {
                     r.and_then(|(func, errors)| {
