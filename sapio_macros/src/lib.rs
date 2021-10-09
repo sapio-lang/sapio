@@ -6,6 +6,7 @@ mod tests {
     }
 }
 
+use core::ops::Index;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::Lit;
@@ -19,11 +20,15 @@ use syn::{parse_macro_input, AttributeArgs, ItemFn, Meta, NestedMeta};
 pub fn compile_if(args: TokenStream, input: TokenStream) -> TokenStream {
     let _args = parse_macro_input!(args as AttributeArgs);
     let input = parse_macro_input!(input as ItemFn);
+    if input.sig.inputs.len() != 2 {
+        panic!("Too may Arguments to function");
+    }
+    let context_arg = input.sig.inputs.index(1);
     let name = input.sig.ident;
     let compile_if_name = format_ident!("compile_if_{}", name);
     let block = input.block;
     proc_macro::TokenStream::from(quote! {
-        fn #compile_if_name(&self, ctx: sapio::contract::Context) -> sapio::contract::actions::ConditionalCompileType
+        fn #compile_if_name(&self, #context_arg) -> sapio::contract::actions::ConditionalCompileType
         #block
         fn #name() -> Option<sapio::contract::actions::ConditionallyCompileIf<Self>> {
             Some(sapio::contract::actions::ConditionallyCompileIf::Fresh(Self::#compile_if_name))
@@ -42,6 +47,10 @@ pub fn compile_if(args: TokenStream, input: TokenStream) -> TokenStream {
 pub fn guard(args: TokenStream, input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(args as AttributeArgs);
     let input = parse_macro_input!(input as ItemFn);
+    if input.sig.inputs.len() != 2 {
+        panic!("Too may Arguments to function");
+    }
+    let context_arg = input.sig.inputs.index(1);
     let name = input.sig.ident;
     let guard_name = format_ident!("guard_{}", name);
     let block = input.block;
@@ -55,7 +64,7 @@ pub fn guard(args: TokenStream, input: TokenStream) -> TokenStream {
         }
     }
     proc_macro::TokenStream::from(quote! {
-        fn #guard_name(&self, ctx: sapio::contract::Context) -> sapio::sapio_base::Clause
+        fn #guard_name(&self, #context_arg) -> sapio::sapio_base::Clause
         #block
         fn  #name() -> Option<sapio::contract::actions::Guard<Self>> {
             Some(sapio::contract::actions::Guard::Fresh(Self::#guard_name))
@@ -90,7 +99,7 @@ fn get_arrays(args: &Vec<NestedMeta>) -> (proc_macro2::TokenStream, proc_macro2:
             (Some(_), _, NestedMeta::Meta(Meta::NameValue(v))) if v.path.is_ident("compile_if") => {
                 panic!("Repeated compile_if arguments");
             }
-            v => {}
+            _v => {}
         }
     }
     (
@@ -103,6 +112,10 @@ fn get_arrays(args: &Vec<NestedMeta>) -> (proc_macro2::TokenStream, proc_macro2:
 pub fn then(args: TokenStream, input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(args as AttributeArgs);
     let input = parse_macro_input!(input as ItemFn);
+    if input.sig.inputs.len() != 2 {
+        panic!("Too may Arguments to function");
+    }
+    let context_arg = input.sig.inputs.index(1);
     let name = input.sig.ident;
     let then_fn_name = format_ident!("then_{}", name);
     let block = input.block;
@@ -118,7 +131,7 @@ pub fn then(args: TokenStream, input: TokenStream) -> TokenStream {
                 })
             }
             /// (missing docs fix)
-            fn #then_fn_name(&self, ctx: sapio::contract::Context) -> sapio::contract::TxTmplIt
+            fn #then_fn_name(&self, #context_arg) -> sapio::contract::TxTmplIt
             #block
     })
 }
@@ -183,11 +196,15 @@ pub fn continuation(args: TokenStream, input: TokenStream) -> TokenStream {
     let name = input.sig.ident;
     let continue_name = format_ident!("continue_{}", name);
     let block = input.block;
+    if input.sig.inputs.len() != 3 {
+        panic!("Too may Arguments to function");
+    }
     let arg_type = input
         .sig
         .inputs
         .last()
         .expect("Must have at least one argument");
+    let context_arg = input.sig.inputs.index(1);
     let (cia, gba) = get_arrays(&args);
     let web_api_type = web_api(&args);
     let continue_schema_for_name = format_ident!("continue_schema_for_{}", name);
@@ -196,7 +213,7 @@ pub fn continuation(args: TokenStream, input: TokenStream) -> TokenStream {
     proc_macro::TokenStream::from(quote! {
             #web_api_schema_s
             /// (missing docs fix)
-            fn #continue_name(&self, ctx:sapio::contract::Context, #arg_type) -> sapio::contract::TxTmplIt
+            fn #continue_name(&self, #context_arg, #arg_type) -> sapio::contract::TxTmplIt
             #block
             /// (missing docs fix)
             fn #name<'a>() -> Option<Box<dyn
