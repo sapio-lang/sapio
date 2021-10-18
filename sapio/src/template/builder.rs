@@ -9,6 +9,8 @@ pub use super::{Output, OutputMeta};
 use super::{Template, TemplateMetadata};
 use crate::contract::{CompilationError, Context};
 use bitcoin::util::amount::Amount;
+use bitcoin::VarInt;
+use miniscript::DescriptorTrait;
 use sapio_base::effects::PathFragment;
 use sapio_base::timelocks::*;
 use sapio_base::CTVHash;
@@ -184,6 +186,52 @@ impl Builder {
                     script_pubkey: out.contract.address.clone().into(),
                 })
                 .collect(),
+        }
+    }
+
+    /// more efficient that get_tx() to estimate a tx size, not including witness
+    pub fn estimate_tx_size(&self) -> u64 {
+        let mut input_weight: u64 = 0;
+        let inputs_with_witnesses: u64 = self.sequences.len() as u64;
+        let scale_factor = 1u64;
+        for _seq in &self.sequences {
+            input_weight += scale_factor
+                * (32 + 4 + 4 + // outpoint (32+4) + nSequence
+                VarInt(0u64).len() as u64 + 0);
+            //if !input.witness.is_empty() {
+            //    inputs_with_witnesses += 1;
+            //    input_weight += VarInt(input.witness.len() as u64).len();
+            //    for elem in &input.witness {
+            //        input_weight += VarInt(elem.len() as u64).len() + elem.len();
+            //    }
+            //}
+        }
+        let mut output_size: u64 = 0;
+        for output in &self.outputs {
+            let spk = output
+                .contract
+                .descriptor
+                .as_ref()
+                .map(|d| d.script_pubkey().len() as u64);
+            output_size += 8 + // value
+                (VarInt(spk.unwrap_or(0)).len() as u64) +
+                spk.unwrap_or(0);
+        }
+        let non_input_size : u64=
+        // version:
+        4 +
+        // count varints:
+        (VarInt(self.sequences.len() as u64).len() as u64 +
+        VarInt(self.outputs.len() as u64).len() as u64)+
+        output_size +
+        // lock_time
+        4;
+        if inputs_with_witnesses == 0 {
+            non_input_size * scale_factor + input_weight
+        } else {
+            non_input_size * scale_factor + input_weight + (self.sequences.len() as u64)
+                - inputs_with_witnesses
+                + 2
         }
     }
 }
