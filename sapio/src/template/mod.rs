@@ -65,6 +65,13 @@ pub struct Template {
     )]
     #[schemars(with = "i64")]
     pub max: Amount,
+    /// the amount being sent to this Template (TODO: currently computed via tx.total_amount())
+    #[serde(
+        rename = "min_feerate_sats_vbyte",
+        with = "bitcoin::util::amount::serde::as_sat::opt"
+    )]
+    #[schemars(with = "Option<i64>")]
+    pub min_feerate_sats_vbyte: Option<Amount>,
     /// any metadata fields attached to this template
     #[serde(
         skip_serializing_if = "TemplateMetadata::skip_serializing",

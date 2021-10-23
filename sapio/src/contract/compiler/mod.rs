@@ -345,21 +345,35 @@ where
         };
 
         let miniscript = policy.compile().map_err(Into::<CompilationError>::into)?;
+        let estimated_max_size = Segwitv0::max_satisfaction_size(&miniscript)
+            .ok_or(CompilationError::TerminateCompilation)?;
         let descriptor = Descriptor::new_wsh(miniscript)?;
         let address = descriptor.address(ctx.network)?.into();
         let descriptor = Some(descriptor);
         let policy = Some(policy);
         let root_path = SArc(ctx.path().clone());
 
-        Ok(Compiled {
-            ctv_to_tx,
-            suggested_txs,
-            continue_apis,
-            root_path,
-            address,
-            descriptor,
-            policy,
-            amount_range,
-        })
+        let failed_estimate = ctv_to_tx.values().any(|a| {
+            // witness space not scaled
+            let tx_size = a.tx.get_weight() + estimated_max_size;
+            let fees = amount_range.max() - a.total_amount();
+            a.min_feerate_sats_vbyte
+                .map(|m| fees.as_sat() < (m.as_sat() * tx_size as u64))
+                == Some(false)
+        });
+        if failed_estimate {
+            Err(CompilationError::MinFeerateError)
+        } else {
+            Ok(Compiled {
+                ctv_to_tx,
+                suggested_txs,
+                continue_apis,
+                root_path,
+                address,
+                descriptor,
+                policy,
+                amount_range,
+            })
+        }
     }
 }

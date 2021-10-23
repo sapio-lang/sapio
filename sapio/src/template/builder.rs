@@ -26,6 +26,7 @@ pub struct Builder {
     lock_time: Option<AnyAbsTimeLock>,
     ctx: Context,
     fees: Amount,
+    min_feerate: Option<Amount>,
     // Metadata Fields:
     metadata: TemplateMetadata,
 }
@@ -40,6 +41,7 @@ impl Builder {
             lock_time: None,
             metadata: TemplateMetadata::new(),
             fees: Amount::from_sat(0),
+            min_feerate: None,
             ctx,
         }
     }
@@ -189,6 +191,19 @@ impl Builder {
         }
     }
 
+    /// Sets the feerate if not set, and then sets the value to the min of the
+    /// existing value or the new value.
+    /// For example, s.set_min_feerate(100.into()).set_min_feerate(1000.into())
+    /// results in feerate Some(100).
+    ///
+    /// During compilation, templates should be checked to ensure that at least
+    /// that feerate is paid.
+    pub fn set_min_feerate(mut self, a: Amount) -> Self {
+        let v: &mut Amount = self.min_feerate.get_or_insert(a);
+        *v = std::cmp::min(*v, a);
+        self
+    }
+
     /// more efficient that get_tx() to estimate a tx size, not including witness
     pub fn estimate_tx_size(&self) -> u64 {
         let mut input_weight: u64 = 0;
@@ -243,6 +258,7 @@ impl From<Builder> for Template {
             ctv: tx.get_ctv_hash(0),
             ctv_index: 0,
             max: tx.total_amount() + t.fees,
+            min_feerate_sats_vbyte: t.min_feerate,
             tx,
             metadata_map_s2s: t.metadata,
         }

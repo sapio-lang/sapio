@@ -19,6 +19,8 @@ use std::fmt;
 pub enum CompilationError {
     /// Unspecified Error -- but we should stop compiling
     TerminateCompilation,
+    /// Fee Specification Error
+    MinFeerateError,
     /// Error when ContextPath has already been used.
     ContexPathAlreadyDerived,
     /// Error when ContextPath attempted
