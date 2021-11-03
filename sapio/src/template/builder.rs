@@ -9,6 +9,8 @@ pub use super::{Output, OutputMeta};
 use super::{Template, TemplateMetadata};
 use crate::contract::{CompilationError, Context};
 use bitcoin::util::amount::Amount;
+use bitcoin::VarInt;
+use miniscript::DescriptorTrait;
 use sapio_base::effects::PathFragment;
 use sapio_base::timelocks::*;
 use sapio_base::CTVHash;
@@ -24,6 +26,7 @@ pub struct Builder {
     lock_time: Option<AnyAbsTimeLock>,
     ctx: Context,
     fees: Amount,
+    min_feerate: Option<Amount>,
     // Metadata Fields:
     metadata: TemplateMetadata,
 }
@@ -38,6 +41,7 @@ impl Builder {
             lock_time: None,
             metadata: TemplateMetadata::new(),
             fees: Amount::from_sat(0),
+            min_feerate: None,
             ctx,
         }
     }
@@ -186,6 +190,65 @@ impl Builder {
                 .collect(),
         }
     }
+
+    /// Sets the feerate if not set, and then sets the value to the min of the
+    /// existing value or the new value.
+    /// For example, s.set_min_feerate(100.into()).set_min_feerate(1000.into())
+    /// results in feerate Some(100).
+    ///
+    /// During compilation, templates should be checked to ensure that at least
+    /// that feerate is paid.
+    pub fn set_min_feerate(mut self, a: Amount) -> Self {
+        let v: &mut Amount = self.min_feerate.get_or_insert(a);
+        *v = std::cmp::min(*v, a);
+        self
+    }
+
+    /// more efficient that get_tx() to estimate a tx size, not including witness
+    pub fn estimate_tx_size(&self) -> u64 {
+        let mut input_weight: u64 = 0;
+        let inputs_with_witnesses: u64 = self.sequences.len() as u64;
+        let scale_factor = 1u64;
+        for _seq in &self.sequences {
+            input_weight += scale_factor
+                * (32 + 4 + 4 + // outpoint (32+4) + nSequence
+                VarInt(0u64).len() as u64 + 0);
+            //if !input.witness.is_empty() {
+            //    inputs_with_witnesses += 1;
+            //    input_weight += VarInt(input.witness.len() as u64).len();
+            //    for elem in &input.witness {
+            //        input_weight += VarInt(elem.len() as u64).len() + elem.len();
+            //    }
+            //}
+        }
+        let mut output_size: u64 = 0;
+        for output in &self.outputs {
+            let spk = output
+                .contract
+                .descriptor
+                .as_ref()
+                .map(|d| d.script_pubkey().len() as u64);
+            output_size += 8 + // value
+                (VarInt(spk.unwrap_or(0)).len() as u64) +
+                spk.unwrap_or(0);
+        }
+        let non_input_size : u64=
+        // version:
+        4 +
+        // count varints:
+        (VarInt(self.sequences.len() as u64).len() as u64 +
+        VarInt(self.outputs.len() as u64).len() as u64)+
+        output_size +
+        // lock_time
+        4;
+        if inputs_with_witnesses == 0 {
+            non_input_size * scale_factor + input_weight
+        } else {
+            non_input_size * scale_factor + input_weight + (self.sequences.len() as u64)
+                - inputs_with_witnesses
+                + 2
+        }
+    }
 }
 impl From<Builder> for Template {
     fn from(t: Builder) -> Template {
@@ -195,6 +258,7 @@ impl From<Builder> for Template {
             ctv: tx.get_ctv_hash(0),
             ctv_index: 0,
             max: tx.total_amount() + t.fees,
+            min_feerate_sats_vbyte: t.min_feerate,
             tx,
             metadata_map_s2s: t.metadata,
         }

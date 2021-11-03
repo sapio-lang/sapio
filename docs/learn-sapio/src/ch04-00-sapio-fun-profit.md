@@ -29,46 +29,40 @@ pub struct UnderFundedExpiringOption {
     timeout: AnyAbsTimeLock,
 }
 
-impl UnderFundedExpiringOption
-{
-    then! {
-        /// return the funds on expiry
-        fn expires(self, ctx) {
-            Ok(Box::new(std::iter::once(
-                ctx.template()
-                    // set the timeout for this path -- because it is using
-                    // then! we do not require a guard.
-                    .set_lock_time(self.timeout)?
-                    .add_output(
-                        // ctx.funds() knows how much money has been sent to this contract
-                        ctx.funds(),
-                        // this bootstraps an address into a contract object
-                        &Compiled::from_address(self.return_address.clone(), None),
-                        None,
-                    )?
-                    .into(),
-            )))
-        }
+impl UnderFundedExpiringOption {
+    #[then]
+    /// return the funds on expiry
+    fn expires(self, ctx: Context) {
+        ctx.template()
+            // set the timeout for this path -- because it is using
+            // then! we do not require a guard.
+            .set_lock_time(self.timeout)?
+            .add_output(
+                // ctx.funds() knows how much money has been sent to this contract
+                ctx.funds(),
+                // this bootstraps an address into a contract object
+                &Compiled::from_address(self.return_address.clone(), None),
+                None,
+            )?
+            .into()
     }
-
-    then! {
-        /// continue the contract
-        fn strikes(self, ctx) {
-            let mut tmpl = ctx.template().add_amount(self.strike_price);
-            tmpl.add_sequence()
-                .add_output(
-                    /// use the inner context of tmpl because it has added funds
-                    (tmpl.ctx().funds() + self.strike_price).into(),
-                    &self.strike_into
-                    None,
-                )?
-                .into()
-        }
+    /// continue the contract
+    #[then]
+    fn strikes(self, ctx: Context) {
+        let tmpl = ctx.template().add_amount(self.strike_price);
+        let amt = (tmpl.ctx().funds() + self.strike_price).into();
+        tmpl.add_sequence()
+            .add_output(
+                // use the inner context of tmpl because it has added funds
+                amt,
+                self.strike_into.as_ref(),
+                None,
+            )?
+            .into()
     }
 }
 
-impl Contract for UnderFundedExpiringOption
-{
+impl Contract for UnderFundedExpiringOption {
     declare!(then, Self::expires, Self::strikes);
     declare!(non updatable);
 }

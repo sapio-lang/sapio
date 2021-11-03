@@ -6,7 +6,6 @@
 
 //! An example of how one might begin building a payment channel contract in Sapio
 use bitcoin;
-use bitcoin::secp256k1::*;
 use bitcoin::util::amount::CoinAmount;
 use contract::*;
 
@@ -26,6 +25,7 @@ use std::sync::{Arc, Mutex};
 mod tests {
     use super::*;
     use ::rand::rngs::OsRng;
+    use bitcoin::secp256k1::*;
     use bitcoin::Amount;
     use miniscript::Descriptor;
     use miniscript::DescriptorTrait;
