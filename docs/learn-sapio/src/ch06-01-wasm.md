@@ -58,26 +58,113 @@ the environment.
 struct C;
 const DEPENDS_ON_MODULE : [u8; 32] = [0;32];
 impl Contract for C {
-    then!{
-        fn demo(self, ctx) {
-            let amt = ctx.funds()/2;
-            ctx.template()
-               .add_output(amt, &create_contract("users_cold_storage", /**/, amt), None)?
-               .add_output(amt, &create_contract(&DEPENDS_ON_MODULE, /**/, amt), None)?
-               .into()
-        }
+    #[then]
+    fn demo(self, ctx: Context) {
+        let amt = ctx.funds()/2;
+        ctx.template()
+            .add_output(amt, &create_contract("users_cold_storage", /**/, amt), None)?
+            .add_output(amt, &create_contract(&DEPENDS_ON_MODULE, /**/, amt), None)?
+            .into()
     }
 }
 ```
+### Typed Calls
+ Using JSONSchemas, plugins have a basic type system that enables run-time
+ checking for compatibility. Plugins can guarantee they implement particular
+ interfaces faithfully. These interfaces currently only support protecting the
+ call, but make no assurances about the returned value or potential errors from
+ the callee's implementation of the trait.
+
+For example, suppose I want to be able to specify a provided module must
+statisfy a calling convention for batching. I define the trait
+`BatchingTraitVersion0_1_1` as follows:
+
+```rust
+/// A payment to a specific address
+#[derive(JsonSchema, Serialize, Deserialize, Clone)]
+pub struct Payment {
+    /// The amount to send
+    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    #[schemars(with = "f64")]
+    pub amount: bitcoin::util::amount::Amount,
+    /// # Address
+    /// The Address to send to
+    pub address: bitcoin::Address,
+}
+#[derive(Serialize, JsonSchema, Deserialize, Clone)]
+pub struct BatchingTraitVersion0_1_1 {
+    pub payments: Vec<Payment>,
+    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    #[schemars(with = "u64")]
+    pub feerate_per_byte: bitcoin::util::amount::Amount,
+}
+```
+
+I can then turn this into a SapioJSONTrait by implementing the trait and
+providing an "example" function.
+```rust
+impl SapioJSONTrait for BatchingTraitVersion0_1_1 {
+    /// required to implement
+    fn get_example_for_api_checking() -> Value {
+        #[derive(Serialize)]
+        enum Versions {
+            BatchingTraitVersion0_1_1(BatchingTraitVersion0_1_1),
+        }
+        serde_json::to_value(Versions::BatchingTraitVersion0_1_1(
+            BatchingTraitVersion0_1_1 {
+                payments: vec![],
+                feerate_per_byte: bitcoin::util::amount::Amount::from_sat(0),
+            },
+        ))
+        .unwrap()
+    }
+
+    /// optionally, this method may be overridden directly for more advanced type checking.
+    fn check_trait_implemented(api: &dyn SapioAPIHandle) -> bool {
+        Self::check_trait_implemented_inner(api).is_ok()
+    }
+}
+```
+If a contract module can receive the example, then it is considered to have
+implemented the API. We can implement the receivers for a module as follows:
+
+```rust
+struct MockContract;
+/// # Different Calling Conventions to create a Treepay
+#[derive(Serialize, Deserialize, JsonSchema)]
+enum Versions {
+    /// # Base
+    Base(MockContract),
+    /// # Batching Trait API
+    BatchingTraitVersion0_1_1(BatchingTraitVersion0_1_1),
+}
+impl From<BatchingTraitVersion0_1_1> for MockContract {
+    fn from(args: BatchingTraitVersion0_1_1) -> Self {
+        MockContract
+    }
+}
+impl From<Versions> for TreePay {
+    fn from(v: Versions) -> TreePay {
+        match v {
+            Versions::Base(v) => v,
+            Versions::BatchingTraitVersion0_1_1(v) => v.into(),
+        }
+    }
+}
+REGISTER![[MockContract, Versions], "logo.png"];
+```
+
+Now `MockContract` can be called via the `BatchingTraitVersion0_1_1` trait
+interface.
+
+Another module in the future need only have a field
+`SapioHostAPI<BatchingTraitVersion0_1_1>`. This type verifies at deserialize
+time that the provided name or hash key implements the required interface(s).
 
 ### Future Work on Cross Module Calls
 
-- **Type System:** Using JSONSchemas, plugins have a basic type system that
-enables run-time checking for compatibility. Work could be done to establish
-a trait based type system that can allow plugins to guarantee they implement
-particular interfaces faithfully. For example, `users_cold_storage` key could
-be wrapped in a type safe wrapper that knows how to respond to a
-`ColdStorageArgs` struct.
+
+
 - **Gitian Packaging:** Using a gitian signed packaging distribution system
 would enable a user to set up a web-of-trust setting for their sapio compiler
 and enable fetching of sub-resources by hash if they've been signed by the
