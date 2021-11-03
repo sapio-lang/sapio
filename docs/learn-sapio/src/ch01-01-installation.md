@@ -1,6 +1,16 @@
 # Installing Sapio
 
-## QuickStart:
+
+## Sapio Pod QuickStart:
+
+See https://github.com/jeremyrubin/sapio-pod for an unofficial podman
+Containerfile (docker compatible). Look out for this pod being published as an
+image soon. This  is the simplest way to get a working Sapio playground, but you
+may prefer to have it set up locally. The Sapio Pod is currently targetted at
+someone wanting a development environment, but future releases may target more
+specific needs.
+
+## Local QuickStart:
 
 Sapio should work on all platforms, but is recommend for use with Linux (Ubuntu preferred).
 Follow this quickstart guide to get going.

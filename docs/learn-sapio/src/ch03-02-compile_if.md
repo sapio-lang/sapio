@@ -14,13 +14,12 @@ path that's only accessible if the amount of funds being sent to the contract is
 We could write:
 
 ```rust
-compile_if!{
-    fn not_too_much(self, ctx) {
-        if ctx.funds() > Self::MAX_FUNDS {
-            ConditionallyCompileType::Never
-        } else {
-            ConditionalCompileType::NoConstraint
-        }
+#[compile_if]
+fn not_too_much(self, ctx: Context) {
+    if ctx.funds() > Self::MAX_FUNDS {
+        ConditionallyCompileType::Never
+    } else {
+        ConditionalCompileType::NoConstraint
     }
 }
 ```
@@ -66,11 +65,10 @@ see `ConditionalCompileType::merge` for details.
 # compile_if! macro
 The `compile_if` macro can be called two ways:
 ```rust
-compile_if!{
-    fn name(self, ctx) {
-        /*ConditionalCompileType*/
-    }
+#[compile_if]
+fn name(self, ctx) {
+    /*ConditionalCompileType*/
 }
 /// null implementation
-compile_if!{name}
+decl_compile_if!{name}
 ```

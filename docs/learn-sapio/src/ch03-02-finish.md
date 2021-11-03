@@ -11,28 +11,38 @@ An example of where a `FinishOrFunc` could be used is a multisig escrow contract
 ## finish! macro
 
 
-The `finish!` macro generates a static `fn() -> Option<FinishOrFunc>` method for a given impl.
+The `continuation` macro generates a static `fn() -> Option<FinishOrFunc>` method for a given impl.
 
-There are a few variants of how you can create a `finish!`.
+There are a few variants of how you can create a `continuation`.
 
 ```rust
-/// A Guarded CTV Function
-finish!{
-    guarded_by: [guard_1, ... guard_n]
-    fn name(self, ctx, o) {
-        /*Result<Box<Iterator<TransactionTemplate>>>*/
-    }
+struct UpdateType;
+/// Helper
+fn default_coerce(
+    k: <T as Contract>::StatefulArguments,
+) -> Result<UpdateType, CompilationError> {
+    Ok(k)
 }
-/// A Conditional CTV Function
-finish!{
-    compile_if: [compile_if_1, ... compile_if_n]
-    guarded_by: [guard_1, ... guard_n]
-    fn name(self, ctx, o) {
-        /*Result<Box<Iterator<TransactionTemplate>>>*/
-    }
+/// A Guarded CTV Function
+#[continuation(
+    /// required: guards for the miniscript clauses required
+    guarded_by = "[Self::guard_1,... Self::guard_n]",
+    /// optional: Conditional compilation
+    compile_if = "[Self::compile_if_1, ... Self::compile_if_n]",
+    ///  optional: Enables compiling this for a json callable continuation
+    web_api,
+    /// helper for coercing args for json api, could be arbitrary
+    coerce_args = "default_coerce"
+)]
+fn name(self, ctx:Context, o:UpdateType) {
+    /*Result<Box<Iterator<TransactionTemplate>>>*/
 }
 /// Null Implementation
-finish!(name);
+decl_finish!(name);
 ```
 
-The type of the parameter `o` is `Option<<Self as Contract>::StatefulArguments>` and is the same across all `FinishOrFunc`s. Enums may be used to pass different arguments to different functions.
+The parameter `o` is either called directly or attempted to be coerced from the
+higher level `<Self as Contract>::StatefulArguments` which mus enum wrap the
+arguments. This means that each `continuation` can have a unique parameter type,
+but also be represented as a trait object with a single type. Enums may be used
+to pass different arguments to different functions.

@@ -21,20 +21,22 @@ where Self : Sized + Contract
 {
     /// empty declaration *could* be a default implementation, but we leave it empty
     /// so that other states may override it.
-    then!{do_something}
+    decl_then!{do_something}
 }
 
 
 /// Override the impl when state is Opened
 impl FunctionalityAtState for StatefulContract<Opened> {
-    then! {
-        /// Transition from Opened => Closed state
-        fn do_something(self, ctx) {
-            ctx.template()
-               .add_output(ctx.funds(),
-                           &StatefulContract::<Closed>(Default::default()),
-                           None)?.into()
-        }
+  /// Transition from Opened => Closed state
+    #[then]
+    fn do_something(self, ctx: Context) {
+        ctx.template()
+            .add_output(
+                ctx.funds(),
+                &StatefulContract::<Closed>(Default::default()),
+                None,
+            )?
+            .into()
     }
 }
 
@@ -81,7 +83,7 @@ where Self : Sized + Contract
 {
     /// empty declaration *could* be a default implementation, but we leave it empty
     /// so that other states may override it.
-    then!{do_something}
+    delc_then!{do_something}
 }
 
 trait ColorAtState 
@@ -89,20 +91,22 @@ where Self : Sized + Contract
 {
     /// empty declaration *could* be a default implementation, but we leave it empty
     /// so that other states may override it.
-    then!{do_something}
+    decl_then!{do_something}
 }
 
 
 /// Override the impl when state is Opened
 impl OpenAtState<DontCare> for StatefulContract<Opened, DontCare> {
-    then! {
-        /// Transition from Opened => Closed state
-        fn do_something(self, ctx) {
-            ctx.template()
-               .add_output(ctx.funds(),
-                           &StatefulContract::<Closed, DontCare>(Default::default()),
-                           None)?.into()
-        }
+    /// Transition from Opened => Closed state
+    #[then]
+    fn do_something(self, ctx: Context) {
+        ctx.template()
+            .add_output(
+                ctx.funds(),
+                &StatefulContract::<Closed, DontCare>(Default::default()),
+                None,
+            )?
+            .into()
     }
 }
 
@@ -111,26 +115,30 @@ impl OpenAtState<DontCare> for StatefulContract<Closed, DontCare> {}
 
 /// Override the impl when state is Opened
 impl ColorAtState for StatefulContract<Open, Green> {
-    then! {
-        /// Transition from Green => Red state
-        fn do_something_else(self, ctx) {
-            ctx.template()
-               .add_output(ctx.funds(),
-                           &StatefulContract::<Open, Red>(Default::default()),
-                           None)?.into()
-        }
+    /// Transition from Green => Red state
+    #[then]
+    fn do_something_else(self, ctx: Context) {
+        ctx.template()
+            .add_output(
+                ctx.funds(),
+                &StatefulContract::<Open, Red>(Default::default()),
+                None,
+            )?
+            .into()
     }
 }
 
 impl ColorAtState for StatefulContract<Open, Red> {
-    then! {
-        /// Transition from Open => Closed state
-        fn do_something_else(self, ctx) {
-            ctx.template()
-               .add_output(ctx.funds(),
-                           &StatefulContract::<Closed, Red>(Default::default()),
-                           None)?.into()
-        }
+    /// Transition from Open => Closed state
+    #[then]
+    fn do_something_else(self, ctx: Context) {
+        ctx.template()
+            .add_output(
+                ctx.funds(),
+                &StatefulContract::<Closed, Red>(Default::default()),
+                None,
+            )?
+            .into()
     }
 }
 
