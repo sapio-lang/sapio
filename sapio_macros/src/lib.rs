@@ -67,7 +67,7 @@ pub fn guard(args: TokenStream, input: TokenStream) -> TokenStream {
         fn #guard_name(&self, #context_arg) -> sapio::sapio_base::Clause
         #block
         fn  #name() -> Option<sapio::contract::actions::Guard<Self>> {
-            Some(sapio::contract::actions::Guard::Fresh(Self::#guard_name))
+            Some(sapio::contract::actions::Guard::#ty(Self::#guard_name))
         }
     })
 }
