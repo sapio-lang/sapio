@@ -8,7 +8,7 @@ kinds of smart contract more easily, supporting more advanced constructs.
 
 The below code demonstrates how to use the template builder. See the
 [docs](https://docs.rs/sapio/0.1.2/sapio/template/builder/struct.Builder.html)
-for more detail!
+for more details!
 
 ```rust
 struct X;

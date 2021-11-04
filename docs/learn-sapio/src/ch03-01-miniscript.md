@@ -1,10 +1,9 @@
 # Miniscript & Policy
 
-Miniscript & Policy are tools for creating well formed Bitcoin scripts
-developed by Blockstream developers Pieter Wiulle, Andrew Poelstra, and
-Sanket Kanjalkar.
+Miniscript & Policy are tools for creating well formed Bitcoin scripts developed
+by Blockstream developers Pieter Wiulle, Andrew Poelstra, and Sanket Kanjalkar.
 
-from the [miniscript website](http://bitcoin.sipa.be/miniscript/):
+From the [miniscript website](http://bitcoin.sipa.be/miniscript/):
 
 > Miniscript is a language for writing (a subset of) Bitcoin Scripts in a
 > structured way, enabling analysis, composition, generic signing and more.
@@ -30,16 +29,22 @@ from the [miniscript website](http://bitcoin.sipa.be/miniscript/):
 > for e.g. signing devices that support it.
 
 For Sapio, we use a customized
-[rust-miniscript](https://github.com/sapio-lang/rust-miniscript) which
-extends miniscript with functionality relevent to CheckTemplateVerify and
-Sapio. All changes should be able to be upstreamed eventually.
+[rust-miniscript](https://github.com/sapio-lang/rust-miniscript) which extends
+miniscript with functionality relevent to CheckTemplateVerify and Sapio. All
+changes should be able to be upstreamed... eventually.
 
-The Policy type (named Clause in Sapio) allows us to specify the predicates upon which various state transitions should unlock.
+The Policy type (named Clause in Sapio) allows us to specify the predicates upon
+which various state transitions should unlock.
 
 This makes it so that Sapio should be compatible with other software that can
 generate valid Policies, and compatible with PSBT signing devices that
 understand how to satisfy miniscripts.
 
 A limitation of this approach is that there are certain types of script which
-are possible, but not yet supported in Sapio. For example, the `OP_SIZE`
-coin flip script is not currently possible with Miniscript.
+are possible, but not yet supported in Sapio. For example, the `OP_SIZE` coin
+flip script is not currently possible with Miniscript. Another limitation of
+Miniscript is that keys may not be repreated to preserve a guarantee of non
+malleability.
+
+Miniscript & Policy are an ongoing research concern. As they develop, Sapio will
+benefit from this foundational work.

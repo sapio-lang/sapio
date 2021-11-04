@@ -10,17 +10,14 @@ to either agree on an outcome or to default to a pre-fixed outcome after a
 relative timeout.
 
 ```rust
-use bitcoin::util::amount::CoinAmount;
-use sapio::contract::*;
-use sapio::*;
-use sapio_base::timelocks::RelTime;
-use sapio_base::Clause;
-use std::convert::{TryFrom, TryInto};
+#[derive(JsonSchema, Deserialize)]
 pub struct TrustlessEscrow {
     alice: bitcoin::PublicKey,
     bob: bitcoin::PublicKey,
-    alice_escrow: (CoinAmount, bitcoin::Address),
-    bob_escrow: (CoinAmount, bitcoin::Address),
+    alice_escrow_address: bitcoin::Address,
+    alice_escrow_amount: CoinAmount,
+    bob_escrow_address: bitcoin::Address,
+    bob_escrow_amount: CoinAmount,
 }
 
 impl TrustlessEscrow {
@@ -29,16 +26,16 @@ impl TrustlessEscrow {
         Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
     }
     #[then]
-    fn use_escrow(self, ctx: sapio::Context) {
+    fn use_escrow(self, ctx: Context) {
         ctx.template()
             .add_output(
-                self.alice_escrow.0.try_into()?,
-                &Compiled::from_address(self.alice_escrow.1.clone(), None),
+                self.alice_escrow_amount.try_into()?,
+                &Compiled::from_address(self.alice_escrow_address.clone(), None),
                 None,
             )?
             .add_output(
-                self.bob_escrow.0.try_into()?,
-                &Compiled::from_address(self.bob_escrow.1.clone(), None),
+                self.bob_escrow_amount.try_into()?,
+                &Compiled::from_address(self.bob_escrow_address.clone(), None),
                 None,
             )?
             .set_sequence(
@@ -55,12 +52,18 @@ impl Contract for TrustlessEscrow {
     declare! {non updatable}
 }
 
+REGISTER![TrustlessEscrow, "logo.png"];
+
 ```
 
-Create a new rust project and paste the above code in. You should be able to
-compile it using `cargo build`. 
+Navigate to `sapio/plugin-example/helloworld/plugin.rs` in your code editior.
+You'll find this code there. You should be able to compile it using 
+`cargo build --target wasm32-unknown-unknown`. 
 
 ## Challenges
+
+For the challenges, you'll want to modify the helloworld plugin file directly.
+Through this tutorial we'll use this as a sandbox file.
 
 1. Add a new finish state that allows Alice to spend after a relative timeout.
 1. Add `use_escrow2` which enables a different pair of payouts to Alice and

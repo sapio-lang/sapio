@@ -29,4 +29,5 @@ let b: AnyTimeLock = RelHeight::from(20u16).into();
 ```
 
 These are not required to be used, but care should be taken if not used to
-ensure that correct values are passed to the miniscript compiler.
+ensure that correct values are passed to the miniscript compiler since
+Miniscript doesn't validate these strictly.
