@@ -1,6 +1,6 @@
 [package]
 name = "sapio_macros"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -9,6 +9,6 @@ edition = "2018"
 proc-macro = true
 
 [dependencies]
-syn = { version = "1.0", features = ["full"] }
+syn = { version = "1.0", features = ["full", "extra-traits"] }
 quote = "1.0"
 proc-macro2 ="1.0"
