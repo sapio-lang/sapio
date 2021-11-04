@@ -85,8 +85,11 @@ yarn start-react
 yarn start-electron
 ```
 
-The first time you run it you may have some errors, you will need to ensure
-you've configured your client correctly!
+
+The first time you run it you most likely *will* have some errors, you will need
+to ensure you've configured your client correctly. You can do this by opening
+the Preferences menu and configuring it appropriately. Soon there will be a better
+interface for first run setup.
 
 
 ## Docs
