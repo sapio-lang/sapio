@@ -56,6 +56,10 @@ impl Context {
             effects,
         }
     }
+    /// Get this Context's effect database, for clients
+    pub unsafe fn get_effects_internal(&self) -> &Arc<MapEffectDB> {
+        &self.effects
+    }
     /// Get this Context's effect database
     pub(crate) fn get_effects(&self, _: InternalCompilerTag) -> &Arc<MapEffectDB> {
         &self.effects

@@ -14,7 +14,10 @@ use syn::{parse_macro_input, AttributeArgs, ItemFn, Meta, NestedMeta};
 /// The compile_if macro is used to define a `ConditionallyCompileIf`.
 /// formats for calling are:
 /// ```ignore
-/// compile_if!(fn name(self, ctx) {/*ConditionallyCompileType*/})
+/// #[compile_if]
+/// fn name(self, ctx: Context) {
+///     /*ConditionallyCompileType*/
+/// }
 /// ```
 #[proc_macro_attribute]
 pub fn compile_if(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -39,9 +42,13 @@ pub fn compile_if(args: TokenStream, input: TokenStream) -> TokenStream {
 /// The guard macro is used to define a `Guard`. Guards may be cached or uncached.
 /// formats for calling are:
 /// ```ignore
-/// guard!(fn name(self, ctx) {/*Clause*/})
-/// /// The guard should only be invoked once
-/// guard!(cached fn name(self, ctx) {/*Clause*/})
+/// #[guard(
+///     /// optional, if desired to only be invoked once
+///     cached
+/// )]
+/// fn name(self, ctx) {
+///     /*Clause*/
+/// }
 /// ```
 #[proc_macro_attribute]
 pub fn guard(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -108,6 +115,20 @@ fn get_arrays(args: &Vec<NestedMeta>) -> (proc_macro2::TokenStream, proc_macro2:
     )
 }
 
+/// The then macro is used to define a `ThenFunction`.
+/// formats for calling are:
+/// ```ignore
+/// /// A Conditional + Guarded CTV Function
+/// #[then(
+///     /// optional: only compile these branches if these compile_if statements permit
+///     compile_if= "[compile_if_1, ... compile_if_n]",
+///     /// optional: protect these branches with the conjunction (and) of these clauses
+///     guarded_by= "[guard_1, ... guard_n]"
+/// )]
+/// fn name(self, ctx) {
+///     /*Result<Box<Iterator<TransactionTemplate>>>*/
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn then(args: TokenStream, input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(args as AttributeArgs);
@@ -189,6 +210,37 @@ fn web_api_schema(
         const #name : Option<&'static dyn Fn() -> std::sync::Arc<sapio::schemars::schema::RootSchema>> = None;
     }
 }
+///
+///
+/// The `continuation` macro generates a static `fn() -> Option<FinishOrFunc>` method for a given impl.
+///
+/// There are a few variants of how you can create a `continuation`.
+///
+/// ```ignore
+/// struct UpdateType;
+/// /// Helper
+/// fn default_coerce(
+///     k: <T as Contract>::StatefulArguments,
+/// ) -> Result<UpdateType, CompilationError> {
+///     Ok(k)
+/// }
+/// /// A Guarded CTV Function
+/// #[continuation(
+///     /// required: guards for the miniscript clauses required
+///     guarded_by = "[Self::guard_1,... Self::guard_n]",
+///     /// optional: Conditional compilation
+///     compile_if = "[Self::compile_if_1, ... Self::compile_if_n]",
+///     ///  optional: Enables compiling this for a json callable continuation
+///     web_api,
+///     /// helper for coercing args for json api, could be arbitrary
+///     coerce_args = "default_coerce"
+/// )]
+/// fn name(self, ctx:Context, o:UpdateType) {
+///     /*Result<Box<Iterator<TransactionTemplate>>>*/
+/// }
+/// /// Null Implementation
+/// decl_finish!(name);
+/// ```
 #[proc_macro_attribute]
 pub fn continuation(args: TokenStream, input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(args as AttributeArgs);
@@ -232,52 +284,3 @@ pub fn continuation(args: TokenStream, input: TokenStream) -> TokenStream {
             }
     })
 }
-
-//    {
-//        $(#[$meta:meta])*
-//        $(<web=$web_enable:block>)?
-//        compile_if: $conditional_compile_list:tt
-//        guarded_by: $guard_list:tt
-//        coerce_args: $coerce_args:ident
-//        fn $name:ident($s:ident, $ctx:ident, $o:ident : $arg_type:ty)
-//        $b:block
-//    } => {
-//
-//        $crate::contract::macros::paste!{
-//            web_api!($name,$arg_type$(,$web_enable)*);
-//            $(#[$meta])*
-//            fn [<FINISH_ $name>](&$s, $ctx:$crate::contract::Context, $o: $arg_type) -> $crate::contract::TxTmplIt
-//            $b
-//            $(#[$meta])*
-//            fn $name<'a>() -> Option<Box<dyn
-//            $crate::contract::actions::CallableAsFoF<Self, <Self as $crate::contract::Contract>::StatefulArguments>>>
-//            {
-//                let f : $crate::contract::actions::FinishOrFunc<_, _, _, is_web_api_type!($($web_enable)*)>= $crate::contract::actions::FinishOrFunc{
-//                    coerce_args: $coerce_args,
-//                    guard: &$guard_list,
-//                    conditional_compile_if: &$conditional_compile_list,
-//                    func: Self::[<FINISH_ $name>],
-//                    schema: Self::[<FINISH_API_FOR_ $name >].map(|f|f()),
-//                    name: std::sync::Arc::new(std::stringify!($name).into()),
-//                    f: std::default::Default::default()
-//                };
-//                Some(Box::new(f))
-//            }
-//        }
-//    };
-//    {
-//        $(#[$meta:meta])*
-//        $(<web=$web_enable:block>)?
-//        guarded_by: $guard_list:tt
-//        coerce_args: $coerce_args:ident
-//        fn $name:ident($s:ident, $ctx:ident, $o:ident:$arg_type:ty) $b:block
-//    } => {
-//        finish!{
-//            $(#[$meta])*
-//            $(<web=$web_enable>)*
-//            compile_if: []
-//            guarded_by: $guard_list
-//            coerce_args: $coerce_args
-//            fn $name($s, $ctx, $o:$arg_type) $b }
-//    };
-//}

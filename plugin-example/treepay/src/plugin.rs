@@ -47,17 +47,16 @@ struct PayThese {
     delay: Option<AnyRelTimeLock>,
 }
 impl PayThese {
-    then! {
-        fn expand(self, ctx) {
-            let mut bld = ctx.template();
-            for (amt, ct) in self.contracts.iter() {
-                bld = bld.add_output(*amt, ct.as_ref(), None)?;
-            }
-            if let Some(delay) = self.delay {
-                bld = bld.set_sequence(0, delay)?;
-            }
-            bld.add_fees(self.fees)?.into()
+    #[then]
+    fn expand(self, ctx: Context) {
+        let mut bld = ctx.template();
+        for (amt, ct) in self.contracts.iter() {
+            bld = bld.add_output(*amt, ct.as_ref(), None)?;
         }
+        if let Some(delay) = self.delay {
+            bld = bld.set_sequence(0, delay)?;
+        }
+        bld.add_fees(self.fees)?.into()
     }
 
     fn total_to_pay(&self) -> Amount {
@@ -73,8 +72,8 @@ impl Contract for PayThese {
     declare! {non updatable}
 }
 impl TreePay {
-    then! {
-        fn expand(self, ctx) {
+    #[then]
+        fn expand(self, ctx: Context) {
             let mut queue: VecDeque<(Amount, Box<dyn Compilable>)> = self
                 .participants
                 .iter()
@@ -110,7 +109,6 @@ impl TreePay {
                     queue.push_back((pay.total_to_pay(), pay))
                 }
             }
-        }
     }
 }
 impl Contract for TreePay {
