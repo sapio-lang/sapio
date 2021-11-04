@@ -26,7 +26,7 @@ version = "^0.26.0"
 features = ['use-serde', 'rand']
 [dependencies.sapio]
 path = "../../sapio"
-version = "0.1.2"
+version = "0.2.0"
 
 [dependencies.batching-trait]
 path = "../batching-trait"
@@ -34,7 +34,7 @@ version = "0.1.0"
 
 [dependencies.sapio-base]
 path = "../../sapio-base"
-version = "0.1.0"
+version = "0.2.0"
 [lib]
 crate-type = ["cdylib", "rlib"]
 path = "src/plugin.rs"
@@ -43,7 +43,7 @@ path = "src/plugin.rs"
 
 [dependencies.sapio-ctv-emulator-trait]
 path="../../emulator-trait"
-version = "0.1.0"
+version = "0.2.0"
 
 [dependencies.miniscript]
 package = "sapio-miniscript"
@@ -56,6 +56,6 @@ wasm-opt = false
 
 [dependencies.sapio-wasm-plugin]
 path = "../../plugins"
-version = "0.1.0"
+version = "0.2.0"
 features = ["client"]
 
