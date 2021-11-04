@@ -1,6 +1,6 @@
 [package]
 name = "sapio-wasm-plugin"
-version = "0.1.4"
+version = "0.2.0"
 license = "MPL-2.0"
 authors = ["Jeremy Rubin <j@rubin.io>"]
 edition = "2018"
@@ -28,7 +28,7 @@ version = "0.2.69"
 optional = true
 
 [dependencies.sapio-trait]
-version = "0.1.0"
+version = "0.2.0"
 path = "../sapio-trait"
 
 [dependencies.directories]
@@ -53,11 +53,11 @@ version = "^0.26.0"
 features = ['use-serde', 'rand']
 [dependencies.sapio]
 path = "../sapio"
-version = "0.1.0"
+version = "0.2.0"
 
 [dependencies.sapio-base]
 path = "../sapio-base"
-version = "0.1.0"
+version = "0.2.0"
 
 [lib]
 path = "src/lib.rs"
@@ -65,7 +65,7 @@ path = "src/lib.rs"
 
 [dependencies.sapio-ctv-emulator-trait]
 path="../emulator-trait"
-version = "0.1.0"
+version = "0.2.0"
 
 [dependencies.miniscript]
 package = "sapio-miniscript"
