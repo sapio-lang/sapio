@@ -1,14 +1,30 @@
 # Installing Sapio
 
-
 ## Sapio Pod QuickStart:
 
-See https://github.com/jeremyrubin/sapio-pod for an unofficial podman
-Containerfile (docker compatible). Look out for this pod being published as an
-image soon. This  is the simplest way to get a working Sapio playground, but you
-may prefer to have it set up locally. The Sapio Pod is currently targetted at
-someone wanting a development environment, but future releases may target more
-specific needs.
+[**DOWNLOAD THE POD**](https://hub.docker.com/repository/docker/sapiolang/sapio)
+
+Today, Sapio can come to you in an easy to set up Docker compatible container
+(unofficial™). With the Sapio pod you get:
+
+1. A CTV Compatible Bitcoin Node running regtest
+2. Rust
+3. A pre build cached Sapio Directory for you to use as a workspace
+4. sapio-cli pre-built
+5. Sapio Studio built and running over X11 connected to your regtest node
+6. neovim for editing
+
+See [the repo](https://github.com/jeremyrubin/sapio-pod) for setup instructions,
+especially with x11 through containerization.
+
+This  is the simplest way to get a working Sapio playground, but you may prefer
+to have it set up locally (x11 can be glitchy). The Sapio Pod is currently
+targetted at someone wanting a pain free development environment for tutorials,
+but future releases may target more specific needs such as deployments in
+infrastructure.
+
+The book will *assume* this is your setup, and instructions will be tailored
+appropriately.
 
 ## Local QuickStart:
 
@@ -28,7 +44,7 @@ rustup target add wasm32-unknown-unknown
 > cargo install wasm-pack
 > rustup toolchain install nightly
 > ```
-> and then load the following before compiling
+> and then load the following before compiling to use the newer llvm/clang.
 > ```bash
 > export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
 > export CC=/opt/homebrew/opt/llvm/bin/clang
@@ -68,6 +84,7 @@ and then in separate shells
 yarn start-react
 yarn start-electron
 ```
+
 
 The first time you run it you most likely *will* have some errors, you will need
 to ensure you've configured your client correctly. You can do this by opening

@@ -74,6 +74,7 @@ There's no right answer to the following challenges, and the resulting
 contract may not be too useful, but it should be a good exercise to learn
 more about writing Sapio contracts.
 
+1. Clear out your helloworld plugin and put this code in.
 1. Write a contract designed to be put into the `strike_into` field which
 sends funds to one party or the other based on a third-party revealing a
 hash preimage `A` or `B`.

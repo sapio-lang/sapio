@@ -26,6 +26,7 @@
         - [When to use macros?](./ch03-02-when-use-macros.md)
     - [Contract Declarations](./ch03-03-declarations.md)
     - [Contract Compilation Overview](./ch03-04-compliation.md)
+    - [Contract Continuation Effects](./ch03-04-continuation-effects.md)
 
 # Exercises
 - [Sapio for Fun (and Profit)](./ch04-00-sapio-fun-profit.md)

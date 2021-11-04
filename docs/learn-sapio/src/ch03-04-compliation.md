@@ -9,7 +9,8 @@ item one at a time. If the order of compilation is important for your contract:
 
 This logic may be improved over time to take advantage of parallelization or
 otherwise restructure. As such, one should be careful when switching compiler
-versions.
+versions. Further, optimizers or data structures may be unstable with respect to
+things like renamed functions leading to changes of compilation result.
 
 
 ## Determinism?
