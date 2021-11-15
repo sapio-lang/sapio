@@ -517,7 +517,7 @@ impl X {
     fn example(self, ctx: Context) {
         /// create a new template with the current context
         /// and set lock time to height 100
-        let mut tmpl = ctx.template().set_lock_time(AbsHeight::from(10).into())?;
+        let mut tmpl = ctx.template().set_lock_time(AbsHeight::from(100).into())?;
         let h = vec![(String::from(&quot;Metadata&quot;), String::from(&quot;IS_COOL&quot;))].into_iter().collect();
         /// Add an output
         /// make sure to assign to update after initial assignment, otherwise tmpl is consumed completely...
