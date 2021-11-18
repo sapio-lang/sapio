@@ -36,9 +36,7 @@ Follow this quickstart guide to get going.
 ```bash
 rustup target add wasm32-unknown-unknown
 ```
-1.  Get the [wasm-pack](https://rustwasm.github.io/wasm-pack/) tool.
-
-> Tip: On an M1 Mac you may need to do the following:
+1. Tip: On an M1 Mac you may need to do the following:
 > ```bash
 > brew install llvm
 > cargo install wasm-pack
@@ -59,11 +57,11 @@ git clone --depth 1 git@github.com:sapio-lang/sapio.git && cd sapio
 We recommend a shallow clone unless you want the full history.
 1.  Build a plugin
 ```
-cd plugin-example/treepay/ && wasm-pack build && cd ..
+cd plugin-example/ && cargo build --target wasm32-unknown-unknown && cd ..
 ```
 1.  Instantiate a contract from the plugin:
 ```
-cargo run --bin sapio-cli -- contract create \{\"amount\":9.99,\"arguments\":\{\"Basic\":\{\"fee_sats_per_tx\":1000,\"participants\":\[\{\"address\":\"bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw\",\"amount\":2.99\}\],\"radix\":2\}\},\"network\":\"Regtest\"\} --file="plugin-example/treepay/pkg/sapio_wasm_plugin_example_bg.wasm"
+cargo run --bin sapio-cli -- contract create "{\"arguments\":{\"ForAddress\":{\"amount_step\":{\"Sats\":100},\"cold_storage\":\"bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj\",\"hot_storage\":\"bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj\",\"mature\":{\"RH\":10},\"n_steps\":10,\"timeout\":{\"RH\":5}}},\"context\":{\"amount\":1,\"network\":\"Regtest\"}}" --file="plugin-example/target/wasm32-unknown-unknown/debug/sapio_wasm_vault.wasm"
 ```
 
 You can use `cargo run --bin sapio-cli -- help` to learn more about what a the
