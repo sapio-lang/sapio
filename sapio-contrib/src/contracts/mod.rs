@@ -28,3 +28,4 @@ pub mod tic_tac_toe;
 pub mod treepay;
 pub mod undo_send;
 pub mod vault;
+pub mod hanukkah;

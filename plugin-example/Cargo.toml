@@ -1,2 +1,2 @@
 [workspace]
-members = ["treepay", "trampolinepay", "batching-trait", "vault", "staker", "coin_pool", "fedpeg", "helloworld", "op_return_chain"]
+members = ["treepay", "trampolinepay", "batching-trait", "vault", "staker", "coin_pool", "fedpeg", "helloworld", "op_return_chain", "hanukkiah"]
