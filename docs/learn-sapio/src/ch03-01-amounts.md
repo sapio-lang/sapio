@@ -42,7 +42,7 @@ of.
 These different types have uses in different circumstances.
 
 Because `bitcoin::Amount` does not have a standard serializer, in order to
-use it in e.g. a `Vec`, you have to wrap the type with a a serializer. `From` impls can make life a little eaiser to work with these.
+use it in e.g. a `Vec`, you have to wrap the type with a serializer. `From` impls can make life a little eaiser to work with these.
 
 ```rust
 use bitcoin::util::amount::Amount;
@@ -74,7 +74,7 @@ impl From<AmountF64> for Amount {
 ```
 
 `CoinAmount` does not have this problem, but it can't be used in all
-contexts, e.g. extenral APIs that aren't tagged.
+contexts, e.g. external APIs that aren't tagged.
 
 
 ## Don't Panic (or do)
