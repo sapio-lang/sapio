@@ -29,9 +29,9 @@ From the [miniscript website](http://bitcoin.sipa.be/miniscript/):
 > for e.g. signing devices that support it.
 
 For Sapio, we use a customized
-[rust-miniscript](https://github.com/sapio-lang/rust-miniscript) which extends
-miniscript with functionality relevent to CheckTemplateVerify and Sapio. All
-changes should be able to be upstreamed... eventually.
+[fork of rust-miniscript](https://github.com/sapio-lang/rust-miniscript) library
+which extends miniscript with functionality relevant to CheckTemplateVerify and
+Sapio. All changes should be able to be upstreamed... eventually.
 
 The Policy type (named Clause in Sapio) allows us to specify the predicates upon
 which various state transitions should unlock.
