@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 )]
 #[serde(transparent)]
 pub struct AmountF64(
+    /// # Amount (BTC)
     #[schemars(with = "f64")]
     #[serde(with = "bitcoin::util::amount::serde::as_btc")]
     Amount,
@@ -31,7 +32,33 @@ impl From<AmountF64> for Amount {
         a.0
     }
 }
+/// A wrapper around `bitcoin::Amount` to force it to serialize with u64.
+#[derive(
+    Serialize, Deserialize, JsonSchema, Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq,
+)]
+#[serde(transparent)]
+pub struct AmountU64(
+    /// # Amount (Sats)
+    #[schemars(with = "u64")]
+    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    Amount,
+);
 
+impl From<Amount> for AmountU64 {
+    fn from(a: Amount) -> AmountU64 {
+        AmountU64(a)
+    }
+}
+impl From<AmountU64> for Amount {
+    fn from(a: AmountU64) -> Amount {
+        a.0
+    }
+}
+impl From<AmountU64> for u64 {
+    fn from(a: AmountU64) -> u64 {
+        a.0.as_sat()
+    }
+}
 /// `AmountRange` makes it simple to track and update the range of allowed values
 /// for a contract to receive.
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Copy, Debug)]

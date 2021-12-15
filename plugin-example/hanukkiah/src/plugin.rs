@@ -5,14 +5,10 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 #[deny(missing_docs)]
-use sapio::contract::*;
-
 use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
-
-use std::convert::{TryFrom, TryInto};
 
 use sapio_contrib::contracts::hanukkah::Hanukkiah2;
 

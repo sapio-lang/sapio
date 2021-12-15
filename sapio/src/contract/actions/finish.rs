@@ -55,10 +55,12 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     /// Calls the internal function, should convert `StatefulArguments` to `SpecificArgs`.
     fn call_json(
         &self,
-        cself: &ContractSelf,
-        ctx: Context,
-        o: serde_json::Value,
-    ) -> Option<TxTmplIt>;
+        _cself: &ContractSelf,
+        _ctx: Context,
+        _o: serde_json::Value,
+    ) -> Option<TxTmplIt> {
+        None
+    }
     /// Getter Method for internal field
     fn get_conditional_compile_if(&self) -> ConditionallyCompileIfList<'_, ContractSelf>;
     /// Getter Method for internal field
@@ -67,6 +69,10 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     fn get_name(&self) -> &Arc<String>;
     /// Get the RootSchema for calling this with an update
     fn get_schema(&self) -> &Option<Arc<RootSchema>>;
+    /// If the call_json is implemented
+    fn has_call_json(&self) -> bool {
+        false
+    }
 }
 
 /// Type Tag for FinishOrFunc Variant
@@ -80,14 +86,6 @@ impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, 
     fn call(&self, cself: &ContractSelf, ctx: Context, o: StatefulArguments) -> TxTmplIt {
         let args = (self.coerce_args)(o)?;
         (self.func)(cself, ctx, args)
-    }
-    fn call_json(
-        &self,
-        _cself: &ContractSelf,
-        _ctx: Context,
-        _o: serde_json::Value,
-    ) -> Option<TxTmplIt> {
-        None
     }
     fn get_conditional_compile_if(&self) -> ConditionallyCompileIfList<'_, ContractSelf> {
         self.conditional_compile_if
@@ -124,6 +122,9 @@ where
                 .map_err(CompilationError::EffectDBError)
                 .and_then(|args| (self.func)(cself, ctx, args)),
         )
+    }
+    fn has_call_json(&self) -> bool {
+        true
     }
     fn get_conditional_compile_if(&self) -> ConditionallyCompileIfList<'_, ContractSelf> {
         self.conditional_compile_if
