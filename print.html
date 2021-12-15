@@ -484,9 +484,9 @@ be converted to Miniscript form - avoiding the need for additional metadata
 for e.g. signing devices that support it.</p>
 </blockquote>
 <p>For Sapio, we use a customized
-<a href="https://github.com/sapio-lang/rust-miniscript">rust-miniscript</a> which extends
-miniscript with functionality relevent to CheckTemplateVerify and Sapio. All
-changes should be able to be upstreamed... eventually.</p>
+<a href="https://github.com/sapio-lang/rust-miniscript">fork of rust-miniscript</a> library
+which extends miniscript with functionality relevant to CheckTemplateVerify and
+Sapio. All changes should be able to be upstreamed... eventually.</p>
 <p>The Policy type (named Clause in Sapio) allows us to specify the predicates upon
 which various state transitions should unlock.</p>
 <p>This makes it so that Sapio should be compatible with other software that can
@@ -618,7 +618,7 @@ of.</p>
 </ol>
 <p>These different types have uses in different circumstances.</p>
 <p>Because <code>bitcoin::Amount</code> does not have a standard serializer, in order to
-use it in e.g. a <code>Vec</code>, you have to wrap the type with a a serializer. <code>From</code> impls can make life a little eaiser to work with these.</p>
+use it in e.g. a <code>Vec</code>, you have to wrap the type with a serializer. <code>From</code> impls can make life a little eaiser to work with these.</p>
 <pre><pre class="playground"><code class="language-rust">
 <span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -651,7 +651,7 @@ impl From&lt;AmountF64&gt; for Amount {
 <span class="boring">}
 </span></code></pre></pre>
 <p><code>CoinAmount</code> does not have this problem, but it can't be used in all
-contexts, e.g. extenral APIs that aren't tagged.</p>
+contexts, e.g. external APIs that aren't tagged.</p>
 <h2 id="dont-panic-or-do"><a class="header" href="#dont-panic-or-do">Don't Panic (or do)</a></h2>
 <p>A final annoyance is that <code>bitcoin::Amount</code> has arithmetic that may panic
 (unless you use the <code>checked_</code> variants). So one must be careful to ensure
