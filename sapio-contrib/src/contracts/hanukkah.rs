@@ -9,13 +9,10 @@ use sapio::contract::*;
 use sapio::util::amountrange::AmountF64;
 use sapio::*;
 use sapio_base::timelocks::AbsTime;
-use sapio_base::timelocks::RelTime;
-use sapio_base::Clause;
-use sapio_macros::guard;
+
 use schemars::*;
 use serde::*;
 use std::convert::TryFrom;
-use std::time::Duration;
 
 /// Implements a Hanukkiah for @TheBitcoinRabbi
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
@@ -105,9 +102,9 @@ impl TryFrom<String> for Recipients {
             .split_whitespace()
             .map(bitcoin::Address::from_str)
             .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| CompilationError::TerminateCompilation)?
+            .map_err(|_e| CompilationError::TerminateCompilation)?
             .try_into()
-            .map_err(|e| CompilationError::TerminateCompilation)?;
+            .map_err(|_e| CompilationError::TerminateCompilation)?;
         Ok(Recipients(v))
     }
 }

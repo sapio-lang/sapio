@@ -73,42 +73,42 @@ impl Contract for PayThese {
 }
 impl TreePay {
     #[then]
-        fn expand(self, ctx: Context) {
-            let mut queue: VecDeque<(Amount, Box<dyn Compilable>)> = self
-                .participants
-                .iter()
-                .map(|payment| {
-                    let mut amt = AmountRange::new();
-                    amt.update_range(payment.amount);
-                    let b: Box<dyn Compilable> =
-                        Box::new(Compiled::from_address(payment.address.clone(), Some(amt)));
-                    (payment.amount, b)
-                })
-                .collect();
+    fn expand(self, ctx: Context) {
+        let mut queue: VecDeque<(Amount, Box<dyn Compilable>)> = self
+            .participants
+            .iter()
+            .map(|payment| {
+                let mut amt = AmountRange::new();
+                amt.update_range(payment.amount);
+                let b: Box<dyn Compilable> =
+                    Box::new(Compiled::from_address(payment.address.clone(), Some(amt)));
+                (payment.amount, b)
+            })
+            .collect();
 
-            loop {
-                let v: Vec<_> = queue
-                    .drain(0..std::cmp::min(self.radix, queue.len()))
-                    .collect();
-                if queue.len() == 0 {
-                    let mut builder = ctx.template();
-                    for pay in v.iter() {
-                        builder = builder.add_output(pay.0, pay.1.as_ref(), None)?;
-                        if let Some(timelock) = self.timelock_backpressure {
-                            builder = builder.set_sequence(0, timelock)?;
-                        }
+        loop {
+            let v: Vec<_> = queue
+                .drain(0..std::cmp::min(self.radix, queue.len()))
+                .collect();
+            if queue.len() == 0 {
+                let mut builder = ctx.template();
+                for pay in v.iter() {
+                    builder = builder.add_output(pay.0, pay.1.as_ref(), None)?;
+                    if let Some(timelock) = self.timelock_backpressure {
+                        builder = builder.set_sequence(0, timelock)?;
                     }
-                    builder = builder.add_fees(self.fee_sats_per_tx)?;
-                    return builder.into();
-                } else {
-                    let pay = Box::new(PayThese {
-                        contracts: v,
-                        fees: self.fee_sats_per_tx,
-                        delay: self.timelock_backpressure,
-                    });
-                    queue.push_back((pay.total_to_pay(), pay))
                 }
+                builder = builder.add_fees(self.fee_sats_per_tx)?;
+                return builder.into();
+            } else {
+                let pay = Box::new(PayThese {
+                    contracts: v,
+                    fees: self.fee_sats_per_tx,
+                    delay: self.timelock_backpressure,
+                });
+                queue.push_back((pay.total_to_pay(), pay))
             }
+        }
     }
 }
 impl Contract for TreePay {

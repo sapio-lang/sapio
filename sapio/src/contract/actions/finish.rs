@@ -55,9 +55,9 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     /// Calls the internal function, should convert `StatefulArguments` to `SpecificArgs`.
     fn call_json(
         &self,
-        cself: &ContractSelf,
-        ctx: Context,
-        o: serde_json::Value,
+        _cself: &ContractSelf,
+        _ctx: Context,
+        _o: serde_json::Value,
     ) -> Option<TxTmplIt> {
         None
     }

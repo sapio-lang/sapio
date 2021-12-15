@@ -25,7 +25,7 @@ use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
 use std::collections::{BTreeMap, HashMap};
-use std::convert::TryFrom;
+
 use std::convert::TryInto;
 use std::io::Write;
 
@@ -93,7 +93,7 @@ impl PaymentPool {
     /// Only compile an ejection if the pool has other users in it, otherwise
     /// it's base case.
     #[compile_if]
-    fn has_eject(self, ctx: Context) {
+    fn has_eject(self, _ctx: Context) {
         if self.members.len() > 1 {
             ConditionalCompileType::Required
         } else {
@@ -103,7 +103,7 @@ impl PaymentPool {
     /// Split the pool in two -- users can eject multiple times to fully eject.
     #[then(compile_if = "[Self::has_eject]")]
     fn ejection(self, ctx: Context) {
-        let mut t = ctx.template();
+        let t = ctx.template();
         let mid = (self.members.len() + 1) / 2;
         // find the middle
         let key = self.members.keys().nth(mid).expect("must be present");
@@ -124,7 +124,7 @@ impl PaymentPool {
 
     /// all signed the transaction!
     #[guard]
-    fn all_signed(self, ctx: Context) {
+    fn all_signed(self, _ctx: Context) {
         Clause::Threshold(
             self.members.len(),
             self.members.keys().cloned().map(Clause::Key).collect(),
@@ -138,8 +138,7 @@ impl PaymentPool {
         coerce_args = "default_coerce"
     )]
     fn do_tx(self, ctx: Context, update: DoTx) {
-        use std::borrow::Borrow;
-        let effects = unsafe { ctx.get_effects_internal() };
+        let _effects = unsafe { ctx.get_effects_internal() };
         // don't allow empty updates.
         if update.payments.is_empty() {
             return empty();

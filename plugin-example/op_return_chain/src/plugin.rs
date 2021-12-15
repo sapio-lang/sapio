@@ -4,18 +4,12 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #[deny(missing_docs)]
-use crate::sapio_base::Clause;
-
-use sapio::contract::*;
-use sapio::util::amountrange::AmountF64;
 use sapio::*;
 use sapio_contrib::contracts::op_return_chain::ChainReturn;
 use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
-use std::convert::TryFrom;
-use std::sync::{Arc, Mutex};
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(transparent)]
