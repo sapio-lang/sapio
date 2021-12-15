@@ -160,7 +160,7 @@ pub fn then(args: TokenStream, input: TokenStream) -> TokenStream {
 fn web_api(args: &Vec<NestedMeta>) -> proc_macro2::TokenStream {
     for arg in args {
         match arg {
-            NestedMeta::Meta(Meta::NameValue(v)) if v.path.is_ident("web_api") => {
+            NestedMeta::Meta(Meta::Path(v)) if v.is_ident("web_api") => {
                 return quote! { sapio::contract::actions::WebAPIEnabled};
             }
             _ => continue,
