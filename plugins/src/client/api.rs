@@ -56,7 +56,26 @@ pub fn lookup_module_name(key: &str) -> Option<[u8; 32]> {
     }
 }
 
-#[derive(Serialize, Deserialize, JsonSchema)]
+/// Get the current executing module's hash
+pub fn lookup_this_module_name() -> Option<[u8; 32]> {
+    unsafe {
+        let mut res = [0u8; 32];
+        let mut ok = 0u8;
+        sapio_v1_wasm_plugin_lookup_module_name(
+            0i32,
+            0i32,
+            &mut res as *mut [u8; 32] as i32,
+            &mut ok as *mut u8 as i32,
+        );
+        if ok == 0 {
+            None
+        } else {
+            Some(res)
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Eq)]
 /// # Lookup Parameters
 /// - either using a hash key (exact); or
 /// - name (user configured)
@@ -65,6 +84,8 @@ pub enum LookupFrom {
     HashKey(String),
     /// # Give a Configurable Name
     Name(String),
+    /// # Get the currently executing module hash
+    This,
 }
 impl LookupFrom {
     pub fn to_key(&self) -> Option<[u8; 32]> {
@@ -75,11 +96,12 @@ impl LookupFrom {
                 Some(r)
             }
             LookupFrom::Name(name) => lookup_module_name(name),
+            LookupFrom::This => lookup_this_module_name(),
         }
     }
 }
 
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Eq)]
 #[serde(try_from = "SapioHostAPIVerifier<T>")]
 pub struct SapioHostAPI<T: SapioJSONTrait> {
     pub which_plugin: LookupFrom,
@@ -98,6 +120,16 @@ struct SapioHostAPIVerifier<T: SapioJSONTrait> {
     which_plugin: LookupFrom,
     #[serde(default, skip)]
     _pd: PhantomData<T>,
+}
+
+impl<T: SapioJSONTrait> TryFrom<LookupFrom> for SapioHostAPI<T> {
+    type Error = Box<dyn Error>;
+    fn try_from(which_plugin: LookupFrom) -> Result<SapioHostAPI<T>, Box<dyn Error>> {
+        SapioHostAPI::try_from(SapioHostAPIVerifier {
+            which_plugin,
+            _pd: Default::default(),
+        })
+    }
 }
 impl<T: SapioJSONTrait> TryFrom<SapioHostAPIVerifier<T>> for SapioHostAPI<T> {
     type Error = Box<dyn Error>;

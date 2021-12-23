@@ -101,11 +101,13 @@ impl WasmPluginHandle {
                 }
             };
         }
-
+        let mut this = [0; 32];
+        this.clone_from_slice(&hex::decode(key.to_string())?);
         let mut wasm_ctv_emulator = Arc::new(Mutex::new(HostEnvironmentInner {
             typ,
             org,
             proj,
+            this,
             module_map: plugin_map.unwrap_or_else(HashMap::new).into(),
             store: Arc::new(Mutex::new(store.clone())),
             net,
