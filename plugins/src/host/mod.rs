@@ -29,6 +29,7 @@ pub struct HostEnvironmentInner {
     pub typ: String,
     pub org: String,
     pub proj: String,
+    pub this: [u8; 32],
     pub module_map: HashMap<Vec<u8>, [u8; 32]>,
     pub store: Arc<Mutex<Store>>,
     pub net: bitcoin::Network,
@@ -64,6 +65,7 @@ mod exports {
     /// lookup a plugin key from a human reable name.
     /// if ok == 1, result is valid.
     /// out is written and must be 32 bytes of writable memory.
+    /// if name == 0 and name_len == 0, then return the current module
     pub fn sapio_v1_wasm_plugin_lookup_module_name(
         env: &HostEnvironment,
         key: i32,
@@ -72,28 +74,35 @@ mod exports {
         ok: i32,
     ) {
         let env = env.lock().unwrap();
-        let mut buf = vec![0u8; len as usize];
-        for (src, dst) in env.memory_ref().unwrap().view()[key as usize..(key + len) as usize]
-            .iter()
-            .map(Cell::get)
-            .zip(buf.iter_mut())
-        {
-            *dst = src;
-        }
-        env.memory_ref().unwrap().view::<u8>()[ok as usize].set(
-            if let Some(b) = env.module_map.get(&buf) {
-                let out = out as usize;
-                for (src, dst) in b
-                    .iter()
-                    .zip(env.memory_ref().unwrap().view::<u8>()[out..out + 32].iter())
-                {
-                    dst.set(*src);
-                }
-                1
+        let m_hash = {
+            if key == 0 && len == 0 {
+                Some(&env.this)
             } else {
-                0
-            },
-        );
+                let mut buf = vec![0u8; len as usize];
+                for (src, dst) in env.memory_ref().unwrap().view()
+                    [key as usize..(key + len) as usize]
+                    .iter()
+                    .map(Cell::get)
+                    .zip(buf.iter_mut())
+                {
+                    *dst = src;
+                }
+                env.module_map.get(&buf)
+            }
+        };
+        let is_ok = if let Some(b) = m_hash {
+            let out = out as usize;
+            for (src, dst) in b
+                .iter()
+                .zip(env.memory_ref().unwrap().view::<u8>()[out..out + 32].iter())
+            {
+                dst.set(*src);
+            }
+            1
+        } else {
+            0
+        };
+        env.memory_ref().unwrap().view::<u8>()[ok as usize].set(is_ok);
     }
 
     /// Create an instance of a contract by "trampolining" through the host to use another

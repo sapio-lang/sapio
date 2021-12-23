@@ -27,6 +27,7 @@ extern "C" {
     /// lookup a plugin key from a human reable name.
     /// if ok == 1, result is valid.
     /// out is written and must be 32 bytes of writable memory.
+    /// if name == 0 and name_len == 0, then return the current module
     pub fn sapio_v1_wasm_plugin_lookup_module_name(name: i32, name_len: i32, out: i32, ok: i32);
 }
 
