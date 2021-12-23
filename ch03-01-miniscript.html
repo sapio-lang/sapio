@@ -198,9 +198,9 @@ be converted to Miniscript form - avoiding the need for additional metadata
 for e.g. signing devices that support it.</p>
 </blockquote>
 <p>For Sapio, we use a customized
-<a href="https://github.com/sapio-lang/rust-miniscript">rust-miniscript</a> which extends
-miniscript with functionality relevent to CheckTemplateVerify and Sapio. All
-changes should be able to be upstreamed... eventually.</p>
+<a href="https://github.com/sapio-lang/rust-miniscript">fork of rust-miniscript</a> library
+which extends miniscript with functionality relevant to CheckTemplateVerify and
+Sapio. All changes should be able to be upstreamed... eventually.</p>
 <p>The Policy type (named Clause in Sapio) allows us to specify the predicates upon
 which various state transitions should unlock.</p>
 <p>This makes it so that Sapio should be compatible with other software that can
