@@ -131,6 +131,8 @@ macro_rules! web_api {
         }
     }
 }
+pub use web_api;
+
 
 /// Generates a type tag for WebAPI Enabled/Disabled
 #[macro_export]
@@ -163,7 +165,7 @@ macro_rules! decl_continuation {
         $name:ident<$arg_type:ty>
     } => {
         $crate::contract::macros::paste!{
-            web_api!($name,$arg_type$(,$web_enable)*);
+            $crate::contract::macros::web_api!($name,$arg_type$(,$web_enable)*);
             $(#[$meta])*
             fn [<continue_ $name>](&self, _ctx:$crate::contract::Context, _o: $arg_type)-> $crate::contract::TxTmplIt
             {
