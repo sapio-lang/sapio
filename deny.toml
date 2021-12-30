@@ -18,7 +18,7 @@
 # dependencies not shared by any other crates, would be ignored, as the target
 # list here is effectively saying which targets you are building for.
 targets = [
-    # The triple can be any string, but only the target triples built in to
+    # The triple can be any string, but only the target triples built into
     # rustc (as of 1.40) can be checked against actual config expressions
     #{ triple = "x86_64-unknown-linux-musl" },
     # You can also specify which target_features you promise are enabled for a
@@ -93,8 +93,8 @@ copyleft = "warn"
 # Blanket approval or denial for OSI-approved or FSF Free/Libre licenses
 # * both - The license will be approved if it is both OSI-approved *AND* FSF
 # * either - The license will be approved if it is either OSI-approved *OR* FSF
-# * osi-only - The license will be approved if is OSI-approved *AND NOT* FSF
-# * fsf-only - The license will be approved if is FSF *AND NOT* OSI-approved
+# * osi-only - The license will be approved if it is OSI-approved *AND NOT* FSF
+# * fsf-only - The license will be approved if it is FSF *AND NOT* OSI-approved
 # * neither - This predicate is ignored and the default lint level is used
 allow-osi-fsf-free = "neither"
 # Lint level used when no other predicates are matched
