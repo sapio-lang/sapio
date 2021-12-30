@@ -108,5 +108,5 @@ represents Alice and Bob both having the ability to purchase the NFT for 10 BTC.
 
 # Challenges
 
-1. By using decreaing time locks, implement a dutch auction pitting two
+1. By using decreasing time locks, implement a dutch auction pitting two
 participants against each other.
