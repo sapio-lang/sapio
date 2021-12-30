@@ -4,7 +4,7 @@ The Template builder is one of the most important parts of a Sapio contract.
 It is how you define and build a transaction step.
 
 It's also an area of active work to improve the UX of, to enable building new
-kinds of smart contract more easily, supporting more advanced constructs.
+kinds of smart contracts more easily, supporting more advanced constructs.
 
 The below code demonstrates how to use the template builder. See the
 [docs](https://docs.rs/sapio/0.1.2/sapio/template/builder/struct.Builder.html)
