@@ -24,7 +24,7 @@ safeguarded.
 The emulator definitions include wrapper types that compose individual
 instances of an emulator into a federated multisig. This is useful
 for circumstances where a contract is between e.g. 2 parties and both
-have a emulator server. Then the contract can be "immutable" unless
+have an emulator server. Then the contract can be "immutable" unless
 both collude.
 
 To aid in experimentation, Judica, Inc operates a public emulator server for
@@ -58,7 +58,7 @@ This derivation path is then applied to K to generate a key C. This key is
 added with a CheckSig(SIGHASH_ALL) to the script in place of a CTV clause.
 
 Then, when a user desires to spend an output with such a key, they create the
-entire transaction they want to occur and send it to the the emulator server.
+entire transaction they want to occur and send it to the emulator server.
 
 Without even checking to see that the key is used in the transaction, the
 server generates the template hash H' (which should equal H) and then signs,
