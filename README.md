@@ -20,7 +20,7 @@ The root crate is a workspace for various Sapio Components such as:
 
 ## QuickStart:
 
-Sapio should work on all platforms, but is recommend for use with Linux (Ubuntu preferred).
+Sapio should work on all platforms, but is recommended for use with Linux (Ubuntu preferred).
 Follow this quickstart guide to get going.
 
 1.  Get [rust](https://rustup.rs/) if you don't have it already.
@@ -30,7 +30,7 @@ Follow this quickstart guide to get going.
 1.  Build the plugin `cd plugin-example && wasm-pack build && cd ..`
 1.  Instantiate a contract from the plugin: `cargo run --bin sapio-cli -- contract create 9.99 "{\"participants\": [{\"amount\": 9.99, \"address\": \"bcrt1qs758ursh4q9z627kt3pp5yysm78ddny6txaqgw\"}], \"radix\": 2, \"fee_sats_per_tx\": "0"}" --file="plugin-example/pkg/sapio_wasm_plugin_example_bg.wasm"` to see some magic!
 
-You can use `cargo run --bin sapio-cli -- help` to learn more about what a the CLI can do! and `cargo run --bin sapio-cli -- <subcommand> help` to learn about subcommands like `contract`.
+You can use `cargo run --bin sapio-cli -- help` to learn more about what the CLI can do! and `cargo run --bin sapio-cli -- <subcommand> help` to learn about subcommands like `contract`.
 
 As a second experiment, try modifying the contract in plugin-example to one
 of the contracts from sapio-contrib! Remember to recompile plugin-example
