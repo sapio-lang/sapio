@@ -1,6 +1,6 @@
 # Advanced Transaction Handling
 
-Sapio does not try to handle all possible types of Bitcoin transaction.
+Sapio does not try to handle all possible types of Bitcoin transactions.
 
 There are certain "advanced techniques" that have use cases, but are
 difficult to reason about. For example, there are many ways that SIGHASH
