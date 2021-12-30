@@ -9,7 +9,7 @@ Today, Sapio can come to you in an easy to set up Docker compatible container
 
 1. A CTV Compatible Bitcoin Node running regtest
 2. Rust
-3. A pre-build cached Sapio Directory for you to use as a workspace
+3. A pre-built cached Sapio Directory for you to use as a workspace
 4. sapio-cli pre-built
 5. Sapio Studio built and running over X11 connected to your regtest node
 6. neovim for editing
