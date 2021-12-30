@@ -24,7 +24,7 @@ fn not_too_much(self, ctx: Context) {
 }
 ```
 
-and apply it to the relevent paths.
+and apply it to the relevant paths.
 
 ## ConditionalCompileType Variants
 
