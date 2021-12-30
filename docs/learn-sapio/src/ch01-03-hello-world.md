@@ -56,7 +56,7 @@ REGISTER![TrustlessEscrow, "logo.png"];
 
 ```
 
-Navigate to `sapio/plugin-example/helloworld/plugin.rs` in your code editior.
+Navigate to `sapio/plugin-example/helloworld/plugin.rs` in your code editor.
 You'll find this code there. You should be able to compile it using 
 `cargo build --target wasm32-unknown-unknown`. 
 
