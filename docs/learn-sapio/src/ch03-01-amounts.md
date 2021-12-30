@@ -14,7 +14,7 @@ might think that 10.0 would be unambiguous, but it turns out the lightning
 network is building sub-satoshi support.
 
 The *only* way to make context-free unambiguous amounts is to have them
-explicityly tagged, e.g., {denom: "sats", amount: 10}.
+explicitly tagged, e.g., {denom: "sats", amount: 10}.
 
 This would be great, but there are already myriads of services out there
 where the only way to know what unit you have is to RTFM.
@@ -42,7 +42,7 @@ of.
 These different types have uses in different circumstances.
 
 Because `bitcoin::Amount` does not have a standard serializer, in order to
-use it in e.g. a `Vec`, you have to wrap the type with a serializer. `From` impls can make life a little eaiser to work with these.
+use it in e.g. a `Vec`, you have to wrap the type with a serializer. `From` impls can make life a little easier to work with these.
 
 ```rust
 use bitcoin::util::amount::Amount;
