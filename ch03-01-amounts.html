@@ -180,7 +180,7 @@ problem for good reason.</p>
 might think that 10.0 would be unambiguous, but it turns out the lightning
 network is building sub-satoshi support.</p>
 <p>The <em>only</em> way to make context-free unambiguous amounts is to have them
-explicityly tagged, e.g., {denom: &quot;sats&quot;, amount: 10}.</p>
+explicitly tagged, e.g., {denom: &quot;sats&quot;, amount: 10}.</p>
 <p>This would be great, but there are already myriads of services out there
 where the only way to know what unit you have is to RTFM.</p>
 <p>Generally, we know that floating point representations are evil for financial
@@ -202,7 +202,7 @@ of.</p>
 </ol>
 <p>These different types have uses in different circumstances.</p>
 <p>Because <code>bitcoin::Amount</code> does not have a standard serializer, in order to
-use it in e.g. a <code>Vec</code>, you have to wrap the type with a serializer. <code>From</code> impls can make life a little eaiser to work with these.</p>
+use it in e.g. a <code>Vec</code>, you have to wrap the type with a serializer. <code>From</code> impls can make life a little easier to work with these.</p>
 <pre><pre class="playground"><code class="language-rust">
 <span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
