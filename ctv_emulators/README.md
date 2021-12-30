@@ -1,7 +1,7 @@
 # Sapio CTV Emulators
 
 
-Sapio CTV Emulators defines implementations of the emualator trait that can
+Sapio CTV Emulators defines implementations of the emulator trait that can
 be used by sapio compiler library users. This includes wrapper types that
 compose instances of an emulator into a federated multisig.
 
@@ -31,7 +31,7 @@ This derivation path is then applied to K to generate a key C. This key is
 added with a CheckSig(SIGHASH_ALL) to the script in place of a CTV clause.
 
 Then, when a user desires to spend an output with such a key, they create the
-entire transaction they want to occur and send it to the the emualtor server.
+entire transaction they want to occur and send it to the emulator server.
 
 Without even checking to see that the key is used in the transaction, the
 server generates the template hash H' (which should equal H) and then signs,
