@@ -19,7 +19,7 @@ struct GenericB<T:Compilable> {
 
 
 In `GenericA` we use a _trait object_ to allow us to let the `send_to` field
-equal any `Compilable` type while having having the same type `GenericA`,
+equal any `Compilable` type while having the same type `GenericA`,
 whereas `GenericB` takes a type parameter that makes the `GenericB` more
 specifically typed.
 
