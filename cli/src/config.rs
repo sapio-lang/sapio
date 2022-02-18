@@ -232,9 +232,7 @@ impl ConfigVerifier {
             3 => Ok(bitcoin::network::constants::Network::Bitcoin),
             11 => Ok(bitcoin::network::constants::Network::Testnet),
             7 => Ok(bitcoin::network::constants::Network::Regtest),
-            5 => {
-                todo!()
-            }
+            5 => Ok(bitcoin::network::constants::Network::Signet),
             _ => Err(ConfigError::TooManyActiveNetworks),
         }
     }
