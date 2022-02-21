@@ -19,7 +19,7 @@ version = "0.2.69"
 
 [dependencies.bitcoin]
 package = "sapio-bitcoin"
-version = "^0.26.0"
+version = "0.28.0-rc.2"
 features = ['use-serde', 'rand']
 [dependencies.sapio]
 path = "../../sapio"
@@ -40,7 +40,7 @@ version = "0.2.0"
 
 [dependencies.miniscript]
 package = "sapio-miniscript"
-version = "^5.1.0"
+version = "^7.0.0-0"
 features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 optional = true
 
