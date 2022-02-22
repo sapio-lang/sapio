@@ -89,7 +89,7 @@ impl HDOracleEmulator {
                     }
                 }
                 let msg = bitcoin::secp256k1::Message::from(Wrapped(sighash));
-                let mut signature = secp.sign(&msg, &key.to_priv().inner);
+                let signature = secp.sign(&msg, &key.to_priv().inner);
                 let sig = EcdsaSig {
                     sig: signature,
                     hash_ty: EcdsaSigHashType::All,
