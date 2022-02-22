@@ -208,7 +208,7 @@ impl PaymentPool {
                 let sig = Signature::from_der(&signed)
                     .map_err(|_| CompilationError::TerminateCompilation)?;
                 let _: () = secp
-                    .verify(&m, &sig, &from.key)
+                    .verify(&m, &sig, &from.inner)
                     .map_err(|_| CompilationError::TerminateCompilation)?;
             }
         }
