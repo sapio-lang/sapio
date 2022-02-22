@@ -240,8 +240,10 @@ impl Object {
                                 {
                                     psbt_in.witness_utxo =
                                         blockdata.lookup_output(&tx_in.previous_output).ok();
-                                    psbt_in.sighash_type =
-                                        Some(bitcoin::blockdata::transaction::EcdsaSigHashType::All.into());
+                                    psbt_in.sighash_type = Some(
+                                        bitcoin::blockdata::transaction::EcdsaSigHashType::All
+                                            .into(),
+                                    );
                                 }
                                 // Missing other Witness Info.
                                 if let Some(d) = descriptor {
