@@ -205,7 +205,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         })?[..],
                     )?;
                 let secp = Secp256k1::new();
-                miniscript::psbt::finalize(&mut psbt, &secp)?;
+                miniscript::psbt::finalize_mall(&mut psbt, &secp)?;
                 let tx = miniscript::psbt::extract(&psbt, &secp)?;
                 let hex = bitcoin::consensus::encode::serialize_hex(&tx);
                 println!("{}", hex);
