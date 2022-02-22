@@ -31,8 +31,10 @@ use std::sync::Arc;
 /// Error types that can arise when constructing an Object
 #[derive(Debug)]
 pub enum ObjectError {
+    /// The Error was due to Miniscript Policy
+    MiniscriptPolicy(miniscript::policy::compiler::CompilerError),
     /// The Error was due to Miniscript
-    Miniscript(miniscript::policy::compiler::CompilerError),
+    Miniscript(miniscript::Error),
     /// Unknown Script Type
     UnknownScriptType(bitcoin::Script),
     /// OpReturn Too Long
@@ -54,6 +56,12 @@ impl From<TxIndexError> for ObjectError {
 
 impl From<miniscript::policy::compiler::CompilerError> for ObjectError {
     fn from(v: miniscript::policy::compiler::CompilerError) -> Self {
+        ObjectError::MiniscriptPolicy(v)
+    }
+}
+
+impl From<miniscript::Error> for ObjectError {
+    fn from(v: miniscript::Error) -> Self {
         ObjectError::Miniscript(v)
     }
 }
@@ -233,11 +241,11 @@ impl Object {
                                     psbt_in.witness_utxo =
                                         blockdata.lookup_output(&tx_in.previous_output).ok();
                                     psbt_in.sighash_type =
-                                        Some(bitcoin::blockdata::transaction::SigHashType::All);
+                                        Some(bitcoin::blockdata::transaction::EcdsaSigHashType::All.into());
                                 }
                                 // Missing other Witness Info.
                                 if let Some(d) = descriptor {
-                                    psbtx.inputs[0].witness_script = Some(d.explicit_script());
+                                    psbtx.inputs[0].witness_script = Some(d.explicit_script()?);
                                 }
                                 psbtx = emulator.sign(psbtx)?;
                                 let final_tx = psbtx.clone().extract_tx();
