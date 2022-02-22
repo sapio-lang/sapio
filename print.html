@@ -271,6 +271,7 @@ rustup default nightly
 </ol>
 <pre><code>cd plugin-example/ &amp;&amp; cargo build --target wasm32-unknown-unknown &amp;&amp; cd ..
 </code></pre>
+<p>If the compilation fails, you may want to check the clang version (8&lt;=), and install libraries for cross-compilation (in case of ubuntu, <code>sudo apt install gcc-multilib</code>)</p>
 <ol>
 <li>Instantiate a contract from the plugin:</li>
 </ol>
