@@ -5,6 +5,8 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use super::*;
+use bitcoin::EcdsaSig;
+use bitcoin::EcdsaSigHashType;
 use bitcoin::SigHash;
 #[derive(Clone)]
 pub struct HDOracleEmulator {
@@ -75,13 +77,10 @@ impl HDOracleEmulator {
                     v[24..26].copy_from_slice(&[0x88, 0xac]);
                     bitcoin::blockdata::script::Builder::from(v).into_script()
                 });
-                let mut sighash = bitcoin::util::bip143::SigHashCache::new(&tx);
-                let sighash = sighash.signature_hash(
-                    0,
-                    &scriptcode,
-                    utxo.value,
-                    bitcoin::blockdata::transaction::SigHashType::All,
-                );
+                let mut sighash = bitcoin::util::sighash::SigHashCache::new(&tx);
+                let sighash = sighash
+                    .segwit_signature_hash(0, &scriptcode, utxo.value, EcdsaSigHashType::All)
+                    .expect("Signature hash cannot fail...");
                 use bitcoin::secp256k1::ThirtyTwoByteHash;
                 struct Wrapped(SigHash);
                 impl ThirtyTwoByteHash for Wrapped {
@@ -90,13 +89,13 @@ impl HDOracleEmulator {
                     }
                 }
                 let msg = bitcoin::secp256k1::Message::from(Wrapped(sighash));
-                let mut signature: Vec<u8> = secp
-                    .sign(&msg, &key.private_key.key)
-                    .serialize_der()
-                    .to_vec();
-                signature.push(0x01);
-                let pk = key.private_key.public_key(secp);
-                b.inputs[0].partial_sigs.insert(pk, signature);
+                let mut signature = secp.sign(&msg, &key.to_priv().inner);
+                let sig = EcdsaSig {
+                    sig: signature,
+                    hash_ty: EcdsaSigHashType::All,
+                };
+                let pk = key.to_priv().public_key(secp);
+                b.inputs[0].partial_sigs.insert(pk, sig);
                 return Ok(b);
             } else {
                 input_error("Could not find UTXO")?;
@@ -120,7 +119,7 @@ impl HDOracleEmulator {
             }
             msgs::Request::ConfirmKey(msgs::ConfirmKey(_epk, s)) => {
                 let ck = SECP.with(|secp| {
-                    let key = self.root.private_key.key;
+                    let key = self.root.to_priv().inner;
                     let entropy: [u8; 32] = rand::thread_rng().gen();
                     let h: Sha256 = Sha256::from_slice(&entropy).unwrap();
                     let mut m = Sha256::engine();
@@ -128,7 +127,7 @@ impl HDOracleEmulator {
                     m.input(&s.into_inner());
                     let msg = bitcoin::secp256k1::Message::from_slice(&Sha256::from_engine(m)[..])
                         .unwrap();
-                    let signature = secp.sign(&msg, &key);
+                    let signature = secp.sign_ecdsa(&msg, &key);
                     msgs::KeyConfirmed(signature, h)
                 });
                 Self::respond(t, &ck).await
