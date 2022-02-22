@@ -133,7 +133,6 @@ macro_rules! web_api {
 }
 pub use web_api;
 
-
 /// Generates a type tag for WebAPI Enabled/Disabled
 #[macro_export]
 macro_rules! is_web_api_type {

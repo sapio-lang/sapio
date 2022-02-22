@@ -39,7 +39,7 @@ mod tests {
         let public_keys: Vec<_> = (0..3)
             .map(|_| bitcoin::PublicKey {
                 compressed: true,
-                key: full.generate_keypair(&mut rng).1,
+                inner: full.generate_keypair(&mut rng).1,
             })
             .collect();
         let resolution = Compiled::from_address(

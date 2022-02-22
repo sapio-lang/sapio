@@ -49,83 +49,91 @@ mod util;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = clap_app!("sapio-cli" =>
-        (@setting SubcommandRequiredElseHelp)
-        (version: "0.1.0 Beta")
-        (author: "Jeremy Rubin <j@rubin.io>")
-        (about: "Sapio CLI for Bitcoin Smart Contracts")
-        (@arg config: -c --config +takes_value #{1,1} {check_file} "Sets a custom config file")
-        (@arg debug: -d ... "Sets the level of debugging information")
-        (@subcommand emulator =>
-            (@setting SubcommandRequiredElseHelp)
-            (about: "Make Requests to Emulator Servers")
-            (@subcommand sign =>
-                (about: "Sign a PSBT")
-                (@arg psbt: -p --psbt +takes_value +required #{1,2} {check_file} "The file containing the PSBT to Sign")
-                (@arg out: -o --output +takes_value +required #{1,2} {check_file_not} "The file to save the resulting PSBT")
-            )
-            (@subcommand get_key =>
-                (about: "Get Signing Condition")
-                (@arg psbt: -p --psbt +takes_value +required #{1,2} {check_file} "The file containing the PSBT to Get a Key For")
-            )
-            (@subcommand show =>
-                (about: "Show a psbt")
-                (@arg psbt: -p --psbt +takes_value +required #{1,2} {check_file} "The file containing the PSBT to Get a Key For")
-            )
-            (@subcommand server =>
-                (about: "run an emulation server")
-                (@arg sync: --sync  "Run in Synchronous mode")
-                (@arg seed: +takes_value +required {check_file} "The file containing the Seed")
-                (@arg interface: +required +takes_value "The Interface to Bind")
-            )
-        )
-        (@subcommand contract =>
-            (@setting SubcommandRequiredElseHelp)
-            (about: "Create or Manage a Contract")
-            (@subcommand bind =>
-                (about: "Bind Contract to a specific UTXO")
-                (@arg mock: --mock "Create a fake output for this txn.")
-                (@arg base64_psbt: --base64_psbt "Create a fake output for this txn.")
-                (@arg outpoint: --outpoint +takes_value "Use this specific outpoint")
-                (@arg json: "JSON to Bind")
-            )
-            (@subcommand create =>
-                (about: "create a contract to a specific UTXO")
-                (@group from +required =>
-                    (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
-                    (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
-                )
-                (@arg json: "JSON of args")
-            )
-            (@subcommand load =>
-                (about: "Load a wasm contract module, returns the hex sha3 hash key")
-                (@arg file: -f --file +required +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
-            )
-            (@subcommand api =>
-                (about: "Machine Readable API for a plugin, pipe into jq for pretty formatting.")
-                (@group from +required =>
-                    (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
-                    (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
-                )
-            )
-            (@subcommand logo =>
-                (about: "base64 encoded png image")
-                (@group from +required =>
-                    (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
-                    (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
-                )
-            )
-            (@subcommand info =>
-                (about: "View human readable basic information for a plugin")
-                (@group from +required =>
-                    (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
-                    (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
-                )
-            )
-            (@subcommand list =>
-                (about: "list available contracts")
-            )
-        )
-    );
+    (@setting SubcommandRequiredElseHelp)
+    (version: "0.1.0 Beta")
+    (author: "Jeremy Rubin <j@rubin.io>")
+    (about: "Sapio CLI for Bitcoin Smart Contracts")
+    (@arg config: -c --config +takes_value #{1,1} {check_file} "Sets a custom config file")
+    (@arg debug: -d ... "Sets the level of debugging information")
+    (@subcommand emulator =>
+     (@setting SubcommandRequiredElseHelp)
+     (about: "Make Requests to Emulator Servers")
+     (@subcommand sign =>
+      (about: "Sign a PSBT")
+      (@arg psbt: -p --psbt +takes_value +required #{1,2} {check_file} "The file containing the PSBT to Sign")
+      (@arg out: -o --output +takes_value +required #{1,2} {check_file_not} "The file to save the resulting PSBT")
+     )
+     (@subcommand get_key =>
+      (about: "Get Signing Condition")
+      (@arg psbt: -p --psbt +takes_value +required #{1,2} {check_file} "The file containing the PSBT to Get a Key For")
+     )
+     (@subcommand show =>
+      (about: "Show a psbt")
+      (@arg psbt: -p --psbt +takes_value +required #{1,2} {check_file} "The file containing the PSBT to Get a Key For")
+     )
+     (@subcommand server =>
+      (about: "run an emulation server")
+      (@arg sync: --sync  "Run in Synchronous mode")
+      (@arg seed: +takes_value +required {check_file} "The file containing the Seed")
+      (@arg interface: +required +takes_value "The Interface to Bind")
+     )
+     )
+     (@subcommand psbt =>
+      (@setting SubcommandRequiredElseHelp)
+      (about: "Perform operations on PSBTs")
+      (@subcommand finalize =>
+       (about: "finalize and extract this psbt to transaction hex")
+       (@arg psbt: --psbt +takes_value "psbt as base64, otherwise read from stdin")
+      )
+     )
+     (@subcommand contract =>
+      (@setting SubcommandRequiredElseHelp)
+      (about: "Create or Manage a Contract")
+      (@subcommand bind =>
+       (about: "Bind Contract to a specific UTXO")
+       (@arg mock: --mock "Create a fake output for this txn.")
+       (@arg base64_psbt: --base64_psbt "Create a fake output for this txn.")
+       (@arg outpoint: --outpoint +takes_value "Use this specific outpoint")
+       (@arg json: "JSON to Bind")
+      )
+      (@subcommand create =>
+       (about: "create a contract to a specific UTXO")
+       (@group from +required =>
+        (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
+        (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
+       )
+       (@arg json: "JSON of args")
+      )
+      (@subcommand load =>
+       (about: "Load a wasm contract module, returns the hex sha3 hash key")
+       (@arg file: -f --file +required +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
+      )
+      (@subcommand api =>
+       (about: "Machine Readable API for a plugin, pipe into jq for pretty formatting.")
+       (@group from +required =>
+        (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
+        (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
+       )
+      )
+      (@subcommand logo =>
+       (about: "base64 encoded png image")
+       (@group from +required =>
+        (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
+        (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
+       )
+      )
+      (@subcommand info =>
+       (about: "View human readable basic information for a plugin")
+       (@group from +required =>
+        (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
+        (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
+       )
+      )
+      (@subcommand list =>
+       (about: "list available contracts")
+      )
+      )
+      );
     let matches = app.get_matches();
 
     let config = Config::setup(&matches, "org", "judica", "sapio-cli").await?;
@@ -181,6 +189,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let server = oracle.bind(args.value_of("interface").unwrap());
                 println!("Running Oracle With Key: {}", pk_root);
                 server.await?;
+            }
+            _ => unreachable!(),
+        },
+        Some(("psbt", matches)) => match matches.subcommand() {
+            Some(("finalize", args)) => {
+                let mut psbt: PartiallySignedTransaction =
+                    PartiallySignedTransaction::consensus_decode(
+                        &base64::decode(&if let Some(psbt) = args.value_of("psbt") {
+                            psbt.into()
+                        } else {
+                            let mut s = String::new();
+                            tokio::io::stdin().read_to_string(&mut s).await?;
+                            s
+                        })?[..],
+                    )?;
+                let secp = Secp256k1::new();
+                miniscript::psbt::finalize_mall(&mut psbt, &secp)?;
+                let tx = miniscript::psbt::extract(&psbt, &secp)?;
+                let hex = bitcoin::consensus::encode::serialize_hex(&tx);
+                println!("{}", hex);
             }
             _ => unreachable!(),
         },

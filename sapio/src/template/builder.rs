@@ -10,6 +10,7 @@ use super::{Template, TemplateMetadata};
 use crate::contract::{CompilationError, Context};
 use bitcoin::util::amount::Amount;
 use bitcoin::VarInt;
+use bitcoin::Witness;
 use miniscript::DescriptorTrait;
 use sapio_base::effects::PathFragment;
 use sapio_base::timelocks::*;
@@ -177,7 +178,7 @@ impl Builder {
                     previous_output: Default::default(),
                     script_sig: Default::default(),
                     sequence: sequence.unwrap_or(default_seq).get(),
-                    witness: vec![],
+                    witness: Witness::new(),
                 })
                 .collect(),
             output: self
