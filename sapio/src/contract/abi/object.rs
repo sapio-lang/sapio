@@ -15,9 +15,12 @@ use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::amount::Amount;
 use bitcoin::util::psbt::PartiallySignedTransaction;
+use bitcoin::util::taproot::TaprootBuilder;
+use bitcoin::util::taproot::TaprootBuilderError;
 use bitcoin::PublicKey;
 use bitcoin::Script;
 use bitcoin::XOnlyPublicKey;
+use miniscript::Descriptor::Tr;
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
 use sapio_base::serialization_helpers::SArc;
@@ -67,6 +70,8 @@ pub enum ObjectError {
     MiniscriptPolicy(miniscript::policy::compiler::CompilerError),
     /// The Error was due to Miniscript
     Miniscript(miniscript::Error),
+    /// Error Building Taproot Tree
+    TaprootBulderError(TaprootBuilderError),
     /// Unknown Script Type
     UnknownScriptType(bitcoin::Script),
     /// OpReturn Too Long
@@ -75,6 +80,11 @@ pub enum ObjectError {
     Custom(Box<dyn std::error::Error>),
 }
 impl std::error::Error for ObjectError {}
+impl From<TaprootBuilderError> for ObjectError {
+    fn from(e: TaprootBuilderError) -> ObjectError {
+        ObjectError::TaprootBulderError(e)
+    }
+}
 impl From<EmulatorError> for ObjectError {
     fn from(e: EmulatorError) -> Self {
         ObjectError::Custom(Box::new(e))
@@ -218,6 +228,7 @@ impl Object {
         // faster.
         let mut stack = vec![(out_in, self)];
 
+        let secp = bitcoin::secp256k1::Secp256k1::new();
         while let Some((
             out,
             Object {
@@ -269,12 +280,28 @@ impl Object {
                                     );
                                 }
                                 // Missing other Witness Info.
-                                if let Some(d) = descriptor {
-                                    psbtx.inputs[0].witness_script = match d {
-                                        SupportedDescriptors::Pk(d) => Some(d.explicit_script()?),
-                                        // TODO: Taproot, should return a psbt for each witness?
-                                        SupportedDescriptors::XOnly(_d) => None,
-                                    };
+                                match descriptor {
+                                    Some(SupportedDescriptors::Pk(d)) => {
+                                        psbtx.inputs[0].witness_script = Some(d.explicit_script()?);
+                                    }
+                                    Some(SupportedDescriptors::XOnly(Descriptor::Tr(t))) => {
+                                        let mut builder = TaprootBuilder::new();
+                                        for (depth, ms) in t.iter_scripts() {
+                                            let script = ms.encode();
+                                            builder = builder.add_leaf(depth, script)?;
+                                        }
+                                        let info =
+                                            builder.finalize(&secp, t.internal_key().clone())?;
+                                        let inp = &mut psbtx.inputs[0];
+                                        for item in info.as_script_map().keys() {
+                                            let cb =
+                                                info.control_block(item).expect("Must be present");
+                                            inp.tap_scripts.insert(cb.clone(), item.clone());
+                                        }
+                                        inp.tap_merkle_root = info.merkle_root();
+                                        inp.tap_internal_key = Some(info.internal_key());
+                                    }
+                                    _ => (),
                                 }
                                 psbtx = emulator.sign(psbtx)?;
                                 let final_tx = psbtx.clone().extract_tx();
