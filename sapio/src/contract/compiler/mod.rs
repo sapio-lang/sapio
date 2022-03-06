@@ -20,8 +20,7 @@ use ::miniscript::*;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::schnorr::TweakedPublicKey;
-use bitcoin::PublicKey;
-use bitcoin::Script;
+
 use bitcoin::XOnlyPublicKey;
 use sapio_base::effects::EffectDB;
 use sapio_base::effects::EffectPath;
@@ -29,8 +28,7 @@ use sapio_base::effects::PathFragment;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::Clause;
 use std::cmp::Reverse;
-use std::collections::BTreeSet;
-use std::collections::BinaryHeap;
+
 use std::collections::HashMap;
 use std::collections::LinkedList;
 use std::sync::Arc;
@@ -278,7 +276,7 @@ where
             .map(|(nullability, uses_ctv, guards, r_txtmpls)| {
                 // it would be an error if any of r_txtmpls is an error instead of just an empty
                 // iterator.
-                let mut txtmpl_clauses = r_txtmpls?
+                let txtmpl_clauses = r_txtmpls?
                     .map(|r_txtmpl| {
                         let txtmpl = r_txtmpl?;
                         let h = txtmpl.hash();

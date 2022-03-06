@@ -23,7 +23,7 @@ use sapio_base::effects::PathFragment;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::txindex::TxIndex;
 use sapio_base::txindex::TxIndexError;
-use sapio_base::Clause;
+
 use sapio_ctv_emulator_trait::{CTVEmulator, EmulatorError};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -273,7 +273,7 @@ impl Object {
                                     psbtx.inputs[0].witness_script = match d {
                                         SupportedDescriptors::Pk(d) => Some(d.explicit_script()?),
                                         // TODO: Taproot, should return a psbt for each witness?
-                                        SupportedDescriptors::XOnly(d) => None,
+                                        SupportedDescriptors::XOnly(_d) => None,
                                     };
                                 }
                                 psbtx = emulator.sign(psbtx)?;
