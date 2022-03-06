@@ -272,15 +272,10 @@ where
         // If no guards and not CTV, then nothing gets added (not interpreted as Trivial True)
         // If CTV and no guards, just CTV added.
         // If CTV and guards, CTV & guards added.
-        let mut clause_accumulator = then_fns
+        let clause_accumulator = then_fns
             .into_iter()
             .chain(finish_or_fns.into_iter())
             .map(|(nullability, uses_ctv, guards, r_txtmpls)| {
-                // Compute all guard clauses.
-                // Don't use a threshold here because then miniscript will just
-                // re-compile it into the And for again, causing extra allocations.
-                let mut guard = guards;
-
                 // it would be an error if any of r_txtmpls is an error instead of just an empty
                 // iterator.
                 let mut txtmpl_clauses = r_txtmpls?
@@ -298,39 +293,36 @@ where
                     })
                     // Forces any error to abort the whole thing
                     .collect::<Result<Vec<_>, CompilationError>>()?;
-                if uses_ctv == CTVRequired::Yes {
-                    guard = match nullability {
-                        Nullable::Yes if txtmpl_clauses.is_empty() => {
-                            // Mark this branch dead.
-                            Clause::Unsatisfiable
-                        }
-                        _ => {
-                            let hashes = match txtmpl_clauses.len() {
-                                0 => {
-                                    return Err(CompilationError::MissingTemplates);
-                                }
-                                1 => txtmpl_clauses
-                                    .pop()
-                                    .expect("Length of txtmpl_clauses must be at least 1"),
-                                _n => Clause::Threshold(1, txtmpl_clauses),
-                            };
-                            match guard {
-                                Clause::Trivial => hashes,
-                                _ => Clause::And(vec![guard, hashes]),
-                            }
-                        }
-                    };
-                }
-                Ok(guard)
-            })
-            .filter_map(|func| {
-                if let Ok(Clause::Unsatisfiable) = func {
-                    None
-                } else {
-                    Some(func)
+
+                match (uses_ctv, nullability, txtmpl_clauses.len(), guards) {
+                    // Mark this branch dead.
+                    // Nullable branch without anything
+                    (CTVRequired::Yes, Nullable::Yes, 0, _) => Ok(vec![]),
+                    // Error if we expect CTV, returned some templates, but our guard
+                    // was unsatisfiable, irrespective of nullability. This is because
+                    // the behavior should be captured through a compile_if if it is
+                    // intended.
+                    (CTVRequired::Yes, _, n, Clause::Unsatisfiable) if n > 0 => {
+                        // TODO: Turn into a warning that the intended behavior should be to compile_if
+                        Err(CompilationError::MissingTemplates)
+                    }
+                    // Error if 0 templates return and we don't want to be nullable
+                    (CTVRequired::Yes, Nullable::No, 0, _) => {
+                        Err(CompilationError::MissingTemplates)
+                    }
+                    // If the guard is trivial, return the hashes standalone
+                    (CTVRequired::Yes, _, _, Clause::Trivial) => Ok(txtmpl_clauses),
+                    // If the guard is non-trivial, zip it to each hash
+                    // TODO: Arc in miniscript to dedup memory?
+                    //       This could be Clause::Shared(x) or something...
+                    (CTVRequired::Yes, _, _, guards) => Ok(txtmpl_clauses
+                        .iter()
+                        .map(|hash| Clause::And(vec![guards.clone(), hash.clone()]))
+                        .collect()),
+                    (CTVRequired::No, _, _, guards) => Ok(vec![guards]),
                 }
             })
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<Vec<Clause>>, CompilationError>>()?;
         let finish_fns: Vec<_> = {
             let mut finish_fns_ctx = ctx.derive(PathFragment::FinishFn)?;
             // Compute all finish_functions at this level, caching if requested.
@@ -347,7 +339,7 @@ where
 
         let branches: Vec<Miniscript<XOnlyPublicKey, Tap>> = finish_fns
             .iter()
-            .chain(clause_accumulator.iter())
+            .chain(clause_accumulator.iter().flatten())
             .map(|policy| policy.compile().map_err(Into::<CompilationError>::into))
             .collect::<Result<Vec<_>, _>>()?;
 
