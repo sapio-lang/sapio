@@ -50,8 +50,12 @@ struct Payouts {
 pub struct HodlChickenInner {
     alice_contract: Payouts,
     bob_contract: Payouts,
-    alice_key: bitcoin::PublicKey,
-    bob_key: bitcoin::PublicKey,
+    // TODO: Taproot Fix Encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    alice_key: bitcoin::XOnlyPublicKey,
+    // TODO: Taproot Fix Encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    bob_key: bitcoin::XOnlyPublicKey,
     alice_deposit: u64,
     bob_deposit: u64,
     winner_gets: u64,

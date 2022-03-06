@@ -36,10 +36,10 @@ pub struct Update {
 
 #[derive(Clone)]
 struct OpenChannel {
-    alice: bitcoin::PublicKey,
-    bob: bitcoin::PublicKey,
-    alice_u: bitcoin::PublicKey,
-    bob_u: bitcoin::PublicKey,
+    alice: bitcoin::XOnlyPublicKey,
+    bob: bitcoin::XOnlyPublicKey,
+    alice_u: bitcoin::XOnlyPublicKey,
+    bob_u: bitcoin::XOnlyPublicKey,
     pending_update: Option<Update>,
     min_maturity: RelHeight,
 }

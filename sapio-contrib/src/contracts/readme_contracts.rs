@@ -19,7 +19,9 @@ use std::convert::TryInto;
 /// Pay To Public Key Sapio Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct PayToPublicKey {
-    key: bitcoin::PublicKey,
+    // TODO: Taproot fix encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    key: bitcoin::XOnlyPublicKey,
 }
 
 impl PayToPublicKey {
@@ -37,9 +39,15 @@ impl Contract for PayToPublicKey {
 /// Basic Escrowing Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct BasicEscrow {
-    alice: bitcoin::PublicKey,
-    bob: bitcoin::PublicKey,
-    escrow: bitcoin::PublicKey,
+    // TODO: Taproot fix encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    alice: bitcoin::XOnlyPublicKey,
+    // TODO: Taproot fix encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    bob: bitcoin::XOnlyPublicKey,
+    // TODO: Taproot fix encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    escrow: bitcoin::XOnlyPublicKey,
 }
 
 impl BasicEscrow {
@@ -66,9 +74,15 @@ impl Contract for BasicEscrow {
 /// Basic Escrowing Contract, written more expressively
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct BasicEscrow2 {
-    alice: bitcoin::PublicKey,
-    bob: bitcoin::PublicKey,
-    escrow: bitcoin::PublicKey,
+    // TODO: Taproot fix encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    alice: bitcoin::XOnlyPublicKey,
+    // TODO: Taproot fix encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    bob: bitcoin::XOnlyPublicKey,
+    // TODO: Taproot fix encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    escrow: bitcoin::XOnlyPublicKey,
 }
 
 impl BasicEscrow2 {
@@ -93,8 +107,12 @@ impl Contract for BasicEscrow2 {
 /// Trustless Escrowing Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct TrustlessEscrow {
-    alice: bitcoin::PublicKey,
-    bob: bitcoin::PublicKey,
+    // TODO: Taproot fix encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    alice: bitcoin::XOnlyPublicKey,
+    // TODO: Taproot fix encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    bob: bitcoin::XOnlyPublicKey,
     alice_escrow: (CoinAmount, bitcoin::Address),
     bob_escrow: (CoinAmount, bitcoin::Address),
 }

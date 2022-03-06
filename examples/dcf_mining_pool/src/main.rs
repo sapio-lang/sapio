@@ -9,7 +9,7 @@ use crate::miner_payout::PoolShare;
 use bitcoin::hash_types::BlockHash;
 use bitcoin::Amount;
 use bitcoin::Block;
-use bitcoin::PublicKey;
+use bitcoin::XOnlyPublicKey as PublicKey;
 use bitcoin::Script;
 use bitcoincore_rpc_async as rpc;
 use rpc::RpcApi;

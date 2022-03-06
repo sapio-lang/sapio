@@ -37,15 +37,14 @@ mod tests {
         let full = Secp256k1::new();
         let mut rng = OsRng::new().expect("OsRng");
         let public_keys: Vec<_> = (0..3)
-            .map(|_| bitcoin::PublicKey {
-                compressed: true,
-                inner: full.generate_keypair(&mut rng).1,
-            })
+            .map(|_| full.generate_keypair(&mut rng).1.into())
             .collect();
         let resolution = Compiled::from_address(
-            Descriptor::<bitcoin::PublicKey>::Pkh(miniscript::descriptor::Pkh::new(public_keys[2]))
-                .address(bitcoin::Network::Regtest)
-                .expect("An Address"),
+            Descriptor::<bitcoin::XOnlyPublicKey>::Pkh(miniscript::descriptor::Pkh::new(
+                public_keys[2],
+            ))
+            .address(bitcoin::Network::Regtest)
+            .expect("An Address"),
             None,
         );
 
@@ -200,8 +199,12 @@ impl State for Stop {}
 #[derive(JsonSchema, Serialize, Deserialize)]
 struct Channel<T: State, ArgsT: TryInto<Update>> {
     pd: PhantomData<(T, ArgsT)>,
-    alice: bitcoin::PublicKey,
-    bob: bitcoin::PublicKey,
+    // TODO: Taproot Fix Encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    alice: bitcoin::XOnlyPublicKey,
+    // TODO: Taproot Fix Encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    bob: bitcoin::XOnlyPublicKey,
     amount: CoinAmount,
     resolution: Compiled,
     /// We instruct the JSONSchema to use strings

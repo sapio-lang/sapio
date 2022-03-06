@@ -7,10 +7,13 @@
 //! general non-parameter compilation state required by all contracts
 use super::{Amount, Compilable, CompilationError, Compiled};
 use crate::contract::compiler::InternalCompilerTag;
+use crate::contract::object::SupportedDescriptors;
 use crate::util::amountrange::AmountRange;
 use bitcoin::Network;
 use miniscript::Descriptor;
 use miniscript::DescriptorTrait;
+use miniscript::MiniscriptKey;
+use miniscript::ToPublicKey;
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
 pub use sapio_base::effects::{EffectDB, MapEffectDB};
@@ -169,10 +172,11 @@ impl Context {
 
     /// converts a descriptor and an optional AmountRange to a Object object.
     /// This can be used for e.g. creating raw SegWit Scripts.
-    pub fn compiled_from_descriptor(
-        d: Descriptor<bitcoin::PublicKey>,
-        a: Option<AmountRange>,
-    ) -> Compiled {
+    pub fn compiled_from_descriptor<T>(d: Descriptor<T>, a: Option<AmountRange>) -> Compiled
+    where
+        Descriptor<T>: Into<SupportedDescriptors>,
+        T: MiniscriptKey + ToPublicKey,
+    {
         Compiled {
             ctv_to_tx: HashMap::new(),
             suggested_txs: HashMap::new(),
@@ -181,9 +185,8 @@ impl Context {
                 None,
                 PathFragment::Named(SArc(Arc::new("".into()))),
             )),
-            policy: None,
             address: d.address(bitcoin::Network::Bitcoin).unwrap().into(),
-            descriptor: Some(d),
+            descriptor: Some(d.into()),
             amount_range: a.unwrap_or_else(|| {
                 let mut a = AmountRange::new();
                 a.update_range(Amount::min_value());

@@ -5,7 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! A Contract that enables a staked signing protocol
-use bitcoin::PublicKey;
+use bitcoin::XOnlyPublicKey;
 use sapio::contract::*;
 use sapio::*;
 use sapio_base::timelocks::AnyRelTimeLock;
@@ -44,10 +44,14 @@ pub struct Staker<T: StakingState> {
     timeout: AnyRelTimeLock,
     /// # Signing Key
     /// The key that if leaked can burn funds
-    signing_key: PublicKey,
+    // TODO: Taproot fix encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    signing_key: XOnlyPublicKey,
     /// # Redemption Key
     /// The key that will be used to control & return the redeemed funds
-    redeeming_key: PublicKey,
+    // TODO: Taproot fix encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    redeeming_key: XOnlyPublicKey,
     /// current contract state.
     #[serde(skip, default)]
     state: PhantomData<T>,

@@ -32,11 +32,15 @@ impl RecoveryState for CanBeginRecovery {}
 /// A contract for depositing into a federated side chain.
 pub struct FederatedPegIn<T: RecoveryState> {
     /// # Normal Operation Keys
-    keys: Vec<bitcoin::PublicKey>,
+    // TODO: Taproot Fix Encoding
+    #[schemars(with = "Vec<bitcoin::hashes::sha256::Hash>")]
+    keys: Vec<bitcoin::XOnlyPublicKey>,
     /// # Normal Operation Threshold
     thresh_normal: usize,
     /// # Recovery Operation Keys
-    keys_recovery: Vec<bitcoin::PublicKey>,
+    // TODO: Taproot Fix Encoding
+    #[schemars(with = "Vec<bitcoin::hashes::sha256::Hash>")]
+    keys_recovery: Vec<bitcoin::XOnlyPublicKey>,
     /// # Recovery Operation Threshold
     thresh_recovery: usize,
     /// # Amount to Deposit

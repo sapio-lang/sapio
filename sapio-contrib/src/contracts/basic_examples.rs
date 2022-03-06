@@ -16,8 +16,12 @@ use std::marker::PhantomData;
 
 #[derive(JsonSchema, Serialize, Deserialize)]
 struct ExampleA {
-    alice: bitcoin::PublicKey,
-    bob: bitcoin::PublicKey,
+    // TODO: Taproot Fix Encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    alice: bitcoin::XOnlyPublicKey,
+    // TODO: Taproot Fix Encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    bob: bitcoin::XOnlyPublicKey,
     amount: CoinAmount,
     resolution: Compiled,
 }
@@ -63,7 +67,9 @@ where
 
 #[derive(JsonSchema, Serialize, Deserialize)]
 struct ExampleB<T: BState> {
-    participants: Vec<bitcoin::PublicKey>,
+    // TODO: Taproot Fix Encoding
+    #[schemars(with = "Vec<bitcoin::hashes::sha256::Hash>")]
+    participants: Vec<bitcoin::XOnlyPublicKey>,
     threshold: u8,
     amount: CoinAmount,
     #[serde(skip)]
@@ -111,8 +117,12 @@ where
 /// Trustless Escrowing Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct ExampleCompileIf {
-    alice: bitcoin::PublicKey,
-    bob: bitcoin::PublicKey,
+    // TODO: Taproot Fix Encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    alice: bitcoin::XOnlyPublicKey,
+    // TODO: Taproot Fix Encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    bob: bitcoin::XOnlyPublicKey,
     alice_escrow: (CoinAmount, bitcoin::Address),
     bob_escrow: (CoinAmount, bitcoin::Address),
     escrow_disable: bool,

@@ -85,7 +85,7 @@ use bitcoin::util::psbt::Map;
 use tokio::sync::Mutex;
 impl CTVEmulator for HDOracleEmulatorConnection {
     fn get_signer_for(&self, h: Sha256) -> Result<Clause, EmulatorError> {
-        Ok(Clause::Key(self.derive(h)?.to_pub()))
+        Ok(Clause::Key(self.derive(h)?.to_x_only_pub()))
     }
     fn sign(
         &self,

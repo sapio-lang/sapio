@@ -15,6 +15,9 @@ use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::amount::Amount;
 use bitcoin::util::psbt::PartiallySignedTransaction;
+use bitcoin::PublicKey;
+use bitcoin::Script;
+use bitcoin::XOnlyPublicKey;
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
 use sapio_base::serialization_helpers::SArc;
@@ -27,6 +30,35 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
+
+/// Multiple Types of Allowed Descriptor
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
+pub enum SupportedDescriptors {
+    /// # ECDSA Descriptors
+    Pk(Descriptor<PublicKey>),
+    /// # Taproot Descriptors
+    XOnly(Descriptor<XOnlyPublicKey>),
+}
+
+impl From<Descriptor<PublicKey>> for SupportedDescriptors {
+    fn from(x: Descriptor<PublicKey>) -> Self {
+        SupportedDescriptors::Pk(x)
+    }
+}
+impl From<Descriptor<XOnlyPublicKey>> for SupportedDescriptors {
+    fn from(x: Descriptor<XOnlyPublicKey>) -> Self {
+        SupportedDescriptors::XOnly(x)
+    }
+}
+impl SupportedDescriptors {
+    /// Regardless of descriptor type, get the output script
+    pub fn script_pubkey(&self) -> Script {
+        match self {
+            SupportedDescriptors::Pk(p) => p.script_pubkey(),
+            SupportedDescriptors::XOnly(x) => x.script_pubkey(),
+        }
+    }
+}
 
 /// Error types that can arise when constructing an Object
 #[derive(Debug)]
@@ -103,13 +135,6 @@ pub struct Object {
     pub continue_apis: HashMap<SArc<EffectPath>, ContinuationPoint>,
     /// The base location for the set of continue_apis.
     pub root_path: SArc<EffectPath>,
-    /// The Object's Policy -- if known
-    #[serde(
-        rename = "known_policy",
-        skip_serializing_if = "Option::is_none",
-        default
-    )]
-    pub policy: Option<Clause>,
     /// The Object's address, or a Script if no address is possible
     pub address: ExtendedAddress,
     /// The Object's descriptor -- if there is one known/available
@@ -118,7 +143,7 @@ pub struct Object {
         skip_serializing_if = "Option::is_none",
         default
     )]
-    pub descriptor: Option<Descriptor<bitcoin::PublicKey>>,
+    pub descriptor: Option<SupportedDescriptors>,
     /// The amount_range safe to send this object
     pub amount_range: AmountRange,
 }
@@ -135,7 +160,6 @@ impl Object {
                 None,
                 PathFragment::Named(SArc(Arc::new("".into()))),
             )),
-            policy: None,
             address: address.into(),
             descriptor: None,
             amount_range: a.unwrap_or_else(|| {
@@ -171,7 +195,6 @@ impl Object {
                 None,
                 PathFragment::Named(SArc(Arc::new("".into()))),
             )),
-            policy: None,
             address: ExtendedAddress::make_op_return(data)?,
             descriptor: None,
             amount_range: AmountRange::new(),
@@ -247,7 +270,11 @@ impl Object {
                                 }
                                 // Missing other Witness Info.
                                 if let Some(d) = descriptor {
-                                    psbtx.inputs[0].witness_script = Some(d.explicit_script()?);
+                                    psbtx.inputs[0].witness_script = match d {
+                                        SupportedDescriptors::Pk(d) => Some(d.explicit_script()?),
+                                        // TODO: Taproot, should return a psbt for each witness?
+                                        SupportedDescriptors::XOnly(d) => None,
+                                    };
                                 }
                                 psbtx = emulator.sign(psbtx)?;
                                 let final_tx = psbtx.clone().extract_tx();

@@ -3,8 +3,9 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
+use bitcoin::schnorr::TweakedPublicKey;
 use bitcoin::Address;
-use bitcoin::PublicKey;
+use bitcoin::XOnlyPublicKey as PublicKey;
 use sapio::contract::*;
 use sapio::util::amountrange::*;
 use sapio::*;
@@ -21,7 +22,9 @@ pub struct PoolShare {
     pub amount: bitcoin::util::amount::Amount,
     /// # Address
     /// The Address to send to
-    pub key: bitcoin::PublicKey,
+    // TODO: Taproot Fix Encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    pub key: PublicKey,
 }
 /// Documentation placed here will be visible to users!
 #[derive(JsonSchema, Serialize, Deserialize)]
@@ -54,8 +57,10 @@ impl JustAKey {
     fn new(payment: &PoolShare, ctx: Context) -> Result<Self, CompilationError> {
         let mut amt = AmountRange::new();
         amt.update_range(payment.amount);
-        let address = Address::p2wpkh(&payment.key, ctx.network)
-            .map_err(|_| CompilationError::TerminateCompilation)?;
+        let address = Address::p2tr_tweaked(
+            TweakedPublicKey::dangerous_assume_tweaked(payment.key),
+            ctx.network,
+        );
         let b: Box<dyn Compilable> = Box::new(Compiled::from_address(address, Some(amt)));
         Ok(JustAKey(payment.key, b))
     }

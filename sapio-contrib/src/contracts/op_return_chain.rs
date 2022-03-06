@@ -18,7 +18,9 @@ use serde::*;
 /// Chain of OpReturns
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ChainReturn {
-    pk: bitcoin::PublicKey,
+    // TODO: Taproot Fix Encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    pk: bitcoin::XOnlyPublicKey,
 }
 /// Helper
 fn default_coerce(

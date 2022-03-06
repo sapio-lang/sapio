@@ -116,7 +116,9 @@ pub enum UpdateTypes {
     Basic {
         /// the contracts to pay into
         #[serde(skip_serializing_if = "Option::is_none", default)]
-        payouts: Option<Vec<(bitcoin::PublicKey, AmountF64)>>,
+        // TODO: Taproot fix encoding
+        #[schemars(with = "Option<Vec<(bitcoin::hashes::sha256::Hash, AmountF64)>>")]
+        payouts: Option<Vec<(bitcoin::XOnlyPublicKey, AmountF64)>>,
         /// If the external inputs are contributing funds -- this allows two
         /// coinpools to merge.
         /// TODO: Allow different indexes?

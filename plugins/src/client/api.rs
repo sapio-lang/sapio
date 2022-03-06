@@ -173,7 +173,7 @@ impl CTVEmulator for WasmHostEmulator {
         &self,
         h: bitcoin::hashes::sha256::Hash,
     ) -> std::result::Result<
-        miniscript::policy::concrete::Policy<bitcoin::PublicKey>,
+        miniscript::policy::concrete::Policy<bitcoin::XOnlyPublicKey>,
         sapio_ctv_emulator_trait::EmulatorError,
     > {
         let mut inner = h.into_inner();

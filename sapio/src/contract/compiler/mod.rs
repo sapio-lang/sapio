@@ -15,14 +15,25 @@ use crate::contract::actions::conditional_compile::CCILWrapper;
 use crate::contract::actions::CallableAsFoF;
 use crate::contract::TxTmplIt;
 use crate::util::amountrange::AmountRange;
+use ::miniscript::descriptor::TapTree;
 use ::miniscript::*;
+use bitcoin::hashes::sha256::Hash as Sha256;
+use bitcoin::hashes::Hash;
+use bitcoin::schnorr::TweakedPublicKey;
+use bitcoin::PublicKey;
+use bitcoin::Script;
+use bitcoin::XOnlyPublicKey;
 use sapio_base::effects::EffectDB;
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::Clause;
+use std::cmp::Reverse;
+use std::collections::BTreeSet;
+use std::collections::BinaryHeap;
 use std::collections::HashMap;
 use std::collections::LinkedList;
+use std::sync::Arc;
 mod cache;
 use cache::*;
 /// Used to prevent unintended callers to internal_clone.
@@ -36,7 +47,7 @@ mod private {
     pub trait ImplSeal {}
     /// Allow Contract to implement Compile
     impl ImplSeal for super::Compiled {}
-    impl ImplSeal for bitcoin::PublicKey {}
+    impl ImplSeal for bitcoin::XOnlyPublicKey {}
     impl<'a, C> ImplSeal for C where C: super::AnyContract {}
 }
 /// Compilable is a trait for anything which can be compiled
@@ -52,10 +63,13 @@ impl Compilable for Compiled {
     }
 }
 
-impl Compilable for bitcoin::PublicKey {
+impl Compilable for bitcoin::XOnlyPublicKey {
+    // TODO: Taproot; make infallible API
     fn compile(&self, ctx: Context) -> Result<Compiled, CompilationError> {
-        let addr = bitcoin::Address::p2wpkh(self, ctx.network)
-            .map_err(|_e| CompilationError::Custom("Invalid Key".into()))?;
+        let addr = bitcoin::Address::p2tr_tweaked(
+            TweakedPublicKey::dangerous_assume_tweaked(self.clone()),
+            ctx.network,
+        );
         let mut amt = AmountRange::new();
         amt.update_range(ctx.funds());
         Ok(Compiled::from_address(addr, Some(amt)))
@@ -330,27 +344,48 @@ where
                 .filter_map(|(func, c)| guard_clauses.borrow_mut().get(self_ref, *func, c))
                 .collect()
         };
-        // If any clauses are returned, use a Threshold with n = 1
-        // It compiles equivalently to a tree of ORs.
-        if finish_fns.len() > 0 {
-            clause_accumulator.push(Clause::Threshold(1, finish_fns))
+
+        let branches: Vec<Miniscript<XOnlyPublicKey, Tap>> = finish_fns
+            .iter()
+            .chain(clause_accumulator.iter())
+            .map(|policy| policy.compile().map_err(Into::<CompilationError>::into))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // TODO: Pick a better branch that is guaranteed to work!
+        let some_key = branches
+            .iter()
+            .filter_map(|f| {
+                if let Terminal::PkK(k) = f.node {
+                    Some(k)
+                } else {
+                    None
+                }
+            })
+            .next()
+            .map(|x| bitcoin::util::schnorr::UntweakedPublicKey::from(x))
+            .unwrap_or(
+                XOnlyPublicKey::from_slice(&Sha256::hash(&[1u8; 32]).into_inner())
+                    .expect("constant"),
+            );
+        // Don't remove the key from the scripts in case it was bogus
+        let mut scripts: Vec<(Reverse<u64>, TapTree<_>)> = branches
+            .iter()
+            .map(|b| (Reverse(1), TapTree::Leaf(Arc::new(b.clone()))))
+            .collect();
+        while scripts.len() > 1 {
+            let (w1, v1) = scripts.pop().unwrap();
+            let (w2, v2) = scripts.pop().unwrap();
+            scripts.push((
+                Reverse(w1.0.saturating_add(w2.0)),
+                TapTree::Tree(Arc::new(v1), Arc::new(v2)),
+            ));
         }
 
-        let policy = match clause_accumulator.len() {
-            0 => return Err(CompilationError::EmptyPolicy),
-            1 => clause_accumulator
-                .pop()
-                .expect("Length of policy must be at least 1"),
-            _ => Clause::Threshold(1, clause_accumulator),
-        };
-
-        let miniscript = policy.compile().map_err(Into::<CompilationError>::into)?;
-        let estimated_max_size = Segwitv0::max_satisfaction_size(&miniscript)
-            .ok_or(CompilationError::TerminateCompilation)?;
-        let descriptor = Descriptor::new_wsh(miniscript)?;
+        let tree = scripts.pop().map(|v| v.1);
+        let descriptor = Descriptor::Tr(descriptor::Tr::new(some_key, tree)?);
+        let estimated_max_size = descriptor.max_satisfaction_weight()?;
         let address = descriptor.address(ctx.network)?.into();
-        let descriptor = Some(descriptor);
-        let policy = Some(policy);
+        let descriptor = Some(descriptor.into());
         let root_path = SArc(ctx.path().clone());
 
         let failed_estimate = ctv_to_tx.values().any(|a| {
@@ -371,7 +406,6 @@ where
                 root_path,
                 address,
                 descriptor,
-                policy,
                 amount_range,
             })
         }

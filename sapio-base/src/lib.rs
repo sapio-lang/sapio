@@ -7,6 +7,7 @@
 #[deny(missing_docs)]
 /// Extra functionality for working with Bitcoin types
 pub mod util;
+use bitcoin::XOnlyPublicKey;
 pub use util::CTVHash;
 pub mod plugin_args;
 
@@ -21,7 +22,7 @@ pub mod serialization_helpers;
 
 /// Concrete Instantiation of Miniscript Policy. Because we need to be able to generate exact
 /// transactions, we only work with `bitcoin::PublicKey` types.
-pub type Clause = miniscript::policy::concrete::Policy<bitcoin::PublicKey>;
+pub type Clause = miniscript::policy::concrete::Policy<XOnlyPublicKey>;
 #[cfg(test)]
 mod tests {
     #[test]
