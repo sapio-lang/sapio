@@ -117,28 +117,12 @@ impl HDOracleEmulator {
     /// the main server business logic.
     ///
     /// - on receiving Request::SignPSBT, signs the PSBT.
-    /// - on receiving Request::ConfirmKey, signs the challenge prefixed by a nonce.
     async fn handle(&self, t: &mut TcpStream) -> Result<(), std::io::Error> {
         let request = Self::requested(t).await?;
         match request {
             msgs::Request::SignPSBT(msgs::PSBT(unsigned)) => {
                 let psbt = SECP.with(|secp| self.sign(unsigned, secp))?;
                 Self::respond(t, &msgs::PSBT(psbt)).await
-            }
-            msgs::Request::ConfirmKey(msgs::ConfirmKey(_epk, s)) => {
-                let ck = SECP.with(|secp| {
-                    let key = self.root.to_priv().inner;
-                    let entropy: [u8; 32] = rand::thread_rng().gen();
-                    let h: Sha256 = Sha256::from_slice(&entropy).unwrap();
-                    let mut m = Sha256::engine();
-                    m.input(&h.into_inner());
-                    m.input(&s.into_inner());
-                    let msg = bitcoin::secp256k1::Message::from_slice(&Sha256::from_engine(m)[..])
-                        .unwrap();
-                    let signature = secp.sign_ecdsa(&msg, &key);
-                    msgs::KeyConfirmed(signature, h)
-                });
-                Self::respond(t, &ck).await
             }
         }
     }

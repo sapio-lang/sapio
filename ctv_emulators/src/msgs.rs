@@ -19,18 +19,9 @@ const MAX_MSG: usize = 1_000_000;
 #[derive(Clone)]
 pub struct PSBT(pub PartiallySignedTransaction);
 
-/// A message for a client to challenge a server to prove it has the key
-#[derive(Serialize, Deserialize)]
-pub struct ConfirmKey(pub ExtendedPubKey, pub Sha256);
-
-/// a response from a server to a client with a challenge response
-#[derive(Serialize, Deserialize)]
-pub struct KeyConfirmed(pub bitcoin::secp256k1::Signature, pub Sha256);
-
 /// Wrapper for message serialization
 #[derive(Serialize, Deserialize)]
 pub enum Request {
-    ConfirmKey(ConfirmKey),
     SignPSBT(PSBT),
 }
 
