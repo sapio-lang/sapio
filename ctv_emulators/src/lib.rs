@@ -34,7 +34,10 @@ thread_local! {
 
 /// Helper function to create an InvalidInput error from a &str
 fn input_error<T>(s: &str) -> Result<T, std::io::Error> {
-    Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, s))
+    Err(input_err(s))
+}
+fn input_err(s: &str) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidInput, s)
 }
 
 /// Compute a derivation path from a sha256 hash.

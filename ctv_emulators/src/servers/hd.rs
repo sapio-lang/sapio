@@ -5,9 +5,13 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use super::*;
-use bitcoin::EcdsaSig;
-use bitcoin::EcdsaSigHashType;
-use bitcoin::SigHash;
+use bitcoin::util::sighash::Prevouts;
+use bitcoin::util::taproot::TapLeafHash;
+use bitcoin::util::taproot::TapSighashHash;
+use bitcoin::SchnorrSig;
+use bitcoin::Script;
+use bitcoin::TxOut;
+use bitcoin::XOnlyPublicKey;
 #[derive(Clone)]
 pub struct HDOracleEmulator {
     root: ExtendedPrivKey,
@@ -63,47 +67,51 @@ impl HDOracleEmulator {
     ) -> Result<PartiallySignedTransaction, std::io::Error> {
         let tx = b.clone().extract_tx();
         let h = tx.get_ctv_hash(0);
-        if let Ok(key) = self.derive(h, secp) {
-            if let Some(utxo) = &b.inputs[0].witness_utxo {
-                // This is *funny*. In this case, we are assuming that our signature is required
-                // and if a scriptcode is not present than it must be the case that it is a p2wpkh
-                // script, so we generate a scriptcode for our key as a p2wpkh... this is a reasonable
-                // choice! We do not look at the utxo (for now) to verify this.
-
-                let scriptcode = b.inputs[0].witness_script.clone().unwrap_or_else(|| {
-                    let mut v = vec![0u8; 26];
-                    v[0..4].copy_from_slice(&[0x19, 0x76, 0xa9, 0x14]);
-                    v[4..24].copy_from_slice(&key.identifier(secp).as_hash()[..]);
-                    v[24..26].copy_from_slice(&[0x88, 0xac]);
-                    bitcoin::blockdata::script::Builder::from(v).into_script()
-                });
-                let mut sighash = bitcoin::util::sighash::SigHashCache::new(&tx);
-                let sighash = sighash
-                    .segwit_signature_hash(0, &scriptcode, utxo.value, EcdsaSigHashType::All)
-                    .expect("Signature hash cannot fail...");
-                use bitcoin::secp256k1::ThirtyTwoByteHash;
-                struct Wrapped(SigHash);
-                impl ThirtyTwoByteHash for Wrapped {
-                    fn into_32(self) -> [u8; 32] {
-                        self.0.as_hash().into_inner()
-                    }
-                }
-                let msg = bitcoin::secp256k1::Message::from(Wrapped(sighash));
-                let signature = secp.sign(&msg, &key.to_priv().inner);
-                let sig = EcdsaSig {
-                    sig: signature,
-                    hash_ty: EcdsaSigHashType::All,
-                };
-                let pk = key.to_priv().public_key(secp);
-                b.inputs[0].partial_sigs.insert(pk, sig);
-                return Ok(b);
-            } else {
-                input_error("Could not find UTXO")?;
-            }
-        } else {
-            input_error("Could Not Derive Key")?;
+        let utxos: Vec<TxOut> = b
+            .inputs
+            .iter()
+            .map(|o| o.witness_utxo.clone())
+            .collect::<Option<Vec<TxOut>>>()
+            .ok_or_else(|| input_err("Could not find one of the UTXOs to be signed over"))?;
+        let key = self
+            .derive(h, secp)
+            .map_err(|_| input_err("Could Not Derive Key"))?;
+        let untweaked = key.to_keypair(secp);
+        let pk = XOnlyPublicKey::from_keypair(&untweaked);
+        let mut sighash = bitcoin::util::sighash::SigHashCache::new(&tx);
+        let input_zero = &mut b.inputs[0];
+        use bitcoin::schnorr::TapTweak;
+        let tweaked = untweaked
+            .tap_tweak(secp, input_zero.tap_merkle_root)
+            .into_inner();
+        let tweaked_pk = tweaked.public_key();
+        let hash_ty = bitcoin::util::sighash::SchnorrSigHashType::All;
+        let prevouts = &Prevouts::All(&utxos);
+        let mut get_sig = |path, kp| {
+            let annex = None;
+            let sighash: TapSighashHash = sighash
+                .taproot_signature_hash(0, prevouts, annex, path, hash_ty)
+                .expect("Signature hash cannot fail...");
+            let msg = bitcoin::secp256k1::Message::from_slice(&sighash[..])
+                .expect("Size must be correct.");
+            let sig = secp.sign_schnorr_no_aux_rand(&msg, kp);
+            SchnorrSig { sig, hash_ty }
+        };
+        if let Some(true) = input_zero.witness_utxo.as_ref().map(|v| {
+            v.script_pubkey == Script::new_v1_p2tr_tweaked(tweaked_pk.dangerous_assume_tweaked())
+        }) {
+            let sig = get_sig(None, &tweaked);
+            input_zero.tap_key_sig = Some(sig);
         }
-        input_error("Unknown Failure to Sign")
+        for tlh in input_zero
+            .tap_scripts
+            .values()
+            .map(|(script, ver)| TapLeafHash::from_script(script, *ver))
+        {
+            let sig = get_sig(Some((tlh, 0xffffffff)), &untweaked);
+            input_zero.tap_script_sigs.insert((pk.clone(), tlh), sig);
+        }
+        Ok(b)
     }
 
     /// the main server business logic.
