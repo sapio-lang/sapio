@@ -9,15 +9,16 @@ use bitcoin::util::amount::Amount;
 use bitcoin::util::bip32::*;
 use bitcoin::Script;
 use bitcoin::TxOut;
-
 use emulator_connect::connections::hd::HDOracleEmulatorConnection;
 use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::*;
 use sapio::contract::*;
 use sapio::*;
+use sapio_base::effects::EffectPath;
 use sapio_base::timelocks::RelTime;
 use sapio_base::txindex::{TxIndex, TxIndexLogger};
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -32,15 +33,13 @@ impl<T> TestEmulation<T>
 where
     T: Compilable,
 {
-    then!(
-        complete | s,
-        ctx | {
-            ctx.template()
-                .add_output(s.amount, &s.to_contract, None)?
-                .set_sequence(0, RelTime::from(s.timeout).into())?
-                .into()
-        }
-    );
+    #[then]
+    fn complete(self, ctx: Context) {
+        ctx.template()
+            .add_output(self.amount, &self.to_contract, None)?
+            .set_sequence(0, RelTime::from(self.timeout).into())?
+            .into()
+    }
 }
 
 impl<T: Compilable + 'static> Contract for TestEmulation<T> {
@@ -94,10 +93,12 @@ fn test_connect() {
     });
     let rc_conn: Arc<dyn CTVEmulator> = Arc::new(connecter);
     let compiled = contract
-        .compile(&Context::new(
+        .compile(Context::new(
             bitcoin::Network::Regtest,
             Amount::from_btc(1.0).unwrap(),
-            Some(rc_conn.clone()),
+            rc_conn.clone(),
+            EffectPath::try_from("integration_test").unwrap(),
+            Arc::new(Default::default()),
         ))
         .unwrap();
     let txindex: Rc<dyn TxIndex> = Rc::new(TxIndexLogger::new());
@@ -117,6 +118,20 @@ fn test_connect() {
         txindex,
         rc_conn.as_ref(),
     );
+    use bitcoin::psbt::PartiallySignedTransaction;
+    use sapio::contract::abi::studio::SapioStudioFormat;
+    let secp = Secp256k1::new();
+    for (path, sso) in _psbts.unwrap().program {
+        for tx in sso.txs {
+            match tx {
+                SapioStudioFormat::LinkedPSBT { psbt, .. } => {
+                    let mut psbt = PartiallySignedTransaction::from_str(&psbt).unwrap();
+                    println!("{}", serde_json::to_string_pretty(&psbt).unwrap());
+                    miniscript::psbt::finalize(&mut psbt, &secp).unwrap();
+                }
+            }
+        }
+    }
     shutdown.send(()).unwrap();
     // TODO: Test PSBT result
 }
