@@ -20,7 +20,7 @@ use bitcoin::util::taproot::TaprootBuilderError;
 use bitcoin::PublicKey;
 use bitcoin::Script;
 use bitcoin::XOnlyPublicKey;
-use miniscript::Descriptor::Tr;
+
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
 use sapio_base::serialization_helpers::SArc;

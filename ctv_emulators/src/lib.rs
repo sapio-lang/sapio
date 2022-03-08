@@ -6,7 +6,7 @@
 
 #[deny(missing_docs)]
 use bitcoin::hashes::sha256::Hash as Sha256;
-use bitcoin::hashes::{Hash, HashEngine};
+use bitcoin::hashes::Hash;
 use bitcoin::util::bip32::*;
 use sapio_ctv_emulator_trait::Clause;
 pub use sapio_ctv_emulator_trait::{CTVAvailable, CTVEmulator, EmulatorError, NullEmulator};
@@ -19,7 +19,7 @@ use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 
 use bitcoin::secp256k1::{All, Secp256k1};
 use bitcoin::util::psbt::PartiallySignedTransaction;
-use rand::Rng;
+
 use sapio_base::CTVHash;
 use std::sync::Arc;
 const MAX_MSG: usize = 1_000_000;
