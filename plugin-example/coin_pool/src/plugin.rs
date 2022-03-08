@@ -53,7 +53,9 @@ enum PoolTypes {
 #[derive(JsonSchema, Deserialize)]
 pub struct SimplePayment {
     /// # The Key that Votes & Redeems Funds
-    key: bitcoin::PublicKey,
+    // TODO: Taproot Fix Encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    key: bitcoin::XOnlyPublicKey,
     /// # Amount to Pay in BTC
     amount: AmountF64,
 }

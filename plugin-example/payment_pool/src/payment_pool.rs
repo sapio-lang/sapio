@@ -9,12 +9,13 @@ use crate::sapio_base::Clause;
 use bitcoin::hashes::hex::FromHex;
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::Hash;
+use bitcoin::secp256k1::schnorr::Signature;
 use bitcoin::secp256k1::Message;
 use bitcoin::secp256k1::Secp256k1;
-use bitcoin::secp256k1::Signature;
 use bitcoin::util::amount::Amount;
 use bitcoin::Address;
-use bitcoin::PublicKey;
+use bitcoin::SchnorrSig;
+use bitcoin::XOnlyPublicKey;
 use sapio::contract::actions::conditional_compile::ConditionalCompileType;
 use sapio::contract::*;
 use sapio::util::amountrange::{AmountF64, AmountU64};
@@ -25,15 +26,15 @@ use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
 use std::collections::{BTreeMap, HashMap};
-
 use std::convert::TryInto;
 use std::io::Write;
+use std::str::FromStr;
 
 #[derive(Deserialize, JsonSchema, Clone)]
 struct PaymentPool {
     /// # Pool Members
     /// map of all initial balances as PK to BTC
-    members: BTreeMap<PublicKey, AmountF64>,
+    members: BTreeMap<XOnlyPublicKey, AmountF64>,
     /// The current sequence number (for authenticating state updates)
     sequence: u64,
     /// If to require signatures or not (debugging, should be true)
@@ -49,7 +50,7 @@ impl Contract for PaymentPool {
 struct PaymentRequest {
     /// # Signature
     /// hex encoded signature of the fee, sequence number, and payments
-    hex_der_sig: String,
+    hex_sig: String,
     /// # Fees
     /// Fees for this participant to pay in Satoshis
     fee: AmountU64,
@@ -62,7 +63,7 @@ struct PaymentRequest {
 struct DoTx {
     /// # Payments
     /// A mapping of public key in members to signed list of payouts with a fee rate.
-    payments: HashMap<PublicKey, PaymentRequest>,
+    payments: HashMap<XOnlyPublicKey, PaymentRequest>,
 }
 /// required...
 impl Default for DoTx {
@@ -154,7 +155,7 @@ impl PaymentPool {
         for (
             from,
             PaymentRequest {
-                hex_der_sig,
+                hex_sig,
                 fee,
                 payments,
             },
@@ -203,12 +204,10 @@ impl PaymentPool {
                 }
                 let h = sha256::Hash::from_engine(hasher);
                 let m = Message::from_slice(&h.as_inner()[..]).expect("Correct Size");
-                let signed: Vec<u8> = FromHex::from_hex(&hex_der_sig)
-                    .map_err(|_| CompilationError::TerminateCompilation)?;
-                let sig = Signature::from_der(&signed)
+                let sig = Signature::from_str(&hex_sig)
                     .map_err(|_| CompilationError::TerminateCompilation)?;
                 let _: () = secp
-                    .verify(&m, &sig, &from.inner)
+                    .verify_schnorr(&sig, &m, &from)
                     .map_err(|_| CompilationError::TerminateCompilation)?;
             }
         }

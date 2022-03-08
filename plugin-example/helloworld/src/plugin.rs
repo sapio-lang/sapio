@@ -19,8 +19,12 @@ use std::convert::{TryFrom, TryInto};
 
 #[derive(JsonSchema, Deserialize)]
 pub struct TrustlessEscrow {
-    alice: bitcoin::PublicKey,
-    bob: bitcoin::PublicKey,
+    // TODO: Taproot Fix Encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    alice: bitcoin::XOnlyPublicKey,
+    // TODO: Taproot Fix Encoding
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    bob: bitcoin::XOnlyPublicKey,
     alice_escrow_address: bitcoin::Address,
     alice_escrow_amount: CoinAmount,
     bob_escrow_address: bitcoin::Address,
