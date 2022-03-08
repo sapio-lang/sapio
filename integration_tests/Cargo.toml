@@ -6,6 +6,9 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[patch.crates-io]
+sapio-miniscript = { path = '../../sapio-miniscript' }
+
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 schemars = "0.8.0"
@@ -32,7 +35,7 @@ features = ['use-serde', 'rand', 'base64']
 
 [dependencies.miniscript]
 package = "sapio-miniscript"
-version = "^7.0.0-0"
+version = "^7.0.0-4"
 features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 
 [dependencies.sapio-base]

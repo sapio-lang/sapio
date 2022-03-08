@@ -49,10 +49,11 @@ impl<T: Compilable + 'static> Contract for TestEmulation<T> {
 
 #[test]
 fn test_connect() {
+    let secp = Secp256k1::new();
     let root =
         ExtendedPrivKey::new_master(bitcoin::network::constants::Network::Regtest, &[44u8; 32])
             .unwrap();
-    let pk_root = ExtendedPubKey::from_private(&Secp256k1::new(), &root);
+    let pk_root = ExtendedPubKey::from_private(&secp, &root);
     let rt1 = Arc::new(tokio::runtime::Runtime::new().unwrap());
     let (shutdown, quit) = tokio::sync::oneshot::channel();
     {
@@ -69,7 +70,10 @@ fn test_connect() {
 
     let contract_1 = TestEmulation {
         to_contract: Compiled::from_address(
-            bitcoin::Address::from_str("bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh").unwrap(),
+            bitcoin::Address::from_str(
+                "tb1pnt49mgrp6djyzj7ttldle9lhnhav9hh7pcaqmv9yqpfrwk4yzvasd8wc37",
+            )
+            .unwrap(),
             None,
         ),
         amount: Amount::from_btc(1.0).unwrap(),
@@ -108,10 +112,11 @@ fn test_connect() {
         input: vec![],
         output: vec![TxOut {
             value: Amount::from_btc(1.0).unwrap().as_sat(),
-            script_pubkey: Script::new(),
+            script_pubkey: compiled.address.clone().into(),
         }],
     };
     let fake_txid = txindex.add_tx(std::sync::Arc::new(tx)).unwrap();
+    println!("Fake TXID: {}", fake_txid);
     let _psbts = compiled.bind_psbt(
         bitcoin::OutPoint::new(fake_txid, 0),
         HashMap::new(),
@@ -120,14 +125,15 @@ fn test_connect() {
     );
     use bitcoin::psbt::PartiallySignedTransaction;
     use sapio::contract::abi::studio::SapioStudioFormat;
-    let secp = Secp256k1::new();
-    for (path, sso) in _psbts.unwrap().program {
-        for tx in sso.txs {
+
+    for (path, sso) in _psbts.unwrap().program.iter() {
+        for tx in &sso.txs {
             match tx {
                 SapioStudioFormat::LinkedPSBT { psbt, .. } => {
                     let mut psbt = PartiallySignedTransaction::from_str(&psbt).unwrap();
-                    println!("{}", serde_json::to_string_pretty(&psbt).unwrap());
                     miniscript::psbt::finalize(&mut psbt, &secp).unwrap();
+                    println!("{}", psbt.to_string());
+
                 }
             }
         }

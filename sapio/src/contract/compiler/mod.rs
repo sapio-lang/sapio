@@ -358,7 +358,7 @@ where
                     .expect("constant"),
             );
         // Don't remove the key from the scripts in case it was bogus
-        let mut scripts: Vec<(Reverse<u64>, TapTree<_>)> = branches
+        let mut scripts: Vec<(Reverse<u64>, TapTree<XOnlyPublicKey>)> = branches
             .iter()
             .map(|b| (Reverse(1), TapTree::Leaf(Arc::new(b.clone()))))
             .collect();
