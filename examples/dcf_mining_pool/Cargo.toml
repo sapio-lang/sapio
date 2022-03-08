@@ -15,8 +15,6 @@ serde_derive = "1.0"
 tokio = { version = "1", features = ["full"] }
 bitcoincore-rpc-async = "4.0.1-alpha.1"
 
-[dependencies.wasm-bindgen]
-version = "0.2.69"
 
 [dependencies.bitcoin]
 package = "sapio-bitcoin"

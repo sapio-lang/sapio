@@ -59,7 +59,7 @@ jobs:
     strategy:
       matrix:
         rust:
-          - 1.52.1
+          - 1.54.0
           - beta
           - stable
     steps:
@@ -71,8 +71,8 @@ jobs:
           profile: minimal
           toolchain: ${{ matrix.rust }}
           override: true
-      - name: Pin cc if rust 1.52.1
-        if: matrix.rust == '1.52.1'
+      - name: Pin cc if rust 1.54.0
+        if: matrix.rust == '1.54.0'
         run: cargo generate-lockfile
       - name: Running cargo
         env:
