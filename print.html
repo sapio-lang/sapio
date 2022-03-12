@@ -241,23 +241,25 @@ appropriately.</p>
 Follow this quickstart guide to get going.</p>
 <ol>
 <li>Get <a href="https://rustup.rs/">rust</a> if you don't have it already.</li>
-<li>Add the wasm target by running the below command in your terminal:</li>
+<li>Add the wasm target and nightly toolchain by running the below command in your terminal:</li>
 </ol>
 <pre><code class="language-bash">rustup target add wasm32-unknown-unknown
 </code></pre>
-<ol>
-<li>Tip: On an M1 Mac you may need to do the following:</li>
-</ol>
+<blockquote>
+<p>Tip: On macOS you may need to do the following:</p>
+</blockquote>
 <blockquote>
 <pre><code class="language-bash">brew install llvm
 cargo install wasm-pack
 rustup toolchain install nightly
+rustup default nightly
 </code></pre>
 <p>and then load the following before compiling to use the newer llvm/clang.</p>
 <pre><code class="language-bash">export PATH=&quot;/opt/homebrew/opt/llvm/bin:$PATH&quot;
+# for older homebrew installs
+# export PATH=&quot;/usr/local/opt/llvm/bin:$PATH&quot;
 export CC=/opt/homebrew/opt/llvm/bin/clang
 export AR=/opt/homebrew/opt/llvm/bin/llvm-ar
-rustup default nightly
 </code></pre>
 </blockquote>
 <ol>
