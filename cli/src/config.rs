@@ -16,11 +16,12 @@ use std::net::ToSocketAddrs;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use tokio::io::BufReader;
 use tokio::sync::Mutex;
 /// EmulatorConfig is used to determine how this sapio-cli instance should stub
 /// out CTV. Emulators are specified by EPK and interface address. Threshold
 /// should be <= emulators.len().
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EmulatorConfig {
     /// if the emulator should be used or not. We tag explicitly for convenience
     /// in the config file format.
@@ -104,15 +105,16 @@ mod pathbuf {
 
 /// Remote type Derivation for rpc::Auth
 /// TODO: Move to the RPC Library?
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(remote = "super::rpc::Auth")]
 enum Auth {
     None,
     UserPass(String, String),
     CookieFile(#[serde(with = "pathbuf")] PathBuf),
 }
+
 /// Which Bitcoin Node should Sapio use
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Node {
     pub url: String,
     #[serde(with = "Auth")]
@@ -121,7 +123,7 @@ pub struct Node {
 
 /// A configuration for any network (regtest, main, signet, testnet)
 /// Only one config may set active = true at a time.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NetworkConfig {
     /// if this is the active config
     pub active: bool,
@@ -159,7 +161,7 @@ impl TryFrom<String> for WasmerCacheHash {
 
 /// This config has only the currently active network, the other configs get
 /// dropped during the ConfigVerifier::try_into.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(try_from = "ConfigVerifier")]
 pub struct Config {
     pub active: NetworkConfig,
@@ -193,9 +195,7 @@ impl Config {
             if let Ok(txt) = tokio::fs::read(&pb).await {
                 Ok(serde_json::from_slice(&txt[..])?)
             } else {
-                let cfg = ConfigVerifier::default();
-                tokio::fs::write(&pb, &serde_json::to_string_pretty(&cfg)?).await?;
-                Ok(Config::try_from(cfg)?)
+                Err("Please Run the configure wizard command to make a config file")?
             }
         }
     }
@@ -203,7 +203,7 @@ impl Config {
 
 /// This is a deserialization helper which checks the config file for well
 /// formedness before processing into an actual config.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ConfigVerifier {
     main: Option<NetworkConfig>,
     testnet: Option<NetworkConfig>,
@@ -221,6 +221,32 @@ impl TryFrom<ConfigVerifier> for Config {
             active: cfg.check()?,
             network,
         })
+    }
+}
+
+impl From<Config> for ConfigVerifier {
+    fn from(c: Config) -> ConfigVerifier {
+        let mut res = ConfigVerifier {
+            main: None,
+            testnet: None,
+            signet: None,
+            regtest: None,
+        };
+        match c.network {
+            bitcoin::network::constants::Network::Regtest => {
+                res.regtest = Some(c.active);
+            }
+            bitcoin::network::constants::Network::Signet => {
+                res.signet = Some(c.active);
+            }
+            bitcoin::network::constants::Network::Testnet => {
+                res.testnet = Some(c.active);
+            }
+            bitcoin::network::constants::Network::Bitcoin => {
+                res.main = Some(c.active);
+            }
+        };
+        res
     }
 }
 
@@ -272,6 +298,129 @@ impl ConfigVerifier {
             11 => Ok(self.testnet.unwrap()),
             _ => Err(ConfigError::TooManyActiveNetworks),
         }
+    }
+
+    pub async fn wizard() -> Result<Self, Box<dyn std::error::Error>> {
+        use tokio::io::AsyncBufReadExt;
+
+        let stdin = tokio::io::stdin();
+        let reader = BufReader::new(stdin);
+        let mut b = BaseDirs::new()
+            .expect("Could Not Determine a Base Directory")
+            .home_dir()
+            .to_path_buf();
+        b.push(".bitcoin");
+        b.push("regtest");
+        b.push(".cookie");
+        let network;
+        let mut lines = reader.lines();
+        loop {
+            println!("Which Network? (main, reg, sig, test): ");
+            if let Some(line) = lines.next_line().await? {
+                network = match line.trim() {
+                    "main" => bitcoin::network::constants::Network::Bitcoin,
+                    "reg" => bitcoin::network::constants::Network::Regtest,
+                    "sig" => bitcoin::network::constants::Network::Signet,
+                    "test" => bitcoin::network::constants::Network::Testnet,
+                    _ => {
+                        println!("Not a valid option {:?}", line);
+                        continue;
+                    }
+                };
+                break;
+            }
+        }
+        let mut url: String;
+        loop {
+            println!("API Node URL (e.g., http://127.0.0.1:18443): ");
+            if let Some(line) = lines.next_line().await? {
+                url = line.trim().into();
+                if url.len() == 0 {
+                    println!("Must enter a username");
+                } else {
+                    break;
+                }
+            }
+        }
+        let using_cookie;
+        loop {
+            println!("Auth Type (for cookie file, \"cookie\", for username/password \"basic\"): ");
+            if let Some(line) = lines.next_line().await? {
+                using_cookie = match line.trim().into() {
+                    "cookie" => true,
+                    "basic" => false,
+                    l => {
+                        println!("Invalid option {}, type cookie or basic:", l);
+                        continue;
+                    }
+                };
+                break;
+            }
+        }
+        let auth = if using_cookie {
+            let mut cookie: String;
+            loop {
+                println!("Cookie file location (e.g., {}): ", b.display());
+                if let Some(line) = lines.next_line().await? {
+                    cookie = line.trim().into();
+                    if cookie.len() == 0 {
+                        println!("Must give a cookie file location.");
+                        continue;
+                    }
+                    break;
+                }
+            }
+            super::rpc::Auth::CookieFile(cookie.into())
+        } else {
+            let mut username: String;
+            loop {
+                println!("Username: ");
+                if let Some(line) = lines.next_line().await? {
+                    username = line.trim().into();
+                    if username.len() == 0 {
+                        println!("Must enter a username");
+                    } else {
+                        break;
+                    }
+                }
+            }
+            let mut password: String;
+            loop {
+                println!("Password: ");
+                if let Some(line) = lines.next_line().await? {
+                    password = line.trim().into();
+                    if password.len() == 0 {
+                        println!("Must enter a username");
+                    } else {
+                        break;
+                    }
+                }
+            }
+            super::rpc::Auth::UserPass(username, password)
+        };
+
+        println!("Configuration Complete!");
+        println!("To configure Emulators/ Plugin Maps please edit manually if desired.");
+        println!("Your Configuration:");
+
+        let active = NetworkConfig {
+            active: true,
+            api_node: Node{url, auth},
+            emulator_nodes: Some(EmulatorConfig{
+                enabled: false,
+                threshold: 1u8,
+                emulators: vec![(ExtendedPubKey::from_str("tpubD6NzVbkrYhZ4Wf398td3H8YhWBsXx9Sxa4W3cQWkNW3N3DHSNB2qtPoUMXrA6JNaPxodQfRpoZNE5tGM9iZ4xfUEFRJEJvfs8W5paUagYCE").unwrap(),
+                    "example.please.change.this.before.using:8367".into())],
+            }),
+            plugin_map: None,
+        };
+        let cv: ConfigVerifier = Config { network, active }.into();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::to_value(cv.clone())?)?
+        );
+
+        Ok(cv)
     }
 }
 

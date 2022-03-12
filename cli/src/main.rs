@@ -55,6 +55,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     (about: "Sapio CLI for Bitcoin Smart Contracts")
     (@arg config: -c --config +takes_value #{1,1} {check_file} "Sets a custom config file")
     (@arg debug: -d ... "Sets the level of debugging information")
+    (@subcommand configure =>
+     (@setting SubcommandRequiredElseHelp)
+     (about: "Helper to check current configuration settings")
+     (@subcommand files =>
+      (about: "Show where the configure files live.")
+      (@arg json: -j --json "Print or return JSON formatted dirs")
+     )
+     (@subcommand show =>
+     (about: "Print out the currently loaded configuration")
+    )
+     (@subcommand wizard =>
+      (@arg write: -w --write "Write the default config file to the standard location.")
+     (about: "Interactive wizard to create a configuration")
+     )
+    )
     (@subcommand emulator =>
      (@setting SubcommandRequiredElseHelp)
      (about: "Make Requests to Emulator Servers")
@@ -135,11 +150,68 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
       )
       );
     let matches = app.get_matches();
+    if let Some(("configure", config_matches)) = matches.subcommand() {
+        if let Some(("wizard", args)) = config_matches.subcommand() {
+            let config = ConfigVerifier::wizard().await?;
+            if args.is_present("write") {
+                let proj = directories::ProjectDirs::from("org", "judica", "sapio-cli")
+                    .expect("Failed to find config directory");
+                let path = proj.config_dir();
+                tokio::fs::create_dir_all(path).await?;
+                let mut pb = path.to_path_buf();
+                pb.push("config.json");
+                tokio::fs::write(&pb, &serde_json::to_string_pretty(&config)?).await?;
+            } else {
+                println!(
+                    "Please write this to the config file location (see sapio-cli configure files)"
+                );
+            }
+            return Ok(());
+        }
+    }
 
     let config = Config::setup(&matches, "org", "judica", "sapio-cli").await?;
 
-    let cfg = config.active;
-    let emulator: Arc<dyn CTVEmulator> = if let Some(emcfg) = &cfg.emulator_nodes {
+    match matches.subcommand() {
+        Some(("configure", config_matches)) => match config_matches.subcommand() {
+            Some(("files", args)) => {
+                let proj = directories::ProjectDirs::from("org", "judica", "sapio-cli")
+                    .expect("Failed to find config directory");
+                let path = proj.config_dir();
+                let mut config_json = path.to_path_buf();
+                config_json.push("config.json");
+                let mut modules = path.to_path_buf();
+                modules.push("modules");
+                if args.is_present("json") {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&serde_json::json!({
+                            "directory": path,
+                            "config": config_json,
+                            "modules": modules,
+                        }))?
+                    );
+                } else {
+                    println!("Config Dir: {}", path.display());
+                    println!("Config File: {}", config_json.display());
+                    println!("Modules Directory: {}", modules.display());
+                }
+                return Ok(());
+            }
+            Some(("show", _)) => {
+                println!(
+                    "{}",
+                    serde_json::to_value(ConfigVerifier::from(config.clone()))
+                        .and_then(|v| serde_json::to_string_pretty(&v))?
+                );
+                return Ok(());
+            }
+            _ => unreachable!(),
+        },
+        _ => (),
+    }
+
+    let emulator: Arc<dyn CTVEmulator> = if let Some(emcfg) = &config.active.emulator_nodes {
         if emcfg.enabled {
             emcfg.get_emulator()?.into()
         } else {
@@ -148,7 +220,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         Arc::new(CTVAvailable)
     };
-    let plugin_map = cfg.plugin_map.map(|x| {
+    let plugin_map = config.active.plugin_map.map(|x| {
         x.into_iter()
             .map(|(x, y)| (x.into_bytes().into(), y.into()))
             .collect()
@@ -184,7 +256,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let contents = tokio::fs::read(filename).await?;
 
                 let root = ExtendedPrivKey::new_master(config.network, &contents[..]).unwrap();
-                let pk_root = ExtendedPubKey::from_private(&Secp256k1::new(), &root);
+                let pk_root = ExtendedPubKey::from_priv(&Secp256k1::new(), &root);
                 let oracle = HDOracleEmulator::new(root, args.is_present("sync"));
                 let server = oracle.bind(args.value_of("interface").unwrap());
                 println!("Running Oracle With Key: {}", pk_root);
@@ -244,8 +316,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .value_of("outpoint")
                     .map(serde_json::from_str)
                     .transpose()?;
-                let client =
-                    rpc::Client::new(cfg.api_node.url.clone(), cfg.api_node.auth.clone()).await?;
+                let client = rpc::Client::new(
+                    config.active.api_node.url.clone(),
+                    config.active.api_node.auth.clone(),
+                )
+                .await?;
                 let j: Compiled = if let Some(json) = args.value_of("json") {
                     serde_json::from_str(json)?
                 } else {
