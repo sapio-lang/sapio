@@ -4,10 +4,10 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-///! Wraps the external API with friendly methods
 use super::*;
-use bitcoin::Amount;
 use core::convert::TryFrom;
+///! Wraps the external API with friendly methods
+use sapio::contract::CompilationError;
 use sapio_trait::SapioJSONTrait;
 use std::marker::PhantomData;
 /// Print a &str to the parent's console.
@@ -18,21 +18,23 @@ pub fn log(s: &str) {
 }
 
 /// Given a 32 byte plugin identifier, create a new contract instance.
-pub fn create_contract_by_key(key: &[u8; 32], args: Value, amt: Amount) -> Option<Compiled> {
+pub fn create_contract_by_key<S: Serialize>(
+    key: &[u8; 32],
+    args: CreateArgs<S>,
+) -> Result<Compiled, CompilationError> {
     unsafe {
-        let s = args.to_string();
+        let s = serde_json::to_value(args)
+            .map_err(|_| CompilationError::TerminateCompilation)?
+            .to_string();
         let l = s.len();
-        let p = sapio_v1_wasm_plugin_create_contract(
-            key.as_ptr() as i32,
-            s.as_ptr() as i32,
-            l as i32,
-            amt.as_sat() as u32,
-        );
+        let p =
+            sapio_v1_wasm_plugin_create_contract(key.as_ptr() as i32, s.as_ptr() as i32, l as i32);
         if p != 0 {
             let cs = CString::from_raw(p as *mut c_char);
-            serde_json::from_slice(cs.as_bytes()).ok()
+            serde_json::from_slice(cs.as_bytes())
+                .map_err(|_| CompilationError::TerminateCompilation)
         } else {
-            None
+            Err(CompilationError::TerminateCompilation)
         }
     }
 }
@@ -161,9 +163,12 @@ impl<T: SapioJSONTrait> TryFrom<SapioHostAPIVerifier<T>> for SapioHostAPI<T> {
 }
 
 /// Given a human readable name, create a new contract instance
-pub fn create_contract(key: &str, args: Value, amt: Amount) -> Option<Compiled> {
-    let key = lookup_module_name(key)?;
-    create_contract_by_key(&key, args, amt)
+pub fn create_contract<S: Serialize>(
+    key: &str,
+    args: CreateArgs<S>,
+) -> Result<Compiled, CompilationError> {
+    let key = lookup_module_name(key).ok_or(CompilationError::TerminateCompilation)?;
+    create_contract_by_key(&key, args)
 }
 
 /// A empty type tag to bind the dynamically linked host emulator functionality

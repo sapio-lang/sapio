@@ -25,7 +25,7 @@ struct Payout {
     /// # Payout Plugin ID
     payout_handle: LookupFrom,
     /// # Arguments (as JSON) for Plugin
-    payout_args: String,
+    payout_args: CreateArgs<String>,
 }
 
 /// # Plugin Based Payment Pool
@@ -81,20 +81,13 @@ impl TryFrom<PoolTypes> for CoinPool {
             PoolTypes::PluginPool { clauses, refunds } => {
                 let mut processed_refunds = vec![];
                 for payout in refunds.iter() {
-                    if let Some(key) = payout.payout_handle.to_key() {
-                        if let Some(compiled) = create_contract_by_key(
-                            &key,
-                            serde_json::from_str(&payout.payout_args)
-                                .map_err(|_| CompilationError::TerminateCompilation)?,
-                            payout.amount.into(),
-                        ) {
-                            let compilable: Arc<Mutex<dyn Compilable>> =
-                                Arc::new(Mutex::new(compiled));
-                            processed_refunds.push((compilable, payout.amount));
-                            continue;
-                        }
-                    }
-                    return Err(CompilationError::TerminateCompilation);
+                    let key = payout
+                        .payout_handle
+                        .to_key()
+                        .ok_or(CompilationError::TerminateCompilation)?;
+                    let compiled = create_contract_by_key(&key, payout.payout_args.clone())?;
+                    let compilable: Arc<Mutex<dyn Compilable>> = Arc::new(Mutex::new(compiled));
+                    processed_refunds.push((compilable, payout.amount));
                 }
                 Ok(CoinPool {
                     clauses: clauses,

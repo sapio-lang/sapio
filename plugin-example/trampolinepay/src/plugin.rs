@@ -36,26 +36,20 @@ enum Versions {
 impl TrampolinePay {
     #[then]
     fn expand(self, ctx: Context) {
-        let compiled = create_contract_by_key(
+        let contract = create_contract_by_key(
             &self.handle.key,
-            serde_json::to_value(CreateArgs {
+            CreateArgs {
                 context: ContextualArguments {
                     amount: ctx.funds(),
                     network: ctx.network,
                     effects: unsafe { ctx.get_effects_internal() }.as_ref().clone(),
                 },
                 arguments: Versions::BatchingTraitVersion0_1_1(self.data.clone()),
-            })
-            .map_err(|_| CompilationError::TerminateCompilation)?,
-            Amount::from_sat(0),
-        );
-        if let Some(contract) = compiled {
-            let mut builder = ctx.template();
-            builder = builder.add_output(contract.amount_range.max(), &contract, None)?;
-            builder.into()
-        } else {
-            Err(CompilationError::TerminateCompilation)
-        }
+            },
+        )?;
+        let mut builder = ctx.template();
+        builder = builder.add_output(contract.amount_range.max(), &contract, None)?;
+        builder.into()
     }
 }
 impl Contract for TrampolinePay {

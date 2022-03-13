@@ -15,12 +15,7 @@ extern "C" {
     pub fn sapio_v1_wasm_plugin_debug_log_string(a: i32, len: i32);
     /// Create an instance of a contract by "trampolining" through the host to use another
     /// plugin identified by key.
-    pub fn sapio_v1_wasm_plugin_create_contract(
-        key: i32,
-        json: i32,
-        json_len: i32,
-        amt: u32,
-    ) -> i32;
+    pub fn sapio_v1_wasm_plugin_create_contract(key: i32, json: i32, json_len: i32) -> i32;
     /// Get contract API by "trampolining" through the host to use another
     /// plugin identified by key.
     pub fn sapio_v1_wasm_plugin_get_api(key: i32) -> i32;
