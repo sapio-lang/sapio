@@ -16,7 +16,7 @@ pub enum NetworkDef {
 
 /// # Arguments For Creating this Contract
 /// Provide this information to create an instance of a contract
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct CreateArgs<S> {
     /// # The Main Contract Arguments
     pub arguments: S,
@@ -26,7 +26,7 @@ pub struct CreateArgs<S> {
 }
 
 /// # Contextual Arguments For Creating this Contract
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct ContextualArguments {
     #[serde(with = "NetworkDef")]
     /// # The Network the contract should be created for.

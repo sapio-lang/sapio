@@ -17,6 +17,10 @@ use std::fmt;
 /// Sapio's core error type.
 #[derive(Debug)]
 pub enum CompilationError {
+    /// The template passed to the compiler during a continuation has and
+    /// add_guard on it, which is forbidden (since continuations should not)
+    /// modify the compiled script other than to add their guards.
+    AdditionalGuardsNotAllowedHere,
     /// Unspecified Error -- but we should stop compiling
     TerminateCompilation,
     /// Fee Specification Error

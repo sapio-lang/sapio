@@ -15,12 +15,14 @@ use miniscript::DescriptorTrait;
 use sapio_base::effects::PathFragment;
 use sapio_base::timelocks::*;
 use sapio_base::CTVHash;
+use sapio_base::Clause;
 use std::convert::TryFrom;
 use std::convert::TryInto;
 
 /// Builder can be used to interactively put together a transaction template before
 /// finalizing into a Template.
 pub struct Builder {
+    guards: Vec<Clause>,
     sequences: Vec<Option<AnyRelTimeLock>>,
     outputs: Vec<Output>,
     version: i32,
@@ -36,6 +38,7 @@ impl Builder {
     /// Creates a new transaction template with 1 input and no outputs.
     pub fn new(ctx: Context) -> Builder {
         Builder {
+            guards: Vec::new(),
             sequences: vec![None],
             outputs: vec![],
             version: 2,
@@ -163,6 +166,15 @@ impl Builder {
         self
     }
 
+    /// adds an additional precondition on this template
+    /// which ends up being computed as:
+    /// And(And(Top Guard, And(add_guard(1),..., add_guard(n))), CTV)
+    /// n.b. not to be used with a continuation!
+    pub fn add_guard(mut self, guard: Clause) -> Self {
+        self.guards.push(guard);
+        self
+    }
+
     /// Creates a transaction from a Builder.
     /// Generally, should not be called directly.
     pub fn get_tx(&self) -> bitcoin::Transaction {
@@ -255,6 +267,7 @@ impl From<Builder> for Template {
     fn from(t: Builder) -> Template {
         let tx = t.get_tx();
         Template {
+            guards: t.guards,
             outputs: t.outputs,
             ctv: tx.get_ctv_hash(0),
             ctv_index: 0,

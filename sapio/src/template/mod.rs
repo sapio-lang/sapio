@@ -7,6 +7,7 @@
 //! utilities for building Bitcoin transaction templates up programmatically
 use bitcoin::hashes::sha256;
 use bitcoin::util::amount::Amount;
+use sapio_base::Clause;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -51,6 +52,9 @@ impl TemplateMetadata {
 /// metadata
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct Template {
+    /// additional restrictions placed on this template
+    #[serde(rename = "additional_preconditions")]
+    pub guards: Vec<Clause>,
     /// the precomputed template hash for this Template
     #[serde(rename = "precomputed_template_hash")]
     pub ctv: sha256::Hash,

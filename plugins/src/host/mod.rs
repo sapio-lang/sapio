@@ -117,20 +117,11 @@ mod exports {
         key: i32,
         json: i32,
         json_len: i32,
-        amt: u32,
     ) -> i32 {
-        wasm_plugin_action(
-            env,
-            key,
-            Action::Create {
-                json,
-                json_len,
-                amt,
-            },
-        )
+        wasm_plugin_action(env, key, Action::Create { json, json_len })
     }
     enum Action {
-        Create { json: i32, json_len: i32, amt: u32 },
+        Create { json: i32, json_len: i32 },
         GetAPI,
     }
 

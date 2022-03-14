@@ -21,6 +21,7 @@ pub use oracle::{Oracle, Symbol};
 
 pub mod apis;
 pub mod call;
+pub mod dlc;
 pub mod exploding;
 pub mod put;
 pub mod risk_reversal;

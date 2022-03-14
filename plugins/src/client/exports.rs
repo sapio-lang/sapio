@@ -45,7 +45,8 @@ unsafe extern "C" fn sapio_v1_wasm_plugin_client_create(c: *mut c_char) -> *mut 
 /// Drops a pointer that was created in the WASM
 #[no_mangle]
 unsafe extern "C" fn sapio_v1_wasm_plugin_client_drop_allocation(s: *mut c_char) {
-    CString::from_raw(s);
+    // manually drop here for clarity / linter
+    drop(CString::from_raw(s));
 }
 
 /// Allows the host to allocate len bytes inside the WASM environment

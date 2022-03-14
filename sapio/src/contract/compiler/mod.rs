@@ -287,10 +287,29 @@ where
                         .entry(h)
                         .or_insert(txtmpl);
                         amount_range.update_range(txtmpl.max);
-                        ctx.ctv_emulator(h)
+                        // Add the addition guards to these clauses
+                        if uses_ctv == CTVRequired::Yes {
+                            if txtmpl.guards.len() == 0 {
+                                ctx.ctv_emulator(h)
+                            } else {
+                                let mut g = txtmpl.guards.clone();
+                                g.push(ctx.ctv_emulator(h)?);
+                                Ok(Clause::And(g))
+                            }
+                        } else {
+                            // Don't return or use the extra guards here because we're within a
+                            // non-CTV context... if we did, then it would destabilize compilation
+                            // with effect arguments.
+                            if txtmpl.guards.len() != 0 {
+                                // todo: In theory, the *default* effect could pass up something here.
+                                Err(CompilationError::AdditionalGuardsNotAllowedHere)
+                            } else {
+                                Ok(Clause::Trivial)
+                            }
+                        }
                     })
                     // Forces any error to abort the whole thing
-                    .collect::<Result<Vec<_>, CompilationError>>()?;
+                    .collect::<Result<Vec<Clause>, CompilationError>>()?;
 
                 match (uses_ctv, nullability, txtmpl_clauses.len(), guards) {
                     // Mark this branch dead.
@@ -313,11 +332,11 @@ where
                     // If the guard is non-trivial, zip it to each hash
                     // TODO: Arc in miniscript to dedup memory?
                     //       This could be Clause::Shared(x) or something...
-                    (CTVRequired::Yes, _, _, guards) => Ok(txtmpl_clauses
-                        .iter()
-                        .map(|hash| Clause::And(vec![guards.clone(), hash.clone()]))
+                    (_, _, _, guards) => Ok(txtmpl_clauses
+                        .into_iter()
+                        // extra_guards will contain any CTV
+                        .map(|extra_guards| Clause::And(vec![guards.clone(), extra_guards]))
                         .collect()),
-                    (CTVRequired::No, _, _, guards) => Ok(vec![guards]),
                 }
             })
             .collect::<Result<Vec<Vec<Clause>>, CompilationError>>()?;

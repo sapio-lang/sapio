@@ -259,7 +259,8 @@ pub fn continuation(args: TokenStream, input: TokenStream) -> TokenStream {
     let context_arg = input.sig.inputs.index(1);
     let (cia, gba) = get_arrays(&args);
     let web_api_type = web_api(&args);
-    let continue_schema_for_name = format_ident!("continue_schema_for_{}", name);
+    let continue_schema_for_name =
+        format_ident!("CONTINUE_SCHEMA_FOR_{}", name.to_string().to_uppercase());
     let web_api_schema_s = web_api_schema(&args, &continue_schema_for_name, &arg_type);
     let coerce_args_f = coerce_args(&args);
     proc_macro::TokenStream::from(quote! {
