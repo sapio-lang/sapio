@@ -75,7 +75,7 @@ impl DLCContract {
             .collect::<Result<Vec<_>, _>>()?;
 
         let mut tmpls: Vec<Result<Template, CompilationError>> = vec![];
-        let new_ctx = ctx.derive_str(Arc::new("points".to_string()))?;
+        let mut new_ctx = ctx.derive_str(Arc::new("points".to_string()))?;
 
         let mut oracles: Vec<_> = self
             .oracles
@@ -88,26 +88,30 @@ impl DLCContract {
             })
             .collect();
         for i in 0..=self.points {
+            // increment each key
+            for v in oracles.iter_mut() {
+                v.1 =
+                    v.1.combine(&v.0)
+                        .map_err(|_| CompilationError::TerminateCompilation)?;
+            }
             let guard = Clause::Threshold(
                 self.oracles.0,
                 oracles
-                    .iter_mut()
-                    .map(|(oracle_r, mut oracle_k)| {
-                        oracle_k = oracle_k
-                            .combine(&oracle_r)
-                            .map_err(|_| CompilationError::TerminateCompilation)?;
-                        Ok(Clause::Key(XOnlyPublicKey::from(oracle_k)))
-                    })
+                    .iter()
+                    .map(|(_, oracle_k)| Ok(Clause::Key(XOnlyPublicKey::from(oracle_k.clone()))))
                     .collect::<Result<Vec<_>, CompilationError>>()?,
             );
-            let mut tmpl = ctx.derive_num(i)?.template().add_guard(guard);
+            let mut tmpl = new_ctx.derive_num(i)?.template().add_guard(guard);
             let payouts = (self.curve)(i, parties.len())?;
             if payouts.iter().sum::<f64>() != 1f64 || payouts.len() != parties.len() {
                 return Err(CompilationError::TerminateCompilation);
             }
             for (party, payout) in parties.iter().zip(payouts.iter()) {
-                tmpl =
-                    tmpl.add_output(Amount::from_btc(funds.as_btc() * (*payout))?, party, None)?;
+                tmpl = tmpl.add_output(
+                    Amount::from_sat((funds.as_sat() as f64 * (*payout)).trunc() as u64),
+                    party,
+                    None,
+                )?;
             }
             tmpls.push(Ok(tmpl.into()));
         }
@@ -197,5 +201,58 @@ impl From<StandardDLC> for DLCContract {
             parties: s.parties.into(),
             event: s.event,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sapio_base::effects::EffectPath;
+    use sapio_ctv_emulator_trait::CTVAvailable;
+    use std::convert::TryFrom;
+
+    struct CachedOracle {
+        key: X,
+        event: R,
+    }
+
+    impl DLCOracle for CachedOracle {
+        fn get_R_for_event(&self, event: &Event) -> R {
+            self.event.clone()
+        }
+        fn get_X_for_oracle(&self) -> X {
+            self.key.clone()
+        }
+    }
+
+    #[test]
+    fn create_dlc() {
+        let secp = Secp256k1::new();
+        let mut rng = rand::thread_rng();
+        let (_, pk1) = secp.generate_keypair(&mut rng);
+        let (_, pk2) = secp.generate_keypair(&mut rng);
+        let o = CachedOracle {
+            key: X(pk1),
+            event: R(pk2),
+        };
+        let (_, pk_a) = secp.generate_keypair(&mut rng);
+        let (_, pk_b) = secp.generate_keypair(&mut rng);
+        let d: DLCContract = StandardDLC {
+            oracles: (1, vec![Box::new(o)]),
+            points: 1000,
+            parties: [XOnlyPublicKey::from(pk_a), XOnlyPublicKey::from(pk_b)],
+            event: Event("whatever".into()),
+            curve: SplitFunctions::LinearPositive(0.1),
+        }
+        .into();
+        // Inner closure, the actual test
+        let ctx = Context::new(
+            bitcoin::network::constants::Network::Bitcoin,
+            Amount::from_sat(1000000000),
+            Arc::new(CTVAvailable),
+            EffectPath::try_from("dlc").unwrap(),
+            Arc::new(Default::default()),
+        );
+        let _r = d.compile(ctx).unwrap();
     }
 }
