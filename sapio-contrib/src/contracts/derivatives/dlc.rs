@@ -109,7 +109,6 @@ impl DLCContract {
                 tmpl =
                     tmpl.add_output(Amount::from_btc(funds.as_btc() * (*payout))?, party, None)?;
             }
-            let secp = Secp256k1::new();
             tmpls.push(Ok(tmpl.into()));
         }
         Ok(Box::new(tmpls.into_iter()))
