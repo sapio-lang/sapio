@@ -20,6 +20,7 @@ use ::miniscript::*;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::schnorr::TweakedPublicKey;
+use std::collections::BinaryHeap;
 
 use bitcoin::XOnlyPublicKey;
 use sapio_base::effects::EffectDB;
@@ -353,13 +354,11 @@ where
                 .filter_map(|(func, c)| guard_clauses.borrow_mut().get(self_ref, *func, c))
                 .collect()
         };
-
         let branches: Vec<Miniscript<XOnlyPublicKey, Tap>> = finish_fns
             .iter()
             .chain(clause_accumulator.iter().flatten())
             .map(|policy| policy.compile().map_err(Into::<CompilationError>::into))
             .collect::<Result<Vec<_>, _>>()?;
-
         // TODO: Pick a better branch that is guaranteed to work!
         let some_key = branches
             .iter()
@@ -377,7 +376,7 @@ where
                     .expect("constant"),
             );
         // Don't remove the key from the scripts in case it was bogus
-        let mut scripts: Vec<(Reverse<u64>, TapTree<XOnlyPublicKey>)> = branches
+        let mut scripts: BinaryHeap<(Reverse<u64>, TapTree<XOnlyPublicKey>)> = branches
             .iter()
             .map(|b| (Reverse(1), TapTree::Leaf(Arc::new(b.clone()))))
             .collect();
