@@ -285,7 +285,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     )?;
                 let secp = Secp256k1::new();
                 miniscript::psbt::finalize_mall(&mut psbt, &secp)?;
-                let tx = miniscript::psbt::extract(&psbt, &secp)?;
+                use miniscript::psbt::PsbtExt;
+                let tx = psbt.finalize(&secp).or_else(|e| {
+                    let errors: Vec<_> = e.1.iter().map(|e| format!("{:?}", e)).collect();
+                    let js = serde_json::json! {{ "psbt": e.0,
+                    "error": "could not fully finalize psbt",
+                    "errors": errors}};
+                    let s = serde_json::to_string_pretty(&js)?;
+                    Err(Box::<dyn std::error::Error>::from(s))
+                })?;
                 let hex = bitcoin::consensus::encode::serialize_hex(&tx);
                 println!("{}", hex);
             }
