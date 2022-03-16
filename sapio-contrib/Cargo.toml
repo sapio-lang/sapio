@@ -42,3 +42,6 @@ features = ['compiler', 'use-serde', 'use-schemars', 'serde']
 [dependencies.sapio-ctv-emulator-trait]
 path = "../emulator-trait"
 version = "0.2.0"
+
+[dev-dependencies]
+rand="^0.6"
