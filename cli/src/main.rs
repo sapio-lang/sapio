@@ -261,12 +261,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let oracle = HDOracleEmulator::new(root, sync_mode);
                 let interface = args.value_of("interface").unwrap();
                 let server = oracle.bind(interface);
-                let status = serde_json::json!{{
+                let status = serde_json::json! {{
                     "interface": interface,
                     "pk": pk_root,
                     "sync": sync_mode,
                 }};
-                println!("{}",serde_json::to_string_pretty(&status).unwrap());
+                println!("{}", serde_json::to_string_pretty(&status).unwrap());
                 server.await?;
             }
             _ => unreachable!(),
