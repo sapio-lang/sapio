@@ -257,9 +257,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 let root = ExtendedPrivKey::new_master(config.network, &contents[..]).unwrap();
                 let pk_root = ExtendedPubKey::from_priv(&Secp256k1::new(), &root);
-                let oracle = HDOracleEmulator::new(root, args.is_present("sync"));
-                let server = oracle.bind(args.value_of("interface").unwrap());
-                println!("Running Oracle With Key: {}", pk_root);
+                let sync_mode = args.is_present("sync");
+                let oracle = HDOracleEmulator::new(root, sync_mode);
+                let interface = args.value_of("interface").unwrap();
+                let server = oracle.bind(interface);
+                let status = serde_json::json!{{
+                    "interface": interface,
+                    "pk": pk_root,
+                    "sync": sync_mode,
+                }};
+                println!("{}",serde_json::to_string_pretty(&status).unwrap());
                 server.await?;
             }
             _ => unreachable!(),
