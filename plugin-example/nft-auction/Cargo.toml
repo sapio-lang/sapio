@@ -1,5 +1,5 @@
 [package]
-name = "sapio-wasm-plugin-example"
+name = "sapio-wasm-nft-auction"
 version = "0.1.0"
 license = "MPL-2.0"
 authors = ["Jeremy Rubin <j@rubin.io>"]
@@ -17,15 +17,16 @@ serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
 
-[dependencies.schemars]
-version = "0.8.0"
-features = ['impl_json_schema']
 [dependencies.wasm-bindgen]
 version = "0.2.69"
 
+
+[dependencies.schemars]
+version = "0.8.0"
+features = ['impl_json_schema']
 [dependencies.bitcoin]
 package = "sapio-bitcoin"
-version = "0.28.0-rc.2"
+version = "^0.26.0"
 features = ['use-serde']
 [dependencies.sapio]
 path = "../../sapio"
@@ -37,6 +38,9 @@ version = "0.1.0"
 
 [dependencies.sapio-base]
 path = "../../sapio-base"
+version = "0.2.0"
+[dependencies.sapio-contrib]
+path = "../../sapio-contrib"
 version = "0.2.0"
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -50,7 +54,7 @@ version = "0.2.0"
 
 [dependencies.miniscript]
 package = "sapio-miniscript"
-version = "^7.0.0-0"
+version = "^5.1.0"
 features = ['compiler', 'use-serde', 'use-schemars', 'serde']
 optional = true
 
@@ -62,3 +66,7 @@ path = "../../plugins"
 version = "0.2.0"
 features = ["client"]
 
+
+[dependencies.sapio-wasm-nft-trait]
+path = "../nft-trait"
+version = "0.1.0"

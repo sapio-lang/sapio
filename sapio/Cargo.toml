@@ -14,7 +14,7 @@ description = "A programming framework for bitcoin smart contracts."
 [dependencies.miniscript]
 package = "sapio-miniscript"
 version = "^7.0.0-0"
-features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
+features = ['compiler', 'use-serde', 'use-schemars', 'serde']
 
 [features]
 # used to enable some niceties if compiling on a nightly compiler
@@ -38,7 +38,7 @@ features = ['impl_json_schema', 'derive']
 [dependencies.bitcoin]
 package = "sapio-bitcoin"
 version = "0.28.0-rc.2"
-features = ['use-serde', 'rand']
+features = ['use-serde']
 
 
 [dependencies.sapio-base]

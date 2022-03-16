@@ -22,7 +22,7 @@ default-features = false
 [dependencies.bitcoin]
 package = "sapio-bitcoin"
 version = "0.28.0-rc.2"
-features = ['use-serde', 'rand']
+features = ['use-serde']
 
 [dependencies.sapio-base]
 path = "../sapio-base"
