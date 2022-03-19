@@ -32,7 +32,7 @@ features = ['use-serde', 'rand', 'base64']
 
 [dependencies.miniscript]
 package = "sapio-miniscript"
-version = "^7.0.0-7"
+version = "^7.0.0-9"
 features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 
 [dependencies.sapio]

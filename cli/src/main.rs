@@ -19,6 +19,7 @@ use config::*;
 use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::CTVAvailable;
 use emulator_connect::CTVEmulator;
+use miniscript::psbt::PsbtExt;
 use sapio::contract::context::MapEffectDB;
 
 use sapio_base::serialization_helpers::SArc;
@@ -273,7 +274,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         Some(("psbt", matches)) => match matches.subcommand() {
             Some(("finalize", args)) => {
-                let mut psbt: PartiallySignedTransaction =
+                let psbt: PartiallySignedTransaction =
                     PartiallySignedTransaction::consensus_decode(
                         &base64::decode(&if let Some(psbt) = args.value_of("psbt") {
                             psbt.into()
@@ -284,18 +285,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         })?[..],
                     )?;
                 let secp = Secp256k1::new();
-                miniscript::psbt::finalize_mall(&mut psbt, &secp)?;
-                use miniscript::psbt::PsbtExt;
-                let tx = psbt.finalize(&secp).or_else(|e| {
-                    let errors: Vec<_> = e.1.iter().map(|e| format!("{:?}", e)).collect();
-                    let js = serde_json::json! {{ "psbt": e.0,
-                    "error": "could not fully finalize psbt",
-                    "errors": errors}};
-                    let s = serde_json::to_string_pretty(&js)?;
-                    Err(Box::<dyn std::error::Error>::from(s))
-                })?;
-                let hex = bitcoin::consensus::encode::serialize_hex(&tx);
-                println!("{}", hex);
+                let js = psbt
+                    .finalize(&secp)
+                    .map(|tx| {
+                        let hex = bitcoin::consensus::encode::serialize_hex(&tx.extract_tx());
+                        serde_json::json!({
+                            "completed": true,
+                            "hex": hex
+                        })
+                    })
+                    .unwrap_or_else(|(psbt, errors)| {
+                        let errors: Vec<_> = errors.iter().map(|e| format!("{:?}", e)).collect();
+                        let encoded_psbt = base64::encode(serialize(&psbt));
+                        serde_json::json!(
+                            {
+                                 "completed": false,
+                                 "psbt": encoded_psbt,
+                                 "error": "Could not fully finalize psbt",
+                                 "errors": errors
+                            }
+                        )
+                    });
+                println!("{}", serde_json::to_string_pretty(&js)?);
             }
             _ => unreachable!(),
         },
