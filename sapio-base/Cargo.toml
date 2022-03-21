@@ -19,10 +19,10 @@ serde_derive = "1.0"
 
 [dependencies.miniscript]
 package = "sapio-miniscript"
-version = "^7.0.0-4"
-features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
+version = "^7.0.0-10"
+features = ['compiler', 'use-serde', 'use-schemars', 'serde']
 
 [dependencies.bitcoin]
 package = "sapio-bitcoin"
 version = "0.28.0-rc.2"
-features = ['use-serde', 'rand']
+features = ['use-serde']

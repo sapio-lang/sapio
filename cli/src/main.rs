@@ -19,6 +19,7 @@ use config::*;
 use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::CTVAvailable;
 use emulator_connect::CTVEmulator;
+use miniscript::psbt::PsbtExt;
 use sapio::contract::context::MapEffectDB;
 
 use sapio_base::serialization_helpers::SArc;
@@ -257,16 +258,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 let root = ExtendedPrivKey::new_master(config.network, &contents[..]).unwrap();
                 let pk_root = ExtendedPubKey::from_priv(&Secp256k1::new(), &root);
-                let oracle = HDOracleEmulator::new(root, args.is_present("sync"));
-                let server = oracle.bind(args.value_of("interface").unwrap());
-                println!("Running Oracle With Key: {}", pk_root);
+                let sync_mode = args.is_present("sync");
+                let oracle = HDOracleEmulator::new(root, sync_mode);
+                let interface = args.value_of("interface").unwrap();
+                let server = oracle.bind(interface);
+                let status = serde_json::json! {{
+                    "interface": interface,
+                    "pk": pk_root,
+                    "sync": sync_mode,
+                }};
+                println!("{}", serde_json::to_string_pretty(&status).unwrap());
                 server.await?;
             }
             _ => unreachable!(),
         },
         Some(("psbt", matches)) => match matches.subcommand() {
             Some(("finalize", args)) => {
-                let mut psbt: PartiallySignedTransaction =
+                let psbt: PartiallySignedTransaction =
                     PartiallySignedTransaction::consensus_decode(
                         &base64::decode(&if let Some(psbt) = args.value_of("psbt") {
                             psbt.into()
@@ -277,10 +285,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         })?[..],
                     )?;
                 let secp = Secp256k1::new();
-                miniscript::psbt::finalize_mall(&mut psbt, &secp)?;
-                let tx = miniscript::psbt::extract(&psbt, &secp)?;
-                let hex = bitcoin::consensus::encode::serialize_hex(&tx);
-                println!("{}", hex);
+                let js = psbt
+                    .finalize(&secp)
+                    .map(|tx| {
+                        let hex = bitcoin::consensus::encode::serialize_hex(&tx.extract_tx());
+                        serde_json::json!({
+                            "completed": true,
+                            "hex": hex
+                        })
+                    })
+                    .unwrap_or_else(|(psbt, errors)| {
+                        let errors: Vec<_> = errors.iter().map(|e| format!("{:?}", e)).collect();
+                        let encoded_psbt = base64::encode(serialize(&psbt));
+                        serde_json::json!(
+                            {
+                                 "completed": false,
+                                 "psbt": encoded_psbt,
+                                 "error": "Could not fully finalize psbt",
+                                 "errors": errors
+                            }
+                        )
+                    });
+                println!("{}", serde_json::to_string_pretty(&js)?);
             }
             _ => unreachable!(),
         },

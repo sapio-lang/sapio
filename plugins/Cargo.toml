@@ -46,7 +46,7 @@ features = ["full"]
 [dependencies.bitcoin]
 package = "sapio-bitcoin"
 version = "0.28.0-rc.2"
-features = ['use-serde', 'rand']
+features = ['use-serde']
 [dependencies.sapio]
 path = "../sapio"
 version = "0.2.0"
@@ -66,7 +66,7 @@ version = "0.2.0"
 [dependencies.miniscript]
 package = "sapio-miniscript"
 version = "^7.0.0-0"
-features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
+features = ['compiler', 'use-serde', 'use-schemars', 'serde']
 optional = true
 
 [package.metadata.wasm-pack.profile.release]
