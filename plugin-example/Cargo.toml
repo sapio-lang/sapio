@@ -9,4 +9,5 @@ members = ["treepay"
           , "helloworld"
           , "op_return_chain"
           , "hanukkiah"
-          , "payment_pool"]
+          , "payment_pool"
+          , "jamesob-vault"]
