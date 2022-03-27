@@ -165,6 +165,15 @@ impl Builder {
         self.metadata.color = Some(color);
         self
     }
+    /// set an extra metadata value
+    pub fn set_meta<I, J>(mut self, i: I, j: J) -> Result<Self, CompilationError>
+    where
+        I: Into<String>,
+        J: Into<serde_json::Value>,
+    {
+        self.metadata = self.metadata.set(i, j)?;
+        Ok(self)
+    }
 
     /// adds an additional precondition on this template
     /// which ends up being computed as:

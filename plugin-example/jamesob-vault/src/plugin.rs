@@ -121,7 +121,17 @@ impl<S: State> Vault<S> {
                 .set_label("spend via hot".into())
                 .set_color("red".into())
                 .set_sequence(-1, self.timeout.into())?
-                .add_output(amount.into(), &Compiled::from_address(address, None), None)?
+                .add_output(
+                    amount.into(),
+                    &Compiled::from_address(address, None),
+                    Some(
+                        [(
+                            "purpose",
+                            "Funds transfered out of vault to this address.".into(),
+                        )]
+                        .into(),
+                    ),
+                )?
                 .into()
         } else {
             empty()
@@ -157,7 +167,17 @@ impl<S: State> Vault<S> {
             ctx.template()
                 .set_label("spend via cold direct".into())
                 .set_color("cyan".into())
-                .add_output(amount.into(), &Compiled::from_address(address, None), None)?
+                .add_output(
+                    amount.into(),
+                    &Compiled::from_address(address, None),
+                    Some(
+                        [(
+                            "purpose",
+                            "Funds transfered out of vault to this address.".into(),
+                        )]
+                        .into(),
+                    ),
+                )?
                 .into()
         } else {
             empty()
@@ -172,13 +192,23 @@ impl<S: State> Vault<S> {
             .set_color("darkblue".into())
             .spend_amount(self.default_fee.into())?;
         if let Some(Output { address, amount }) = self.cpfp.clone() {
-            tmpl = tmpl.add_output(amount.into(), &Compiled::from_address(address, None), None)?;
+            tmpl = tmpl.add_output(
+                amount.into(),
+                &Compiled::from_address(address, None),
+                Some([("purpose", "CPFP Anchor Output".into())].into()),
+            )?;
         }
         let funds = tmpl.ctx().funds();
         tmpl = tmpl.add_output(
             funds,
             &Compiled::from_address(self.backup_addr.clone(), None),
-            None,
+            Some(
+                [(
+                    "purpose",
+                    "Funds sent to higher security backup address.".into(),
+                )]
+                .into(),
+            ),
         )?;
         tmpl.into()
     }
@@ -196,7 +226,11 @@ impl<S: State> Vault<S> {
             .set_color("pink".into())
             .spend_amount(self.default_fee.into())?;
         if let Some(Output { address, amount }) = self.cpfp.clone() {
-            tmpl = tmpl.add_output(amount.into(), &Compiled::from_address(address, None), None)?;
+            tmpl = tmpl.add_output(
+                amount.into(),
+                &Compiled::from_address(address, None),
+                Some([("purpose", "CPFP Anchor Output".into())].into()),
+            )?;
         }
         let funds = tmpl.ctx().funds();
         tmpl = tmpl.add_output(
@@ -210,7 +244,13 @@ impl<S: State> Vault<S> {
                 timeout: self.timeout,
                 pd: Default::default(),
             },
-            None,
+            Some(
+                [(
+                    "purpose",
+                    "Funds being proposed to be withdrawn into hot wallet.".into(),
+                )]
+                .into(),
+            ),
         )?;
         tmpl.into()
     }

@@ -5,6 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! utilities for building Bitcoin transaction templates up programmatically
+use crate::contract::error::CompilationError;
 use bitcoin::hashes::sha256;
 use bitcoin::util::amount::Amount;
 use sapio_base::Clause;
@@ -45,6 +46,45 @@ impl TemplateMetadata {
             label: None,
             extra: HashMap::new(),
         }
+    }
+    /// set an extra metadata value
+    pub fn set<I, J>(mut self, i: I, j: J) -> Result<Self, CompilationError>
+    where
+        I: Into<String>,
+        J: Into<serde_json::Value>,
+    {
+        let s: String = i.into();
+        match s.as_str() {
+            "color" | "label" => Err(CompilationError::TerminateCompilation),
+            _ => {
+                if self.extra.insert(s, j.into()).is_some() {
+                    return Err(CompilationError::TerminateCompilation);
+                }
+                Ok(self)
+            }
+        }
+    }
+    /// set a color
+    pub fn set_color<I>(mut self, i: I) -> Result<Self, CompilationError>
+    where
+        I: Into<String>,
+    {
+        if self.color.is_some() {
+            return Err(CompilationError::TerminateCompilation);
+        }
+        self.color = Some(i.into());
+        Ok(self)
+    }
+    /// set a label
+    pub fn set_label<I>(mut self, i: I) -> Result<Self, CompilationError>
+    where
+        I: Into<String>,
+    {
+        if self.label.is_some() {
+            return Err(CompilationError::TerminateCompilation);
+        }
+        self.label = Some(i.into());
+        Ok(self)
     }
 }
 

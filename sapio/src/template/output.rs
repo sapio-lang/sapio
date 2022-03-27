@@ -27,6 +27,16 @@ impl Default for OutputMeta {
     }
 }
 
+impl<const N: usize> From<[(&str, serde_json::Value); N]> for OutputMeta {
+    fn from(v: [(&str, serde_json::Value); N]) -> OutputMeta {
+        OutputMeta {
+            extra: IntoIterator::into_iter(v)
+                .map(|(a, b)| (a.into(), b))
+                .collect(),
+        }
+    }
+}
+
 /// An Output is not a literal Bitcoin Output, but contains data needed to construct one, and
 /// metadata for linking & ABI building
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
