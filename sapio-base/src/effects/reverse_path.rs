@@ -78,6 +78,15 @@ impl<T: Clone, Y> From<ReversePath<T, Y>> for Vec<T> {
         v
     }
 }
+impl<T: Clone, Y> From<T> for ReversePath<T, Y> {
+    fn from(this: T) -> Self {
+        ReversePath {
+            past: None,
+            this,
+            _pd: Default::default(),
+        }
+    }
+}
 /// Helper for making a ReversePath.
 pub struct MkReversePath<T, Y>(Option<Arc<ReversePath<T, Y>>>);
 impl<T, Y> MkReversePath<T, Y> {

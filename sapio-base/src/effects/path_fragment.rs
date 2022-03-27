@@ -18,6 +18,7 @@ use std::sync::Arc;
 #[serde(into = "String")]
 #[serde(try_from = "&str")]
 pub enum PathFragment {
+    Root,
     Cloned,
     ThenFn,
     FinishOrFn,
@@ -40,6 +41,7 @@ impl From<PathFragment> for String {
 impl From<&PathFragment> for String {
     fn from(a: &PathFragment) -> Self {
         match a {
+            PathFragment::Root => "@root".into(),
             PathFragment::Cloned => "@cloned".into(),
             PathFragment::ThenFn => "@then_fn".into(),
             PathFragment::FinishOrFn => "@finish_or_fn".into(),
