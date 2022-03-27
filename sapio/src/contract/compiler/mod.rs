@@ -76,7 +76,7 @@ impl Compilable for bitcoin::XOnlyPublicKey {
 }
 
 #[derive(PartialEq, Eq)]
-enum CTVRequired {
+enum UseCTV {
     Yes,
     No,
 }
@@ -176,7 +176,7 @@ where
                         );
                         Ok((
                             nullability,
-                            CTVRequired::Yes,
+                            UseCTV::Yes,
                             guards,
                             if errors.is_empty() {
                                 (func.func)(self_ref, ntx_ctx)
@@ -193,7 +193,7 @@ where
         // the default argument.
         let (continue_apis, finish_or_fns): (
             HashMap<SArc<EffectPath>, ContinuationPoint>,
-            Vec<(Nullable, CTVRequired, Clause, TxTmplIt)>,
+            Vec<(Nullable, UseCTV, Clause, TxTmplIt)>,
         ) = {
             let mut finish_or_fns_ctx = ctx.derive(PathFragment::FinishOrFn)?;
             let mut conditional_compile_ctx = finish_or_fns_ctx.derive(PathFragment::CondCompIf)?;
@@ -242,7 +242,7 @@ where
                             ),
                             (
                                 Nullable::Yes,
-                                CTVRequired::No,
+                                UseCTV::No,
                                 guard,
                                 if errors.is_empty() {
                                     compute_all_effects(top_effect_ctx, self_ref, func.as_ref())
@@ -256,7 +256,7 @@ where
                 .collect::<Result<
                     Vec<(
                         (SArc<EffectPath>, ContinuationPoint),
-                        (Nullable, CTVRequired, Clause, TxTmplIt),
+                        (Nullable, UseCTV, Clause, TxTmplIt),
                     )>,
                     CompilationError,
                 >>()?
@@ -281,23 +281,19 @@ where
                     .map(|r_txtmpl| {
                         let txtmpl = r_txtmpl?;
                         let h = txtmpl.hash();
-                        let txtmpl = match uses_ctv {
-                            CTVRequired::Yes => &mut ctv_to_tx,
-                            CTVRequired::No => &mut suggested_txs,
-                        }
-                        .entry(h)
-                        .or_insert(txtmpl);
                         amount_range.update_range(txtmpl.max);
                         // Add the addition guards to these clauses
-                        if uses_ctv == CTVRequired::Yes {
+                        if uses_ctv == UseCTV::Yes {
+                            let txtmpl = ctv_to_tx.entry(h).or_insert(txtmpl);
                             if txtmpl.guards.len() == 0 {
-                                ctx.ctv_emulator(h)
+                                ctx.ctv_emulator(h).map(Some)
                             } else {
                                 let mut g = txtmpl.guards.clone();
                                 g.push(ctx.ctv_emulator(h)?);
-                                Ok(Clause::And(g))
+                                Ok(Some(Clause::And(g)))
                             }
                         } else {
+                            let txtmpl = suggested_txs.entry(h).or_insert(txtmpl);
                             // Don't return or use the extra guards here because we're within a
                             // non-CTV context... if we did, then it would destabilize compilation
                             // with effect arguments.
@@ -305,31 +301,32 @@ where
                                 // todo: In theory, the *default* effect could pass up something here.
                                 Err(CompilationError::AdditionalGuardsNotAllowedHere)
                             } else {
-                                Ok(Clause::Trivial)
+                                // Don't add anything...
+                                Ok(None)
                             }
                         }
                     })
+                    // Drop None values
+                    .filter_map(|s| s.transpose())
                     // Forces any error to abort the whole thing
                     .collect::<Result<Vec<Clause>, CompilationError>>()?;
 
                 match (uses_ctv, nullability, txtmpl_clauses.len(), guards) {
                     // Mark this branch dead.
                     // Nullable branch without anything
-                    (CTVRequired::Yes, Nullable::Yes, 0, _) => Ok(vec![]),
+                    (UseCTV::Yes, Nullable::Yes, 0, _) => Ok(vec![]),
                     // Error if we expect CTV, returned some templates, but our guard
                     // was unsatisfiable, irrespective of nullability. This is because
                     // the behavior should be captured through a compile_if if it is
                     // intended.
-                    (CTVRequired::Yes, _, n, Clause::Unsatisfiable) if n > 0 => {
+                    (UseCTV::Yes, _, n, Clause::Unsatisfiable) if n > 0 => {
                         // TODO: Turn into a warning that the intended behavior should be to compile_if
                         Err(CompilationError::MissingTemplates)
                     }
                     // Error if 0 templates return and we don't want to be nullable
-                    (CTVRequired::Yes, Nullable::No, 0, _) => {
-                        Err(CompilationError::MissingTemplates)
-                    }
+                    (UseCTV::Yes, Nullable::No, 0, _) => Err(CompilationError::MissingTemplates),
                     // If the guard is trivial, return the hashes standalone
-                    (CTVRequired::Yes, _, _, Clause::Trivial) => Ok(txtmpl_clauses),
+                    (UseCTV::Yes, _, _, Clause::Trivial) => Ok(txtmpl_clauses),
                     // If the guard is non-trivial, zip it to each hash
                     // TODO: Arc in miniscript to dedup memory?
                     //       This could be Clause::Shared(x) or something...
