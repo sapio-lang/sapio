@@ -107,9 +107,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
       (about: "Create or Manage a Contract")
       (@subcommand bind =>
        (about: "Bind Contract to a specific UTXO")
-       (@arg mock: --mock "Create a fake output for this txn.")
-       (@arg base64_psbt: --base64_psbt "Create a fake output for this txn.")
-       (@arg outpoint: --outpoint +takes_value "Use this specific outpoint")
+       (@arg base64_psbt: --base64_psbt "Output as a base64 PSBT")
+       (@group from  =>
+            (@arg outpoint: --outpoint +takes_value "Use this specific outpoint")
+            (@arg txn: --txn +takes_value "Use this specific transaction ")
+            (@arg mock: --mock "Create a fake output for this txn.")
+       )
        (@arg json: "JSON to Bind")
       )
       (@subcommand create =>
@@ -342,6 +345,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .value_of("outpoint")
                     .map(serde_json::from_str)
                     .transpose()?;
+                let use_txn = args
+                    .value_of("txn")
+                    .map(|buf| base64::decode(buf.as_bytes()))
+                    .transpose()?
+                    .map(|b| PartiallySignedTransaction::consensus_decode(&b[..]))
+                    .transpose()?;
                 let client = rpc::Client::new(
                     config.active.api_node.url.clone(),
                     config.active.api_node.auth.clone(),
@@ -376,19 +385,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let mut spends = HashMap::new();
                     if let ExtendedAddress::Address(ref a) = j.address {
                         spends.insert(format!("{}", a), j.amount_range.max());
+
+                        if let Some(psbt) = use_txn {
+                            let script = a.script_pubkey();
+                            if let Some(pos) = psbt
+                                .unsigned_tx
+                                .output
+                                .iter()
+                                .enumerate()
+                                .find(|(_, o)| o.script_pubkey == script)
+                                .map(|(i, _)| i)
+                            {
+                                (psbt.extract_tx(), pos as u32)
+                            } else {
+                                return Err(format!("No Output found {:?} {:?}", psbt.unsigned_tx, a).into());
+                            }
+                        } else {
+                            let res = client
+                                .wallet_create_funded_psbt(&[], &spends, None, None, None)
+                                .await?;
+                            let psbt = PartiallySignedTransaction::consensus_decode(
+                                &base64::decode(&res.psbt)?[..],
+                            )?;
+                            let tx = psbt.extract_tx();
+                            // if change pos is -1, then +1%len == 0. if it is 0, then 1. if 1, then 2 % len == 0.
+                            let vout = ((res.change_position + 1) as usize) % tx.output.len();
+                            (tx, vout as u32)
+                        }
                     } else {
-                        Err("Must have a valid address")?;
+                        return Err("Must have a valid address".into());
                     }
-                    let res = client
-                        .wallet_create_funded_psbt(&[], &spends, None, None, None)
-                        .await?;
-                    let psbt = PartiallySignedTransaction::consensus_decode(
-                        &base64::decode(&res.psbt)?[..],
-                    )?;
-                    let tx = psbt.extract_tx();
-                    // if change pos is -1, then +1%len == 0. If it is 0, then 1. If 1, then 2 % len == 0.
-                    let vout = ((res.change_position + 1) as usize) % tx.output.len();
-                    (tx, vout as u32)
                 };
                 let logger = Rc::new(TxIndexLogger::new());
                 (*logger).add_tx(Arc::new(tx.clone()))?;
