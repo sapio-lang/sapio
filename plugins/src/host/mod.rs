@@ -47,7 +47,7 @@ pub struct HostEnvironmentInner {
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_drop_allocation"))]
     pub forget: LazyInit<NativeFunc<i32, ()>>,
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_create"))]
-    pub create: LazyInit<NativeFunc<i32, i32>>,
+    pub create: LazyInit<NativeFunc<(i32, i32), i32>>,
     #[wasmer(export(name = "sapio_v1_wasm_plugin_entry_point"))]
     pub init: LazyInit<NativeFunc<(), ()>>,
 }
@@ -62,6 +62,7 @@ mod exports {
     //! the exports that the client will be able to use.
     //! They must be manually bound when instantiating the client.
     use super::*;
+    use sapio_base::effects::EffectPath;
     /// lookup a plugin key from a human reable name.
     /// if ok == 1, result is valid.
     /// out is written and must be 32 bytes of writable memory.
@@ -114,14 +115,30 @@ mod exports {
     /// plugin identified by key.
     pub fn sapio_v1_wasm_plugin_create_contract(
         env: &HostEnvironment,
+        path: i32,
+        path_len: i32,
         key: i32,
         json: i32,
         json_len: i32,
     ) -> i32 {
-        wasm_plugin_action(env, key, Action::Create { json, json_len })
+        wasm_plugin_action(
+            env,
+            key,
+            Action::Create {
+                path,
+                path_len,
+                json,
+                json_len,
+            },
+        )
     }
     enum Action {
-        Create { json: i32, json_len: i32 },
+        Create {
+            path: i32,
+            path_len: i32,
+            json: i32,
+            json_len: i32,
+        },
         GetAPI,
     }
 
@@ -141,10 +158,17 @@ mod exports {
             buf
         })
         .to_string();
-        let v = match action {
+        let action_to_take = match action {
             Action::GetAPI => None,
-            Action::Create { json, json_len, .. } => {
-                let mut v = vec![0u8; json_len as usize];
+            Action::Create {
+                path,
+                path_len,
+                json,
+                json_len,
+                ..
+            } => {
+                // use this buffer twice, so make it the max size
+                let mut v = vec![0u8; std::cmp::max(json_len, path_len) as usize];
                 for (src, dst) in env.memory_ref().unwrap().view()
                     [json as usize..(json + json_len) as usize]
                     .iter()
@@ -153,9 +177,27 @@ mod exports {
                 {
                     *dst = src;
                 }
-                Some(serde_json::from_str(
-                    &String::from_utf8_lossy(&v).to_owned().to_string(),
-                ))
+                let create_args = serde_json::from_str(
+                    &String::from_utf8_lossy(&v[..json_len as usize])
+                        .to_owned()
+                        .to_string(),
+                );
+
+                for (src, dst) in env.memory_ref().unwrap().view()
+                    [path as usize..(path + path_len) as usize]
+                    .iter()
+                    .map(Cell::get)
+                    .zip(v.iter_mut())
+                {
+                    *dst = src;
+                }
+                let effectpath: Result<EffectPath, _> = serde_json::from_str(
+                    &String::from_utf8_lossy(&v[..path_len as usize])
+                        .to_owned()
+                        .to_string(),
+                );
+
+                Some((create_args, effectpath))
             }
         };
         let emulator = env.emulator.clone();
@@ -181,9 +223,9 @@ mod exports {
                         .map(|api| tx_json.send(Ok(api)));
                 }
                 Action::Create { .. } => {
-                    if let Some(Ok(create_args)) = v {
+                    if let Some((Ok(create_args), Ok(path))) = action_to_take {
                         plugin
-                            .and_then(|sph| sph.create(&create_args).ok())
+                            .and_then(|sph| sph.create(&path, &create_args).ok())
                             .map(|comp| tx_json.send(serde_json::to_value(comp)));
                     }
                 }

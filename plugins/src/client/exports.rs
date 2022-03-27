@@ -13,7 +13,10 @@ fn sapio_v1_wasm_plugin_client_get_create_arguments_nullptr() -> *mut c_char {
 }
 
 /// a stub to make the compiler happy
-unsafe fn sapio_v1_wasm_plugin_client_create_nullptr(_c: *mut c_char) -> *mut c_char {
+unsafe fn sapio_v1_wasm_plugin_client_create_nullptr(
+    _p: *mut c_char,
+    _c: *mut c_char,
+) -> *mut c_char {
     panic!("No Function Registered");
 }
 
@@ -25,6 +28,7 @@ pub(crate) static mut SAPIO_V1_WASM_PLUGIN_CLIENT_GET_CREATE_ARGUMENTS_PTR: fn()
 /// a static mut that gets set when a Plugin::register method gets called
 /// in order to enable binding when the type is registered
 pub(crate) static mut SAPIO_V1_WASM_PLUGIN_CLIENT_CREATE_PTR: unsafe fn(
+    *mut c_char,
     *mut c_char,
 ) -> *mut c_char = sapio_v1_wasm_plugin_client_create_nullptr;
 
@@ -38,8 +42,11 @@ extern "C" fn sapio_v1_wasm_plugin_client_get_create_arguments() -> *mut c_char 
 /// create an instance of the plugin's contract from the provided json args
 /// host must drop the returned pointer.
 #[no_mangle]
-unsafe extern "C" fn sapio_v1_wasm_plugin_client_create(c: *mut c_char) -> *mut c_char {
-    SAPIO_V1_WASM_PLUGIN_CLIENT_CREATE_PTR(c)
+unsafe extern "C" fn sapio_v1_wasm_plugin_client_create(
+    p: *mut c_char,
+    c: *mut c_char,
+) -> *mut c_char {
+    SAPIO_V1_WASM_PLUGIN_CLIENT_CREATE_PTR(p, c)
 }
 
 /// Drops a pointer that was created in the WASM

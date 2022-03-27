@@ -21,10 +21,6 @@ use emulator_connect::CTVAvailable;
 use emulator_connect::CTVEmulator;
 use miniscript::psbt::PsbtExt;
 use sapio::contract::context::MapEffectDB;
-
-use sapio_base::serialization_helpers::SArc;
-use std::convert::TryInto;
-
 use sapio::contract::object::LinkedPSBT;
 use sapio::contract::object::SapioStudioObject;
 use sapio::contract::Compiled;
@@ -32,12 +28,15 @@ use sapio::contract::Context;
 use sapio::template::output::OutputMeta;
 use sapio::template::TemplateMetadata;
 use sapio::util::extended_address::ExtendedAddress;
+use sapio_base::effects::PathFragment;
+use sapio_base::serialization_helpers::SArc;
 use sapio_base::txindex::TxIndex;
 use sapio_base::txindex::TxIndexLogger;
 use sapio_base::util::CTVHash;
 use sapio_wasm_plugin::host::{PluginHandle, WasmPluginHandle};
 use sapio_wasm_plugin::CreateArgs;
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::rc::Rc;
 use std::sync::Arc;
 #[deny(missing_docs)]
@@ -398,7 +397,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             {
                                 (psbt.extract_tx(), pos as u32)
                             } else {
-                                return Err(format!("No Output found {:?} {:?}", psbt.unsigned_tx, a).into());
+                                return Err(format!(
+                                    "No Output found {:?} {:?}",
+                                    psbt.unsigned_tx, a
+                                )
+                                .into());
                             }
                         } else {
                             let res = client
@@ -484,7 +487,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 let create_args: CreateArgs<serde_json::Value> = serde_json::from_value(params)?;
 
-                let v = sph.create(&create_args)?;
+                let v = sph.create(&PathFragment::Root.into(), &create_args)?;
                 println!("{}", serde_json::to_string(&v)?);
             }
             Some(("api", args)) => {

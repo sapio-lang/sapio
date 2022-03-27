@@ -5,12 +5,17 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use super::*;
+use sapio_base::effects::EffectPath;
 use std::error::Error;
 /// Generic plugin handle interface.
 ///
 /// TODO: trait objects for being able to e.g. run plugins remotely.
 pub trait PluginHandle {
-    fn create(&self, c: &CreateArgs<serde_json::Value>) -> Result<Compiled, Box<dyn Error>>;
+    fn create(
+        &self,
+        path: &EffectPath,
+        c: &CreateArgs<serde_json::Value>,
+    ) -> Result<Compiled, Box<dyn Error>>;
     fn get_api(&self) -> Result<serde_json::value::Value, Box<dyn Error>>;
     fn get_name(&self) -> Result<String, Box<dyn Error>>;
     fn get_logo(&self) -> Result<String, Box<dyn Error>>;

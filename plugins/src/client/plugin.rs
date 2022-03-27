@@ -6,7 +6,9 @@
 
 //! binding for making a type into a plugin
 use super::*;
+use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
+use sapio_base::serialization_helpers::SArc;
 
 use std::convert::TryFrom;
 /// The `Plugin` trait is used to provide bindings for a WASM Plugin.
@@ -23,16 +25,17 @@ where
     }
 
     /// creates an instance of the plugin from a json pointer and outputs a result pointer
-    unsafe fn create(c: *mut c_char) -> *mut c_char {
-        let res = Self::create_result_err(c);
+    unsafe fn create(p: *mut c_char, c: *mut c_char) -> *mut c_char {
+        let res = Self::create_result_err(p, c);
         encode_json(&res)
     }
 
-    unsafe fn create_result_err(c: *mut c_char) -> Result<String, String> {
-        Self::create_result(c).map_err(|e| e.to_string())
+    unsafe fn create_result_err(p: *mut c_char, c: *mut c_char) -> Result<String, String> {
+        Self::create_result(p, c).map_err(|e| e.to_string())
     }
-    unsafe fn create_result(c: *mut c_char) -> Result<String, Box<dyn Error>> {
+    unsafe fn create_result(p: *mut c_char, c: *mut c_char) -> Result<String, Box<dyn Error>> {
         let s = CString::from_raw(c);
+        let path = CString::from_raw(p);
         let CreateArgs::<Self> {
             arguments,
             context:
@@ -42,15 +45,24 @@ where
                     effects,
                 },
         } = serde_json::from_slice(s.to_bytes())?;
-        // TODO: Get The wasm ID here?
         // TODO: In theory, these trampoline bounds are robust/serialization safe...
         // But the API needs stiching to the parent in a sane way...
+        let caller = lookup_this_module_name()
+            .map(|s| bitcoin::hashes::hex::ToHex::to_hex(&s[..]))
+            .ok_or("Host Error: Should always be able to identify module's own ID")?;
+        let path: EffectPath = EffectPath::push_owned(
+            Some(EffectPath::push(
+                Some(Arc::new(serde_json::from_str(path.to_str()?)?)),
+                PathFragment::Root,
+            )),
+            PathFragment::Named(SArc(Arc::new(caller.into()))),
+        );
+
         let ctx = Context::new(
             network,
             amount,
             Arc::new(client::WasmHostEmulator),
-            // TODO: Carry context's path
-            PathFragment::Root.into(),
+            path,
             // TODO: load database?
             Arc::new(effects),
         );

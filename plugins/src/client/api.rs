@@ -19,16 +19,24 @@ pub fn log(s: &str) {
 
 /// Given a 32 byte plugin identifier, create a new contract instance.
 pub fn create_contract_by_key<S: Serialize>(
+    ctx: Context,
     key: &[u8; 32],
     args: CreateArgs<S>,
 ) -> Result<Compiled, CompilationError> {
+    let path = serde_json::to_string(ctx.path().as_ref())
+        .map_err(|_| CompilationError::TerminateCompilation)?;
     unsafe {
         let s = serde_json::to_value(args)
             .map_err(|_| CompilationError::TerminateCompilation)?
             .to_string();
         let l = s.len();
-        let p =
-            sapio_v1_wasm_plugin_create_contract(key.as_ptr() as i32, s.as_ptr() as i32, l as i32);
+        let p = sapio_v1_wasm_plugin_create_contract(
+            path.as_ptr() as i32,
+            path.len() as i32,
+            key.as_ptr() as i32,
+            s.as_ptr() as i32,
+            l as i32,
+        );
         if p != 0 {
             let cs = CString::from_raw(p as *mut c_char);
             serde_json::from_slice(cs.as_bytes())
@@ -164,11 +172,12 @@ impl<T: SapioJSONTrait> TryFrom<SapioHostAPIVerifier<T>> for SapioHostAPI<T> {
 
 /// Given a human readable name, create a new contract instance
 pub fn create_contract<S: Serialize>(
+    context: Context,
     key: &str,
     args: CreateArgs<S>,
 ) -> Result<Compiled, CompilationError> {
     let key = lookup_module_name(key).ok_or(CompilationError::TerminateCompilation)?;
-    create_contract_by_key(&key, args)
+    create_contract_by_key(context, &key, args)
 }
 
 /// A empty type tag to bind the dynamically linked host emulator functionality

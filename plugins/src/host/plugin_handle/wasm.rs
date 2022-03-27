@@ -9,6 +9,7 @@ use super::*;
 use crate::host::exports::*;
 use crate::host::wasm_cache::get_all_keys_from_fs;
 use crate::host::{HostEnvironment, HostEnvironmentInner};
+use sapio_base::effects::EffectPath;
 use sapio_ctv_emulator_trait::CTVEmulator;
 use std::error::Error;
 pub struct WasmPluginHandle {
@@ -211,16 +212,25 @@ impl WasmPluginHandle {
 }
 
 impl PluginHandle for WasmPluginHandle {
-    fn create(&self, c: &CreateArgs<serde_json::Value>) -> Result<Compiled, Box<dyn Error>> {
+    fn create(
+        &self,
+        path: &EffectPath,
+        c: &CreateArgs<serde_json::Value>,
+    ) -> Result<Compiled, Box<dyn Error>> {
         let arg_str = serde_json::to_string(c)?;
-        let offset = self.pass_string(&arg_str)?;
+        let args_ptr = self.pass_string(&arg_str)?;
+        let path_str = serde_json::to_string(path)?;
+        let path_ptr = self.pass_string(&path_str)?;
         let create_func = {
             let env = self.env.lock().unwrap();
             env.create.clone()
         };
-        let offset = create_func.get_ref().ok_or("Uninitialized")?.call(offset)?;
-        let buf = self.read_to_vec(offset)?;
-        self.forget(offset)?;
+        let result_ptr = create_func
+            .get_ref()
+            .ok_or("Uninitialized")?
+            .call(path_ptr, args_ptr)?;
+        let buf = self.read_to_vec(result_ptr)?;
+        self.forget(result_ptr)?;
         let c: Result<String, String> = serde_json::from_slice(&buf)?;
         let v: Compiled = serde_json::from_str(&c?)?;
         Ok(v)
