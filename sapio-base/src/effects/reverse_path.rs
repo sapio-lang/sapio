@@ -112,11 +112,15 @@ impl<T, Y> From<Vec<T>> for MkReversePath<T, Y> {
 impl<T, Y> ReversePath<T, Y> {
     /// Add an element to a ReversePath
     pub fn push(v: Option<Arc<ReversePath<T, Y>>>, s: T) -> Arc<ReversePath<T, Y>> {
-        Arc::new(ReversePath::<T, Y> {
+        Arc::new(Self::push_owned(v, s))
+    }
+    /// Add an element to a ReversePath and do not wrap in Arc
+    pub fn push_owned(v: Option<Arc<ReversePath<T, Y>>>, s: T) -> ReversePath<T, Y> {
+        ReversePath::<T, Y> {
             past: v,
             this: s,
             _pd: Default::default(),
-        })
+        }
     }
     /// iterate over a reversepath
     pub fn iter(&self) -> RPI<'_, T, Y> {

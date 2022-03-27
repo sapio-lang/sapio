@@ -81,29 +81,14 @@ impl From<ParseIntError> for ValidFragmentError {
 impl TryFrom<Arc<String>> for PathFragment {
     type Error = ValidFragmentError;
     fn try_from(s: Arc<String>) -> Result<Self, Self::Error> {
-        Ok(match s.as_ref().as_str() {
-            "@cloned" => PathFragment::Cloned,
-            "@then_fn" => PathFragment::ThenFn,
-            "@finish_or_fn" => PathFragment::FinishOrFn,
-            "@finish_fn" => PathFragment::FinishFn,
-            "@cond_comp_if" => PathFragment::CondCompIf,
-            "@guard" => PathFragment::Guard,
-            "@next" => PathFragment::Next,
-            "@suggested" => PathFragment::Suggested,
-            "@default_effect" => PathFragment::DefaultEffect,
-            "@effects" => PathFragment::Effects,
-            n if n.starts_with('#') => PathFragment::Branch(FromStr::from_str(&n[1..])?),
-            n if n.chars().all(|x| x.is_ascii_alphabetic() || x == '_') => {
-                PathFragment::Named(SArc(s))
-            }
-            _ => return Err(ValidFragmentError::BadName(SArc(s.clone()))),
-        })
+        Self::try_from(s.as_ref().as_str())
     }
 }
 impl TryFrom<&str> for PathFragment {
     type Error = ValidFragmentError;
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         Ok(match s.as_ref() {
+            "@root" => PathFragment::Root,
             "@cloned" => PathFragment::Cloned,
             "@then_fn" => PathFragment::ThenFn,
             "@finish_or_fn" => PathFragment::FinishOrFn,
@@ -115,7 +100,7 @@ impl TryFrom<&str> for PathFragment {
             "@default_effect" => PathFragment::DefaultEffect,
             "@effects" => PathFragment::Effects,
             n if n.starts_with('#') => PathFragment::Branch(FromStr::from_str(&n[1..])?),
-            n if n.chars().all(|x| x.is_ascii_alphabetic() || x == '_') => {
+            n if n.chars().all(|x| x.is_ascii_alphanumeric() || x == '_') => {
                 PathFragment::Named(SArc(Arc::new(s.into())))
             }
             _ => return Err(ValidFragmentError::BadName(SArc(Arc::new(s.into())))),
