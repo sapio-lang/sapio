@@ -4,24 +4,27 @@ use sapio::contract::Contract;
 use sapio::contract::StatefulArgumentsTrait;
 use sapio::decl_continuation;
 use sapio::util::amountrange::AmountU64;
+use sapio_base::timelocks::AbsHeight;
 use sapio_trait::SapioJSONTrait;
 use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
 use serde_json::Value;
-use std::str::FromStr;
-use sapio_base::timelocks::AbsHeight;
 use std::convert::TryFrom;
+use std::str::FromStr;
+use std::sync::Arc;
 
 /// # Trait for a Mintable NFT
 #[derive(Serialize, JsonSchema, Deserialize, Clone)]
 pub struct Mint_NFT_Trait_Version_0_1_0 {
     /// # Creator Key
-    pub creator: bitcoin::PublicKey,
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    pub creator: bitcoin::XOnlyPublicKey,
     /// # Initial Owner
     /// The key that will own this NFT
-    pub owner: bitcoin::PublicKey,
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    pub owner: bitcoin::XOnlyPublicKey,
     /// # Locator
     /// A piece of information that will instruct us where the NFT can be
     /// downloaded -- e.g. an IPFs Hash
@@ -48,8 +51,8 @@ pub mod mint_impl {
             let ipfs_hash = "bafkreig7r2tdlwqxzlwnd7aqhkkvzjqv53oyrkfnhksijkvmc6k57uqk6a";
             serde_json::to_value(mint_impl::Versions::Mint_NFT_Trait_Version_0_1_0(
                 Mint_NFT_Trait_Version_0_1_0 {
-                    creator: bitcoin::PublicKey::from_str(key).unwrap(),
-                    owner: bitcoin::PublicKey::from_str(key).unwrap(),
+                    creator: bitcoin::XOnlyPublicKey::from_str(key).unwrap(),
+                    owner: bitcoin::XOnlyPublicKey::from_str(key).unwrap(),
                     locator: ipfs_hash.into(),
                     minting_module: None,
                     royalty: 0.02,
@@ -66,7 +69,8 @@ pub mod mint_impl {
 pub struct NFT_Sale_Trait_Version_0_1_0 {
     /// # Owner
     /// The key that will own this NFT
-    pub sell_to: bitcoin::PublicKey,
+    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    pub sell_to: bitcoin::XOnlyPublicKey,
     /// # Price
     /// The price in Sats
     pub price: AmountU64,
@@ -97,11 +101,11 @@ pub mod sale_impl {
             let ipfs_hash = "bafkreig7r2tdlwqxzlwnd7aqhkkvzjqv53oyrkfnhksijkvmc6k57uqk6a";
             serde_json::to_value(sale_impl::Versions::NFT_Sale_Trait_Version_0_1_0(
                 NFT_Sale_Trait_Version_0_1_0 {
-                    sell_to: bitcoin::PublicKey::from_str(key).unwrap(),
-                    price: Amount::from_sat(0).into(),
+                    sell_to: bitcoin::XOnlyPublicKey::from_str(key).unwrap(),
+                    price: AmountU64::from(0u64),
                     data: Mint_NFT_Trait_Version_0_1_0 {
-                        creator: bitcoin::PublicKey::from_str(key).unwrap(),
-                        owner: bitcoin::PublicKey::from_str(key).unwrap(),
+                        creator: bitcoin::XOnlyPublicKey::from_str(key).unwrap(),
+                        owner: bitcoin::XOnlyPublicKey::from_str(key).unwrap(),
                         locator: ipfs_hash.into(),
                         minting_module: None,
                         royalty: 0.02,

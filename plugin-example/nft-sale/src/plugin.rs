@@ -43,7 +43,6 @@ impl From<Versions> for SimpleNFTSale {
 
 REGISTER![[SimpleNFTSale, Versions], "logo.png"];
 
-
 impl SimpleNFTSale {
     /// # signed
     /// sales must be signed by the current owner
@@ -69,6 +68,7 @@ impl SimpleNFTSale {
         let mut mint_data = self.0.data.clone();
         // and change the owner to the buyer
         mint_data.owner = self.0.sell_to;
+        let new_ctx = ctx.derive_str(Arc::new("transfer".into()));
         // let's now compile a new 'mint' of the NFT
         let new_nft_contract = Ok(CreateArgs {
             context: ContextualArguments {
@@ -79,7 +79,7 @@ impl SimpleNFTSale {
             arguments: mint_impl::Versions::Mint_NFT_Trait_Version_0_1_0(mint_data),
         })
         .and_then(serde_json::to_value)
-        .map(|args| create_contract_by_key(&key, args, Amount::from_sat(0)))
+        .map(|args| create_contract_by_key(new_ctx, &key, args, Amount::from_sat(0)))
         .map_err(|_| CompilationError::TerminateCompilation)?
         .ok_or(CompilationError::TerminateCompilation)?;
         // Now for the magic:
@@ -96,10 +96,8 @@ impl SimpleNFTSale {
             .add_amount(self.0.price.into())
             .add_sequence()
             .add_output(self.0.price.into(), &self.0.data.owner, None)?
-            // note: what would happen if we had another output that 
+            // note: what would happen if we had another output that
             // had a percentage-of-sale royalty to some creator's key?
             .into()
     }
 }
-
-
