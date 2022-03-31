@@ -122,12 +122,12 @@ pub fn get_schema_for<T: schemars::JsonSchema + 'static + Sized>(
 macro_rules! web_api {
     {$name:ident,$type:ty,{}} => {
         $crate::contract::macros::paste!{
-            const [<continue_schema_for_ $name >] : Option<&'static dyn Fn() -> std::sync::Arc<$crate::schemars::schema::RootSchema>> = Some(&|| $crate::contract::macros::get_schema_for::<$type>());
+            const [<CONTINUE_SCHEMA_FOR_ $name:upper >] : Option<&'static dyn Fn() -> std::sync::Arc<$crate::schemars::schema::RootSchema>> = Some(&|| $crate::contract::macros::get_schema_for::<$type>());
         }
     };
     {$name:ident,$type:ty} => {
         $crate::contract::macros::paste!{
-            const [<continue_schema_for_ $name >] : Option<&'static dyn Fn() -> std::sync::Arc<$crate::schemars::schema::RootSchema>> = None;
+            const [<CONTINUE_SCHEMA_FOR_ $name:upper >] : Option<&'static dyn Fn() -> std::sync::Arc<$crate::schemars::schema::RootSchema>> = None;
         }
     }
 }
