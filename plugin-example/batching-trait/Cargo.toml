@@ -14,9 +14,6 @@ serde_derive = "1.0"
 version = "0.8.0"
 features = ['impl_json_schema']
 
-[dependencies.wasm-bindgen]
-version = "0.2.69"
-
 [dependencies.bitcoin]
 package = "sapio-bitcoin"
 version = "0.28.0-rc.2"
