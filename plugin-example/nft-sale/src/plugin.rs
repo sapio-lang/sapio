@@ -3,19 +3,19 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
-use bitcoin::util::amount::Amount;
+
 use sapio::contract::CompilationError;
 use sapio::contract::Contract;
 use sapio::*;
 use sapio_base::Clause;
 use sapio_wasm_nft_trait::*;
 use sapio_wasm_plugin::client::*;
-use sapio_wasm_plugin::client::*;
+
 use sapio_wasm_plugin::*;
-use sapio_wasm_plugin::*;
+
 use schemars::*;
 use serde::*;
-use std::convert::TryFrom;
+
 #[deny(missing_docs)]
 use std::sync::Arc;
 /// # Simple NFT Sale
@@ -48,13 +48,13 @@ impl SimpleNFTSale {
     /// # signed
     /// sales must be signed by the current owner
     #[guard]
-    fn signed(self, ctx: Context) {
+    fn signed(self, _ctx: Context) {
         Clause::Key(self.0.data.owner.clone())
     }
     /// # transfer
     /// transfer exchanges the NFT for cold hard Bitcoinz
     #[continuation(guarded_by = "[Self::signed]", web_api, coerce_args = "default_coerce")]
-    fn transfer(self, mut ctx: Context, u: ()) {
+    fn transfer(self, mut ctx: Context, _u: ()) {
         let amt = ctx.funds();
         // first, let's get the module that should be used to 're-mint' this NFT
         // to the new owner
