@@ -6,19 +6,18 @@
 
 //! utilities for building Bitcoin transaction templates up programmatically
 use crate::contract::error::CompilationError;
+use sapio_base::simp::SIMPError;
+use sapio_base::simp::SIMP;
 use bitcoin::hashes::sha256;
 use bitcoin::util::amount::Amount;
 use sapio_base::Clause;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-
 pub mod output;
 pub use output::{Output, OutputMeta};
-
 pub mod builder;
 pub use builder::Builder;
-
 /// Metadata Struct which has some standard defined fields
 /// and can be extended via a hashmap
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
@@ -29,6 +28,8 @@ pub struct TemplateMetadata {
     /// catch all map for future metadata....
     #[serde(flatten)]
     pub extra: HashMap<String, serde_json::Value>,
+    /// SIMP: Sapio Interactive Metadata Protocol
+    pub simp: HashMap<i64, serde_json::Value>,
     /// A Color to render this node.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub color: Option<String>,
@@ -42,6 +43,7 @@ impl TemplateMetadata {
     /// create a new `TemplateMetadata`
     pub fn new() -> Self {
         TemplateMetadata {
+            simp: HashMap::new(),
             color: None,
             label: None,
             extra: HashMap::new(),
@@ -85,6 +87,20 @@ impl TemplateMetadata {
         }
         self.label = Some(i.into());
         Ok(self)
+    }
+
+    /// attempts to add a SIMP to the output meta.
+    ///
+    /// Returns [`SIMPError::AlreadyDefined`] if one was previously set.
+    pub fn add_simp<S: SIMP>(mut self, s: S) -> Result<Self, SIMPError> {
+        let old = self
+            .simp
+            .insert(S::get_protocol_number(), serde_json::to_value(&s)?);
+        if let Some(old) = old {
+            Err(SIMPError::AlreadyDefined(old))
+        } else {
+            Ok(self)
+        }
     }
 }
 

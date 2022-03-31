@@ -10,6 +10,7 @@
 use crate::contract::object::ObjectError;
 use sapio_base::effects::EffectDBError;
 use sapio_base::effects::ValidFragmentError;
+use sapio_base::simp::SIMPError;
 use sapio_ctv_emulator_trait::EmulatorError;
 use std::collections::LinkedList;
 use std::error::Error;
@@ -59,10 +60,17 @@ pub enum CompilationError {
     ConditionalCompilationFailed(LinkedList<String>),
     /// Error fromt the Effects system
     EffectDBError(EffectDBError),
+    /// Error in a Sapio Interactive Metadata Protocol
+    SIMPError(SIMPError),
     /// Unknown Error type -- either from a user or from some unhandled dependency
     Custom(Box<dyn std::error::Error>),
 }
 
+impl From<SIMPError> for CompilationError {
+    fn from(e: SIMPError) -> CompilationError {
+        CompilationError::SIMPError(e)
+    }
+}
 impl From<ValidFragmentError> for CompilationError {
     fn from(e: ValidFragmentError) -> CompilationError {
         CompilationError::PathFragmentError(e)

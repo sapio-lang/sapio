@@ -442,6 +442,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     label: Some("funding".into()),
                                     color: Some("pink".into()),
                                     extra: HashMap::new(),
+                                    simp: Default::default()
                                 },
                                 output_metadata,
                             }
