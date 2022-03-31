@@ -3,7 +3,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
-#[deny(missing_docs)]
 use bitcoin::util::amount::Amount;
 use sapio::contract::CompilationError;
 use sapio::contract::Contract;
@@ -17,6 +16,8 @@ use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
 use std::convert::TryFrom;
+#[deny(missing_docs)]
+use std::sync::Arc;
 /// # Simple NFT Sale
 /// A Sale which simply transfers the NFT for a fixed price.
 #[derive(JsonSchema, Serialize, Deserialize)]
@@ -53,7 +54,7 @@ impl SimpleNFTSale {
     /// # transfer
     /// transfer exchanges the NFT for cold hard Bitcoinz
     #[continuation(guarded_by = "[Self::signed]", web_api, coerce_args = "default_coerce")]
-    fn transfer(self, ctx: Context, u: ()) {
+    fn transfer(self, mut ctx: Context, u: ()) {
         let amt = ctx.funds();
         // first, let's get the module that should be used to 're-mint' this NFT
         // to the new owner
@@ -68,20 +69,18 @@ impl SimpleNFTSale {
         let mut mint_data = self.0.data.clone();
         // and change the owner to the buyer
         mint_data.owner = self.0.sell_to;
-        let new_ctx = ctx.derive_str(Arc::new("transfer".into()));
+        let new_ctx = ctx.derive_str(Arc::new("transfer".into()))?;
         // let's now compile a new 'mint' of the NFT
-        let new_nft_contract = Ok(CreateArgs {
+        let new_nft_args = CreateArgs {
             context: ContextualArguments {
                 amount: ctx.funds(),
                 network: ctx.network,
                 effects: unsafe { ctx.get_effects_internal() }.as_ref().clone(),
             },
             arguments: mint_impl::Versions::Mint_NFT_Trait_Version_0_1_0(mint_data),
-        })
-        .and_then(serde_json::to_value)
-        .map(|args| create_contract_by_key(new_ctx, &key, args, Amount::from_sat(0)))
-        .map_err(|_| CompilationError::TerminateCompilation)?
-        .ok_or(CompilationError::TerminateCompilation)?;
+        };
+        let new_nft_contract = create_contract_by_key(new_ctx, &key, new_nft_args)
+            .map_err(|_| CompilationError::TerminateCompilation)?;
         // Now for the magic:
         // This is a transaction that creates at output 0 the new nft for the
         // person, and must add another input that pays sufficiently to pay the
