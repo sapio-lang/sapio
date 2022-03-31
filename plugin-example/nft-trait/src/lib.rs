@@ -1,5 +1,5 @@
-use bitcoin::Amount;
-use sapio::contract::macros::*;
+
+
 use sapio::contract::Contract;
 use sapio::contract::StatefulArgumentsTrait;
 use sapio::decl_continuation;
@@ -7,13 +7,13 @@ use sapio::util::amountrange::AmountU64;
 use sapio_base::timelocks::AbsHeight;
 use sapio_trait::SapioJSONTrait;
 use sapio_wasm_plugin::client::*;
-use sapio_wasm_plugin::*;
+
 use schemars::*;
 use serde::*;
 use serde_json::Value;
 use std::convert::TryFrom;
 use std::str::FromStr;
-use std::sync::Arc;
+
 
 /// # Trait for a Mintable NFT
 #[derive(Serialize, JsonSchema, Deserialize, Clone)]

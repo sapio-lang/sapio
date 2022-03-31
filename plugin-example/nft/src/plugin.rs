@@ -1,9 +1,9 @@
+#[deny(missing_docs)]
 // Copyright Judica, Inc 2021
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
-#[deny(missing_docs)]
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::util::amount::Amount;
@@ -15,13 +15,12 @@ use sapio::*;
 use sapio_base::Clause;
 use sapio_wasm_nft_trait::*;
 use sapio_wasm_plugin::client::*;
-use sapio_wasm_plugin::client::*;
-use sapio_wasm_plugin::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
 use std::convert::TryFrom;
 use std::convert::TryInto;
+use std::sync::Arc;
 
 /// # SimpleNFT
 /// A really simple NFT... not much too it!
@@ -80,7 +79,7 @@ fn default_coerce(k: <SimpleNFT as Contract>::StatefulArguments) -> Result<Sell,
 
 impl SellableNFT for SimpleNFT {
     #[continuation(guarded_by = "[Self::signed]", web_api, coerce_args = "default_coerce")]
-    fn sell(self, ctx: Context, sale: Sell) {
+    fn sell(self, mut ctx: Context, sale: Sell) {
         if let Sell::MakeSale {
             sale_info,
             which_sale,
@@ -92,21 +91,20 @@ impl SellableNFT for SimpleNFT {
                 // matched the sale's claimed owner.
                 return Err(CompilationError::TerminateCompilation);
             }
+            let sale_ctx = ctx.derive_str(Arc::new("sell".into()))?;
             // create a contract from the sale API passed in
-            let compiled = Ok(CreateArgs {
+            let create_args = CreateArgs {
                 context: ContextualArguments {
                     amount: ctx.funds(),
                     network: ctx.network,
                     effects: unsafe { ctx.get_effects_internal() }.as_ref().clone(),
                 },
                 arguments: sale_impl::Versions::NFT_Sale_Trait_Version_0_1_0(sale_info.clone()),
-            })
-            .and_then(serde_json::to_value)
+            };
             // use the sale API we passed in
-            .map(|args| create_contract_by_key(&which_sale.key, args, Amount::from_sat(0)))
-            // handle errors...
-            .map_err(|_| CompilationError::TerminateCompilation)?
-            .ok_or(CompilationError::TerminateCompilation)?;
+            let compiled = create_contract_by_key(sale_ctx, &which_sale.key, create_args)
+                // handle errors...
+                .map_err(|_| CompilationError::TerminateCompilation)?;
             // send to this sale!
             let mut builder = ctx.template();
             // todo: we need to cut-through the compiled contract address, but this
@@ -114,7 +112,7 @@ impl SellableNFT for SimpleNFT {
             builder = builder.add_output(compiled.amount_range.max(), &compiled, None)?;
             builder.into()
         } else {
-            /// Don't do anything if we're holding!
+            // Don't do anything if we're holding!
             empty()
         }
     }

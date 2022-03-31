@@ -6,7 +6,7 @@
 
 #[deny(missing_docs)]
 use batching_trait::BatchingTraitVersion0_1_1;
-use bitcoin::util::amount::Amount;
+
 use sapio::contract::*;
 use sapio::*;
 use sapio_wasm_plugin::client::*;
