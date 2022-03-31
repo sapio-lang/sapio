@@ -14,7 +14,7 @@ use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
-use std::convert::{TryFrom, TryInto};
+
 use std::marker::PhantomData;
 
 /// A type tag which tracks state for compile_if inside of Vault
@@ -99,12 +99,12 @@ fn default_coerce<T: Contract>(
 impl<S: State> Vault<S> {
     /// don't compile spend_hot unless we're in redeeming mode
     #[compile_if]
-    fn compile_spend_hot(self, ctx: Context) {
+    fn compile_spend_hot(self, _ctx: Context) {
         S::is_redeeming()
     }
     /// make a guard with the timeout condition and the hot key.
     #[guard]
-    fn hot_key_cl(self, ctx: Context) {
+    fn hot_key_cl(self, _ctx: Context) {
         Clause::And(vec![Clause::Key(self.hot_key.clone()), self.timeout.into()])
     }
     /// allow spending with the satisfaction of hot_key_cl, but only in state =
@@ -140,14 +140,14 @@ impl<S: State> Vault<S> {
     /// a contract has_cold if a plain backup key has been provided. some cold
     /// storages won't have a plain key path
     #[compile_if]
-    fn has_cold(self, ctx: Context) {
+    fn has_cold(self, _ctx: Context) {
         self.backup
             .and(Some(ConditionalCompileType::Required))
             .unwrap_or(ConditionalCompileType::Never)
     }
     /// cold_key is
     #[guard]
-    fn cold_key(self, ctx: Context) {
+    fn cold_key(self, _ctx: Context) {
         return self
             .backup
             .clone()
@@ -214,7 +214,7 @@ impl<S: State> Vault<S> {
     }
     /// Only allow redeeming to begin when we are in the Secure state.
     #[compile_if]
-    fn compile_begin_redeem(self, ctx: Context) {
+    fn compile_begin_redeem(self, _ctx: Context) {
         S::is_secure()
     }
     /// Move the funds from a vault state = Secure to a vault State = Redeeming
