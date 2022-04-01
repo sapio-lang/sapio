@@ -133,8 +133,8 @@ struct SapioHostAPIVerifier<T: SapioJSONTrait> {
 }
 
 impl<T: SapioJSONTrait> TryFrom<LookupFrom> for SapioHostAPI<T> {
-    type Error = Box<dyn Error>;
-    fn try_from(which_plugin: LookupFrom) -> Result<SapioHostAPI<T>, Box<dyn Error>> {
+    type Error = CompilationError;
+    fn try_from(which_plugin: LookupFrom) -> Result<SapioHostAPI<T>, CompilationError> {
         SapioHostAPI::try_from(SapioHostAPIVerifier {
             which_plugin,
             _pd: Default::default(),
@@ -142,25 +142,27 @@ impl<T: SapioJSONTrait> TryFrom<LookupFrom> for SapioHostAPI<T> {
     }
 }
 impl<T: SapioJSONTrait> TryFrom<SapioHostAPIVerifier<T>> for SapioHostAPI<T> {
-    type Error = Box<dyn Error>;
-    fn try_from(shapv: SapioHostAPIVerifier<T>) -> Result<SapioHostAPI<T>, Box<dyn Error>> {
+    type Error = CompilationError;
+    fn try_from(shapv: SapioHostAPIVerifier<T>) -> Result<SapioHostAPI<T>, CompilationError> {
         let SapioHostAPIVerifier { which_plugin, _pd } = shapv;
         let key = match which_plugin.to_key() {
             Some(key) => key,
             _ => {
-                return Err("Key Not Found".into());
+                return Err(CompilationError::UnknownModuleError);
             }
         };
         let p = key.as_ptr() as i32;
         let api = unsafe {
             let api_buf = sapio_v1_wasm_plugin_get_api(p);
             if api_buf == 0 {
-                return Err("API Pointer Null".into());
+                return Err(CompilationError::UnknownModuleError);
             }
             let cs = { CString::from_raw(api_buf as *mut c_char) };
-            serde_json::from_slice(cs.as_bytes())?
+            serde_json::from_slice(cs.as_bytes()).map_err(|_|
+                CompilationError::InvalidModuleError
+            )?
         };
-        T::check_trait_implemented_inner(&api)?;
+        T::check_trait_implemented_inner(&api).map_err(CompilationError::ModuleFailedAPICheck)?;
         Ok(SapioHostAPI {
             which_plugin,
             key,

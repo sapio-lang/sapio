@@ -24,6 +24,8 @@ pub enum CompilationError {
     AdditionalGuardsNotAllowedHere,
     /// Unspecified Error -- but we should stop compiling
     TerminateCompilation,
+    /// Unspecified Error -- stop compiling, share message
+    TerminateWith(String),
     /// Fee Specification Error
     MinFeerateError,
     /// Error when ContextPath has already been used.
@@ -62,6 +64,15 @@ pub enum CompilationError {
     EffectDBError(EffectDBError),
     /// Error in a Sapio Interactive Metadata Protocol
     SIMPError(SIMPError),
+    /// Module could not be found.
+    /// Used in Plugin interface (TODO: Wrap these types)
+    UnknownModuleError,
+    /// Module could not be queried
+    /// Used in Plugin interface (TODO: Wrap these types)
+    InvalidModuleError,
+    /// API Check Failed, module didn't satisfy examples.
+    /// Used in Plugin interface (TODO: Wrap these types)
+    ModuleFailedAPICheck(String),
     /// Unknown Error type -- either from a user or from some unhandled dependency
     Custom(Box<dyn std::error::Error>),
 }
