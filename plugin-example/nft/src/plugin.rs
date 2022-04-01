@@ -11,6 +11,7 @@ use sapio::contract::empty;
 use sapio::contract::CompilationError;
 use sapio::contract::Compiled;
 use sapio::contract::Contract;
+use sapio::template::OutputMeta;
 use sapio::*;
 use sapio_base::Clause;
 use sapio_wasm_nft_trait::*;
@@ -56,13 +57,12 @@ impl SimpleNFT {
     /// transactions... in a future post, we'll see more!
     #[then(guarded_by = "[Self::unspendable]")]
     fn metadata_txns(self, ctx: Context) {
+        let a = ctx.funds();
         ctx.template()
             .add_output(
-                Amount::ZERO,
-                &Compiled::from_op_return(
-                    &sha256::Hash::hash(&self.data.locator.as_bytes()).as_inner()[..],
-                )?,
-                None,
+                a,
+                &Compiled::from_op_return(&self.data.ipfs_nft.commitment().as_inner()[..])?,
+                Some(OutputMeta::default().add_simp(self.data.ipfs_nft.clone())?),
             )?
             .into()
     }
@@ -81,16 +81,11 @@ impl SellableNFT for SimpleNFT {
     #[continuation(guarded_by = "[Self::signed]", web_api, coerce_args = "default_coerce")]
     fn sell(self, mut ctx: Context, sale: Sell) {
         if let Sell::MakeSale {
-            sale_info,
+            sale_info_partial,
             which_sale,
         } = sale
         {
-            // if we're selling...
-            if sale_info.data.owner != self.data.owner {
-                // Hmmm... metadata mismatch! the current owner does not
-                // matched the sale's claimed owner.
-                return Err(CompilationError::TerminateCompilation);
-            }
+            let sale_info = sale_info_partial.fill(self.data.clone());
             let sale_ctx = ctx.derive_str(Arc::new("sell".into()))?;
             // create a contract from the sale API passed in
             let create_args = CreateArgs {
@@ -102,9 +97,7 @@ impl SellableNFT for SimpleNFT {
                 arguments: sale_impl::Versions::NFT_Sale_Trait_Version_0_1_0(sale_info.clone()),
             };
             // use the sale API we passed in
-            let compiled = create_contract_by_key(sale_ctx, &which_sale.key, create_args)
-                // handle errors...
-                .map_err(|_| CompilationError::TerminateCompilation)?;
+            let compiled = create_contract_by_key(sale_ctx, &which_sale.key, create_args)?;
             // send to this sale!
             let mut builder = ctx.template();
             // todo: we need to cut-through the compiled contract address, but this
@@ -127,9 +120,9 @@ impl TryFrom<Versions> for SimpleNFT {
     type Error = CompilationError;
     fn try_from(v: Versions) -> Result<Self, Self::Error> {
         let Versions::Mint_NFT_Trait_Version_0_1_0(mut data) = v;
-        let this = LookupFrom::This
+        let this: SapioHostAPI<Mint_NFT_Trait_Version_0_1_0> = LookupFrom::This
             .try_into()
-            .map_err(|_| CompilationError::TerminateCompilation)?;
+            .map_err(|_| CompilationError::TerminateWith("Failed to Lookup".into()))?;
         match data.minting_module {
             // if no module is provided, it must be this module!
             None => {

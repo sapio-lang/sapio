@@ -1,9 +1,3 @@
-#[deny(missing_docs)]
-// Copyright Judica, Inc 2021
-//
-// This Source Code Form is subject to the terms of the Mozilla Public
-//  License, v. 2.0. If a copy of the MPL was not distributed with this
-//  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 use bitcoin::util::amount::Amount;
 use sapio::contract::CompilationError;
 use sapio::contract::Contract;
@@ -20,6 +14,13 @@ use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
 use std::convert::TryFrom;
+#[deny(missing_docs)]
+// Copyright Judica, Inc 2021
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+//  License, v. 2.0. If a copy of the MPL was not distributed with this
+//  file, You can obtain one at https://mozilla.org/MPL/2.0/.
+use std::sync::Arc;
 
 /// # Dutch Auction Data
 /// Additional information required to initiate a dutch auction
@@ -110,11 +111,11 @@ impl TryFrom<Versions> for NFTDutchAuction {
                 NFTDutchAuction { main, extra }
             }
             Versions::Exact(extra, main) => {
-                if extra.start_price < extra.min_price || extra.period == 0 || extra.updates == 0{
+                if extra.start_price < extra.min_price || extra.period == 0 || extra.updates == 0 {
                     // Nonsense
                     return Err(CompilationError::TerminateCompilation);
                 }
-                NFTDutchAuction { main, extra },
+                NFTDutchAuction { main, extra }
             }
         })
     }
@@ -138,7 +139,7 @@ impl NFTDutchAuction {
         let mut base_ctx = base_ctx;
         // the main difference is we iterate over the schedule here
         for (nth, sched) in schedule.iter().enumerate() {
-            let ctx = base_ctx.derive_num(nth as u64)?;
+            let mut ctx = base_ctx.derive_num(nth as u64)?;
             let amt = ctx.funds();
             // first, let's get the module that should be used to 're-mint' this NFT
             // to the new owner
@@ -153,19 +154,18 @@ impl NFTDutchAuction {
             let mut mint_data = self.main.data.clone();
             // and change the owner to the buyer
             mint_data.owner = self.main.sell_to;
+            let new_ctx = ctx.derive_str(Arc::new("transfer".into()))?;
             // let's now compile a new 'mint' of the NFT
-            let new_nft_contract = Ok(CreateArgs {
+            let create_args = CreateArgs {
                 context: ContextualArguments {
                     amount: ctx.funds(),
                     network: ctx.network,
                     effects: unsafe { ctx.get_effects_internal() }.as_ref().clone(),
                 },
                 arguments: mint_impl::Versions::Mint_NFT_Trait_Version_0_1_0(mint_data),
-            })
-            .and_then(serde_json::to_value)
-            .map(|args| create_contract_by_key(&key, args, Amount::from_sat(0)))
-            .map_err(|_| CompilationError::TerminateCompilation)?
-            .ok_or(CompilationError::TerminateCompilation)?;
+            };
+            let new_nft_contract = create_contract_by_key(new_ctx, &key, create_args)
+                .map_err(|_| CompilationError::TerminateCompilation)?;
             // Now for the magic:
             // This is a transaction that creates at output 0 the new nft for the
             // person, and must add another input that pays sufficiently to pay the
@@ -176,13 +176,16 @@ impl NFTDutchAuction {
             // cleanly if the buyer identifys an output they are spending before requesting
             // a purchase.
             let price: Amount = sched.1.into();
-            ret.push(Ok(ctx
+            let mut tmpl = ctx
                 .template()
                 .add_output(amt, &new_nft_contract, None)?
                 .add_amount(price)
                 .add_sequence()
+                // only active at the set time
+                .set_lock_time(sched.0.into())?;
+            let t = if let Some(artist) = self.main.data.ipfs_nft.artist {
                 // Pay Sale to Seller
-                .add_output(
+                tmpl.add_output(
                     Amount::from_btc(price.as_btc() * (1.0 - self.main.data.royalty))?,
                     &self.main.data.owner,
                     None,
@@ -190,12 +193,18 @@ impl NFTDutchAuction {
                 // Pay Royalty to Creator
                 .add_output(
                     Amount::from_btc(price.as_btc() as f64 * self.main.data.royalty)?,
-                    &self.main.data.creator,
+                    &artist,
                     None,
                 )?
-                // only active at the set time
-                .set_lock_time(sched.0.into())?
-                .into()))
+            } else {
+                // Pay Sale to Seller
+                tmpl.add_output(
+                    Amount::from_btc(price.as_btc())?,
+                    &self.main.data.owner,
+                    None,
+                )?
+            };
+            ret.push(Ok(t.into()));
         }
         Ok(Box::new(ret.into_iter()))
     }

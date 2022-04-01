@@ -8,31 +8,60 @@ use sapio_base::simp::SIMP;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 /// A URL to a project for convenience
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct URL {
     #[schemars(url)]
     pub url: String,
 }
 /// An IPFS Based NFT Spec
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct IpfsNFT {
     /// The Content ID to be retrieved through IPFS
     pub cid: String,
+    /// The version. Must be 0
+    pub version: u64,
     /// If the NFT is one of a series, it is first / second
     pub edition: Option<(u64, u64)>,
     /// The Artist's Public Key
-    #[serde(flatten)]
     // TODO: fixup representation with patches to add more Schemars to bitcoin
     #[schemars(with = "Option::<String>")]
     pub artist: Option<bitcoin::secp256k1::XOnlyPublicKey>,
     /// The signature of artist
-    #[serde(flatten)]
     // TODO: fixup representation with patches to add more Schemars to bitcoin
     #[schemars(with = "Option::<String>")]
     pub blessing: Option<bitcoin::secp256k1::schnorr::Signature>,
     /// If the NFT has a webpage (legacy web)
-    #[serde(flatten)]
     pub softlink: Option<URL>,
+}
+use bitcoin::hashes::sha256::Hash as sha256;
+use bitcoin::hashes::sha256::HashEngine as engine;
+use bitcoin::hashes::Hash;
+use bitcoin::hashes::HashEngine;
+impl IpfsNFT {
+    /// Canonicalized commitment to IpfsNFT data
+    pub fn commitment(&self) -> sha256 {
+        let h1 = sha256::hash(self.cid.as_bytes()).into_inner();
+        let ed = self.edition.unwrap_or((0, 0));
+        let artist = self.artist.map(|b| b.serialize()).unwrap_or([0u8; 32]);
+        let blessing = self
+            .blessing
+            .map(|b| b.as_ref().clone())
+            .unwrap_or([0u8; 64]);
+        let softlink = self
+            .softlink
+            .as_ref()
+            .map(|s| sha256::hash(s.url.as_bytes()).into_inner())
+            .unwrap_or([0u8; 32]);
+        let mut eng = engine::default();
+        eng.input(&self.version.to_be_bytes());
+        eng.input(&h1);
+        eng.input(&ed.0.to_be_bytes());
+        eng.input(&ed.1.to_be_bytes());
+        eng.input(&artist);
+        eng.input(&blessing);
+        eng.input(&softlink);
+        sha256::from_engine(eng)
+    }
 }
 impl SIMP for IpfsNFT {
     fn get_protocol_number() -> i64 {
