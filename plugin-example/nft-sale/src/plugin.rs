@@ -10,7 +10,7 @@ use sapio::*;
 use sapio_base::Clause;
 use sapio_wasm_nft_trait::*;
 use sapio_wasm_plugin::client::*;
-
+use bitcoin::Amount;
 use sapio_wasm_plugin::*;
 
 use schemars::*;
@@ -89,13 +89,33 @@ impl SimpleNFTSale {
         // todo: change seem problematic here? with a bit of work, we could handle it
         // cleanly if the buyer identifys an output they are spending before requesting
         // a purchase.
-        ctx.template()
-            .add_output(amt, &new_nft_contract, None)?
-            .add_amount(self.0.price.into())
-            .add_sequence()
-            .add_output(self.0.price.into(), &self.0.data.owner, None)?
-            // note: what would happen if we had another output that
-            // had a percentage-of-sale royalty to some creator's key?
-            .into()
+        if let Some(artist) = self.0.data.ipfs_nft.artist {
+            let price: Amount = self.0.price.into();
+            ctx.template()
+                .add_output(amt, &new_nft_contract, None)?
+                .add_amount(self.0.price.into())
+                .add_sequence()
+                .add_output(
+                    Amount::from_btc(price.as_btc() * (1.0 - self.0.data.royalty))?,
+                    &self.0.data.owner,
+                    None,
+                )?
+                // Pay Royalty to Creator
+                .add_output(
+                    Amount::from_btc(price.as_btc() * self.0.data.royalty)?,
+                    &artist,
+                    None,
+                )?
+                // note: what would happen if we had another output that
+                // had a percentage-of-sale royalty to some creator's key?
+                .into()
+        } else {
+            ctx.template()
+                .add_output(amt, &new_nft_contract, None)?
+                .add_amount(self.0.price.into())
+                .add_sequence()
+                .add_output(self.0.price.into(), &self.0.data.owner, None)?
+                .into()
+        }
     }
 }
