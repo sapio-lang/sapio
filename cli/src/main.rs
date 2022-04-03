@@ -321,8 +321,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     emulator,
                     config.network,
                     plugin_map,
-                )
-                .await?;
+                )?;
                 for plugin in plugins {
                     println!("{} -- {}", plugin.get_name()?, plugin.id().to_string());
                 }
@@ -457,7 +456,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             Some(("create", args)) => {
-                let sph = WasmPluginHandle::new(
+                let sph = WasmPluginHandle::new_async(
                     "org".into(),
                     "judica".into(),
                     "sapio-cli".into(),
@@ -492,7 +491,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("{}", serde_json::to_string(&v)?);
             }
             Some(("api", args)) => {
-                let sph = WasmPluginHandle::new(
+                let sph = WasmPluginHandle::new_async(
                     "org".into(),
                     "judica".into(),
                     "sapio-cli".into(),
@@ -506,7 +505,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("{}", sph.get_api()?);
             }
             Some(("logo", args)) => {
-                let sph = WasmPluginHandle::new(
+                let sph = WasmPluginHandle::new_async(
                     "org".into(),
                     "judica".into(),
                     "sapio-cli".into(),
@@ -520,7 +519,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("{}", sph.get_logo()?);
             }
             Some(("info", args)) => {
-                let sph = WasmPluginHandle::new(
+                let sph = WasmPluginHandle::new_async(
                     "org".into(),
                     "judica".into(),
                     "sapio-cli".into(),
@@ -550,7 +549,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             Some(("load", args)) => {
-                let sph = WasmPluginHandle::new(
+                let sph = WasmPluginHandle::new_async(
                     "org".into(),
                     "judica".into(),
                     "sapio-cli".into(),

@@ -39,7 +39,9 @@ pub fn create_contract_by_key<S: Serialize>(
         );
         if p != 0 {
             let cs = CString::from_raw(p as *mut c_char);
-            serde_json::from_slice(cs.as_bytes()).map_err(CompilationError::DeserializationError)
+            let res: Result<Compiled, String> = serde_json::from_slice(cs.as_bytes())
+                .map_err(CompilationError::DeserializationError)?;
+            res.map_err(CompilationError::ModuleCompilationErrorUnsendable)
         } else {
             Err(CompilationError::InternalModuleError("Unknown".into()))
         }
@@ -121,7 +123,6 @@ pub struct SapioHostAPI<T: SapioJSONTrait> {
     #[serde(default, skip)]
     _pd: PhantomData<T>,
 }
-
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 /// # Helper for Serialization...

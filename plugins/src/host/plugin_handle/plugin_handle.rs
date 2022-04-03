@@ -6,7 +6,7 @@
 
 use super::*;
 use sapio_base::effects::EffectPath;
-use std::error::Error;
+use sapio::contract::CompilationError;
 /// Generic plugin handle interface.
 ///
 /// TODO: trait objects for being able to e.g. run plugins remotely.
@@ -15,8 +15,8 @@ pub trait PluginHandle {
         &self,
         path: &EffectPath,
         c: &CreateArgs<serde_json::Value>,
-    ) -> Result<Compiled, Box<dyn Error>>;
-    fn get_api(&self) -> Result<serde_json::value::Value, Box<dyn Error>>;
-    fn get_name(&self) -> Result<String, Box<dyn Error>>;
-    fn get_logo(&self) -> Result<String, Box<dyn Error>>;
+    ) -> Result<Compiled, CompilationError>;
+    fn get_api(&self) -> Result<serde_json::value::Value, CompilationError>;
+    fn get_name(&self) -> Result<String, CompilationError>;
+    fn get_logo(&self) -> Result<String, CompilationError>;
 }

@@ -43,7 +43,7 @@ pub trait EffectDB {
 /// #  Effects
 /// Map of all effects to process during compilation.  Each Key represents a
 /// path, each sub-key represents the sub-path name and value.
-#[derive(Clone, Default, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Default, Serialize, Deserialize, JsonSchema, Debug)]
 pub struct MapEffectDB {
     /// # The set of all effects
     /// List of effects to include while compiling.
