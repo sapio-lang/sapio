@@ -1,3 +1,4 @@
+use bitcoin::Amount;
 #[deny(missing_docs)]
 // Copyright Judica, Inc 2021
 //
@@ -80,8 +81,10 @@ struct Vault<S: State> {
     /// Where funds should land if they are backed up
     backup_addr: bitcoin::Address,
     /// # Default Fee
-    /// How much fee each transaction should have by default, in sats
-    default_fee: AmountU64,
+    /// How much feerate each transaction should have per virtual kilo-weight
+    /// unit, in sats
+    /// e.g., a  1 sat per virtual kilo-weight unit feerate would be 1000
+    default_feerate: AmountU64,
     /// # CPFP Config
     /// If a CPFP anchor is to be added
     cpfp: Option<Output>,
@@ -189,8 +192,7 @@ impl<S: State> Vault<S> {
         let mut tmpl = ctx
             .template()
             .set_label("backup to cold".into())
-            .set_color("darkblue".into())
-            .spend_amount(self.default_fee.into())?;
+            .set_color("darkblue".into());
         if let Some(Output { address, amount }) = self.cpfp.clone() {
             tmpl = tmpl.add_output(
                 amount.into(),
@@ -198,6 +200,8 @@ impl<S: State> Vault<S> {
                 Some([("purpose", "CPFP Anchor Output".into())].into()),
             )?;
         }
+        let size = tmpl.estimate_tx_size() + 8 + self.backup_addr.script_pubkey().len() as u64;
+        tmpl = tmpl.spend_amount((Amount::from(self.default_feerate) * size) / 1000)?;
         let funds = tmpl.ctx().funds();
         tmpl = tmpl.add_output(
             funds,
@@ -223,8 +227,7 @@ impl<S: State> Vault<S> {
         let mut tmpl = ctx
             .template()
             .set_label("begin redeem".into())
-            .set_color("pink".into())
-            .spend_amount(self.default_fee.into())?;
+            .set_color("pink".into());
         if let Some(Output { address, amount }) = self.cpfp.clone() {
             tmpl = tmpl.add_output(
                 amount.into(),
@@ -232,6 +235,8 @@ impl<S: State> Vault<S> {
                 Some([("purpose", "CPFP Anchor Output".into())].into()),
             )?;
         }
+        let size = tmpl.estimate_tx_size() + 8 + 35 /* 1 byte len, 1 byte version, 1 byte len, 32 bytes data*/;
+        tmpl = tmpl.spend_amount((Amount::from(self.default_feerate) * size) / 1000)?;
         let funds = tmpl.ctx().funds();
         tmpl = tmpl.add_output(
             funds,
@@ -240,7 +245,7 @@ impl<S: State> Vault<S> {
                 hot_key: self.hot_key,
                 backup_addr: self.backup_addr.clone(),
                 cpfp: self.cpfp.clone(),
-                default_fee: self.default_fee,
+                default_feerate: self.default_feerate,
                 timeout: self.timeout,
                 pd: Default::default(),
             },
