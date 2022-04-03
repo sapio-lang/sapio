@@ -23,11 +23,11 @@ pub fn create_contract_by_key<S: Serialize>(
     key: &[u8; 32],
     args: CreateArgs<S>,
 ) -> Result<Compiled, CompilationError> {
-    let path = serde_json::to_string(ctx.path().as_ref())
-        .map_err(|_| CompilationError::TerminateCompilation)?;
+    let path =
+        serde_json::to_string(ctx.path().as_ref()).map_err(CompilationError::SerializationError)?;
     unsafe {
         let s = serde_json::to_value(args)
-            .map_err(|_| CompilationError::TerminateCompilation)?
+            .map_err(CompilationError::SerializationError)?
             .to_string();
         let l = s.len();
         let p = sapio_v1_wasm_plugin_create_contract(
@@ -39,10 +39,9 @@ pub fn create_contract_by_key<S: Serialize>(
         );
         if p != 0 {
             let cs = CString::from_raw(p as *mut c_char);
-            serde_json::from_slice(cs.as_bytes())
-                .map_err(|_| CompilationError::TerminateCompilation)
+            serde_json::from_slice(cs.as_bytes()).map_err(CompilationError::DeserializationError)
         } else {
-            Err(CompilationError::TerminateCompilation)
+            Err(CompilationError::InternalModuleError("Unknown".into()))
         }
     }
 }
@@ -148,19 +147,19 @@ impl<T: SapioJSONTrait> TryFrom<SapioHostAPIVerifier<T>> for SapioHostAPI<T> {
         let key = match which_plugin.to_key() {
             Some(key) => key,
             _ => {
-                return Err(CompilationError::UnknownModuleError);
+                return Err(CompilationError::UnknownModule);
             }
         };
         let p = key.as_ptr() as i32;
         let api = unsafe {
             let api_buf = sapio_v1_wasm_plugin_get_api(p);
             if api_buf == 0 {
-                return Err(CompilationError::UnknownModuleError);
+                return Err(CompilationError::InternalModuleError(
+                    "API Not Available".into(),
+                ));
             }
             let cs = { CString::from_raw(api_buf as *mut c_char) };
-            serde_json::from_slice(cs.as_bytes()).map_err(|_|
-                CompilationError::InvalidModuleError
-            )?
+            serde_json::from_slice(cs.as_bytes()).map_err(CompilationError::DeserializationError)?
         };
         T::check_trait_implemented_inner(&api).map_err(CompilationError::ModuleFailedAPICheck)?;
         Ok(SapioHostAPI {
@@ -178,7 +177,7 @@ pub fn create_contract<S: Serialize>(
     key: &str,
     args: CreateArgs<S>,
 ) -> Result<Compiled, CompilationError> {
-    let key = lookup_module_name(key).ok_or(CompilationError::TerminateCompilation)?;
+    let key = lookup_module_name(key).ok_or(CompilationError::UnknownModule)?;
     create_contract_by_key(context, &key, args)
 }
 

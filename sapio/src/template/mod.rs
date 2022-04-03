@@ -6,10 +6,10 @@
 
 //! utilities for building Bitcoin transaction templates up programmatically
 use crate::contract::error::CompilationError;
-use sapio_base::simp::SIMPError;
-use sapio_base::simp::SIMP;
 use bitcoin::hashes::sha256;
 use bitcoin::util::amount::Amount;
+use sapio_base::simp::SIMPError;
+use sapio_base::simp::SIMP;
 use sapio_base::Clause;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -57,10 +57,12 @@ impl TemplateMetadata {
     {
         let s: String = i.into();
         match s.as_str() {
-            "color" | "label" => Err(CompilationError::TerminateCompilation),
+            "color" | "label" => Err(CompilationError::TerminateWith(
+                "Don't Set label or color through the extra API".into(),
+            )),
             _ => {
-                if self.extra.insert(s, j.into()).is_some() {
-                    return Err(CompilationError::TerminateCompilation);
+                if self.extra.insert(s.clone(), j.into()).is_some() {
+                    return Err(CompilationError::OverwriteMetadata(s));
                 }
                 Ok(self)
             }
@@ -72,7 +74,7 @@ impl TemplateMetadata {
         I: Into<String>,
     {
         if self.color.is_some() {
-            return Err(CompilationError::TerminateCompilation);
+            return Err(CompilationError::OverwriteMetadata("color".into()));
         }
         self.color = Some(i.into());
         Ok(self)
@@ -83,7 +85,7 @@ impl TemplateMetadata {
         I: Into<String>,
     {
         if self.label.is_some() {
-            return Err(CompilationError::TerminateCompilation);
+            return Err(CompilationError::OverwriteMetadata("label".into()));
         }
         self.label = Some(i.into());
         Ok(self)

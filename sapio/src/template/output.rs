@@ -5,8 +5,8 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Template Output container
-use sapio_base::simp::{SIMPError, SIMP};
 use super::*;
+use sapio_base::simp::{SIMPError, SIMP};
 use serde::{Deserialize, Serialize};
 /// Metadata for outputs, arbitrary KV set.
 #[derive(Serialize, Deserialize, Clone, JsonSchema, Debug, PartialEq, Eq)]

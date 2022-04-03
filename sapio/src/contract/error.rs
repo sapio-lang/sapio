@@ -26,6 +26,8 @@ pub enum CompilationError {
     TerminateCompilation,
     /// Unspecified Error -- stop compiling, share message
     TerminateWith(String),
+    /// Don't Overwrite Metadata
+    OverwriteMetadata(String),
     /// Fee Specification Error
     MinFeerateError,
     /// Error when ContextPath has already been used.
@@ -66,13 +68,19 @@ pub enum CompilationError {
     SIMPError(SIMPError),
     /// Module could not be found.
     /// Used in Plugin interface (TODO: Wrap these types)
-    UnknownModuleError,
+    UnknownModule,
     /// Module could not be queried
     /// Used in Plugin interface (TODO: Wrap these types)
-    InvalidModuleError,
+    InvalidModule,
+    /// Module failed internally
+    InternalModuleError(String),
     /// API Check Failed, module didn't satisfy examples.
     /// Used in Plugin interface (TODO: Wrap these types)
     ModuleFailedAPICheck(String),
+    /// Error while serializing
+    SerializationError(serde_json::Error),
+    /// Error while deserializing
+    DeserializationError(serde_json::Error),
     /// Unknown Error type -- either from a user or from some unhandled dependency
     Custom(Box<dyn std::error::Error>),
 }
