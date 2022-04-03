@@ -30,7 +30,8 @@ enum Versions {
     NFT_Sale_Trait_Version_0_1_0(NFT_Sale_Trait_Version_0_1_0),
 }
 impl Contract for SimpleNFTSale {
-    declare! {updatable<()>, Self::transfer}
+    declare! {then, Self::transfer}
+    declare! {non updatable}
 }
 fn default_coerce<T>(_: T) -> Result<(), CompilationError> {
     Ok(())
@@ -45,16 +46,10 @@ impl From<Versions> for SimpleNFTSale {
 REGISTER![[SimpleNFTSale, Versions], "logo.png"];
 
 impl SimpleNFTSale {
-    /// # signed
-    /// sales must be signed by the current owner
-    #[guard]
-    fn signed(self, _ctx: Context) {
-        Clause::Key(self.0.data.owner.clone())
-    }
     /// # transfer
     /// transfer exchanges the NFT for cold hard Bitcoinz
-    #[continuation(guarded_by = "[Self::signed]", web_api, coerce_args = "default_coerce")]
-    fn transfer(self, mut ctx: Context, _u: ()) {
+    #[then]
+    fn transfer(self, mut ctx: Context) {
         let amt = ctx.funds();
         // first, let's get the module that should be used to 're-mint' this NFT
         // to the new owner
@@ -94,8 +89,8 @@ impl SimpleNFTSale {
             let artist_gets = self.0.data.compute_royalty_for_artist(price);
             let seller_gets = price - artist_gets;
             ctx.template()
-                .add_output(amt, &new_nft_contract, None)?
                 .add_amount(self.0.price.into())
+                .add_output(amt, &new_nft_contract, None)?
                 .add_sequence()
                 .add_output(seller_gets, &self.0.data.owner, None)?
                 // Pay Royalty to Creator

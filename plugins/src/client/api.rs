@@ -131,7 +131,7 @@ impl<T: SapioJSONTrait> SapioHostAPI<T> {
             which_plugin: LookupFrom::HashKey(self.key.to_hex()),
             key: self.key,
             api: self.api.clone(),
-            _pd: Default::default()
+            _pd: Default::default(),
         }
     }
 }

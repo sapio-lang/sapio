@@ -89,7 +89,7 @@ impl SellableNFT for SimpleNFT {
             let sale_info = sale_info_partial.fill(self.data.clone());
             let sale_ctx = ctx.derive_str(Arc::new("sell".into()))?;
             // create a contract from the sale API passed in
-            let create_args = CreateArgs {
+            let create_args: CreateArgs<sale_impl::Versions> = CreateArgs {
                 context: ContextualArguments {
                     amount: ctx.funds(),
                     network: ctx.network,
@@ -100,7 +100,8 @@ impl SellableNFT for SimpleNFT {
             // use the sale API we passed in
             let compiled = create_contract_by_key(sale_ctx, &which_sale.key, create_args)?;
             // send to this sale!
-            let mut builder = ctx.template();
+            let pays = compiled.amount_range.max() - ctx.funds();
+            let mut builder = ctx.template().add_amount(pays);
             // todo: we need to cut-through the compiled contract address, but this
             // upgrade to Sapio semantics will come Soon™.
             builder = builder.add_output(compiled.amount_range.max(), &compiled, None)?;
@@ -124,6 +125,9 @@ impl TryFrom<Versions> for SimpleNFT {
         let this: SapioHostAPI<Mint_NFT_Trait_Version_0_1_0> = LookupFrom::This
             .try_into()
             .map_err(|_| CompilationError::TerminateWith("Failed to Lookup".into()))?;
+        // required otherwise cross-moudle calls get bungled
+        // TODO: Address this more suavely
+        let this = this.canonicalize();
         match data.minting_module {
             // if no module is provided, it must be this module!
             None => {
@@ -132,7 +136,10 @@ impl TryFrom<Versions> for SimpleNFT {
             }
             // if a module is provided, we have no idea what to do...
             // unless the module is this module itself!
-            Some(ref module) if module.key == this.key => Ok(SimpleNFT { data }),
+            Some(ref mut module) if module.key == this.key => {
+                *module = module.canonicalize();
+                Ok(SimpleNFT { data })
+            }
             _ => Err(CompilationError::TerminateWith(format!(
                 "Minting module must be None or equal to {}",
                 this.key.to_hex()

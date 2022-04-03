@@ -5,8 +5,8 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use super::*;
-use sapio_base::effects::EffectPath;
 use sapio::contract::CompilationError;
+use sapio_base::effects::EffectPath;
 /// Generic plugin handle interface.
 ///
 /// TODO: trait objects for being able to e.g. run plugins remotely.
