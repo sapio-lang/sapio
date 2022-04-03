@@ -80,7 +80,7 @@ to run `cargo build --release` and use a release binary as it is much faster.
 graphical user interface for Sapio. It is the recommended way to get started with Sapio development.
 We recommend a shallow clone unless you want the full history.
 ```
-git clone --depth 1 git@github.com:sapio-lang.sapio-studio.git && cd sapio-studio
+git clone --depth 1 git@github.com:sapio-lang/sapio-studio.git && cd sapio-studio
 yarn install
 ```
 and then in separate shells
