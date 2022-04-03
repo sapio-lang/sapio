@@ -19,22 +19,31 @@ pub fn log(s: &str) {
 
 /// Given a 32 byte plugin identifier, create a new contract instance.
 pub fn create_contract_by_key<S: Serialize>(
+    ctx: Context,
     key: &[u8; 32],
     args: CreateArgs<S>,
 ) -> Result<Compiled, CompilationError> {
+    let path =
+        serde_json::to_string(ctx.path().as_ref()).map_err(CompilationError::SerializationError)?;
     unsafe {
         let s = serde_json::to_value(args)
-            .map_err(|_| CompilationError::TerminateCompilation)?
+            .map_err(CompilationError::SerializationError)?
             .to_string();
         let l = s.len();
-        let p =
-            sapio_v1_wasm_plugin_create_contract(key.as_ptr() as i32, s.as_ptr() as i32, l as i32);
+        let p = sapio_v1_wasm_plugin_create_contract(
+            path.as_ptr() as i32,
+            path.len() as i32,
+            key.as_ptr() as i32,
+            s.as_ptr() as i32,
+            l as i32,
+        );
         if p != 0 {
             let cs = CString::from_raw(p as *mut c_char);
-            serde_json::from_slice(cs.as_bytes())
-                .map_err(|_| CompilationError::TerminateCompilation)
+            let res: Result<Compiled, String> = serde_json::from_slice(cs.as_bytes())
+                .map_err(CompilationError::DeserializationError)?;
+            res.map_err(CompilationError::ModuleCompilationErrorUnsendable)
         } else {
-            Err(CompilationError::TerminateCompilation)
+            Err(CompilationError::InternalModuleError("Unknown".into()))
         }
     }
 }
@@ -115,7 +124,18 @@ pub struct SapioHostAPI<T: SapioJSONTrait> {
     _pd: PhantomData<T>,
 }
 
-use std::error::Error;
+impl<T: SapioJSONTrait> SapioHostAPI<T> {
+    pub fn canonicalize(&self) -> Self {
+        use bitcoin::hashes::hex::ToHex;
+        SapioHostAPI {
+            which_plugin: LookupFrom::HashKey(self.key.to_hex()),
+            key: self.key,
+            api: self.api.clone(),
+            _pd: Default::default(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, JsonSchema)]
 /// # Helper for Serialization...
 struct SapioHostAPIVerifier<T: SapioJSONTrait> {
@@ -125,8 +145,8 @@ struct SapioHostAPIVerifier<T: SapioJSONTrait> {
 }
 
 impl<T: SapioJSONTrait> TryFrom<LookupFrom> for SapioHostAPI<T> {
-    type Error = Box<dyn Error>;
-    fn try_from(which_plugin: LookupFrom) -> Result<SapioHostAPI<T>, Box<dyn Error>> {
+    type Error = CompilationError;
+    fn try_from(which_plugin: LookupFrom) -> Result<SapioHostAPI<T>, CompilationError> {
         SapioHostAPI::try_from(SapioHostAPIVerifier {
             which_plugin,
             _pd: Default::default(),
@@ -134,25 +154,27 @@ impl<T: SapioJSONTrait> TryFrom<LookupFrom> for SapioHostAPI<T> {
     }
 }
 impl<T: SapioJSONTrait> TryFrom<SapioHostAPIVerifier<T>> for SapioHostAPI<T> {
-    type Error = Box<dyn Error>;
-    fn try_from(shapv: SapioHostAPIVerifier<T>) -> Result<SapioHostAPI<T>, Box<dyn Error>> {
+    type Error = CompilationError;
+    fn try_from(shapv: SapioHostAPIVerifier<T>) -> Result<SapioHostAPI<T>, CompilationError> {
         let SapioHostAPIVerifier { which_plugin, _pd } = shapv;
         let key = match which_plugin.to_key() {
             Some(key) => key,
             _ => {
-                return Err("Key Not Found".into());
+                return Err(CompilationError::UnknownModule);
             }
         };
         let p = key.as_ptr() as i32;
         let api = unsafe {
             let api_buf = sapio_v1_wasm_plugin_get_api(p);
             if api_buf == 0 {
-                return Err("API Pointer Null".into());
+                return Err(CompilationError::InternalModuleError(
+                    "API Not Available".into(),
+                ));
             }
             let cs = { CString::from_raw(api_buf as *mut c_char) };
-            serde_json::from_slice(cs.as_bytes())?
+            serde_json::from_slice(cs.as_bytes()).map_err(CompilationError::DeserializationError)?
         };
-        T::check_trait_implemented_inner(&api)?;
+        T::check_trait_implemented_inner(&api).map_err(CompilationError::ModuleFailedAPICheck)?;
         Ok(SapioHostAPI {
             which_plugin,
             key,
@@ -164,11 +186,12 @@ impl<T: SapioJSONTrait> TryFrom<SapioHostAPIVerifier<T>> for SapioHostAPI<T> {
 
 /// Given a human readable name, create a new contract instance
 pub fn create_contract<S: Serialize>(
+    context: Context,
     key: &str,
     args: CreateArgs<S>,
 ) -> Result<Compiled, CompilationError> {
-    let key = lookup_module_name(key).ok_or(CompilationError::TerminateCompilation)?;
-    create_contract_by_key(&key, args)
+    let key = lookup_module_name(key).ok_or(CompilationError::UnknownModule)?;
+    create_contract_by_key(context, &key, args)
 }
 
 /// A empty type tag to bind the dynamically linked host emulator functionality

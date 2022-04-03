@@ -10,6 +10,7 @@ pub mod util;
 use bitcoin::XOnlyPublicKey;
 pub use util::CTVHash;
 pub mod plugin_args;
+pub mod simp;
 
 /// Helpers for making correct time locks
 pub mod timelocks;

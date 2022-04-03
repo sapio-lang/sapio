@@ -21,10 +21,6 @@ use emulator_connect::CTVAvailable;
 use emulator_connect::CTVEmulator;
 use miniscript::psbt::PsbtExt;
 use sapio::contract::context::MapEffectDB;
-
-use sapio_base::serialization_helpers::SArc;
-use std::convert::TryInto;
-
 use sapio::contract::object::LinkedPSBT;
 use sapio::contract::object::SapioStudioObject;
 use sapio::contract::Compiled;
@@ -32,12 +28,15 @@ use sapio::contract::Context;
 use sapio::template::output::OutputMeta;
 use sapio::template::TemplateMetadata;
 use sapio::util::extended_address::ExtendedAddress;
+use sapio_base::effects::PathFragment;
+use sapio_base::serialization_helpers::SArc;
 use sapio_base::txindex::TxIndex;
 use sapio_base::txindex::TxIndexLogger;
 use sapio_base::util::CTVHash;
 use sapio_wasm_plugin::host::{PluginHandle, WasmPluginHandle};
 use sapio_wasm_plugin::CreateArgs;
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::rc::Rc;
 use std::sync::Arc;
 #[deny(missing_docs)]
@@ -107,9 +106,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
       (about: "Create or Manage a Contract")
       (@subcommand bind =>
        (about: "Bind Contract to a specific UTXO")
-       (@arg mock: --mock "Create a fake output for this txn.")
-       (@arg base64_psbt: --base64_psbt "Create a fake output for this txn.")
-       (@arg outpoint: --outpoint +takes_value "Use this specific outpoint")
+       (@arg base64_psbt: --base64_psbt "Output as a base64 PSBT")
+       (@group from  =>
+            (@arg outpoint: --outpoint +takes_value "Use this specific outpoint")
+            (@arg txn: --txn +takes_value "Use this specific transaction ")
+            (@arg mock: --mock "Create a fake output for this txn.")
+       )
        (@arg json: "JSON to Bind")
       )
       (@subcommand create =>
@@ -319,8 +321,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     emulator,
                     config.network,
                     plugin_map,
-                )
-                .await?;
+                )?;
                 for plugin in plugins {
                     println!("{} -- {}", plugin.get_name()?, plugin.id().to_string());
                 }
@@ -341,6 +342,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let outpoint: Option<bitcoin::OutPoint> = args
                     .value_of("outpoint")
                     .map(serde_json::from_str)
+                    .transpose()?;
+                let use_txn = args
+                    .value_of("txn")
+                    .map(|buf| base64::decode(buf.as_bytes()))
+                    .transpose()?
+                    .map(|b| PartiallySignedTransaction::consensus_decode(&b[..]))
                     .transpose()?;
                 let client = rpc::Client::new(
                     config.active.api_node.url.clone(),
@@ -376,19 +383,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let mut spends = HashMap::new();
                     if let ExtendedAddress::Address(ref a) = j.address {
                         spends.insert(format!("{}", a), j.amount_range.max());
+
+                        if let Some(psbt) = use_txn {
+                            let script = a.script_pubkey();
+                            if let Some(pos) = psbt
+                                .unsigned_tx
+                                .output
+                                .iter()
+                                .enumerate()
+                                .find(|(_, o)| o.script_pubkey == script)
+                                .map(|(i, _)| i)
+                            {
+                                (psbt.extract_tx(), pos as u32)
+                            } else {
+                                return Err(format!(
+                                    "No Output found {:?} {:?}",
+                                    psbt.unsigned_tx, a
+                                )
+                                .into());
+                            }
+                        } else {
+                            let res = client
+                                .wallet_create_funded_psbt(&[], &spends, None, None, None)
+                                .await?;
+                            let psbt = PartiallySignedTransaction::consensus_decode(
+                                &base64::decode(&res.psbt)?[..],
+                            )?;
+                            let tx = psbt.extract_tx();
+                            // if change pos is -1, then +1%len == 0. if it is 0, then 1. if 1, then 2 % len == 0.
+                            let vout = ((res.change_position + 1) as usize) % tx.output.len();
+                            (tx, vout as u32)
+                        }
                     } else {
-                        Err("Must have a valid address")?;
+                        return Err("Must have a valid address".into());
                     }
-                    let res = client
-                        .wallet_create_funded_psbt(&[], &spends, None, None, None)
-                        .await?;
-                    let psbt = PartiallySignedTransaction::consensus_decode(
-                        &base64::decode(&res.psbt)?[..],
-                    )?;
-                    let tx = psbt.extract_tx();
-                    // if change pos is -1, then +1%len == 0. If it is 0, then 1. If 1, then 2 % len == 0.
-                    let vout = ((res.change_position + 1) as usize) % tx.output.len();
-                    (tx, vout as u32)
                 };
                 let logger = Rc::new(TxIndexLogger::new());
                 (*logger).add_tx(Arc::new(tx.clone()))?;
@@ -413,6 +441,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     label: Some("funding".into()),
                                     color: Some("pink".into()),
                                     extra: HashMap::new(),
+                                    simp: Default::default(),
                                 },
                                 output_metadata,
                             }
@@ -427,7 +456,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             Some(("create", args)) => {
-                let sph = WasmPluginHandle::new(
+                let sph = WasmPluginHandle::new_async(
                     "org".into(),
                     "judica".into(),
                     "sapio-cli".into(),
@@ -458,11 +487,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 let create_args: CreateArgs<serde_json::Value> = serde_json::from_value(params)?;
 
-                let v = sph.create(&create_args)?;
+                let v = sph.create(&PathFragment::Root.into(), &create_args)?;
                 println!("{}", serde_json::to_string(&v)?);
             }
             Some(("api", args)) => {
-                let sph = WasmPluginHandle::new(
+                let sph = WasmPluginHandle::new_async(
                     "org".into(),
                     "judica".into(),
                     "sapio-cli".into(),
@@ -476,7 +505,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("{}", sph.get_api()?);
             }
             Some(("logo", args)) => {
-                let sph = WasmPluginHandle::new(
+                let sph = WasmPluginHandle::new_async(
                     "org".into(),
                     "judica".into(),
                     "sapio-cli".into(),
@@ -490,7 +519,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("{}", sph.get_logo()?);
             }
             Some(("info", args)) => {
-                let sph = WasmPluginHandle::new(
+                let sph = WasmPluginHandle::new_async(
                     "org".into(),
                     "judica".into(),
                     "sapio-cli".into(),
@@ -520,7 +549,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             Some(("load", args)) => {
-                let sph = WasmPluginHandle::new(
+                let sph = WasmPluginHandle::new_async(
                     "org".into(),
                     "judica".into(),
                     "sapio-cli".into(),

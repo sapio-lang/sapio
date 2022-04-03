@@ -9,8 +9,11 @@ use super::*;
 use crate::host::exports::*;
 use crate::host::wasm_cache::get_all_keys_from_fs;
 use crate::host::{HostEnvironment, HostEnvironmentInner};
+use sapio::contract::CompilationError;
+use sapio_base::effects::EffectPath;
 use sapio_ctv_emulator_trait::CTVEmulator;
 use std::error::Error;
+use wasmer::Memory;
 pub struct WasmPluginHandle {
     store: Store,
     env: HostEnvironment,
@@ -27,7 +30,7 @@ impl WasmPluginHandle {
     }
 
     /// load all the cached keys as plugins upfront.
-    pub async fn load_all_keys(
+    pub fn load_all_keys(
         typ: String,
         org: String,
         proj: String,
@@ -46,16 +49,13 @@ impl WasmPluginHandle {
                 None,
                 net,
                 plugin_map.clone(),
-            )
-            .await?;
+            )?;
             r.push(wph)
         }
         Ok(r)
     }
 
-    /// Create an plugin handle. Only one of key or file should be set, and one
-    /// should be set.
-    pub async fn new(
+    pub async fn new_async(
         typ: String,
         org: String,
         proj: String,
@@ -65,14 +65,42 @@ impl WasmPluginHandle {
         net: bitcoin::Network,
         plugin_map: Option<HashMap<Vec<u8>, [u8; 32]>>,
     ) -> Result<Self, Box<dyn Error>> {
+        let file = if let Some(f) = file {
+            Some(tokio::fs::read(f).await?)
+        } else {
+            None
+        };
+        Self::new(
+            typ,
+            org,
+            proj,
+            emulator,
+            key,
+            file.as_ref(),
+            net,
+            plugin_map,
+        )
+    }
+    /// Create an plugin handle. Only one of key or file should be set, and one
+    /// should be set.
+    /// TODO: Revert to async?
+    pub fn new(
+        typ: String,
+        org: String,
+        proj: String,
+        emulator: &Arc<dyn CTVEmulator>,
+        key: Option<&str>,
+        file: Option<&Vec<u8>>,
+        net: bitcoin::Network,
+        plugin_map: Option<HashMap<Vec<u8>, [u8; 32]>>,
+    ) -> Result<Self, Box<dyn Error>> {
         // ensures that either key or file is passed
         key.xor(file.and(Some("")))
             .ok_or("Passed Both Key and File or Neither")?;
         let store = Store::default();
 
         let (module, key) = match (file, key) {
-            (Some(file), _) => {
-                let wasm_bytes = tokio::fs::read(file).await?;
+            (Some(wasm_bytes), _) => {
                 match wasm_cache::load_module(&typ, &org, &proj, &store, &wasm_bytes) {
                     Ok(module) => module,
                     Err(_) => {
@@ -155,42 +183,45 @@ impl WasmPluginHandle {
     }
 
     /// forget an allocated pointer
-    pub fn forget(&self, p: i32) -> Result<(), Box<dyn Error>> {
+    pub fn forget(&self, p: i32) -> Result<(), CompilationError> {
         Ok(self
             .env
             .lock()
             .unwrap()
             .forget_ref()
-            .ok_or("Uninitialized")?
-            .call(p)?)
+            .ok_or_else(|| CompilationError::ModuleCouldNotFindFunction("forget".into()))?
+            .call(p)
+            .map_err(|e| CompilationError::ModuleCouldNotDeallocate(p, e.into()))?)
     }
 
     /// create an allocation
-    pub fn allocate(&self, len: i32) -> Result<i32, Box<dyn Error>> {
-        Ok(self
-            .env
+    pub fn allocate(&self, len: i32) -> Result<i32, CompilationError> {
+        self.env
             .lock()
             .unwrap()
             .allocate_wasm_bytes_ref()
-            .ok_or("Uninitialized")?
-            .call(len)?)
+            .ok_or_else(|| {
+                CompilationError::ModuleCouldNotFindFunction("allocate_wasm_bytes".into())
+            })?
+            .call(len)
+            .map_err(|e| CompilationError::ModuleCouldNotAllocateError(len, e.into()))
     }
 
     /// pass a string to the WASM plugin
-    pub fn pass_string(&self, s: &str) -> Result<i32, Box<dyn Error>> {
+    pub fn pass_string(&self, s: &str) -> Result<i32, CompilationError> {
         let offset = self.allocate(s.len() as i32)?;
         match self.pass_string_inner(s, offset) {
             Ok(_) => Ok(offset),
-            e @ Err(_) => {
+            Err(e) => {
                 self.forget(offset)?;
-                return e.map(|_| 0);
+                Err(e)
             }
         }
     }
 
     /// helper for string passing
-    fn pass_string_inner(&self, s: &str, offset: i32) -> Result<(), Box<dyn Error>> {
-        let memory = self.instance.exports.get_memory("memory")?;
+    fn pass_string_inner(&self, s: &str, offset: i32) -> Result<(), CompilationError> {
+        let memory = self.get_memory()?;
         let mem: MemoryView<'_, u8> = memory.view();
         for (idx, byte) in s.as_bytes().iter().enumerate() {
             mem[idx + offset as usize].set(*byte);
@@ -198,9 +229,15 @@ impl WasmPluginHandle {
         Ok(())
     }
 
+    fn get_memory(&self) -> Result<&Memory, CompilationError> {
+        self.instance
+            .exports
+            .get_memory("memory")
+            .map_err(|e| CompilationError::ModuleFailedToGetMemory(e.into()))
+    }
     /// read something from wasm memory, null terminated
-    fn read_to_vec(&self, p: i32) -> Result<Vec<u8>, Box<dyn Error>> {
-        let memory = self.instance.exports.get_memory("memory")?;
+    fn read_to_vec(&self, p: i32) -> Result<Vec<u8>, CompilationError> {
+        let memory = self.get_memory()?;
         let mem: MemoryView<'_, u8> = memory.view();
         Ok(mem[p as usize..]
             .iter()
@@ -211,53 +248,68 @@ impl WasmPluginHandle {
 }
 
 impl PluginHandle for WasmPluginHandle {
-    fn create(&self, c: &CreateArgs<serde_json::Value>) -> Result<Compiled, Box<dyn Error>> {
-        let arg_str = serde_json::to_string(c)?;
-        let offset = self.pass_string(&arg_str)?;
+    fn create(
+        &self,
+        path: &EffectPath,
+        c: &CreateArgs<serde_json::Value>,
+    ) -> Result<Compiled, CompilationError> {
+        let arg_str = serde_json::to_string(c).map_err(CompilationError::SerializationError)?;
+        let args_ptr = self.pass_string(&arg_str)?;
+        let path_str = serde_json::to_string(path).map_err(CompilationError::SerializationError)?;
+        let path_ptr = self.pass_string(&path_str)?;
         let create_func = {
             let env = self.env.lock().unwrap();
             env.create.clone()
         };
-        let offset = create_func.get_ref().ok_or("Uninitialized")?.call(offset)?;
-        let buf = self.read_to_vec(offset)?;
-        self.forget(offset)?;
-        let c: Result<String, String> = serde_json::from_slice(&buf)?;
-        let v: Compiled = serde_json::from_str(&c?)?;
-        Ok(v)
+        let result_ptr = create_func
+            .get_ref()
+            .ok_or_else(|| CompilationError::ModuleCouldNotFindFunction("create".into()))?
+            .call(path_ptr, args_ptr)
+            .map_err(|e| {
+                CompilationError::ModuleCouldNotCreateContract(path.clone(), c.clone(), e.into())
+            })?;
+        let buf = self.read_to_vec(result_ptr)?;
+        self.forget(result_ptr)?;
+        let v: Result<Compiled, String> =
+            serde_json::from_slice(&buf).map_err(CompilationError::DeserializationError)?;
+        v.map_err(CompilationError::ModuleCompilationErrorUnsendable)
     }
-    fn get_api(&self) -> Result<serde_json::value::Value, Box<dyn Error>> {
+    fn get_api(&self) -> Result<serde_json::value::Value, CompilationError> {
         let p = self
             .env
             .lock()
             .unwrap()
             .get_api_ref()
-            .ok_or("Uninitialized")?
-            .call()?;
+            .ok_or_else(|| CompilationError::ModuleCouldNotFindFunction("get_api".into()))?
+            .call()
+            .map_err(|e| CompilationError::ModuleCouldNotGetAPI(e.into()))?;
         let v = self.read_to_vec(p)?;
         self.forget(p)?;
-        Ok(serde_json::from_slice(&v)?)
+        serde_json::from_slice(&v).map_err(CompilationError::DeserializationError)
     }
-    fn get_name(&self) -> Result<String, Box<dyn Error>> {
+    fn get_name(&self) -> Result<String, CompilationError> {
         let p = self
             .env
             .lock()
             .unwrap()
             .get_name_ref()
-            .ok_or("Uninitialized")?
-            .call()?;
+            .ok_or_else(|| CompilationError::ModuleCouldNotFindFunction("get_name".into()))?
+            .call()
+            .map_err(|e| CompilationError::ModuleCouldNotGetName(e.into()))?;
         let v = self.read_to_vec(p)?;
         self.forget(p)?;
         Ok(String::from_utf8_lossy(&v).to_string())
     }
 
-    fn get_logo(&self) -> Result<String, Box<dyn Error>> {
+    fn get_logo(&self) -> Result<String, CompilationError> {
         let p = self
             .env
             .lock()
             .unwrap()
             .get_logo_ref()
-            .ok_or("Uninitialized")?
-            .call()?;
+            .ok_or_else(|| CompilationError::ModuleCouldNotFindFunction("get_logo".into()))?
+            .call()
+            .map_err(|e| CompilationError::ModuleCouldNotGetLogo(e.into()))?;
         let v = self.read_to_vec(p)?;
         self.forget(p)?;
         Ok(String::from_utf8_lossy(&v).to_string())

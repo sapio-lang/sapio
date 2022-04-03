@@ -6,7 +6,7 @@
 //! Payment Pool Contract for Sapio Studio Advent Calendar Entry
 #[deny(missing_docs)]
 use crate::sapio_base::Clause;
-use bitcoin::hashes::hex::FromHex;
+
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::secp256k1::schnorr::Signature;
@@ -14,7 +14,7 @@ use bitcoin::secp256k1::Message;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::amount::Amount;
 use bitcoin::Address;
-use bitcoin::SchnorrSig;
+
 use bitcoin::XOnlyPublicKey;
 use sapio::contract::actions::conditional_compile::ConditionalCompileType;
 use sapio::contract::*;

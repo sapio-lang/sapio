@@ -7,16 +7,14 @@
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::util::psbt::PartiallySignedTransaction;
-
 pub use plugin_handle::PluginHandle;
 pub use plugin_handle::WasmPluginHandle;
-
+use sapio::contract::CompilationError;
 use sapio_ctv_emulator_trait::CTVEmulator;
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
-
 use wasmer::*;
 
 pub mod plugin_handle;
@@ -47,7 +45,7 @@ pub struct HostEnvironmentInner {
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_drop_allocation"))]
     pub forget: LazyInit<NativeFunc<i32, ()>>,
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_create"))]
-    pub create: LazyInit<NativeFunc<i32, i32>>,
+    pub create: LazyInit<NativeFunc<(i32, i32), i32>>,
     #[wasmer(export(name = "sapio_v1_wasm_plugin_entry_point"))]
     pub init: LazyInit<NativeFunc<(), ()>>,
 }
@@ -62,6 +60,7 @@ mod exports {
     //! the exports that the client will be able to use.
     //! They must be manually bound when instantiating the client.
     use super::*;
+    use sapio_base::effects::EffectPath;
     /// lookup a plugin key from a human reable name.
     /// if ok == 1, result is valid.
     /// out is written and must be 32 bytes of writable memory.
@@ -114,14 +113,30 @@ mod exports {
     /// plugin identified by key.
     pub fn sapio_v1_wasm_plugin_create_contract(
         env: &HostEnvironment,
+        path: i32,
+        path_len: i32,
         key: i32,
         json: i32,
         json_len: i32,
     ) -> i32 {
-        wasm_plugin_action(env, key, Action::Create { json, json_len })
+        wasm_plugin_action(
+            env,
+            key,
+            Action::Create {
+                path,
+                path_len,
+                json,
+                json_len,
+            },
+        )
     }
     enum Action {
-        Create { json: i32, json_len: i32 },
+        Create {
+            path: i32,
+            path_len: i32,
+            json: i32,
+            json_len: i32,
+        },
         GetAPI,
     }
 
@@ -141,10 +156,17 @@ mod exports {
             buf
         })
         .to_string();
-        let v = match action {
+        let action_to_take = match action {
             Action::GetAPI => None,
-            Action::Create { json, json_len, .. } => {
-                let mut v = vec![0u8; json_len as usize];
+            Action::Create {
+                path,
+                path_len,
+                json,
+                json_len,
+                ..
+            } => {
+                // use this buffer twice, so make it the max size
+                let mut v = vec![0u8; std::cmp::max(json_len, path_len) as usize];
                 for (src, dst) in env.memory_ref().unwrap().view()
                     [json as usize..(json + json_len) as usize]
                     .iter()
@@ -153,9 +175,29 @@ mod exports {
                 {
                     *dst = src;
                 }
-                Some(serde_json::from_str(
-                    &String::from_utf8_lossy(&v).to_owned().to_string(),
-                ))
+                let create_args = serde_json::from_str(
+                    &String::from_utf8_lossy(&v[..json_len as usize])
+                        .to_owned()
+                        .to_string(),
+                )
+                .map_err(CompilationError::DeserializationError);
+
+                for (src, dst) in env.memory_ref().unwrap().view()
+                    [path as usize..(path + path_len) as usize]
+                    .iter()
+                    .map(Cell::get)
+                    .zip(v.iter_mut())
+                {
+                    *dst = src;
+                }
+                let effectpath: Result<EffectPath, _> = serde_json::from_str(
+                    &String::from_utf8_lossy(&v[..path_len as usize])
+                        .to_owned()
+                        .to_string(),
+                )
+                .map_err(CompilationError::DeserializationError);
+
+                Some((create_args, effectpath))
             }
         };
         let emulator = env.emulator.clone();
@@ -164,55 +206,50 @@ mod exports {
         let org = env.org.clone();
         let proj = env.proj.clone();
         let net = env.net;
-        let (tx_json, mut rx_json) =
-            tokio::sync::oneshot::channel::<Result<serde_json::Value, _>>();
 
-        let handle = tokio::runtime::Handle::current();
-
-        handle.spawn(async move {
-            let plugin =
-                WasmPluginHandle::new(typ, org, proj, &emulator, Some(&h), None, net, Some(mmap))
-                    .await
-                    .ok();
-            match action {
-                Action::GetAPI => {
-                    plugin
-                        .and_then(|sph| sph.get_api().ok())
-                        .map(|api| tx_json.send(Ok(api)));
-                }
-                Action::Create { .. } => {
-                    if let Some(Ok(create_args)) = v {
-                        plugin
-                            .and_then(|sph| sph.create(&create_args).ok())
-                            .map(|comp| tx_json.send(serde_json::to_value(comp)));
-                    }
-                }
-            }
-        });
-
-        tokio::task::block_in_place(|| loop {
-            match rx_json.try_recv() {
-                Ok(value) => {
-                    return (move || -> Result<i32, Box<dyn std::error::Error>> {
-                        let comp_s = serde_json::to_string(&value?)?;
-                        let bytes: i32 = env
-                            .allocate_wasm_bytes_ref()
-                            .unwrap()
-                            .call(comp_s.len() as i32)?;
-                        for (byte, c) in env.memory_ref().unwrap().view::<u8>()[bytes as usize..]
-                            .iter()
-                            .zip(comp_s.as_bytes())
-                        {
-                            byte.set(*c);
+        match WasmPluginHandle::new(typ, org, proj, &emulator, Some(&h), None, net, Some(mmap)) {
+            Ok(sph) => {
+                let comp_s = (move || -> Result<serde_json::Value, CompilationError> {
+                    let value = match action_to_take {
+                        None => Ok(sph.get_api()),
+                        Some((create_args, path)) => {
+                            sph.create(&path?, &create_args?).map(|comp| {
+                                serde_json::to_value(comp)
+                                    .map_err(CompilationError::DeserializationError)
+                            })
                         }
-                        Ok(bytes)
-                    })()
-                    .unwrap_or(0);
-                }
-                Err(tokio::sync::oneshot::error::TryRecvError::Closed) => return 0,
-                _ => (),
-            };
-        })
+                    };
+                    serde_json::to_value(&value??).map_err(CompilationError::SerializationError)
+                })();
+                return (move || -> Result<i32, CompilationError> {
+                    let comp_s = serde_json::to_string(&comp_s.map_err(|s| s.to_string()))
+                        .map_err(CompilationError::SerializationError)?;
+                    let bytes: i32 = env
+                        .allocate_wasm_bytes_ref()
+                        .ok_or_else(|| {
+                            CompilationError::ModuleCouldNotFindFunction(
+                                "allocate_wasm_bytes".into(),
+                            )
+                        })?
+                        .call(comp_s.len() as i32)
+                        .map_err(|e| {
+                            CompilationError::ModuleCouldNotAllocateError(
+                                comp_s.len() as i32,
+                                e.into(),
+                            )
+                        })?;
+                    for (byte, c) in env.memory_ref().unwrap().view::<u8>()[bytes as usize..]
+                        .iter()
+                        .zip(comp_s.as_bytes())
+                    {
+                        byte.set(*c);
+                    }
+                    Ok(bytes)
+                })()
+                .unwrap_or(0);
+            }
+            _ => 0,
+        }
     }
 
     /// use the hosts stdout to log a string. The host may make this a no-op.

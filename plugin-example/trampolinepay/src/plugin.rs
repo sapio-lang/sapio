@@ -6,14 +6,14 @@
 
 #[deny(missing_docs)]
 use batching_trait::BatchingTraitVersion0_1_1;
-use bitcoin::util::amount::Amount;
-use sapio::contract::*;
 
+use sapio::contract::*;
 use sapio::*;
 use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
+use std::sync::Arc;
 
 /// # Trampolined Payment
 /// A payment which is passed off to another program via a trait-locked plugin
@@ -35,8 +35,9 @@ enum Versions {
 }
 impl TrampolinePay {
     #[then]
-    fn expand(self, ctx: Context) {
+    fn expand(self, mut ctx: Context) {
         let contract = create_contract_by_key(
+            ctx.derive_str(Arc::new("plugin_trampoline".into()))?,
             &self.handle.key,
             CreateArgs {
                 context: ContextualArguments {

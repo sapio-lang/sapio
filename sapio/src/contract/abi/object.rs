@@ -17,10 +17,11 @@ use bitcoin::util::amount::Amount;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use bitcoin::util::taproot::TaprootBuilder;
 use bitcoin::util::taproot::TaprootBuilderError;
+use bitcoin::util::taproot::TaprootSpendInfo;
+use bitcoin::OutPoint;
 use bitcoin::PublicKey;
 use bitcoin::Script;
 use bitcoin::XOnlyPublicKey;
-
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
 use sapio_base::serialization_helpers::SArc;
@@ -227,7 +228,8 @@ impl Object {
         // Could use a queue instead to do BFS linking, but order doesn't matter and stack is
         // faster.
         let mut stack = vec![(out_in, self)];
-
+        let mut mock_out = OutPoint::default();
+        mock_out.vout = 0;
         let secp = bitcoin::secp256k1::Secp256k1::new();
         while let Some((
             out,
@@ -260,6 +262,10 @@ impl Object {
                             )| {
                                 let mut tx = tx.clone();
                                 tx.input[0].previous_output = out;
+                                for inp in tx.input[1..].iter_mut() {
+                                    inp.previous_output = mock_out;
+                                    mock_out.vout += 1;
+                                }
                                 if let Some(outputs) = output_map.get(ctv_hash) {
                                     for (i, inp) in tx.input.iter_mut().enumerate().skip(1) {
                                         if let Some(out) = outputs[i] {
@@ -282,12 +288,21 @@ impl Object {
                                     }
                                     Some(SupportedDescriptors::XOnly(Descriptor::Tr(t))) => {
                                         let mut builder = TaprootBuilder::new();
+                                        let mut added = false;
                                         for (depth, ms) in t.iter_scripts() {
+                                            added = true;
                                             let script = ms.encode();
                                             builder = builder.add_leaf(depth, script)?;
                                         }
-                                        let info =
-                                            builder.finalize(&secp, t.internal_key().clone())?;
+                                        let info = if added {
+                                            builder.finalize(&secp, t.internal_key().clone())?
+                                        } else {
+                                            TaprootSpendInfo::new_key_spend(
+                                                &secp,
+                                                t.internal_key().clone(),
+                                                None,
+                                            )
+                                        };
                                         let inp = &mut psbtx.inputs[0];
                                         for item in info.as_script_map().keys() {
                                             let cb =

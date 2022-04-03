@@ -49,6 +49,11 @@ impl From<Amount> for AmountU64 {
         AmountU64(a)
     }
 }
+impl From<u64> for AmountU64 {
+    fn from(a: u64) -> Self {
+        AmountU64(Amount::from_sat(a))
+    }
+}
 impl From<AmountU64> for Amount {
     fn from(a: AmountU64) -> Amount {
         a.0

@@ -10,4 +10,8 @@ members = ["treepay"
           , "op_return_chain"
           , "hanukkiah"
           , "payment_pool"
-          , "jamesob-vault"]
+          , "jamesob-vault"
+          , "nft-trait"
+          , "nft"
+          , "nft-sale"
+          , "nft-auction"]

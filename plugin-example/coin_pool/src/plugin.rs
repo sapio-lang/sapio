@@ -33,12 +33,16 @@ struct Payout {
 /// plugins based payouts.
 #[derive(JsonSchema, Deserialize)]
 enum PoolTypes {
-    /// # Expert Mode
-    /// This allows you to specify sub plugins to call out to for every participant
-    PluginPool {
-        clauses: Vec<Clause>,
-        refunds: Vec<Payout>,
-    },
+    // TODO:
+    // Plugin serialization time should, unfortunately, not make calls to sub-plugins -- yet.
+    // TO fix this will require figuring out how to pass a Context object into the TryFrom
+
+    // /// # Expert Mode
+    // /// This allows you to specify sub plugins to call out to for every participant
+    // PluginPool {
+    //     clauses: Vec<Clause>,
+    //     refunds: Vec<Payout>,
+    // },
     /// # Basic Mode
     ///
     /// Accepts a list of amounts and keys and derives all relevant state.
@@ -77,23 +81,23 @@ impl TryFrom<PoolTypes> for CoinPool {
                     clauses: payouts.iter().map(|s| Clause::Key(s.key.clone())).collect(),
                     refunds,
                 })
-            }
-            PoolTypes::PluginPool { clauses, refunds } => {
-                let mut processed_refunds = vec![];
-                for payout in refunds.iter() {
-                    let key = payout
-                        .payout_handle
-                        .to_key()
-                        .ok_or(CompilationError::TerminateCompilation)?;
-                    let compiled = create_contract_by_key(&key, payout.payout_args.clone())?;
-                    let compilable: Arc<Mutex<dyn Compilable>> = Arc::new(Mutex::new(compiled));
-                    processed_refunds.push((compilable, payout.amount));
-                }
-                Ok(CoinPool {
-                    clauses: clauses,
-                    refunds: processed_refunds,
-                })
-            }
+            } //PoolTypes::PluginPool { clauses, refunds } => {
+              //    let mut processed_refunds = vec![];
+              //    for payout in refunds.iter() {
+              //        let key = payout
+              //            .payout_handle
+              //            .to_key()
+              //            .ok_or(CompilationError::TerminateCompilation)?;
+              //        let plugin_ctx = ctx.derive_str(Arc::new("pool_plugin".into()))?,
+              //        let compiled = create_contract_by_key(plugin_ctx, &key, payout.payout_args.clone())?;
+              //        let compilable: Arc<Mutex<dyn Compilable>> = Arc::new(Mutex::new(compiled));
+              //        processed_refunds.push((compilable, payout.amount));
+              //    }
+              //    Ok(CoinPool {
+              //        clauses: clauses,
+              //        refunds: processed_refunds,
+              //    })
+              //}
         }
     }
 }

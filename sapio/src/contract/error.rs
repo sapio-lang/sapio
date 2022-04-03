@@ -9,11 +9,15 @@
 //! errors created by the user we allow boxing an error trait.
 use crate::contract::object::ObjectError;
 use sapio_base::effects::EffectDBError;
+use sapio_base::effects::EffectPath;
 use sapio_base::effects::ValidFragmentError;
+use sapio_base::plugin_args::CreateArgs;
+use sapio_base::simp::SIMPError;
 use sapio_ctv_emulator_trait::EmulatorError;
 use std::collections::LinkedList;
 use std::error::Error;
 use std::fmt;
+type ErrT = Box<dyn std::error::Error>;
 /// Sapio's core error type.
 #[derive(Debug)]
 pub enum CompilationError {
@@ -23,6 +27,10 @@ pub enum CompilationError {
     AdditionalGuardsNotAllowedHere,
     /// Unspecified Error -- but we should stop compiling
     TerminateCompilation,
+    /// Unspecified Error -- stop compiling, share message
+    TerminateWith(String),
+    /// Don't Overwrite Metadata
+    OverwriteMetadata(String),
     /// Fee Specification Error
     MinFeerateError,
     /// Error when ContextPath has already been used.
@@ -59,10 +67,52 @@ pub enum CompilationError {
     ConditionalCompilationFailed(LinkedList<String>),
     /// Error fromt the Effects system
     EffectDBError(EffectDBError),
+    /// Error in a Sapio Interactive Metadata Protocol
+    SIMPError(SIMPError),
+    /// Module could not be found.
+    /// Used in Plugin interface (TODO: Wrap these types)
+    UnknownModule,
+    /// Module could not be queried
+    /// Used in Plugin interface (TODO: Wrap these types)
+    InvalidModule,
+    /// Module failed internally
+    InternalModuleError(String),
+    /// Failed to get module memory
+    ModuleFailedToGetMemory(ErrT),
+    /// Module failed to allocate
+    ModuleCouldNotAllocateError(i32, ErrT),
+    /// Module failed to find function
+    ModuleCouldNotFindFunction(String),
+    /// Module Failed to Deallocate
+    ModuleCouldNotDeallocate(i32, ErrT),
+    /// Module failed to create
+    ModuleCouldNotCreateContract(EffectPath, CreateArgs<serde_json::Value>, ErrT),
+    /// Module failed to get_api
+    ModuleCouldNotGetAPI(ErrT),
+    /// Module failed to get_logo
+    ModuleCouldNotGetLogo(ErrT),
+    /// Module failed to get_name
+    ModuleCouldNotGetName(ErrT),
+    /// Module hit an error at runtime
+    ModuleRuntimeError(ErrT),
+    /// API Check Failed, module didn't satisfy examples.
+    /// Used in Plugin interface (TODO: Wrap these types)
+    ModuleFailedAPICheck(String),
+    /// CompError
+    ModuleCompilationErrorUnsendable(String),
+    /// Error while serializing
+    SerializationError(serde_json::Error),
+    /// Error while deserializing
+    DeserializationError(serde_json::Error),
     /// Unknown Error type -- either from a user or from some unhandled dependency
     Custom(Box<dyn std::error::Error>),
 }
 
+impl From<SIMPError> for CompilationError {
+    fn from(e: SIMPError) -> CompilationError {
+        CompilationError::SIMPError(e)
+    }
+}
 impl From<ValidFragmentError> for CompilationError {
     fn from(e: ValidFragmentError) -> CompilationError {
         CompilationError::PathFragmentError(e)

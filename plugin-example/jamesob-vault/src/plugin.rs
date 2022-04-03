@@ -1,3 +1,4 @@
+use bitcoin::Amount;
 #[deny(missing_docs)]
 // Copyright Judica, Inc 2021
 //
@@ -14,7 +15,7 @@ use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
-use std::convert::{TryFrom, TryInto};
+
 use std::marker::PhantomData;
 
 /// A type tag which tracks state for compile_if inside of Vault
@@ -80,8 +81,10 @@ struct Vault<S: State> {
     /// Where funds should land if they are backed up
     backup_addr: bitcoin::Address,
     /// # Default Fee
-    /// How much fee each transaction should have by default, in sats
-    default_fee: AmountU64,
+    /// How much feerate each transaction should have per virtual kilo-weight
+    /// unit, in sats
+    /// e.g., a  1 sat per virtual kilo-weight unit feerate would be 1000
+    default_feerate: AmountU64,
     /// # CPFP Config
     /// If a CPFP anchor is to be added
     cpfp: Option<Output>,
@@ -99,12 +102,12 @@ fn default_coerce<T: Contract>(
 impl<S: State> Vault<S> {
     /// don't compile spend_hot unless we're in redeeming mode
     #[compile_if]
-    fn compile_spend_hot(self, ctx: Context) {
+    fn compile_spend_hot(self, _ctx: Context) {
         S::is_redeeming()
     }
     /// make a guard with the timeout condition and the hot key.
     #[guard]
-    fn hot_key_cl(self, ctx: Context) {
+    fn hot_key_cl(self, _ctx: Context) {
         Clause::And(vec![Clause::Key(self.hot_key.clone()), self.timeout.into()])
     }
     /// allow spending with the satisfaction of hot_key_cl, but only in state =
@@ -121,7 +124,17 @@ impl<S: State> Vault<S> {
                 .set_label("spend via hot".into())
                 .set_color("red".into())
                 .set_sequence(-1, self.timeout.into())?
-                .add_output(amount.into(), &Compiled::from_address(address, None), None)?
+                .add_output(
+                    amount.into(),
+                    &Compiled::from_address(address, None),
+                    Some(
+                        [(
+                            "purpose",
+                            "Funds transfered out of vault to this address.".into(),
+                        )]
+                        .into(),
+                    ),
+                )?
                 .into()
         } else {
             empty()
@@ -130,14 +143,14 @@ impl<S: State> Vault<S> {
     /// a contract has_cold if a plain backup key has been provided. some cold
     /// storages won't have a plain key path
     #[compile_if]
-    fn has_cold(self, ctx: Context) {
+    fn has_cold(self, _ctx: Context) {
         self.backup
             .and(Some(ConditionalCompileType::Required))
             .unwrap_or(ConditionalCompileType::Never)
     }
     /// cold_key is
     #[guard]
-    fn cold_key(self, ctx: Context) {
+    fn cold_key(self, _ctx: Context) {
         return self
             .backup
             .clone()
@@ -157,7 +170,17 @@ impl<S: State> Vault<S> {
             ctx.template()
                 .set_label("spend via cold direct".into())
                 .set_color("cyan".into())
-                .add_output(amount.into(), &Compiled::from_address(address, None), None)?
+                .add_output(
+                    amount.into(),
+                    &Compiled::from_address(address, None),
+                    Some(
+                        [(
+                            "purpose",
+                            "Funds transfered out of vault to this address.".into(),
+                        )]
+                        .into(),
+                    ),
+                )?
                 .into()
         } else {
             empty()
@@ -169,22 +192,33 @@ impl<S: State> Vault<S> {
         let mut tmpl = ctx
             .template()
             .set_label("backup to cold".into())
-            .set_color("darkblue".into())
-            .spend_amount(self.default_fee.into())?;
+            .set_color("darkblue".into());
         if let Some(Output { address, amount }) = self.cpfp.clone() {
-            tmpl = tmpl.add_output(amount.into(), &Compiled::from_address(address, None), None)?;
+            tmpl = tmpl.add_output(
+                amount.into(),
+                &Compiled::from_address(address, None),
+                Some([("purpose", "CPFP Anchor Output".into())].into()),
+            )?;
         }
+        let size = tmpl.estimate_tx_size() + 8 + self.backup_addr.script_pubkey().len() as u64;
+        tmpl = tmpl.spend_amount((Amount::from(self.default_feerate) * size) / 1000)?;
         let funds = tmpl.ctx().funds();
         tmpl = tmpl.add_output(
             funds,
             &Compiled::from_address(self.backup_addr.clone(), None),
-            None,
+            Some(
+                [(
+                    "purpose",
+                    "Funds sent to higher security backup address.".into(),
+                )]
+                .into(),
+            ),
         )?;
         tmpl.into()
     }
     /// Only allow redeeming to begin when we are in the Secure state.
     #[compile_if]
-    fn compile_begin_redeem(self, ctx: Context) {
+    fn compile_begin_redeem(self, _ctx: Context) {
         S::is_secure()
     }
     /// Move the funds from a vault state = Secure to a vault State = Redeeming
@@ -193,11 +227,16 @@ impl<S: State> Vault<S> {
         let mut tmpl = ctx
             .template()
             .set_label("begin redeem".into())
-            .set_color("pink".into())
-            .spend_amount(self.default_fee.into())?;
+            .set_color("pink".into());
         if let Some(Output { address, amount }) = self.cpfp.clone() {
-            tmpl = tmpl.add_output(amount.into(), &Compiled::from_address(address, None), None)?;
+            tmpl = tmpl.add_output(
+                amount.into(),
+                &Compiled::from_address(address, None),
+                Some([("purpose", "CPFP Anchor Output".into())].into()),
+            )?;
         }
+        let size = tmpl.estimate_tx_size() + 8 + 35 /* 1 byte len, 1 byte version, 1 byte len, 32 bytes data*/;
+        tmpl = tmpl.spend_amount((Amount::from(self.default_feerate) * size) / 1000)?;
         let funds = tmpl.ctx().funds();
         tmpl = tmpl.add_output(
             funds,
@@ -206,11 +245,17 @@ impl<S: State> Vault<S> {
                 hot_key: self.hot_key,
                 backup_addr: self.backup_addr.clone(),
                 cpfp: self.cpfp.clone(),
-                default_fee: self.default_fee,
+                default_feerate: self.default_feerate,
                 timeout: self.timeout,
                 pd: Default::default(),
             },
-            None,
+            Some(
+                [(
+                    "purpose",
+                    "Funds being proposed to be withdrawn into hot wallet.".into(),
+                )]
+                .into(),
+            ),
         )?;
         tmpl.into()
     }
