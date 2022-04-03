@@ -1,3 +1,4 @@
+use bitcoin::hashes::hex::ToHex;
 #[deny(missing_docs)]
 // Copyright Judica, Inc 2021
 //
@@ -132,7 +133,10 @@ impl TryFrom<Versions> for SimpleNFT {
             // if a module is provided, we have no idea what to do...
             // unless the module is this module itself!
             Some(ref module) if module.key == this.key => Ok(SimpleNFT { data }),
-            _ => Err(CompilationError::TerminateCompilation),
+            _ => Err(CompilationError::TerminateWith(format!(
+                "Minting module must be None or equal to {}",
+                this.key.to_hex()
+            ))),
         }
     }
 }

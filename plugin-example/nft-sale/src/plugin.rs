@@ -4,13 +4,13 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use bitcoin::Amount;
 use sapio::contract::CompilationError;
 use sapio::contract::Contract;
 use sapio::*;
 use sapio_base::Clause;
 use sapio_wasm_nft_trait::*;
 use sapio_wasm_plugin::client::*;
-use bitcoin::Amount;
 use sapio_wasm_plugin::*;
 
 use schemars::*;
@@ -91,21 +91,15 @@ impl SimpleNFTSale {
         // a purchase.
         if let Some(artist) = self.0.data.ipfs_nft.artist {
             let price: Amount = self.0.price.into();
+            let artist_gets = self.0.data.compute_royalty_for_artist(price);
+            let seller_gets = price - artist_gets;
             ctx.template()
                 .add_output(amt, &new_nft_contract, None)?
                 .add_amount(self.0.price.into())
                 .add_sequence()
-                .add_output(
-                    Amount::from_btc(price.as_btc() * (1.0 - self.0.data.royalty))?,
-                    &self.0.data.owner,
-                    None,
-                )?
+                .add_output(seller_gets, &self.0.data.owner, None)?
                 // Pay Royalty to Creator
-                .add_output(
-                    Amount::from_btc(price.as_btc() * self.0.data.royalty)?,
-                    &artist,
-                    None,
-                )?
+                .add_output(artist_gets, &artist, None)?
                 // note: what would happen if we had another output that
                 // had a percentage-of-sale royalty to some creator's key?
                 .into()

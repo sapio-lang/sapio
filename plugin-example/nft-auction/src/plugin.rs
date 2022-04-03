@@ -182,18 +182,12 @@ impl NFTDutchAuction {
                 // only active at the set time
                 .set_lock_time(sched.0.into())?;
             let t = if let Some(artist) = self.main.data.ipfs_nft.artist {
+                let artist_gets = self.main.data.compute_royalty_for_artist(price);
+                let seller_gets = price - artist_gets;
                 // Pay Sale to Seller
-                tmpl.add_output(
-                    Amount::from_btc(price.as_btc() * (1.0 - self.main.data.royalty))?,
-                    &self.main.data.owner,
-                    None,
-                )?
-                // Pay Royalty to Creator
-                .add_output(
-                    Amount::from_btc(price.as_btc() as f64 * self.main.data.royalty)?,
-                    &artist,
-                    None,
-                )?
+                tmpl.add_output(seller_gets, &self.main.data.owner, None)?
+                    // Pay Royalty to Creator
+                    .add_output(artist_gets, &artist, None)?
             } else {
                 // Pay Sale to Seller
                 tmpl.add_output(
