@@ -6,9 +6,9 @@
 
 //! A collection of modules for creating derivative contracts with Sapio
 use bitcoin;
-use bitcoin::secp256k1::Secp256k1;
+
 use bitcoin::util::amount::Amount;
-use bitcoin::PublicKey;
+
 use bitcoin::XOnlyPublicKey;
 use contract::*;
 use sapio::template::Template;
@@ -33,7 +33,7 @@ struct BasicOracle {
 }
 
 impl DLCOracle for BasicOracle {
-    fn get_R_for_event(&self, event: &Event) -> R {
+    fn get_R_for_event(&self, _event: &Event) -> R {
         unimplemented!();
     }
     fn get_X_for_oracle(&self) -> X {

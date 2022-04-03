@@ -122,7 +122,7 @@ pub struct SapioHostAPI<T: SapioJSONTrait> {
     _pd: PhantomData<T>,
 }
 
-use std::error::Error;
+
 #[derive(Serialize, Deserialize, JsonSchema)]
 /// # Helper for Serialization...
 struct SapioHostAPIVerifier<T: SapioJSONTrait> {
