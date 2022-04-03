@@ -63,7 +63,7 @@ impl SimpleNFTSale {
             .data
             .minting_module
             .clone()
-            .ok_or(CompilationError::TerminateCompilation)?
+            .ok_or_else(|| CompilationError::TerminateWith("Must Provide Module Hash".into()))?
             .key;
         // let's make a copy of the old nft metadata..
         let mut mint_data = self.0.data.clone();
@@ -79,8 +79,7 @@ impl SimpleNFTSale {
             },
             arguments: mint_impl::Versions::Mint_NFT_Trait_Version_0_1_0(mint_data),
         };
-        let new_nft_contract = create_contract_by_key(new_ctx, &key, new_nft_args)
-            .map_err(|_| CompilationError::TerminateCompilation)?;
+        let new_nft_contract = create_contract_by_key(new_ctx, &key, new_nft_args)?;
         // Now for the magic:
         // This is a transaction that creates at output 0 the new nft for the
         // person, and must add another input that pays sufficiently to pay the

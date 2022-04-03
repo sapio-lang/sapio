@@ -38,31 +38,34 @@ pub mod mint_impl {
     pub enum Versions {
         Mint_NFT_Trait_Version_0_1_0(Mint_NFT_Trait_Version_0_1_0),
     }
+    impl Mint_NFT_Trait_Version_0_1_0 {
+        pub(crate) fn get_example() -> Self {
+            let key = "9c7ad3670650f427bedac55f9a3f6779c1e7a26ab7715299aa0eadb1a09c0e62";
+            let ipfs_hash = "bafkreig7r2tdlwqxzlwnd7aqhkkvzjqv53oyrkfnhksijkvmc6k57uqk6a";
+            mint_impl::Versions::Mint_NFT_Trait_Version_0_1_0(Mint_NFT_Trait_Version_0_1_0 {
+                owner: bitcoin::XOnlyPublicKey::from_str(key).unwrap(),
+                ipfs_nft: IpfsNFT {
+                    version: 0,
+                    artist: Some(bitcoin::XOnlyPublicKey::from_str(key).unwrap()),
+                    cid: ipfs_hash.into(),
+                    blessing: Some({
+                        bitcoin::secp256k1::schnorr::Signature::from_slice(&[34; 64]).unwrap()
+                    }),
+                    edition: Some((1, 1)),
+                    softlink: Some(URL {
+                        url: "https://rubin.io".into(),
+                    }),
+                },
+                minting_module: None,
+                royalty: 0.02,
+            })
+        }
+    }
     /// we must provide an example!
     impl SapioJSONTrait for Mint_NFT_Trait_Version_0_1_0 {
         fn get_example_for_api_checking() -> Value {
-            let key = "9c7ad3670650f427bedac55f9a3f6779c1e7a26ab7715299aa0eadb1a09c0e62";
-            let ipfs_hash = "bafkreig7r2tdlwqxzlwnd7aqhkkvzjqv53oyrkfnhksijkvmc6k57uqk6a";
-            serde_json::to_value(mint_impl::Versions::Mint_NFT_Trait_Version_0_1_0(
-                Mint_NFT_Trait_Version_0_1_0 {
-                    owner: bitcoin::XOnlyPublicKey::from_str(key).unwrap(),
-                    ipfs_nft: IpfsNFT {
-                        version: 0,
-                        artist: Some(bitcoin::XOnlyPublicKey::from_str(key).unwrap()),
-                        cid: ipfs_hash.into(),
-                        blessing: Some({
-                            bitcoin::secp256k1::schnorr::Signature::from_slice(&[34; 64]).unwrap()
-                        }),
-                        edition: Some((1, 1)),
-                        softlink: Some(URL {
-                            url: "https://rubin.io".into(),
-                        }),
-                    },
-                    minting_module: None,
-                    royalty: 0.02,
-                },
-            ))
-            .unwrap()
+            serde_json::to_value(Versions::Mint_NFT_Trait_Version_0_1_0(Self::get_example()))
+                .unwrap()
         }
     }
 }
@@ -86,9 +89,9 @@ pub struct NFT_Sale_Trait_Version_0_1_0 {
     pub sale_time: AbsHeight,
     /// # Extra Information
     /// Extra information required by this contract, if any.
-    /// Must be Optional for consumer or typechecking will fail.
-    /// Usually None unless you know better!
-    pub extra: Option<Value>,
+    /// Optional for consumer or typechecking will fail, just pass `null`.
+    /// Usually null unless you know better!
+    pub extra: Value,
 }
 
 /// Boilerplate for the Sale trait
@@ -107,24 +110,7 @@ pub mod sale_impl {
                 NFT_Sale_Trait_Version_0_1_0 {
                     sell_to: bitcoin::XOnlyPublicKey::from_str(key).unwrap(),
                     price: AmountU64::from(0u64),
-                    data: Mint_NFT_Trait_Version_0_1_0 {
-                        owner: bitcoin::XOnlyPublicKey::from_str(key).unwrap(),
-                        ipfs_nft: IpfsNFT {
-                            version: 0,
-                            artist: Some(bitcoin::XOnlyPublicKey::from_str(key).unwrap()),
-                            cid: ipfs_hash.into(),
-                            blessing: Some(
-                                bitcoin::secp256k1::schnorr::Signature::from_slice(&[34; 64])
-                                    .unwrap(),
-                            ),
-                            edition: Some((1, 1)),
-                            softlink: Some(URL {
-                                url: "https://rubin.io".into(),
-                            }),
-                        },
-                        minting_module: None,
-                        royalty: 0.02,
-                    },
+                    data: Mint_NFT_Trait_Version_0_1_0::get_example(),
                     sale_time: AbsHeight::try_from(0).unwrap(),
                     extra: None,
                 },
@@ -156,9 +142,9 @@ pub struct NFT_Sale_Trait_Version_0_1_0_Partial {
     pub sale_time: AbsHeight,
     /// # Extra Information
     /// Extra information required by this contract, if any.
-    /// Must be Optional for consumer or typechecking will fail.
-    /// Usually None unless you know better!
-    pub extra: Option<Value>,
+    /// Optional for consumer or typechecking will fail, just pass `null`.
+    /// Usually null unless you know better!
+    pub extra: Value,
 }
 
 impl NFT_Sale_Trait_Version_0_1_0_Partial {
