@@ -27,7 +27,7 @@ pub struct Mint_NFT_Trait_Version_0_1_0 {
     /// If a specific sub-module is to be used / known -- when in doubt, should
     /// be None.
     pub minting_module: Option<SapioHostAPI<Mint_NFT_Trait_Version_0_1_0>>,
-    /// how much royalty, should be paid, as a percent
+    /// how much royalty, should be paid, as a percent (0.0 to 1.0)
     pub royalty: f64,
 }
 
@@ -42,7 +42,7 @@ pub mod mint_impl {
         pub(crate) fn get_example() -> Self {
             let key = "9c7ad3670650f427bedac55f9a3f6779c1e7a26ab7715299aa0eadb1a09c0e62";
             let ipfs_hash = "bafkreig7r2tdlwqxzlwnd7aqhkkvzjqv53oyrkfnhksijkvmc6k57uqk6a";
-            mint_impl::Versions::Mint_NFT_Trait_Version_0_1_0(Mint_NFT_Trait_Version_0_1_0 {
+            Mint_NFT_Trait_Version_0_1_0 {
                 owner: bitcoin::XOnlyPublicKey::from_str(key).unwrap(),
                 ipfs_nft: IpfsNFT {
                     version: 0,
@@ -51,14 +51,15 @@ pub mod mint_impl {
                     blessing: Some({
                         bitcoin::secp256k1::schnorr::Signature::from_slice(&[34; 64]).unwrap()
                     }),
-                    edition: Some((1, 1)),
+                    edition: 1,
+                    of_edition_count: 1,
                     softlink: Some(URL {
                         url: "https://rubin.io".into(),
                     }),
                 },
                 minting_module: None,
                 royalty: 0.02,
-            })
+            }
         }
     }
     /// we must provide an example!
@@ -91,7 +92,7 @@ pub struct NFT_Sale_Trait_Version_0_1_0 {
     /// Extra information required by this contract, if any.
     /// Optional for consumer or typechecking will fail, just pass `null`.
     /// Usually null unless you know better!
-    pub extra: Value,
+    pub extra: Option<String>,
 }
 
 /// Boilerplate for the Sale trait
@@ -112,7 +113,7 @@ pub mod sale_impl {
                     price: AmountU64::from(0u64),
                     data: Mint_NFT_Trait_Version_0_1_0::get_example(),
                     sale_time: AbsHeight::try_from(0).unwrap(),
-                    extra: None,
+                    extra: None
                 },
             ))
             .unwrap()
@@ -144,7 +145,7 @@ pub struct NFT_Sale_Trait_Version_0_1_0_Partial {
     /// Extra information required by this contract, if any.
     /// Optional for consumer or typechecking will fail, just pass `null`.
     /// Usually null unless you know better!
-    pub extra: Value,
+    pub extra: Option<String>,
 }
 
 impl NFT_Sale_Trait_Version_0_1_0_Partial {

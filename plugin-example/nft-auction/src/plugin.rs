@@ -101,13 +101,11 @@ impl TryFrom<Versions> for NFTDutchAuction {
                 // - if extra data, must deserialize
                 //   - return any errors?
                 // - if no extra data, derive.
-                let extra = main
-                    .extra
-                    .clone()
-                    .map(serde_json::from_value)
-                    .transpose()
-                    .map_err(|_| CompilationError::TerminateCompilation)?
-                    .unwrap_or_else(|| DutchAuctionData::derive_default(&main));
+                let extra = match main.extra.clone() {
+                    None => DutchAuctionData::derive_default(&main),
+                    Some(extra) => serde_json::from_str(&extra)
+                        .map_err(CompilationError::DeserializationError)?,
+                };
                 NFTDutchAuction { main, extra }
             }
             Versions::Exact(extra, main) => {
