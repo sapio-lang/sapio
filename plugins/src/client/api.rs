@@ -124,6 +124,18 @@ pub struct SapioHostAPI<T: SapioJSONTrait> {
     _pd: PhantomData<T>,
 }
 
+impl<T: SapioJSONTrait> SapioHostAPI<T> {
+    pub fn canonicalize(&self) -> Self {
+        use bitcoin::hashes::hex::ToHex;
+        SapioHostAPI {
+            which_plugin: LookupFrom::HashKey(self.key.to_hex()),
+            key: self.key,
+            api: self.api.clone(),
+            _pd: Default::default()
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, JsonSchema)]
 /// # Helper for Serialization...
 struct SapioHostAPIVerifier<T: SapioJSONTrait> {

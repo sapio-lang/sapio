@@ -253,6 +253,7 @@ impl PluginHandle for WasmPluginHandle {
         path: &EffectPath,
         c: &CreateArgs<serde_json::Value>,
     ) -> Result<Compiled, CompilationError> {
+
         let arg_str = serde_json::to_string(c).map_err(CompilationError::SerializationError)?;
         let args_ptr = self.pass_string(&arg_str)?;
         let path_str = serde_json::to_string(path).map_err(CompilationError::SerializationError)?;
