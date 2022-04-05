@@ -60,7 +60,7 @@ git clone --depth 1 git@github.com:sapio-lang/sapio.git && cd sapio
 We recommend a shallow clone unless you want the full history.
 1.  Build a plugin
 ```
-cd plugin-example/ && cargo build --target wasm32-unknown-unknown && cd ..
+cd plugin-example/ && cargo build --release --target wasm32-unknown-unknown && cd ..
 ```
 
 If the compilation fails, you may want to check the clang version (8<=), and install libraries for cross-compilation (in case of ubuntu, `sudo apt install gcc-multilib`)
@@ -70,7 +70,7 @@ If the compilation fails, you may want to check the clang version (8<=), and ins
 cargo run --bin sapio-cli -- contract create "{\"arguments\":{\"ForAddress\":{\"amount_step\":{\"Sats\":100},\"cold_storage\":\"bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj\",\"hot_storage\":\"bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj\",\"mature\":{\"RH\":10},\"n_steps\":10,\"timeout\":{\"RH\":5}}},\"context\":{\"amount\":1,\"network\":\"Regtest\"}}" --file="plugin-example/target/wasm32-unknown-unknown/debug/sapio_wasm_vault.wasm"
 ```
 
-You can use `cargo run --bin sapio-cli -- help` to learn more about what a the
+You can use `cargo run --release --bin sapio-cli -- help` to learn more about what a the
 CLI can do! and `cargo run --bin sapio-cli -- <subcommand> help` to learn about
 subcommands like `contract`. If you aren't modifying Sapio itself, you'll want
 to run `cargo build --release` and use a release binary as it is much faster.
