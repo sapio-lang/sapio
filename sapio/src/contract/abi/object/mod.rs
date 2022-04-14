@@ -5,7 +5,14 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Object is the output of Sapio Compilation & can be linked to a specific coin
-pub use super::studio::*;
+
+pub mod error;
+pub use error::*;
+pub mod bind;
+pub mod descriptors;
+pub use descriptors::*;
+
+pub use crate::contract::abi::studio::*;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
@@ -16,7 +23,6 @@ use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::amount::Amount;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use bitcoin::util::taproot::TaprootBuilder;
-use bitcoin::util::taproot::TaprootBuilderError;
 use bitcoin::util::taproot::TaprootSpendInfo;
 use bitcoin::OutPoint;
 use bitcoin::PublicKey;
@@ -26,94 +32,13 @@ use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::txindex::TxIndex;
-use sapio_base::txindex::TxIndexError;
 
-use sapio_ctv_emulator_trait::{CTVEmulator, EmulatorError};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
-/// Multiple Types of Allowed Descriptor
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
-pub enum SupportedDescriptors {
-    /// # ECDSA Descriptors
-    Pk(Descriptor<PublicKey>),
-    /// # Taproot Descriptors
-    XOnly(Descriptor<XOnlyPublicKey>),
-}
-
-impl From<Descriptor<PublicKey>> for SupportedDescriptors {
-    fn from(x: Descriptor<PublicKey>) -> Self {
-        SupportedDescriptors::Pk(x)
-    }
-}
-impl From<Descriptor<XOnlyPublicKey>> for SupportedDescriptors {
-    fn from(x: Descriptor<XOnlyPublicKey>) -> Self {
-        SupportedDescriptors::XOnly(x)
-    }
-}
-impl SupportedDescriptors {
-    /// Regardless of descriptor type, get the output script
-    pub fn script_pubkey(&self) -> Script {
-        match self {
-            SupportedDescriptors::Pk(p) => p.script_pubkey(),
-            SupportedDescriptors::XOnly(x) => x.script_pubkey(),
-        }
-    }
-}
-
-/// Error types that can arise when constructing an Object
-#[derive(Debug)]
-pub enum ObjectError {
-    /// The Error was due to Miniscript Policy
-    MiniscriptPolicy(miniscript::policy::compiler::CompilerError),
-    /// The Error was due to Miniscript
-    Miniscript(miniscript::Error),
-    /// Error Building Taproot Tree
-    TaprootBulderError(TaprootBuilderError),
-    /// Unknown Script Type
-    UnknownScriptType(bitcoin::Script),
-    /// OpReturn Too Long
-    OpReturnTooLong,
-    /// The Error was for an unknown/unhandled reason
-    Custom(Box<dyn std::error::Error>),
-}
-impl std::error::Error for ObjectError {}
-impl From<TaprootBuilderError> for ObjectError {
-    fn from(e: TaprootBuilderError) -> ObjectError {
-        ObjectError::TaprootBulderError(e)
-    }
-}
-impl From<EmulatorError> for ObjectError {
-    fn from(e: EmulatorError) -> Self {
-        ObjectError::Custom(Box::new(e))
-    }
-}
-impl From<TxIndexError> for ObjectError {
-    fn from(e: TxIndexError) -> Self {
-        ObjectError::Custom(Box::new(e))
-    }
-}
-
-impl From<miniscript::policy::compiler::CompilerError> for ObjectError {
-    fn from(v: miniscript::policy::compiler::CompilerError) -> Self {
-        ObjectError::MiniscriptPolicy(v)
-    }
-}
-
-impl From<miniscript::Error> for ObjectError {
-    fn from(v: miniscript::Error) -> Self {
-        ObjectError::Miniscript(v)
-    }
-}
-
-impl std::fmt::Display for ObjectError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
 /// Object holds a contract's complete context required post-compilation
 /// There is no guarantee that Object is properly constructed presently.
 //TODO: Make type immutable and correct by construction...
@@ -210,134 +135,5 @@ impl Object {
             descriptor: None,
             amount_range: AmountRange::new(),
         })
-    }
-
-    /// bind_psbt attaches and `Object` to a specific UTXO, returning a
-    /// Vector of PSBTs and transaction metadata.
-    ///
-    /// `bind_psbt` accepts a CTVEmulator, a txindex, and a map of outputs to be
-    /// bound to specific template hashes.
-    pub fn bind_psbt(
-        &self,
-        out_in: bitcoin::OutPoint,
-        output_map: HashMap<Sha256, Vec<Option<bitcoin::OutPoint>>>,
-        blockdata: Rc<dyn TxIndex>,
-        emulator: &dyn CTVEmulator,
-    ) -> Result<Program, ObjectError> {
-        let mut result = HashMap::<SArc<EffectPath>, SapioStudioObject>::new();
-        // Could use a queue instead to do BFS linking, but order doesn't matter and stack is
-        // faster.
-        let mut stack = vec![(out_in, self)];
-        let mut mock_out = OutPoint::default();
-        mock_out.vout = 0;
-        let secp = bitcoin::secp256k1::Secp256k1::new();
-        while let Some((
-            out,
-            Object {
-                root_path,
-                continue_apis,
-                descriptor,
-                ctv_to_tx,
-                suggested_txs,
-                ..
-            },
-        )) = stack.pop()
-        {
-            result.insert(
-                root_path.clone(),
-                SapioStudioObject {
-                    continue_apis: continue_apis.clone(),
-                    txs: ctv_to_tx
-                        .iter()
-                        .chain(suggested_txs.iter())
-                        .map(
-                            |(
-                                ctv_hash,
-                                Template {
-                                    metadata_map_s2s,
-                                    outputs,
-                                    tx,
-                                    ..
-                                },
-                            )| {
-                                let mut tx = tx.clone();
-                                tx.input[0].previous_output = out;
-                                for inp in tx.input[1..].iter_mut() {
-                                    inp.previous_output = mock_out;
-                                    mock_out.vout += 1;
-                                }
-                                if let Some(outputs) = output_map.get(ctv_hash) {
-                                    for (i, inp) in tx.input.iter_mut().enumerate().skip(1) {
-                                        if let Some(out) = outputs[i] {
-                                            inp.previous_output = out;
-                                        }
-                                    }
-                                }
-                                let mut psbtx =
-                                    PartiallySignedTransaction::from_unsigned_tx(tx.clone())
-                                        .unwrap();
-                                for (psbt_in, tx_in) in psbtx.inputs.iter_mut().zip(tx.input.iter())
-                                {
-                                    psbt_in.witness_utxo =
-                                        blockdata.lookup_output(&tx_in.previous_output).ok();
-                                }
-                                // Missing other Witness Info.
-                                match descriptor {
-                                    Some(SupportedDescriptors::Pk(d)) => {
-                                        psbtx.inputs[0].witness_script = Some(d.explicit_script()?);
-                                    }
-                                    Some(SupportedDescriptors::XOnly(Descriptor::Tr(t))) => {
-                                        let mut builder = TaprootBuilder::new();
-                                        let mut added = false;
-                                        for (depth, ms) in t.iter_scripts() {
-                                            added = true;
-                                            let script = ms.encode();
-                                            builder = builder.add_leaf(depth, script)?;
-                                        }
-                                        let info = if added {
-                                            builder.finalize(&secp, t.internal_key().clone())?
-                                        } else {
-                                            TaprootSpendInfo::new_key_spend(
-                                                &secp,
-                                                t.internal_key().clone(),
-                                                None,
-                                            )
-                                        };
-                                        let inp = &mut psbtx.inputs[0];
-                                        for item in info.as_script_map().keys() {
-                                            let cb =
-                                                info.control_block(item).expect("Must be present");
-                                            inp.tap_scripts.insert(cb.clone(), item.clone());
-                                        }
-                                        inp.tap_merkle_root = info.merkle_root();
-                                        inp.tap_internal_key = Some(info.internal_key());
-                                    }
-                                    _ => (),
-                                }
-                                psbtx = emulator.sign(psbtx)?;
-                                let final_tx = psbtx.clone().extract_tx();
-                                let txid = blockdata.add_tx(Arc::new(final_tx))?;
-                                stack.reserve(outputs.len());
-                                for (vout, v) in outputs.iter().enumerate() {
-                                    let vout = vout as u32;
-                                    stack.push((bitcoin::OutPoint { txid, vout }, &v.contract));
-                                }
-                                Ok(LinkedPSBT {
-                                    psbt: psbtx,
-                                    metadata: metadata_map_s2s.clone(),
-                                    output_metadata: outputs
-                                        .iter()
-                                        .cloned()
-                                        .map(|x| x.metadata)
-                                        .collect::<Vec<_>>(),
-                                }
-                                .into())
-                            },
-                        )
-                        .collect::<Result<Vec<SapioStudioFormat>, ObjectError>>()?,
-                },
-            );
-        }
-        Ok(Program { program: result })
     }
 }
