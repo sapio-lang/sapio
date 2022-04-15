@@ -404,6 +404,7 @@ where
         if failed_estimate {
             Err(CompilationError::MinFeerateError)
         } else {
+            let mut metadata_ctx = ctx.derive(PathFragment::Metadata)?;
             Ok(Compiled {
                 ctv_to_tx,
                 suggested_txs,
@@ -412,7 +413,7 @@ where
                 address,
                 descriptor,
                 amount_range,
-                metadata: Default::default(),
+                metadata: self.metadata(metadata_ctx)?,
             })
         }
     }

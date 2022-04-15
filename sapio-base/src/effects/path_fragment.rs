@@ -29,6 +29,7 @@ pub enum PathFragment {
     Suggested,
     DefaultEffect,
     Effects,
+    Metadata,
     Branch(u64),
     Named(SArc<String>),
 }
@@ -52,6 +53,7 @@ impl From<&PathFragment> for String {
             PathFragment::Suggested => "@suggested".into(),
             PathFragment::DefaultEffect => "@default_effect".into(),
             PathFragment::Effects => "@effects".into(),
+            PathFragment::Metadata => "@metadata".into(),
             PathFragment::Branch(u) => format!("#{}", u),
             PathFragment::Named(SArc(a)) => a.as_ref().clone(),
         }
@@ -99,6 +101,7 @@ impl TryFrom<&str> for PathFragment {
             "@suggested" => PathFragment::Suggested,
             "@default_effect" => PathFragment::DefaultEffect,
             "@effects" => PathFragment::Effects,
+            "@metadata" => PathFragment::Metadata,
             n if n.starts_with('#') => PathFragment::Branch(FromStr::from_str(&n[1..])?),
             n if n.chars().all(|x| x.is_ascii_alphanumeric() || x == '_') => {
                 PathFragment::Named(SArc(Arc::new(s.into())))
