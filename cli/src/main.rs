@@ -22,6 +22,7 @@ use emulator_connect::CTVEmulator;
 use miniscript::psbt::PsbtExt;
 use sapio::contract::context::MapEffectDB;
 use sapio::contract::object::LinkedPSBT;
+use sapio::contract::object::ObjectMetadata;
 use sapio::contract::object::SapioStudioObject;
 use sapio::contract::Compiled;
 use sapio::contract::Context;
@@ -429,7 +430,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )?;
 
                 if outpoint.is_none() {
-                    let output_metadata = vec![OutputMeta::default(); tx.output.len()];
+                    let added_output_metadata = vec![OutputMeta::default(); tx.output.len()];
+                    let output_metadata = vec![ObjectMetadata::default(); tx.output.len()];
                     let psbt = PartiallySignedTransaction::from_unsigned_tx(tx)?;
                     bound.program.insert(
                         SArc(Arc::new("funding".try_into()?)),
@@ -444,6 +446,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     simp: Default::default(),
                                 },
                                 output_metadata,
+                                added_output_metadata,
                             }
                             .into()],
                         },

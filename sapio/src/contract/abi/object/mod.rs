@@ -12,8 +12,8 @@ pub mod bind;
 pub mod descriptors;
 pub use descriptors::*;
 
-pub use crate::contract::abi::studio::*;
 use crate::contract::abi::continuation::ContinuationPoint;
+pub use crate::contract::abi::studio::*;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
 use crate::util::extended_address::ExtendedAddress;
@@ -38,6 +38,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
+/// Metadata for Object, arbitrary KV set.
+#[derive(Serialize, Deserialize, Clone, JsonSchema, Debug, PartialEq, Eq, Default)]
+pub struct ObjectMetadata {
+    /// Additional non-standard fields for future upgrades
+    #[serde(flatten)]
+    pub extra: HashMap<String, serde_json::Value>,
+    /// SIMP: Sapio Interactive Metadata Protocol
+    pub simp: HashMap<i64, serde_json::Value>,
+}
 
 /// Object holds a contract's complete context required post-compilation
 /// There is no guarantee that Object is properly constructed presently.
@@ -82,6 +91,8 @@ pub struct Object {
     pub descriptor: Option<SupportedDescriptors>,
     /// The amount_range safe to send this object
     pub amount_range: AmountRange,
+    /// metadata generated for this contract
+    pub metadata: ObjectMetadata,
 }
 
 impl Object {
@@ -104,6 +115,7 @@ impl Object {
                 a.update_range(Amount::from_sat(21_000_000 * 100_000_000));
                 a
             }),
+            metadata: Default::default(),
         }
     }
 
@@ -134,6 +146,34 @@ impl Object {
             address: ExtendedAddress::make_op_return(data)?,
             descriptor: None,
             amount_range: AmountRange::new(),
+            metadata: Default::default(),
         })
+    }
+
+    /// converts a descriptor and an optional AmountRange to a Object object.
+    /// This can be used for e.g. creating raw SegWit Scripts.
+    pub fn from_descriptor<T>(d: Descriptor<T>, a: Option<AmountRange>) -> Self
+    where
+        Descriptor<T>: Into<SupportedDescriptors>,
+        T: MiniscriptKey + ToPublicKey,
+    {
+        Object {
+            ctv_to_tx: HashMap::new(),
+            suggested_txs: HashMap::new(),
+            continue_apis: Default::default(),
+            root_path: SArc(EffectPath::push(
+                None,
+                PathFragment::Named(SArc(Arc::new("".into()))),
+            )),
+            address: d.address(bitcoin::Network::Bitcoin).unwrap().into(),
+            descriptor: Some(d.into()),
+            amount_range: a.unwrap_or_else(|| {
+                let mut a = AmountRange::new();
+                a.update_range(Amount::min_value());
+                a.update_range(Amount::from_sat(21_000_000 * 100_000_000));
+                a
+            }),
+            metadata: Default::default(),
+        }
     }
 }

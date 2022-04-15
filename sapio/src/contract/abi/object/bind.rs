@@ -5,8 +5,11 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //!  binding Object to a specific UTXO
-pub use crate::contract::abi::studio::*;
+use super::descriptors::*;
 use crate::contract::abi::continuation::ContinuationPoint;
+pub use crate::contract::abi::studio::*;
+use crate::contract::object::Object;
+use crate::contract::object::ObjectError;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
 use crate::util::extended_address::ExtendedAddress;
@@ -17,7 +20,6 @@ use bitcoin::util::amount::Amount;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use bitcoin::util::taproot::TaprootBuilder;
 use bitcoin::util::taproot::TaprootSpendInfo;
-use crate::contract::object::ObjectError;
 use bitcoin::OutPoint;
 use bitcoin::PublicKey;
 use bitcoin::Script;
@@ -27,13 +29,11 @@ use sapio_base::effects::PathFragment;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::txindex::TxIndex;
 use sapio_ctv_emulator_trait::CTVEmulator;
-use crate::contract::object::Object;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
-use super::descriptors::*;
 impl Object {
     /// bind_psbt attaches and `Object` to a specific UTXO, returning a
     /// Vector of PSBTs and transaction metadata.
@@ -151,7 +151,12 @@ impl Object {
                                     output_metadata: outputs
                                         .iter()
                                         .cloned()
-                                        .map(|x| x.metadata)
+                                        .map(|x| x.contract.metadata)
+                                        .collect::<Vec<_>>(),
+                                    added_output_metadata: outputs
+                                        .iter()
+                                        .cloned()
+                                        .map(|x| x.added_metadata)
                                         .collect::<Vec<_>>(),
                                 }
                                 .into())

@@ -17,6 +17,7 @@ use sapio_base::serialization_helpers::SArc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use crate::contract::object::ObjectMetadata;
 
 /// Container for data from  `Object::bind_psbt`.
 #[derive(Serialize, Deserialize)]
@@ -27,7 +28,9 @@ pub struct LinkedPSBT {
     /// tx level metadata
     pub metadata: TemplateMetadata,
     /// output specific metadata
-    pub output_metadata: Vec<OutputMeta>,
+    pub output_metadata: Vec<ObjectMetadata>,
+    /// added metadata
+    pub added_output_metadata: Vec<OutputMeta>,
 }
 
 /// Format for a Linked PSBT in Sapio Studio
@@ -42,8 +45,10 @@ pub enum SapioStudioFormat {
         hex: String,
         /// tx level metadata
         metadata: TemplateMetadata,
-        /// per-Output Metadata
-        output_metadata: Vec<OutputMeta>,
+        /// output specific metadata
+        output_metadata: Vec<ObjectMetadata>,
+        /// added metadata
+        added_output_metadata: Vec<OutputMeta>,
     },
 }
 
@@ -59,6 +64,7 @@ impl From<LinkedPSBT> for SapioStudioFormat {
             hex,
             metadata: l.metadata,
             output_metadata: l.output_metadata,
+            added_output_metadata: l.added_output_metadata,
         }
     }
 }

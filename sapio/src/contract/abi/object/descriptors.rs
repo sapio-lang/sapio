@@ -5,8 +5,8 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Wrapper for supported descriptor types
-pub use crate::contract::abi::studio::*;
 use crate::contract::abi::continuation::ContinuationPoint;
+pub use crate::contract::abi::studio::*;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
 use crate::util::extended_address::ExtendedAddress;

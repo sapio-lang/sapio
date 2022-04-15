@@ -84,7 +84,7 @@ impl Builder {
         ret.outputs.push(Output {
             amount: amount,
             contract: contract.compile(subctx)?,
-            metadata: metadata.unwrap_or_else(Default::default),
+            added_metadata: metadata.unwrap_or_else(Default::default),
         });
         Ok(ret)
     }

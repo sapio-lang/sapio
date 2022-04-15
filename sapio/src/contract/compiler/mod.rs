@@ -412,6 +412,7 @@ where
                 address,
                 descriptor,
                 amount_range,
+                metadata: Default::default(),
             })
         }
     }

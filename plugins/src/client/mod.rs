@@ -11,8 +11,6 @@ use ext::*;
 use sapio::contract::Compiled;
 use sapio_ctv_emulator_trait::CTVEmulator;
 
-use std::error::Error;
-
 pub mod api;
 mod exports;
 mod ext;
