@@ -5,6 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Functionality comprising the language base, macros, and compiler internals.
+use crate::contract::object::ObjectMetadata;
 use crate::template::Template as TransactionTemplate;
 #[macro_use]
 pub mod macros;
@@ -46,6 +47,10 @@ where
     declare! {then}
     declare! { updatable<> }
     declare! {finish}
+    /// Generate metadata for this contract object
+    fn metadata(&self, ctx: Context) -> Result<ObjectMetadata, CompilationError> {
+        Ok(Default::default())
+    }
 }
 
 /// DynamicContract wraps a struct S with a set of methods (that can be constructed dynamically)
@@ -57,6 +62,8 @@ pub struct DynamicContract<'a, T, S> {
     pub finish_or: Vec<fn() -> Option<Box<dyn actions::CallableAsFoF<S, T>>>>,
     /// the list of `Guard` for this contract to finish.
     pub finish: Vec<fn() -> Option<actions::Guard<S>>>,
+    /// A metadata generator function
+    pub metadata_f: Box<dyn (Fn(&S, Context) -> Result<ObjectMetadata, CompilationError>)>,
     /// The contract data argument to pass to functions
     pub data: S,
 }
@@ -83,6 +90,10 @@ where
     }
     fn get_inner_ref<'a>(&self) -> &Self::Ref {
         &self.data
+    }
+
+    fn metadata<'a>(&'a self, ctx: Context) -> Result<ObjectMetadata, CompilationError> {
+        (self.metadata_f)(self.get_inner_ref(), ctx)
     }
 }
 
@@ -119,6 +130,8 @@ where
     fn finish_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::Guard<Self::Ref>>];
     /// obtain a reference to `Self::Ref` type.
     fn get_inner_ref<'a>(&'a self) -> &'a Self::Ref;
+    /// Generate the metadata
+    fn metadata<'a>(&'a self, ctx: Context) -> Result<ObjectMetadata, CompilationError>;
 }
 
 impl<C> AnyContract for C
@@ -145,5 +158,9 @@ where
     }
     fn get_inner_ref<'a>(&'a self) -> &Self::Ref {
         self
+    }
+
+    fn metadata<'a>(&'a self, ctx: Context) -> Result<ObjectMetadata, CompilationError> {
+        Self::Ref::metadata(self, ctx)
     }
 }

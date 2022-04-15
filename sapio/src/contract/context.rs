@@ -169,5 +169,4 @@ impl Context {
     pub fn template(self) -> crate::template::Builder {
         crate::template::Builder::new(self)
     }
-
 }

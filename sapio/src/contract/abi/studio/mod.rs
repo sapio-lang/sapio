@@ -13,11 +13,11 @@ use bitcoin::consensus::serialize;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use sapio_base::effects::EffectPath;
 
+use crate::contract::object::ObjectMetadata;
 use sapio_base::serialization_helpers::SArc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::contract::object::ObjectMetadata;
 
 /// Container for data from  `Object::bind_psbt`.
 #[derive(Serialize, Deserialize)]
