@@ -38,6 +38,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
+use sapio_base::simp::SIMP;
+use sapio_base::simp::SIMPError;
 /// Metadata for Object, arbitrary KV set.
 #[derive(Serialize, Deserialize, Clone, JsonSchema, Debug, PartialEq, Eq, Default)]
 pub struct ObjectMetadata {
@@ -46,6 +48,26 @@ pub struct ObjectMetadata {
     pub extra: HashMap<String, serde_json::Value>,
     /// SIMP: Sapio Interactive Metadata Protocol
     pub simp: HashMap<i64, serde_json::Value>,
+}
+impl ObjectMetadata {
+    /// Is there any metadata in this field?
+    pub fn is_empty(&self) -> bool {
+        *self == Default::default()
+    }
+
+    /// attempts to add a SIMP to the object meta.
+    ///
+    /// Returns [`SIMPError::AlreadyDefined`] if one was previously set.
+    pub fn add_simp<S: SIMP>(mut self, s: S) -> Result<Self, SIMPError> {
+        let old = self
+            .simp
+            .insert(S::get_protocol_number(), serde_json::to_value(&s)?);
+        if let Some(old) = old {
+            Err(SIMPError::AlreadyDefined(old))
+        } else {
+            Ok(self)
+        }
+    }
 }
 
 /// Object holds a contract's complete context required post-compilation

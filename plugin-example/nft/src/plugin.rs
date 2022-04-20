@@ -6,9 +6,11 @@ use bitcoin::hashes::hex::ToHex;
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 use bitcoin::hashes::sha256;
+use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::util::amount::Amount;
 use sapio::contract::empty;
+use sapio::contract::object::ObjectMetadata;
 use sapio::contract::CompilationError;
 use sapio::contract::Compiled;
 use sapio::contract::Contract;
@@ -24,6 +26,7 @@ use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::sync::Arc;
 
+use bitcoin::XOnlyPublicKey;
 /// # SimpleNFT
 /// A really simple NFT... not much too it!
 #[derive(JsonSchema, Serialize, Deserialize)]
@@ -37,7 +40,10 @@ impl Contract for SimpleNFT {
     // NFTs... only good for selling?
     declare! {updatable<Sell>, Self::sell}
     // embeds metadata
-    declare! {then, Self::metadata_txns}
+    declare! {finish, Self::metadata_commit}
+    fn metadata(&self, ctx: Context) -> Result<ObjectMetadata, CompilationError> {
+        Ok(ObjectMetadata::default().add_simp(self.data.ipfs_nft.clone())?)
+    }
 }
 
 impl SimpleNFT {
@@ -45,27 +51,16 @@ impl SimpleNFT {
     /// what? This is just a sneaky way of making a provably unspendable branch
     /// (since the preimage of [0u8; 32] hash can never be found). We use that to
     /// help us embed metadata inside of our contract...
+    /// TODO: Check this is OK
     #[guard]
-    fn unspendable(self, ctx: Context) {
-        Clause::Sha256(sha256::Hash::from_inner([0u8; 32]))
-    }
-    /// # Metadata TXNs
-    /// This metadata TXN is provably unspendable because it is guarded
-    /// by `Self::unspendable`. Neat!
-    /// Here, we simple embed a OP_RETURN.
-    /// But you could imagine tracking (& client side validating)
-    /// an entire tree of transactions based on state transitions with these
-    /// transactions... in a future post, we'll see more!
-    #[then(guarded_by = "[Self::unspendable]")]
-    fn metadata_txns(self, ctx: Context) {
-        let a = ctx.funds();
-        ctx.template()
-            .add_output(
-                a,
-                &Compiled::from_op_return(&self.data.ipfs_nft.commitment().as_inner()[..])?,
-                Some(OutputMeta::default().add_simp(self.data.ipfs_nft.clone())?),
-            )?
-            .into()
+    fn metadata_commit(self, ctx: Context) {
+        Clause::And(vec![
+            Clause::Key(
+                XOnlyPublicKey::from_slice(&Sha256::hash(&[1u8; 32]).into_inner())
+                    .expect("constant"),
+            ),
+            Clause::Sha256(self.data.ipfs_nft.commitment()),
+        ])
     }
     /// # signed
     /// Get the current owners signature.
