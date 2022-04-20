@@ -201,7 +201,7 @@ impl<S: State> Vault<S> {
             )?;
         }
         let size = tmpl.estimate_tx_size() + 8 + self.backup_addr.script_pubkey().len() as u64;
-        tmpl = tmpl.spend_amount((Amount::from(self.default_feerate) * size) / 1000)?;
+        tmpl = tmpl.spend_amount((Amount::from(self.default_feerate) * 4 * size) / 1000)?;
         let funds = tmpl.ctx().funds();
         tmpl = tmpl.add_output(
             funds,
@@ -236,7 +236,7 @@ impl<S: State> Vault<S> {
             )?;
         }
         let size = tmpl.estimate_tx_size() + 8 + 35 /* 1 byte len, 1 byte version, 1 byte len, 32 bytes data*/;
-        tmpl = tmpl.spend_amount((Amount::from(self.default_feerate) * size) / 1000)?;
+        tmpl = tmpl.spend_amount((Amount::from(self.default_feerate) * 4 * size) / 1000)?;
         let funds = tmpl.ctx().funds();
         tmpl = tmpl.add_output(
             funds,
