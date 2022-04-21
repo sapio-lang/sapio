@@ -51,6 +51,11 @@ where
     fn metadata(&self, ctx: Context) -> Result<ObjectMetadata, CompilationError> {
         Ok(Default::default())
     }
+
+    /// minimum balance to have in this coin
+    fn ensure_amount(&self, ctx: Context) -> Result<Amount, CompilationError> {
+        Ok(Amount::from_sat(0))
+    }
 }
 
 /// DynamicContract wraps a struct S with a set of methods (that can be constructed dynamically)
@@ -64,6 +69,9 @@ pub struct DynamicContract<'a, T, S> {
     pub finish: Vec<fn() -> Option<actions::Guard<S>>>,
     /// A metadata generator function
     pub metadata_f: Box<dyn (Fn(&S, Context) -> Result<ObjectMetadata, CompilationError>)>,
+    /// A min amount generator function
+    pub ensure_amount_f: Box<dyn (Fn(&S, Context) -> Result<Amount, CompilationError>)>,
+
     /// The contract data argument to pass to functions
     pub data: S,
 }
@@ -94,6 +102,10 @@ where
 
     fn metadata<'a>(&'a self, ctx: Context) -> Result<ObjectMetadata, CompilationError> {
         (self.metadata_f)(self.get_inner_ref(), ctx)
+    }
+
+    fn ensure_amount<'a>(&'a self, ctx: Context) -> Result<Amount, CompilationError> {
+        (self.ensure_amount_f)(self.get_inner_ref(), ctx)
     }
 }
 
@@ -132,6 +144,8 @@ where
     fn get_inner_ref<'a>(&'a self) -> &'a Self::Ref;
     /// Generate the metadata
     fn metadata<'a>(&'a self, ctx: Context) -> Result<ObjectMetadata, CompilationError>;
+    /// Minimum Amount
+    fn ensure_amount<'a>(&'a self, ctx: Context) -> Result<Amount, CompilationError>;
 }
 
 impl<C> AnyContract for C
@@ -162,5 +176,8 @@ where
 
     fn metadata<'a>(&'a self, ctx: Context) -> Result<ObjectMetadata, CompilationError> {
         Self::Ref::metadata(self, ctx)
+    }
+    fn ensure_amount<'a>(&'a self, ctx: Context) -> Result<Amount, CompilationError> {
+        Self::Ref::ensure_amount(self, ctx)
     }
 }

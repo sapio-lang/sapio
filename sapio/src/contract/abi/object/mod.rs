@@ -33,13 +33,13 @@ use sapio_base::effects::PathFragment;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::txindex::TxIndex;
 
+use sapio_base::simp::SIMPError;
+use sapio_base::simp::SIMP;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
-use sapio_base::simp::SIMP;
-use sapio_base::simp::SIMPError;
 /// Metadata for Object, arbitrary KV set.
 #[derive(Serialize, Deserialize, Clone, JsonSchema, Debug, PartialEq, Eq, Default)]
 pub struct ObjectMetadata {

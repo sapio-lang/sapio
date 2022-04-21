@@ -267,6 +267,9 @@ where
         let mut ctv_to_tx = HashMap::new();
         let mut suggested_txs = HashMap::new();
         let mut amount_range = AmountRange::new();
+        // TODO: Maybe do not just cloned?
+        let mut amount_range_ctx = ctx.derive(PathFragment::Cloned)?;
+        amount_range.update_range(self.ensure_amount(amount_range_ctx)?);
 
         // If no guards and not CTV, then nothing gets added (not interpreted as Trivial True)
         // If CTV and no guards, just CTV added.

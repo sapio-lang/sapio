@@ -44,6 +44,10 @@ impl Contract for SimpleNFT {
     fn metadata(&self, ctx: Context) -> Result<ObjectMetadata, CompilationError> {
         Ok(ObjectMetadata::default().add_simp(self.data.ipfs_nft.clone())?)
     }
+    fn ensure_amount(&self, ctx: Context) -> Result<Amount, CompilationError> {
+        Ok(ctx.funds())
+    }
+
 }
 
 impl SimpleNFT {

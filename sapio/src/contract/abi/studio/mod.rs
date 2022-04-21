@@ -6,14 +6,14 @@
 
 //! Formats for Sapio Studio
 use crate::contract::abi::continuation::ContinuationPoint;
+use crate::contract::object::ObjectMetadata;
 use crate::template::output::OutputMeta;
 use crate::template::TemplateMetadata;
 use ::miniscript::*;
 use bitcoin::consensus::serialize;
 use bitcoin::util::psbt::PartiallySignedTransaction;
+use bitcoin::OutPoint;
 use sapio_base::effects::EffectPath;
-
-use crate::contract::object::ObjectMetadata;
 use sapio_base::serialization_helpers::SArc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -91,6 +91,10 @@ pub struct Program {
 /// A `SapioStudioObject` is a json-friendly format for a `Object` for use in Sapio Studio
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SapioStudioObject {
+    /// The object's metadata
+    pub metadata: ObjectMetadata,
+    /// The main covenant OutPoint
+    pub out: OutPoint,
     /// List of SapioStudioFormat PSBTs
     pub txs: Vec<SapioStudioFormat>,
     /// List of continue APIs from this point.

@@ -62,6 +62,7 @@ impl Object {
                 descriptor,
                 ctv_to_tx,
                 suggested_txs,
+                metadata,
                 ..
             },
         )) = stack.pop()
@@ -69,6 +70,8 @@ impl Object {
             result.insert(
                 root_path.clone(),
                 SapioStudioObject {
+                    metadata: metadata.clone(),
+                    out: out,
                     continue_apis: continue_apis.clone(),
                     txs: ctv_to_tx
                         .iter()

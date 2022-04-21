@@ -432,10 +432,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if outpoint.is_none() {
                     let added_output_metadata = vec![OutputMeta::default(); tx.output.len()];
                     let output_metadata = vec![ObjectMetadata::default(); tx.output.len()];
+                    let out = tx.input[0].previous_output;
                     let psbt = PartiallySignedTransaction::from_unsigned_tx(tx)?;
                     bound.program.insert(
                         SArc(Arc::new("funding".try_into()?)),
                         SapioStudioObject {
+                            metadata: Default::default(),
+                            out,
                             continue_apis: Default::default(),
                             txs: vec![LinkedPSBT {
                                 psbt,
