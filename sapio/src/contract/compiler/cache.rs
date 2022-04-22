@@ -66,7 +66,7 @@ pub(crate) fn create_guards<T>(
     guards: &[fn() -> Option<Guard<T>>],
     gc: &mut GuardCache<T>,
 ) -> Clause {
-    let mut v : Vec<_> = guards
+    let mut v: Vec<_> = guards
         .iter()
         .zip((0..).flat_map(|i| ctx.derive(PathFragment::Branch(i)).ok()))
         .filter_map(|(x, c)| gc.get(self_ref, *x, c))
@@ -74,9 +74,9 @@ pub(crate) fn create_guards<T>(
         .collect();
     if v.len() == 0 {
         Clause::Trivial
-    } else if v.len() ==1 {
+    } else if v.len() == 1 {
         v.pop().unwrap()
-    } else{
+    } else {
         Clause::And(v)
     }
 }
