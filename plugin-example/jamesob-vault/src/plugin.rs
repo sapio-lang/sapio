@@ -15,7 +15,7 @@ use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
-
+use bitcoin::util::bip32::ExtendedPubKey;
 use std::marker::PhantomData;
 
 /// A type tag which tracks state for compile_if inside of Vault
@@ -71,12 +71,12 @@ struct Vault<S: State> {
     /// key which can be used to spend from the vault <timeout> after claim
     /// initiated.
     #[schemars(with = "String")]
-    hot_key: bitcoin::XOnlyPublicKey,
+    hot_key: ExtendedPubKey,
     /// # Backup Direct
     /// If available, this key can be used immediately as a single sig cold
     /// multisig option. usable with a musig key.
     #[schemars(with = "String")]
-    backup: Option<bitcoin::XOnlyPublicKey>,
+    backup: Option<ExtendedPubKey>,
     /// # Backup Address
     /// Where funds should land if they are backed up
     backup_addr: bitcoin::Address,
@@ -108,7 +108,7 @@ impl<S: State> Vault<S> {
     /// make a guard with the timeout condition and the hot key.
     #[guard]
     fn hot_key_cl(self, _ctx: Context) {
-        Clause::And(vec![Clause::Key(self.hot_key.clone()), self.timeout.into()])
+        Clause::And(vec![Clause::Key(self.hot_key.to_x_only_pub()), self.timeout.into()])
     }
     /// allow spending with the satisfaction of hot_key_cl, but only in state =
     /// Redeeming.
@@ -154,6 +154,7 @@ impl<S: State> Vault<S> {
         return self
             .backup
             .clone()
+            .map(|e| e.to_x_only_pub())
             .map(Clause::Key)
             .unwrap_or(Clause::Unsatisfiable);
     }
