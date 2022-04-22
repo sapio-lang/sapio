@@ -104,6 +104,8 @@ impl SellableNFT for SimpleNFT {
             // todo: we need to cut-through the compiled contract address, but this
             // upgrade to Sapio semantics will come Soon™.
             builder = builder.add_output(compiled.amount_range.max(), &compiled, None)?;
+            // for now, a capital H Hack.
+            builder = builder.add_sequence();
             builder.into()
         } else {
             // Don't do anything if we're holding!
