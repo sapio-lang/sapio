@@ -267,6 +267,9 @@ where
         let mut ctv_to_tx = HashMap::new();
         let mut suggested_txs = HashMap::new();
         let mut amount_range = AmountRange::new();
+        // TODO: Maybe do not just cloned?
+        let mut amount_range_ctx = ctx.derive(PathFragment::Cloned)?;
+        amount_range.update_range(self.ensure_amount(amount_range_ctx)?);
 
         // If no guards and not CTV, then nothing gets added (not interpreted as Trivial True)
         // If CTV and no guards, just CTV added.
@@ -330,11 +333,12 @@ where
                     // If the guard is non-trivial, zip it to each hash
                     // TODO: Arc in miniscript to dedup memory?
                     //       This could be Clause::Shared(x) or something...
-                    (_, _, _, guards) => Ok(txtmpl_clauses
+                    (UseCTV::Yes, _, _, guards) => Ok(txtmpl_clauses
                         .into_iter()
                         // extra_guards will contain any CTV
                         .map(|extra_guards| Clause::And(vec![guards.clone(), extra_guards]))
                         .collect()),
+                    (UseCTV::No, _, _, guards) => Ok(vec![guards]),
                 }
             })
             .collect::<Result<Vec<Vec<Clause>>, CompilationError>>()?;
@@ -360,11 +364,12 @@ where
         let some_key = branches
             .iter()
             .filter_map(|f| {
-                if let Terminal::PkK(k) = f.node {
-                    Some(k)
-                } else {
-                    None
+                if let Terminal::Check(check) = &f.node {
+                    if let Terminal::PkK(k) = &check.node {
+                        return Some(k.clone());
+                    }
                 }
+                None
             })
             .next()
             .map(|x| bitcoin::util::schnorr::UntweakedPublicKey::from(x))
@@ -404,6 +409,7 @@ where
         if failed_estimate {
             Err(CompilationError::MinFeerateError)
         } else {
+            let mut metadata_ctx = ctx.derive(PathFragment::Metadata)?;
             Ok(Compiled {
                 ctv_to_tx,
                 suggested_txs,
@@ -412,6 +418,7 @@ where
                 address,
                 descriptor,
                 amount_range,
+                metadata: self.metadata(metadata_ctx)?,
             })
         }
     }

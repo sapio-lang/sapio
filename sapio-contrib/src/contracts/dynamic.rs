@@ -5,6 +5,8 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! example of using a dynamic contract
+use bitcoin::Amount;
+use sapio::contract::object::ObjectMetadata;
 use sapio::contract::DynamicContract;
 use sapio::contract::*;
 use sapio::*;
@@ -38,6 +40,12 @@ impl AnyContract for D<'static> {
     fn get_inner_ref<'a>(&'a self) -> &Self {
         self
     }
+    fn metadata<'a>(&'a self, ctx: Context) -> Result<ObjectMetadata, CompilationError> {
+        Ok(Default::default())
+    }
+    fn ensure_amount<'a>(&'a self, ctx: Context) -> Result<Amount, CompilationError> {
+        Ok(Amount::from_sat(0))
+    }
 }
 
 /// Shows how to make a Dynamic Contract without creating a bespoke type.
@@ -61,6 +69,8 @@ impl DynamicExample {
             finish: vec![],
             finish_or: vec![],
             data: "E.g., Create a Vault".into(),
+            metadata_f: Box::new(|s, c| Ok(Default::default())),
+            ensure_amount_f: Box::new(|s, c| Ok(Default::default())),
         };
         let mut bld = ctx.template();
         let amt = bld.ctx().funds() / 2;

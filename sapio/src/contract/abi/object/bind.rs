@@ -1,12 +1,15 @@
-// Copyright Judica, Inc 2021
+// Copyright Judica, Inc 2022
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-//! Object is the output of Sapio Compilation & can be linked to a specific coin
-pub use super::studio::*;
+//!  binding Object to a specific UTXO
+use super::descriptors::*;
 use crate::contract::abi::continuation::ContinuationPoint;
+pub use crate::contract::abi::studio::*;
+use crate::contract::object::Object;
+use crate::contract::object::ObjectError;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
 use crate::util::extended_address::ExtendedAddress;
@@ -16,7 +19,6 @@ use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::amount::Amount;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use bitcoin::util::taproot::TaprootBuilder;
-use bitcoin::util::taproot::TaprootBuilderError;
 use bitcoin::util::taproot::TaprootSpendInfo;
 use bitcoin::OutPoint;
 use bitcoin::PublicKey;
@@ -26,192 +28,13 @@ use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::txindex::TxIndex;
-use sapio_base::txindex::TxIndexError;
-
-use sapio_ctv_emulator_trait::{CTVEmulator, EmulatorError};
+use sapio_ctv_emulator_trait::CTVEmulator;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
-
-/// Multiple Types of Allowed Descriptor
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
-pub enum SupportedDescriptors {
-    /// # ECDSA Descriptors
-    Pk(Descriptor<PublicKey>),
-    /// # Taproot Descriptors
-    XOnly(Descriptor<XOnlyPublicKey>),
-}
-
-impl From<Descriptor<PublicKey>> for SupportedDescriptors {
-    fn from(x: Descriptor<PublicKey>) -> Self {
-        SupportedDescriptors::Pk(x)
-    }
-}
-impl From<Descriptor<XOnlyPublicKey>> for SupportedDescriptors {
-    fn from(x: Descriptor<XOnlyPublicKey>) -> Self {
-        SupportedDescriptors::XOnly(x)
-    }
-}
-impl SupportedDescriptors {
-    /// Regardless of descriptor type, get the output script
-    pub fn script_pubkey(&self) -> Script {
-        match self {
-            SupportedDescriptors::Pk(p) => p.script_pubkey(),
-            SupportedDescriptors::XOnly(x) => x.script_pubkey(),
-        }
-    }
-}
-
-/// Error types that can arise when constructing an Object
-#[derive(Debug)]
-pub enum ObjectError {
-    /// The Error was due to Miniscript Policy
-    MiniscriptPolicy(miniscript::policy::compiler::CompilerError),
-    /// The Error was due to Miniscript
-    Miniscript(miniscript::Error),
-    /// Error Building Taproot Tree
-    TaprootBulderError(TaprootBuilderError),
-    /// Unknown Script Type
-    UnknownScriptType(bitcoin::Script),
-    /// OpReturn Too Long
-    OpReturnTooLong,
-    /// The Error was for an unknown/unhandled reason
-    Custom(Box<dyn std::error::Error>),
-}
-impl std::error::Error for ObjectError {}
-impl From<TaprootBuilderError> for ObjectError {
-    fn from(e: TaprootBuilderError) -> ObjectError {
-        ObjectError::TaprootBulderError(e)
-    }
-}
-impl From<EmulatorError> for ObjectError {
-    fn from(e: EmulatorError) -> Self {
-        ObjectError::Custom(Box::new(e))
-    }
-}
-impl From<TxIndexError> for ObjectError {
-    fn from(e: TxIndexError) -> Self {
-        ObjectError::Custom(Box::new(e))
-    }
-}
-
-impl From<miniscript::policy::compiler::CompilerError> for ObjectError {
-    fn from(v: miniscript::policy::compiler::CompilerError) -> Self {
-        ObjectError::MiniscriptPolicy(v)
-    }
-}
-
-impl From<miniscript::Error> for ObjectError {
-    fn from(v: miniscript::Error) -> Self {
-        ObjectError::Miniscript(v)
-    }
-}
-
-impl std::fmt::Display for ObjectError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-/// Object holds a contract's complete context required post-compilation
-/// There is no guarantee that Object is properly constructed presently.
-//TODO: Make type immutable and correct by construction...
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
-pub struct Object {
-    /// a map of template hashes to the corresponding template, that in the
-    /// policy are a CTV protected
-    #[serde(
-        rename = "template_hash_to_template_map",
-        skip_serializing_if = "HashMap::is_empty",
-        default
-    )]
-    pub ctv_to_tx: HashMap<sha256::Hash, Template>,
-    /// a map of template hashes to the corresponding template, that in the
-    /// policy are not necessarily CTV protected but we might want to know about
-    /// anyways.
-    #[serde(
-        rename = "suggested_template_hash_to_template_map",
-        skip_serializing_if = "HashMap::is_empty",
-        default
-    )]
-    pub suggested_txs: HashMap<sha256::Hash, Template>,
-    /// A Map of arguments to continue execution and generate an update at this
-    /// point via a passed message
-    #[serde(
-        rename = "continuation_points",
-        skip_serializing_if = "HashMap::is_empty",
-        default
-    )]
-    pub continue_apis: HashMap<SArc<EffectPath>, ContinuationPoint>,
-    /// The base location for the set of continue_apis.
-    pub root_path: SArc<EffectPath>,
-    /// The Object's address, or a Script if no address is possible
-    pub address: ExtendedAddress,
-    /// The Object's descriptor -- if there is one known/available
-    #[serde(
-        rename = "known_descriptor",
-        skip_serializing_if = "Option::is_none",
-        default
-    )]
-    pub descriptor: Option<SupportedDescriptors>,
-    /// The amount_range safe to send this object
-    pub amount_range: AmountRange,
-}
-
 impl Object {
-    /// Creates an object from a given address. The optional AmountRange argument determines the
-    /// safe bounds the contract can receive, otherwise it is set to any.
-    pub fn from_address(address: bitcoin::Address, a: Option<AmountRange>) -> Object {
-        Object {
-            ctv_to_tx: HashMap::new(),
-            suggested_txs: HashMap::new(),
-            continue_apis: Default::default(),
-            root_path: SArc(EffectPath::push(
-                None,
-                PathFragment::Named(SArc(Arc::new("".into()))),
-            )),
-            address: address.into(),
-            descriptor: None,
-            amount_range: a.unwrap_or_else(|| {
-                let mut a = AmountRange::new();
-                a.update_range(Amount::min_value());
-                a.update_range(Amount::from_sat(21_000_000 * 100_000_000));
-                a
-            }),
-        }
-    }
-
-    /// Creates an object from a given script. The optional AmountRange argument determines the
-    /// safe bounds the contract can receive, otherwise it is set to any.
-    pub fn from_script(
-        script: bitcoin::Script,
-        a: Option<AmountRange>,
-        net: bitcoin::Network,
-    ) -> Result<Object, ObjectError> {
-        bitcoin::Address::from_script(&script, net)
-            .ok_or_else(|| ObjectError::UnknownScriptType(script.clone()))
-            .map(|m| Object::from_address(m, a))
-    }
-    /// create an op_return of no more than 40 bytes
-    pub fn from_op_return<'a, I: ?Sized>(data: &'a I) -> Result<Object, ObjectError>
-    where
-        &'a [u8]: From<&'a I>,
-    {
-        Ok(Object {
-            ctv_to_tx: HashMap::new(),
-            suggested_txs: HashMap::new(),
-            continue_apis: Default::default(),
-            root_path: SArc(EffectPath::push(
-                None,
-                PathFragment::Named(SArc(Arc::new("".into()))),
-            )),
-            address: ExtendedAddress::make_op_return(data)?,
-            descriptor: None,
-            amount_range: AmountRange::new(),
-        })
-    }
-
     /// bind_psbt attaches and `Object` to a specific UTXO, returning a
     /// Vector of PSBTs and transaction metadata.
     ///
@@ -239,6 +62,7 @@ impl Object {
                 descriptor,
                 ctv_to_tx,
                 suggested_txs,
+                metadata,
                 ..
             },
         )) = stack.pop()
@@ -246,6 +70,8 @@ impl Object {
             result.insert(
                 root_path.clone(),
                 SapioStudioObject {
+                    metadata: metadata.clone(),
+                    out: out,
                     continue_apis: continue_apis.clone(),
                     txs: ctv_to_tx
                         .iter()
@@ -328,7 +154,12 @@ impl Object {
                                     output_metadata: outputs
                                         .iter()
                                         .cloned()
-                                        .map(|x| x.metadata)
+                                        .map(|x| x.contract.metadata)
+                                        .collect::<Vec<_>>(),
+                                    added_output_metadata: outputs
+                                        .iter()
+                                        .cloned()
+                                        .map(|x| x.added_metadata)
                                         .collect::<Vec<_>>(),
                                 }
                                 .into())

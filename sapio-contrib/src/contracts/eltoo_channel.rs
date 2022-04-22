@@ -124,7 +124,7 @@ impl OpenChannel {
             .iter()
         {
             template =
-                template.add_output(out.amount, &out.contract, Some(out.metadata.clone()))?;
+                template.add_output(out.amount, &out.contract, Some(out.added_metadata.clone()))?;
         }
         template.into()
     }

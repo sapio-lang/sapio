@@ -6,13 +6,14 @@
 
 //! Formats for Sapio Studio
 use crate::contract::abi::continuation::ContinuationPoint;
+use crate::contract::object::ObjectMetadata;
 use crate::template::output::OutputMeta;
 use crate::template::TemplateMetadata;
 use ::miniscript::*;
 use bitcoin::consensus::serialize;
 use bitcoin::util::psbt::PartiallySignedTransaction;
+use bitcoin::OutPoint;
 use sapio_base::effects::EffectPath;
-
 use sapio_base::serialization_helpers::SArc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -27,7 +28,9 @@ pub struct LinkedPSBT {
     /// tx level metadata
     pub metadata: TemplateMetadata,
     /// output specific metadata
-    pub output_metadata: Vec<OutputMeta>,
+    pub output_metadata: Vec<ObjectMetadata>,
+    /// added metadata
+    pub added_output_metadata: Vec<OutputMeta>,
 }
 
 /// Format for a Linked PSBT in Sapio Studio
@@ -42,8 +45,10 @@ pub enum SapioStudioFormat {
         hex: String,
         /// tx level metadata
         metadata: TemplateMetadata,
-        /// per-Output Metadata
-        output_metadata: Vec<OutputMeta>,
+        /// output specific metadata
+        output_metadata: Vec<ObjectMetadata>,
+        /// added metadata
+        added_output_metadata: Vec<OutputMeta>,
     },
 }
 
@@ -59,6 +64,7 @@ impl From<LinkedPSBT> for SapioStudioFormat {
             hex,
             metadata: l.metadata,
             output_metadata: l.output_metadata,
+            added_output_metadata: l.added_output_metadata,
         }
     }
 }
@@ -85,6 +91,10 @@ pub struct Program {
 /// A `SapioStudioObject` is a json-friendly format for a `Object` for use in Sapio Studio
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SapioStudioObject {
+    /// The object's metadata
+    pub metadata: ObjectMetadata,
+    /// The main covenant OutPoint
+    pub out: OutPoint,
     /// List of SapioStudioFormat PSBTs
     pub txs: Vec<SapioStudioFormat>,
     /// List of continue APIs from this point.

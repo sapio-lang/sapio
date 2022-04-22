@@ -22,8 +22,8 @@ struct R(bitcoin::secp256k1::PublicKey);
 #[derive(Clone)]
 struct X(bitcoin::secp256k1::PublicKey);
 trait DLCOracle {
-    fn get_R_for_event(&self, e: &Event) -> R;
-    fn get_X_for_oracle(&self) -> X;
+    fn get_r_for_event(&self, e: &Event) -> R;
+    fn get_x_for_oracle(&self) -> X;
 }
 
 struct BasicOracle {
@@ -33,10 +33,10 @@ struct BasicOracle {
 }
 
 impl DLCOracle for BasicOracle {
-    fn get_R_for_event(&self, _event: &Event) -> R {
+    fn get_r_for_event(&self, _event: &Event) -> R {
         unimplemented!();
     }
-    fn get_X_for_oracle(&self) -> X {
+    fn get_x_for_oracle(&self) -> X {
         if let Some(ref x) = self.key_cached {
             x.clone()
         } else {
@@ -82,8 +82,8 @@ impl DLCContract {
             .1
             .iter()
             .map(|oracle| {
-                let r = oracle.get_R_for_event(&self.event);
-                let k = oracle.get_X_for_oracle();
+                let r = oracle.get_r_for_event(&self.event);
+                let k = oracle.get_x_for_oracle();
                 (r.0, k.0)
             })
             .collect();
@@ -210,17 +210,17 @@ mod tests {
     use sapio_base::effects::EffectPath;
     use sapio_ctv_emulator_trait::CTVAvailable;
     use std::convert::TryFrom;
-
+    use bitcoin::secp256k1::Secp256k1;
     struct CachedOracle {
         key: X,
         event: R,
     }
 
     impl DLCOracle for CachedOracle {
-        fn get_R_for_event(&self, event: &Event) -> R {
+        fn get_r_for_event(&self, event: &Event) -> R {
             self.event.clone()
         }
-        fn get_X_for_oracle(&self) -> X {
+        fn get_x_for_oracle(&self) -> X {
             self.key.clone()
         }
     }

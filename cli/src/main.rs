@@ -22,6 +22,7 @@ use emulator_connect::CTVEmulator;
 use miniscript::psbt::PsbtExt;
 use sapio::contract::context::MapEffectDB;
 use sapio::contract::object::LinkedPSBT;
+use sapio::contract::object::ObjectMetadata;
 use sapio::contract::object::SapioStudioObject;
 use sapio::contract::Compiled;
 use sapio::contract::Context;
@@ -68,6 +69,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
      (@subcommand wizard =>
       (@arg write: -w --write "Write the default config file to the standard location.")
      (about: "Interactive wizard to create a configuration")
+     )
+    )
+    (@subcommand signer =>
+     (@setting SubcommandRequiredElseHelp)
+     (about: "Make Requests to Emulator Servers")
+     (@subcommand sign =>
+      (about: "Sign a PSBT")
+      (@arg input: -k --key +takes_value +required #{1,2} {check_file} "The file to read the key from")
+      (@arg psbt: -p --psbt +takes_value  #{1,2} {check_file} "The file containing the PSBT to Sign")
+      (@arg out: -o --output +takes_value  #{1,2} {check_file_not} "The file to save the resulting PSBT")
+     )
+     (@subcommand new =>
+      (about: "Get a new xpriv")
+      (@arg network: -n --network +takes_value +required #{1,2}  "One of: signet, testnet, regtest, bitcoin")
+      (@arg out: -o --output +takes_value +required #{1,2} {check_file_not} "The file to save the resulting key")
+     )
+     (@subcommand show =>
+      (about: "Show xpub for file")
+      (@arg input: -i --input +takes_value +required #{1,2} {check_file} "The file to read the key from")
      )
     )
     (@subcommand emulator =>
@@ -237,7 +257,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         });
     }
+    use bitcoin::network::constants::Network;
+    use rand::prelude::*;
+    use std::str::FromStr;
     match matches.subcommand() {
+        Some(("signer", sign_matches)) => match sign_matches.subcommand() {
+            Some(("sign", args)) => {
+                let buf = tokio::fs::read(args.value_of_os("input").unwrap()).await?;
+                let xpriv = ExtendedPrivKey::decode(&buf)?;
+                let psbt: PartiallySignedTransaction =
+                    PartiallySignedTransaction::consensus_decode(
+                        &base64::decode(&if let Some(psbt) = args.value_of("psbt") {
+                            psbt.into()
+                        } else {
+                            let mut s = String::new();
+                            tokio::io::stdin().read_to_string(&mut s).await?;
+                            s
+                        })?[..],
+                    )?;
+                let psbt = sign_psbt(&xpriv, psbt, &Secp256k1::new())?;
+                let bytes = serialize(&psbt);
+                if let Some(file_out) = args.value_of_os("out") {
+                    std::fs::write(file_out, &base64::encode(bytes))?;
+                } else {
+                    println!("{}", base64::encode(bytes));
+                }
+            }
+            Some(("new", args)) => {
+                let mut entropy: [u8; 32] = rand::thread_rng().gen();
+                let xpriv = ExtendedPrivKey::new_master(
+                    Network::from_str(args.value_of("network").unwrap())?,
+                    &entropy,
+                )?;
+                std::fs::write(args.value_of_os("out").unwrap(), &xpriv.encode())?;
+                println!("{}", ExtendedPubKey::from_priv(&Secp256k1::new(), &xpriv));
+            }
+            Some(("show", args)) => {
+                let buf = tokio::fs::read(args.value_of_os("input").unwrap()).await?;
+                let xpriv = ExtendedPrivKey::decode(&buf)?;
+                println!("{}", ExtendedPubKey::from_priv(&Secp256k1::new(), &xpriv));
+            }
+            _ => unreachable!(),
+        },
         Some(("emulator", sign_matches)) => match sign_matches.subcommand() {
             Some(("sign", args)) => {
                 let psbt = decode_psbt_file(args, "psbt")?;
@@ -429,11 +490,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )?;
 
                 if outpoint.is_none() {
-                    let output_metadata = vec![OutputMeta::default(); tx.output.len()];
+                    let added_output_metadata = vec![OutputMeta::default(); tx.output.len()];
+                    let output_metadata = vec![ObjectMetadata::default(); tx.output.len()];
+                    let out = tx.input[0].previous_output;
                     let psbt = PartiallySignedTransaction::from_unsigned_tx(tx)?;
                     bound.program.insert(
                         SArc(Arc::new("funding".try_into()?)),
                         SapioStudioObject {
+                            metadata: Default::default(),
+                            out,
                             continue_apis: Default::default(),
                             txs: vec![LinkedPSBT {
                                 psbt,
@@ -444,6 +509,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     simp: Default::default(),
                                 },
                                 output_metadata,
+                                added_output_metadata,
                             }
                             .into()],
                         },

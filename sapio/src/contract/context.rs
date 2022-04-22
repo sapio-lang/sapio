@@ -169,30 +169,4 @@ impl Context {
     pub fn template(self) -> crate::template::Builder {
         crate::template::Builder::new(self)
     }
-
-    /// converts a descriptor and an optional AmountRange to a Object object.
-    /// This can be used for e.g. creating raw SegWit Scripts.
-    pub fn compiled_from_descriptor<T>(d: Descriptor<T>, a: Option<AmountRange>) -> Compiled
-    where
-        Descriptor<T>: Into<SupportedDescriptors>,
-        T: MiniscriptKey + ToPublicKey,
-    {
-        Compiled {
-            ctv_to_tx: HashMap::new(),
-            suggested_txs: HashMap::new(),
-            continue_apis: Default::default(),
-            root_path: SArc(EffectPath::push(
-                None,
-                PathFragment::Named(SArc(Arc::new("".into()))),
-            )),
-            address: d.address(bitcoin::Network::Bitcoin).unwrap().into(),
-            descriptor: Some(d.into()),
-            amount_range: a.unwrap_or_else(|| {
-                let mut a = AmountRange::new();
-                a.update_range(Amount::min_value());
-                a.update_range(Amount::from_sat(21_000_000 * 100_000_000));
-                a
-            }),
-        }
-    }
 }

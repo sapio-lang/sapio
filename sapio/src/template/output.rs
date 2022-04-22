@@ -76,5 +76,5 @@ pub struct Output {
         skip_serializing_if = "OutputMeta::is_empty",
         default
     )]
-    pub metadata: OutputMeta,
+    pub added_metadata: OutputMeta,
 }
