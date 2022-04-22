@@ -66,13 +66,17 @@ pub(crate) fn create_guards<T>(
     guards: &[fn() -> Option<Guard<T>>],
     gc: &mut GuardCache<T>,
 ) -> Clause {
-    guards
+    let mut v : Vec<_> = guards
         .iter()
         .zip((0..).flat_map(|i| ctx.derive(PathFragment::Branch(i)).ok()))
         .filter_map(|(x, c)| gc.get(self_ref, *x, c))
         .filter(|x| *x != Clause::Trivial) // no point in using any Trivials
-        .fold(Clause::Trivial, |acc, item| match acc {
-            Clause::Trivial => item,
-            _ => Clause::And(vec![acc, item]),
-        })
+        .collect();
+    if v.len() == 0 {
+        Clause::Trivial
+    } else if v.len() ==1 {
+        v.pop().unwrap()
+    } else{
+        Clause::And(v)
+    }
 }
