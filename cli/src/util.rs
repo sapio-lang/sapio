@@ -77,9 +77,7 @@ pub fn sign_psbt(
         let sig = secp.sign_schnorr_no_aux_rand(&msg, kp);
         SchnorrSig { sig, hash_ty }
     };
-    if let Some(true) = input_zero.witness_utxo.as_ref().map(|v| {
-        v.script_pubkey == Script::new_v1_p2tr_tweaked(tweaked_pk.dangerous_assume_tweaked())
-    }) {
+    if input_zero.tap_internal_key == Some(pk) {
         let sig = get_sig(None, &tweaked);
         input_zero.tap_key_sig = Some(sig);
     }
