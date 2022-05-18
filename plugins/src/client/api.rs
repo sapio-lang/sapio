@@ -25,65 +25,65 @@ pub fn create_contract_by_key<S: Serialize>(
 ) -> Result<Compiled, CompilationError> {
     let path =
         serde_json::to_string(ctx.path().as_ref()).map_err(CompilationError::SerializationError)?;
-    unsafe {
+    
         let s = serde_json::to_value(args)
             .map_err(CompilationError::SerializationError)?
             .to_string();
         let l = s.len();
-        let p = sapio_v1_wasm_plugin_create_contract(
+        let p = unsafe { sapio_v1_wasm_plugin_create_contract(
             path.as_ptr() as i32,
             path.len() as i32,
             key.as_ptr() as i32,
             s.as_ptr() as i32,
             l as i32,
-        );
+        ) };
         if p != 0 {
-            let cs = CString::from_raw(p as *mut c_char);
+            let cs = unsafe { CString::from_raw(p as *mut c_char) };
             let res: Result<Compiled, String> = serde_json::from_slice(cs.as_bytes())
                 .map_err(CompilationError::DeserializationError)?;
             res.map_err(CompilationError::ModuleCompilationErrorUnsendable)
         } else {
             Err(CompilationError::InternalModuleError("Unknown".into()))
         }
-    }
+    
 }
 
 /// lookup a plugin module's key given a human readable name
 pub fn lookup_module_name(key: &str) -> Option<[u8; 32]> {
-    unsafe {
+    
         let mut res = [0u8; 32];
         let mut ok = 0u8;
-        sapio_v1_wasm_plugin_lookup_module_name(
+        unsafe { sapio_v1_wasm_plugin_lookup_module_name(
             key.as_ptr() as i32,
             key.len() as i32,
             &mut res as *mut [u8; 32] as i32,
             &mut ok as *mut u8 as i32,
-        );
+        ) };
         if ok == 0 {
             None
         } else {
             Some(res)
         }
-    }
+    
 }
 
 /// Get the current executing module's hash
 pub fn lookup_this_module_name() -> Option<[u8; 32]> {
-    unsafe {
+    
         let mut res = [0u8; 32];
         let mut ok = 0u8;
-        sapio_v1_wasm_plugin_lookup_module_name(
+        unsafe { sapio_v1_wasm_plugin_lookup_module_name(
             0i32,
             0i32,
             &mut res as *mut [u8; 32] as i32,
             &mut ok as *mut u8 as i32,
-        );
+        ) };
         if ok == 0 {
             None
         } else {
             Some(res)
         }
-    }
+    
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Eq)]
@@ -164,14 +164,14 @@ impl<T: SapioJSONTrait> TryFrom<SapioHostAPIVerifier<T>> for SapioHostAPI<T> {
             }
         };
         let p = key.as_ptr() as i32;
-        let api = unsafe {
-            let api_buf = sapio_v1_wasm_plugin_get_api(p);
+        let api = {
+            let api_buf = unsafe { sapio_v1_wasm_plugin_get_api(p) };
             if api_buf == 0 {
                 return Err(CompilationError::InternalModuleError(
                     "API Not Available".into(),
                 ));
             }
-            let cs = { CString::from_raw(api_buf as *mut c_char) };
+            let cs = unsafe { CString::from_raw(api_buf as *mut c_char) };
             serde_json::from_slice(cs.as_bytes()).map_err(CompilationError::DeserializationError)?
         };
         T::check_trait_implemented_inner(&api).map_err(CompilationError::ModuleFailedAPICheck)?;
