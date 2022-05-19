@@ -25,7 +25,7 @@ use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap};
 use std::convert::TryInto;
 use std::io::Write;
 use std::str::FromStr;
@@ -63,13 +63,13 @@ struct PaymentRequest {
 struct DoTx {
     /// # Payments
     /// A mapping of public key in members to signed list of payouts with a fee rate.
-    payments: HashMap<XOnlyPublicKey, PaymentRequest>,
+    payments: BTreeMap<XOnlyPublicKey, PaymentRequest>,
 }
 /// required...
 impl Default for DoTx {
     fn default() -> Self {
         DoTx {
-            payments: HashMap::new(),
+            payments: BTreeMap::new(),
         }
     }
 }

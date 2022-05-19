@@ -12,7 +12,7 @@ pub use plugin_handle::WasmPluginHandle;
 use sapio::contract::CompilationError;
 use sapio_ctv_emulator_trait::CTVEmulator;
 use std::cell::Cell;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use wasmer::*;
@@ -28,7 +28,7 @@ pub struct HostEnvironmentInner {
     pub org: String,
     pub proj: String,
     pub this: [u8; 32],
-    pub module_map: HashMap<Vec<u8>, [u8; 32]>,
+    pub module_map: BTreeMap<Vec<u8>, [u8; 32]>,
     pub store: Arc<Mutex<Store>>,
     pub net: bitcoin::Network,
     pub emulator: Arc<dyn CTVEmulator>,

@@ -10,7 +10,7 @@ use crate::reverse_path::ReversePath;
 use crate::serialization_helpers::SArc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use std::sync::Arc;
 pub mod path_fragment;
@@ -47,10 +47,10 @@ pub trait EffectDB {
 pub struct MapEffectDB {
     /// # The set of all effects
     /// List of effects to include while compiling.
-    #[serde(skip_serializing_if = "HashMap::is_empty", default)]
-    effects: HashMap<SArc<EffectPath>, HashMap<SArc<String>, serde_json::Value>>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
+    effects: BTreeMap<SArc<EffectPath>, BTreeMap<SArc<String>, serde_json::Value>>,
     #[serde(skip, default)]
-    empty: HashMap<SArc<String>, serde_json::Value>,
+    empty: BTreeMap<SArc<String>, serde_json::Value>,
 }
 impl MapEffectDB {
     pub fn skip_serializing(&self) -> bool {
@@ -63,7 +63,7 @@ impl EffectDB for MapEffectDB {
         &'a self,
         at: &Arc<EffectPath>,
     ) -> Box<dyn Iterator<Item = (&'a Arc<String>, &'a serde_json::Value)> + 'a> {
-        let r: &HashMap<_, _> = self.effects.get(&SArc(at.clone())).unwrap_or(&self.empty);
+        let r: &BTreeMap<_, _> = self.effects.get(&SArc(at.clone())).unwrap_or(&self.empty);
         Box::new(r.iter().map(|(a, b)| (&a.0, b)))
     }
 }

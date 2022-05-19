@@ -30,6 +30,25 @@ where
         self.iter().eq(other.iter())
     }
 }
+
+impl<T, Y> PartialOrd<Self> for ReversePath<T, Y>
+where
+    T: PartialOrd,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.iter().partial_cmp(other.iter())
+    }
+}
+
+impl<T, Y> Ord for ReversePath<T, Y>
+where
+    T: Ord,
+{
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.iter().cmp(other.iter())
+    }
+}
+
 impl<T, Y> Eq for ReversePath<T, Y> where T: Eq {}
 
 /// RPI = ReversePathIterator

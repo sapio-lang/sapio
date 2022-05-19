@@ -13,9 +13,9 @@ use serde::{Deserialize, Serialize};
 pub struct OutputMeta {
     /// Additional non-standard fields for future upgrades
     #[serde(flatten)]
-    pub extra: HashMap<String, serde_json::Value>,
+    pub extra: BTreeMap<String, serde_json::Value>,
     /// SIMP: Sapio Interactive Metadata Protocol
-    pub simp: HashMap<i64, serde_json::Value>,
+    pub simp: BTreeMap<i64, serde_json::Value>,
 }
 
 impl OutputMeta {

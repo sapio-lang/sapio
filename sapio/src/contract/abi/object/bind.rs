@@ -31,7 +31,7 @@ use sapio_base::txindex::TxIndex;
 use sapio_ctv_emulator_trait::CTVEmulator;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::sync::Arc;
 impl Object {
@@ -43,11 +43,11 @@ impl Object {
     pub fn bind_psbt(
         &self,
         out_in: bitcoin::OutPoint,
-        output_map: HashMap<Sha256, Vec<Option<bitcoin::OutPoint>>>,
+        output_map: BTreeMap<Sha256, Vec<Option<bitcoin::OutPoint>>>,
         blockdata: Rc<dyn TxIndex>,
         emulator: &dyn CTVEmulator,
     ) -> Result<Program, ObjectError> {
-        let mut result = HashMap::<SArc<EffectPath>, SapioStudioObject>::new();
+        let mut result = BTreeMap::<SArc<EffectPath>, SapioStudioObject>::new();
         // Could use a queue instead to do BFS linking, but order doesn't matter and stack is
         // faster.
         let mut stack = vec![(out_in, self)];

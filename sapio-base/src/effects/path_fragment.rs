@@ -14,7 +14,9 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 use std::sync::Arc;
 
-#[derive(Serialize, Deserialize, Debug, Hash, Eq, PartialEq, JsonSchema, Clone)]
+#[derive(
+    Serialize, Deserialize, Debug, Hash, Eq, PartialEq, JsonSchema, Clone, PartialOrd, Ord,
+)]
 #[serde(into = "String")]
 #[serde(try_from = "&str")]
 pub enum PathFragment {

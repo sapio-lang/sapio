@@ -36,6 +36,7 @@ use sapio_base::txindex::TxIndexLogger;
 use sapio_base::util::CTVHash;
 use sapio_wasm_plugin::host::{PluginHandle, WasmPluginHandle};
 use sapio_wasm_plugin::CreateArgs;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::rc::Rc;
@@ -484,7 +485,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 let mut bound = j.bind_psbt(
                     OutPoint::new(tx.txid(), vout as u32),
-                    HashMap::new(),
+                    BTreeMap::new(),
                     logger,
                     emulator.as_ref(),
                 )?;
@@ -505,7 +506,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 metadata: TemplateMetadata {
                                     label: Some("funding".into()),
                                     color: Some("pink".into()),
-                                    extra: HashMap::new(),
+                                    extra: BTreeMap::new(),
                                     simp: Default::default(),
                                 },
                                 output_metadata,

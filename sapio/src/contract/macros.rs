@@ -9,7 +9,7 @@
 use core::any::TypeId;
 pub use paste::paste;
 use schemars::schema::RootSchema;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -101,8 +101,8 @@ macro_rules! decl_then {
 }
 
 lazy_static::lazy_static! {
-static ref SCHEMA_MAP: Mutex<HashMap<TypeId, Arc<RootSchema>>> =
-Mutex::new(HashMap::new());
+static ref SCHEMA_MAP: Mutex<BTreeMap<TypeId, Arc<RootSchema>>> =
+Mutex::new(BTreeMap::new());
 }
 /// `get_schema_for` returns a cached RootSchema for a given type.  this is
 /// useful because we might expect to generate the same RootSchema many times,

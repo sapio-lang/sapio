@@ -12,7 +12,7 @@ use sapio::template::Template;
 use sapio::*;
 use sapio_base::Clause;
 use sapio_macros::guard;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::rc::Rc;
 
@@ -42,7 +42,7 @@ impl<'a> From<GenericBetArguments<'a>> for GenericBet {
         // Make sure the outcomes are sorted for the binary tree
         v.outcomes.sort_by_key(|(i, _)| *i);
         // Cache locally all calls to the oracle
-        let mut h = HashMap::new();
+        let mut h = BTreeMap::new();
         for (k, _) in v.outcomes.iter() {
             let r = v.oracle.get_key_lt_gte(&v.symbol, *k);
             h.insert(*k, r);
@@ -61,7 +61,7 @@ impl<'a> From<GenericBetArguments<'a>> for GenericBet {
 pub struct GenericBet {
     amount: Amount,
     outcomes: Vec<(i64, Template)>,
-    oracle: Rc<HashMap<i64, (Clause, Clause)>>,
+    oracle: Rc<BTreeMap<i64, (Clause, Clause)>>,
     cooperate: Clause,
 }
 

@@ -207,10 +207,10 @@ impl From<StandardDLC> for DLCContract {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bitcoin::secp256k1::Secp256k1;
     use sapio_base::effects::EffectPath;
     use sapio_ctv_emulator_trait::CTVAvailable;
     use std::convert::TryFrom;
-    use bitcoin::secp256k1::Secp256k1;
     struct CachedOracle {
         key: X,
         event: R,

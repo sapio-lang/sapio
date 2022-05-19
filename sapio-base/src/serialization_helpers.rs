@@ -10,7 +10,9 @@ use std::borrow::Borrow;
 use std::sync::Arc;
 
 /// Serializable Arc Type
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, PartialOrd, Eq, Hash)]
+#[derive(
+    Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, PartialOrd, Eq, Hash, Ord,
+)]
 #[serde(bound = "T: Serialize + for<'d> Deserialize<'d> + JsonSchema + std::fmt::Debug + Clone ")]
 #[serde(transparent)]
 pub struct SArc<T>(

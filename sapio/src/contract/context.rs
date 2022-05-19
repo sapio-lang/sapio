@@ -21,7 +21,7 @@ use sapio_base::serialization_helpers::SArc;
 use sapio_ctv_emulator_trait::CTVEmulator;
 use std::convert::TryInto;
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 
 use std::sync::Arc;
