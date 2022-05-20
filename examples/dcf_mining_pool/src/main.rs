@@ -16,8 +16,8 @@ use rpc::RpcApi;
 use sapio::contract::Compilable;
 use sapio::contract::Contract;
 use sapio::*;
-use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::RwLock;
@@ -60,7 +60,7 @@ impl BlockNotes {
     }
 }
 struct Coordinator {
-    cache: HashMap<BlockHash, Arc<RwLock<BlockNotes>>>,
+    cache: BTreeMap<BlockHash, Arc<RwLock<BlockNotes>>>,
     client: rpc::Client,
     ctx: dyn Fn() -> Context,
 }

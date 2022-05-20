@@ -32,7 +32,7 @@ use sapio_ctv_emulator_trait::{CTVEmulator, EmulatorError};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::sync::Arc;
 /// Error types that can arise when constructing an Object

@@ -14,7 +14,7 @@ use sapio_base::Clause;
 use sapio_macros::guard;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::marker::PhantomData;
@@ -155,8 +155,8 @@ mod db_serde {
 
     use lazy_static::lazy_static;
     lazy_static! {
-        static ref DB_TYPES: Mutex<HashMap<String, fn(&str) -> Arc<Mutex<dyn DB>>>> =
-            Mutex::new(HashMap::new());
+        static ref DB_TYPES: Mutex<BTreeMap<String, fn(&str) -> Arc<Mutex<dyn DB>>>> =
+            Mutex::new(BTreeMap::new());
     }
 
     pub fn register_db(s: String, f: fn(&str) -> Arc<Mutex<dyn DB>>) {

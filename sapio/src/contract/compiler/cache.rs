@@ -10,7 +10,7 @@ use super::InternalCompilerTag;
 use crate::contract::actions::Guard;
 use sapio_base::effects::PathFragment;
 use sapio_base::Clause;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 pub(crate) enum CacheEntry<T> {
     Cached(Clause),
@@ -20,12 +20,12 @@ pub(crate) enum CacheEntry<T> {
 /// GuardCache assists with caching the computation of guard functions
 /// during compilation.
 pub(crate) struct GuardCache<T> {
-    cache: HashMap<usize, Option<CacheEntry<T>>>,
+    cache: BTreeMap<usize, Option<CacheEntry<T>>>,
 }
 impl<T> GuardCache<T> {
     pub fn new() -> Self {
         GuardCache {
-            cache: HashMap::new(),
+            cache: BTreeMap::new(),
         }
     }
     pub(crate) fn create_entry(g: Option<Guard<T>>, t: &T, ctx: Context) -> Option<CacheEntry<T>> {

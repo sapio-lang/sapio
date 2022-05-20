@@ -17,7 +17,7 @@ use sapio::*;
 use sapio_base::effects::EffectPath;
 use sapio_base::timelocks::RelTime;
 use sapio_base::txindex::{TxIndex, TxIndexLogger};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -119,7 +119,7 @@ fn test_connect() {
     println!("Fake TXID: {}", fake_txid);
     let _psbts = compiled.bind_psbt(
         bitcoin::OutPoint::new(fake_txid, 0),
-        HashMap::new(),
+        BTreeMap::new(),
         txindex,
         rc_conn.as_ref(),
     );

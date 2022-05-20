@@ -13,7 +13,7 @@ use sapio_base::simp::SIMP;
 use sapio_base::Clause;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 pub mod output;
 pub use output::{Output, OutputMeta};
 pub mod builder;
@@ -27,9 +27,9 @@ pub struct TemplateMetadata {
     pub label: Option<String>,
     /// catch all map for future metadata....
     #[serde(flatten)]
-    pub extra: HashMap<String, serde_json::Value>,
+    pub extra: BTreeMap<String, serde_json::Value>,
     /// SIMP: Sapio Interactive Metadata Protocol
-    pub simp: HashMap<i64, serde_json::Value>,
+    pub simp: BTreeMap<i64, serde_json::Value>,
     /// A Color to render this node.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub color: Option<String>,
@@ -43,10 +43,10 @@ impl TemplateMetadata {
     /// create a new `TemplateMetadata`
     pub fn new() -> Self {
         TemplateMetadata {
-            simp: HashMap::new(),
+            simp: BTreeMap::new(),
             color: None,
             label: None,
-            extra: HashMap::new(),
+            extra: BTreeMap::new(),
         }
     }
     /// set an extra metadata value

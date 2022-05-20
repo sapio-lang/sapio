@@ -37,7 +37,7 @@ use sapio_base::simp::SIMPError;
 use sapio_base::simp::SIMP;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::sync::Arc;
 /// Metadata for Object, arbitrary KV set.
@@ -45,9 +45,9 @@ use std::sync::Arc;
 pub struct ObjectMetadata {
     /// Additional non-standard fields for future upgrades
     #[serde(flatten)]
-    pub extra: HashMap<String, serde_json::Value>,
+    pub extra: BTreeMap<String, serde_json::Value>,
     /// SIMP: Sapio Interactive Metadata Protocol
-    pub simp: HashMap<i64, serde_json::Value>,
+    pub simp: BTreeMap<i64, serde_json::Value>,
 }
 impl ObjectMetadata {
     /// Is there any metadata in this field?
@@ -79,27 +79,27 @@ pub struct Object {
     /// policy are a CTV protected
     #[serde(
         rename = "template_hash_to_template_map",
-        skip_serializing_if = "HashMap::is_empty",
+        skip_serializing_if = "BTreeMap::is_empty",
         default
     )]
-    pub ctv_to_tx: HashMap<sha256::Hash, Template>,
+    pub ctv_to_tx: BTreeMap<sha256::Hash, Template>,
     /// a map of template hashes to the corresponding template, that in the
     /// policy are not necessarily CTV protected but we might want to know about
     /// anyways.
     #[serde(
         rename = "suggested_template_hash_to_template_map",
-        skip_serializing_if = "HashMap::is_empty",
+        skip_serializing_if = "BTreeMap::is_empty",
         default
     )]
-    pub suggested_txs: HashMap<sha256::Hash, Template>,
+    pub suggested_txs: BTreeMap<sha256::Hash, Template>,
     /// A Map of arguments to continue execution and generate an update at this
     /// point via a passed message
     #[serde(
         rename = "continuation_points",
-        skip_serializing_if = "HashMap::is_empty",
+        skip_serializing_if = "BTreeMap::is_empty",
         default
     )]
-    pub continue_apis: HashMap<SArc<EffectPath>, ContinuationPoint>,
+    pub continue_apis: BTreeMap<SArc<EffectPath>, ContinuationPoint>,
     /// The base location for the set of continue_apis.
     pub root_path: SArc<EffectPath>,
     /// The Object's address, or a Script if no address is possible
@@ -122,8 +122,8 @@ impl Object {
     /// safe bounds the contract can receive, otherwise it is set to any.
     pub fn from_address(address: bitcoin::Address, a: Option<AmountRange>) -> Object {
         Object {
-            ctv_to_tx: HashMap::new(),
-            suggested_txs: HashMap::new(),
+            ctv_to_tx: BTreeMap::new(),
+            suggested_txs: BTreeMap::new(),
             continue_apis: Default::default(),
             root_path: SArc(EffectPath::push(
                 None,
@@ -158,8 +158,8 @@ impl Object {
         &'a [u8]: From<&'a I>,
     {
         Ok(Object {
-            ctv_to_tx: HashMap::new(),
-            suggested_txs: HashMap::new(),
+            ctv_to_tx: BTreeMap::new(),
+            suggested_txs: BTreeMap::new(),
             continue_apis: Default::default(),
             root_path: SArc(EffectPath::push(
                 None,
@@ -180,8 +180,8 @@ impl Object {
         T: MiniscriptKey + ToPublicKey,
     {
         Object {
-            ctv_to_tx: HashMap::new(),
-            suggested_txs: HashMap::new(),
+            ctv_to_tx: BTreeMap::new(),
+            suggested_txs: BTreeMap::new(),
             continue_apis: Default::default(),
             root_path: SArc(EffectPath::push(
                 None,

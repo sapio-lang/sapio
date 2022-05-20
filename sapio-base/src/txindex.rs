@@ -5,7 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use bitcoin::hash_types::*;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -36,12 +36,12 @@ pub trait TxIndex {
     fn add_tx(&self, tx: Arc<bitcoin::Transaction>) -> Result<Txid>;
 }
 pub struct TxIndexLogger {
-    map: Mutex<HashMap<Txid, Arc<bitcoin::Transaction>>>,
+    map: Mutex<BTreeMap<Txid, Arc<bitcoin::Transaction>>>,
 }
 impl TxIndexLogger {
     pub fn new() -> TxIndexLogger {
         TxIndexLogger {
-            map: Mutex::new(HashMap::new()),
+            map: Mutex::new(BTreeMap::new()),
         }
     }
 }

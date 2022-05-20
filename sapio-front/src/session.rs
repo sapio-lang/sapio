@@ -18,7 +18,7 @@ use schemars::schema::RootSchema;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::fmt::Display;
@@ -151,7 +151,7 @@ impl Action {
                 let program = c
                     .bind_psbt(
                         create_mock_output(),
-                        HashMap::new(),
+                        BTreeMap::new(),
                         Rc::new(TxIndexLogger::new()),
                         &CTVAvailable,
                     )
@@ -169,8 +169,8 @@ impl Action {
 pub struct MenuBuilder {
     menu: Vec<RootSchema>,
     gen: schemars::gen::SchemaGenerator,
-    internal_menu: HashMap<String, fn(Value, Context) -> Result<Compiled, SessionError>>,
-    schemas: HashMap<String, String>,
+    internal_menu: BTreeMap<String, fn(Value, Context) -> Result<Compiled, SessionError>>,
+    schemas: BTreeMap<String, String>,
 }
 impl MenuBuilder {
     /// create an empty Menu
@@ -178,8 +178,8 @@ impl MenuBuilder {
         MenuBuilder {
             menu: Vec::new(),
             gen: schemars::gen::SchemaGenerator::default(),
-            internal_menu: HashMap::new(),
-            schemas: HashMap::new(),
+            internal_menu: BTreeMap::new(),
+            schemas: BTreeMap::new(),
         }
     }
     /// register type T with an optional name.
@@ -252,8 +252,8 @@ impl From<MenuBuilder> for Menu {
 /// A precompiled menu of available contract options
 pub struct Menu {
     menu: String,
-    internal_menu: HashMap<String, fn(Value, Context) -> Result<Compiled, SessionError>>,
-    schemas: HashMap<String, String>,
+    internal_menu: BTreeMap<String, fn(Value, Context) -> Result<Compiled, SessionError>>,
+    schemas: BTreeMap<String, String>,
 }
 impl Menu {
     /// create an instance of contract `name` with the provided args.
@@ -281,7 +281,7 @@ impl Menu {
 
 /// An interactive compiler session
 pub struct Session {
-    contracts: HashMap<Key, Compiled>,
+    contracts: BTreeMap<Key, Compiled>,
     example_msg: Option<String>,
     menu: &'static Menu,
     network: bitcoin::Network,
@@ -299,7 +299,7 @@ impl Session {
     /// create an instance of a session with a fixed menu and a given network
     pub fn new(menu: &'static Menu, network: bitcoin::Network) -> Session {
         Session {
-            contracts: HashMap::new(),
+            contracts: BTreeMap::new(),
             example_msg: None,
             menu,
             network,

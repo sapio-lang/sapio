@@ -14,7 +14,7 @@ use sapio_macros::compile_if;
 
 use schemars::*;
 use serde::*;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -32,7 +32,7 @@ impl Tile {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, JsonSchema, Hash, Eq, PartialEq, Copy)]
+#[derive(Clone, Serialize, Deserialize, JsonSchema, Hash, Eq, PartialEq, Copy, PartialOrd, Ord)]
 struct Board([[Option<Tile>; 3]; 3]);
 
 impl Board {
@@ -69,7 +69,7 @@ pub struct TicTacToe {
     whose_turn: Tile,
     win_key_x: Arc<dyn Compilable>,
     win_key_o: Arc<dyn Compilable>,
-    cache: Arc<Mutex<HashMap<(&'static str, Board, Tile), Vec<Template>>>>,
+    cache: Arc<Mutex<BTreeMap<(&'static str, Board, Tile), Vec<Template>>>>,
 }
 
 impl TicTacToe {

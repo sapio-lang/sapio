@@ -10,7 +10,7 @@ pub use plugin_handle::*;
 use sapio::contract::Compiled;
 use sapio_ctv_emulator_trait::NullEmulator;
 use std::cell::Cell;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};

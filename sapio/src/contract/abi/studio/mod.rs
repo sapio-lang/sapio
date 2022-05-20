@@ -17,7 +17,7 @@ use sapio_base::effects::EffectPath;
 use sapio_base::serialization_helpers::SArc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Container for data from  `Object::bind_psbt`.
 #[derive(Serialize, Deserialize)]
@@ -85,7 +85,7 @@ impl From<LinkedPSBT> for SapioStudioFormat {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Program {
     /// program contains the list of SapioStudio PSBTs
-    pub program: HashMap<SArc<EffectPath>, SapioStudioObject>,
+    pub program: BTreeMap<SArc<EffectPath>, SapioStudioObject>,
 }
 
 /// A `SapioStudioObject` is a json-friendly format for a `Object` for use in Sapio Studio
@@ -98,5 +98,5 @@ pub struct SapioStudioObject {
     /// List of SapioStudioFormat PSBTs
     pub txs: Vec<SapioStudioFormat>,
     /// List of continue APIs from this point.
-    pub continue_apis: HashMap<SArc<EffectPath>, ContinuationPoint>,
+    pub continue_apis: BTreeMap<SArc<EffectPath>, ContinuationPoint>,
 }

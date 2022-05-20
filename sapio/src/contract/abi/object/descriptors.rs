@@ -28,7 +28,7 @@ use sapio_base::txindex::TxIndex;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::sync::Arc;
 

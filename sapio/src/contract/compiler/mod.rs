@@ -30,7 +30,7 @@ use sapio_base::serialization_helpers::SArc;
 use sapio_base::Clause;
 use std::cmp::Reverse;
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::collections::LinkedList;
 use std::sync::Arc;
 mod cache;
@@ -192,7 +192,7 @@ where
         // a given argument, but for building the ABI we only precompute with
         // the default argument.
         let (continue_apis, finish_or_fns): (
-            HashMap<SArc<EffectPath>, ContinuationPoint>,
+            BTreeMap<SArc<EffectPath>, ContinuationPoint>,
             Vec<(Nullable, UseCTV, Clause, TxTmplIt)>,
         ) = {
             let mut finish_or_fns_ctx = ctx.derive(PathFragment::FinishOrFn)?;
@@ -264,8 +264,8 @@ where
                 .unzip()
         };
 
-        let mut ctv_to_tx = HashMap::new();
-        let mut suggested_txs = HashMap::new();
+        let mut ctv_to_tx = BTreeMap::new();
+        let mut suggested_txs = BTreeMap::new();
         let mut amount_range = AmountRange::new();
         // TODO: Maybe do not just cloned?
         let mut amount_range_ctx = ctx.derive(PathFragment::Cloned)?;

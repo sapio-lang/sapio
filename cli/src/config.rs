@@ -10,7 +10,7 @@ use emulator_connect::connections::federated::FederatedEmulatorConnection;
 use emulator_connect::connections::hd::HDOracleEmulatorConnection;
 use emulator_connect::CTVEmulator;
 use serde::*;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::net::ToSocketAddrs;
 use std::path::PathBuf;
@@ -130,7 +130,7 @@ pub struct NetworkConfig {
     pub api_node: Node,
     pub emulator_nodes: Option<EmulatorConfig>,
     #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub plugin_map: Option<HashMap<String, WasmerCacheHash>>,
+    pub plugin_map: Option<BTreeMap<String, WasmerCacheHash>>,
 }
 
 impl From<WasmerCacheHash> for [u8; 32] {
