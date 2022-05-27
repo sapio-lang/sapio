@@ -261,6 +261,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use bitcoin::network::constants::Network;
     use rand::prelude::*;
     use std::str::FromStr;
+    let module_path = util::get_path("org", "judica", "sapio-cli");
     match matches.subcommand() {
         Some(("signer", sign_matches)) => match sign_matches.subcommand() {
             Some(("sign", args)) => {
@@ -377,9 +378,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(("contract", matches)) => match matches.subcommand() {
             Some(("list", _args)) => {
                 let plugins = WasmPluginHandle::load_all_keys(
-                    "org".into(),
-                    "judica".into(),
-                    "sapio-cli".into(),
+                    module_path,
                     emulator,
                     config.network,
                     plugin_map,
@@ -524,9 +523,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Some(("create", args)) => {
                 let sph = WasmPluginHandle::new_async(
-                    "org".into(),
-                    "judica".into(),
-                    "sapio-cli".into(),
+                    module_path,
                     &emulator,
                     args.value_of("key"),
                     args.value_of_os("file"),
@@ -559,9 +556,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Some(("api", args)) => {
                 let sph = WasmPluginHandle::new_async(
-                    "org".into(),
-                    "judica".into(),
-                    "sapio-cli".into(),
+                    module_path,
                     &emulator,
                     args.value_of("key"),
                     args.value_of_os("file"),
@@ -573,9 +568,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Some(("logo", args)) => {
                 let sph = WasmPluginHandle::new_async(
-                    "org".into(),
-                    "judica".into(),
-                    "sapio-cli".into(),
+                    module_path,
                     &emulator,
                     args.value_of("key"),
                     args.value_of_os("file"),
@@ -587,9 +580,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Some(("info", args)) => {
                 let sph = WasmPluginHandle::new_async(
-                    "org".into(),
-                    "judica".into(),
-                    "sapio-cli".into(),
+                    module_path,
                     &emulator,
                     args.value_of("key"),
                     args.value_of_os("file"),
@@ -617,9 +608,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Some(("load", args)) => {
                 let sph = WasmPluginHandle::new_async(
-                    "org".into(),
-                    "judica".into(),
-                    "sapio-cli".into(),
+                    module_path,
                     &emulator,
                     None,
                     args.value_of_os("file"),

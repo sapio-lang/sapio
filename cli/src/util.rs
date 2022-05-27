@@ -6,7 +6,7 @@
 
 use bitcoin::consensus::deserialize;
 use bitcoin::util::psbt::PartiallySignedTransaction;
-
+use std::path::PathBuf;
 /// Checks that a file exists during argument parsing
 ///
 /// **Race Conditions** if file is deleted after this call
@@ -94,4 +94,13 @@ pub fn sign_psbt(
 
 fn input_err(s: &str) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::InvalidInput, s)
+}
+
+/// get the path for the compiled modules
+pub(crate) fn get_path(typ: &str, org: &str, proj: &str) -> PathBuf {
+    let proj =
+        directories::ProjectDirs::from(typ, org, proj).expect("Failed to find config directory");
+    let mut path: PathBuf = proj.data_dir().clone().into();
+    path.push("modules");
+    path
 }
