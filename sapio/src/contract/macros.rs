@@ -90,7 +90,7 @@ macro_rules! decl_then {
         $crate::contract::macros::paste!{
 
             $(#[$meta])*
-            fn [<then_ $name>](&self, _ctx:$crate::contract::Context)-> $crate::contract::TxTmplIt
+            fn [<then_ $name>](&self, _ctx:$crate::contract::Context, _:$crate::contract::actions::ThenFuncTypeTag)-> $crate::contract::TxTmplIt
             {
                 unimplemented!();
             }

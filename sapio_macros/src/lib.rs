@@ -152,7 +152,7 @@ pub fn then(args: TokenStream, input: TokenStream) -> TokenStream {
                 })
             }
             /// (missing docs fix)
-            fn #then_fn_name(&self, #context_arg) -> sapio::contract::TxTmplIt
+            fn #then_fn_name(&self, #context_arg, _: sapio::contract::actions::ThenFuncTypeTag) -> sapio::contract::TxTmplIt
             #block
     })
 }

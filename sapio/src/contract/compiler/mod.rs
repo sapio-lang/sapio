@@ -13,6 +13,7 @@ use super::Context;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::contract::actions::conditional_compile::CCILWrapper;
 use crate::contract::actions::CallableAsFoF;
+use crate::contract::actions::ThenFuncTypeTag;
 use crate::contract::TxTmplIt;
 use crate::util::amountrange::AmountRange;
 use ::miniscript::descriptor::TapTree;
@@ -179,7 +180,7 @@ where
                             UseCTV::Yes,
                             guards,
                             if errors.is_empty() {
-                                (func.func)(self_ref, ntx_ctx)
+                                (func.func)(self_ref, ntx_ctx, ThenFuncTypeTag(()))
                             } else {
                                 Err(CompilationError::ConditionalCompilationFailed(errors))
                             },

@@ -62,7 +62,7 @@ impl DynamicExample {
                 Some(sapio::contract::actions::ThenFunc {
                     conditional_compile_if: &[],
                     guard: &[],
-                    func: |_s, _ctx| Err(CompilationError::TerminateCompilation),
+                    func: |_s, _ctx, _t| Err(CompilationError::TerminateCompilation),
                     name: Arc::new("Empty".into()),
                 })
             }],
