@@ -61,8 +61,8 @@ where
 /// DynamicContract wraps a struct S with a set of methods (that can be constructed dynamically)
 /// to form a contract. DynamicContract owns all its methods.
 pub struct DynamicContract<'a, T, S> {
-    /// the list of `ThenFunc` for this contract.
-    pub then: Vec<fn() -> Option<actions::ThenFunc<'a, S>>>,
+    /// the list of `ThenFuncAsFinishOrFunc` for this contract.
+    pub then: Vec<fn() -> Option<actions::ThenFuncAsFinishOrFunc<'a, S>>>,
     /// the list of `FinishOrFunc` for this contract.
     pub finish_or: Vec<fn() -> Option<Box<dyn actions::CallableAsFoF<S, T>>>>,
     /// the list of `Guard` for this contract to finish.
@@ -82,7 +82,7 @@ where
 {
     type StatefulArguments = T;
     type Ref = S;
-    fn then_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::ThenFunc<'a, S>>]
+    fn then_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::ThenFuncAsFinishOrFunc<'a, S>>]
     where
         Self::Ref: 'a,
     {
@@ -129,8 +129,10 @@ where
     /// This enables `DynamicContract` and `Contract` to impl `AnyContract`, as well
     /// as more exotic types.
     type Ref;
-    /// obtain a reference to the `ThenFunc` list.
-    fn then_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::ThenFunc<'a, Self::Ref>>]
+    /// obtain a reference to the `ThenFuncAsFinishOrFunc` list.
+    fn then_fns<'a>(
+        &'a self,
+    ) -> &'a [fn() -> Option<actions::ThenFuncAsFinishOrFunc<'a, Self::Ref>>]
     where
         Self::Ref: 'a;
 
@@ -155,7 +157,9 @@ where
 {
     type StatefulArguments = C::StatefulArguments;
     type Ref = Self;
-    fn then_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::ThenFunc<'a, Self::Ref>>]
+    fn then_fns<'a>(
+        &'a self,
+    ) -> &'a [fn() -> Option<actions::ThenFuncAsFinishOrFunc<'a, Self::Ref>>]
     where
         Self::Ref: 'a,
     {

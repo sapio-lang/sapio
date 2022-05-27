@@ -30,7 +30,7 @@ macro_rules! declare {
     {then $(,$a:expr)*} => {
         /// binds the list of `ThenFunc`'s to this impl.
         /// Any fn() which returns None is ignored (useful for type-level state machines)
-        const THEN_FNS: &'static [fn() -> Option<$crate::contract::actions::ThenFunc<'static, Self>>] = &[$($a,)*];
+        const THEN_FNS: &'static [fn() -> Option<$crate::contract::actions::ThenFuncAsFinishOrFunc<'static, Self>>] = &[$($a,)*];
     };
     [state $i:ty]  => {
         type StatefulArguments = $i;
@@ -95,7 +95,7 @@ macro_rules! decl_then {
                 unimplemented!();
             }
             $(#[$meta])*
-            fn $name<'a>() -> Option<$crate::contract::actions::ThenFunc<'a, Self>> {None}
+            fn $name<'a>() -> Option<$crate::contract::actions::ThenFuncAsFinishOrFunc<'a, Self>> {None}
         }
     };
 }
