@@ -52,7 +52,7 @@ pub struct FederatedPegIn<T: RecoveryState> {
 /// Actions that will be specialized depending on the exact state.
 pub trait StateDependentActions
 where
-    Self: Sized,
+    Self: Sized + Contract,
 {
     decl_guard! {
     /// Should only be defined when RecoveryState is in CanFinishRecovery

@@ -17,13 +17,15 @@ use std::sync::Arc;
 /// Demonstrates how to make a contract object without known functionality at
 /// (rust) compile time. `D` Binds statically to the AnyContract interface though!
 struct D<'a> {
-    v: Vec<fn() -> Option<actions::ThenFuncAsFinishOrFunc<'a, D<'a>>>>,
+    v: Vec<fn() -> Option<actions::ThenFuncAsFinishOrFunc<'a, D<'a>, ()>>>,
 }
 
 impl AnyContract for D<'static> {
     type StatefulArguments = ();
     type Ref = Self;
-    fn then_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::ThenFuncAsFinishOrFunc<'a, Self>>]
+    fn then_fns<'a>(
+        &'a self,
+    ) -> &'a [fn() -> Option<actions::ThenFuncAsFinishOrFunc<'a, Self, Self::StatefulArguments>>]
     where
         Self::Ref: 'a,
     {
@@ -54,7 +56,8 @@ pub struct DynamicExample;
 impl DynamicExample {
     #[then]
     fn next(self, ctx: sapio::Context) {
-        let v: Vec<fn() -> Option<actions::ThenFuncAsFinishOrFunc<'static, D<'static>>>> = vec![];
+        let v: Vec<fn() -> Option<actions::ThenFuncAsFinishOrFunc<'static, D<'static>, ()>>> =
+            vec![];
         let d: D<'_> = D { v };
 
         let d2 = DynamicContract::<(), String> {

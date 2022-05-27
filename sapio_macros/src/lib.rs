@@ -143,7 +143,7 @@ pub fn then(args: TokenStream, input: TokenStream) -> TokenStream {
     let (cia, gba) = get_arrays(&args);
     proc_macro::TokenStream::from(quote! {
             /// (missing docs fix)
-            fn #name<'a>() -> Option<sapio::contract::actions::ThenFuncAsFinishOrFunc<'a, Self>>{
+            fn #name<'a>() -> Option<sapio::contract::actions::ThenFuncAsFinishOrFunc<'a, Self, <Self as sapio::contract::Contract>::StatefulArguments>>{
                 Some(sapio::contract::actions::ThenFunc{
                     guard: &#gba,
                     conditional_compile_if: &#cia,

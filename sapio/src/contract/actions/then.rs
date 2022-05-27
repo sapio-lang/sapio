@@ -19,14 +19,14 @@ pub struct ThenFuncTypeTag(pub(crate) ());
 
 impl ThenFuncTypeTag {
     /// coerce of Self maps onto Self
-    pub fn coerce_args(f: Self) -> Result<Self, CompilationError> {
-        Ok(f)
+    pub fn coerce_args<StatefulArguments>(f: StatefulArguments) -> Result<Self, CompilationError> {
+        Ok(ThenFuncTypeTag(()))
     }
 }
 
 /// Alias for representation of ThenFunc as FinishOrFunc
-pub type ThenFuncAsFinishOrFunc<'a, ContractSelf> =
-    FinishOrFunc<'a, ContractSelf, ThenFuncTypeTag, ThenFuncTypeTag, WebAPIDisabled>;
+pub type ThenFuncAsFinishOrFunc<'a, ContractSelf, StatefulArguments> =
+    FinishOrFunc<'a, ContractSelf, StatefulArguments, ThenFuncTypeTag, WebAPIDisabled>;
 
 /// A ThenFunc takes a list of Guards and a TxTmplIt generator.  Each TxTmpl returned from the
 /// ThenFunc is Covenant Permitted only if the AND of all guards is satisfied.
@@ -45,8 +45,8 @@ pub struct ThenFunc<'a, ContractSelf> {
     pub name: Arc<String>,
 }
 
-impl<'a, ContractSelf> From<ThenFunc<'a, ContractSelf>>
-    for ThenFuncAsFinishOrFunc<'a, ContractSelf>
+impl<'a, ContractSelf, StatefulArgs> From<ThenFunc<'a, ContractSelf>>
+    for ThenFuncAsFinishOrFunc<'a, ContractSelf, StatefulArgs>
 {
     fn from(f: ThenFunc<'a, ContractSelf>) -> Self {
         FinishOrFunc {
