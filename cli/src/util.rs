@@ -97,10 +97,9 @@ fn input_err(s: &str) -> std::io::Error {
 }
 
 /// get the path for the compiled modules
-pub(crate) fn get_path(typ: &str, org: &str, proj: &str) -> PathBuf {
+pub(crate) fn get_data_dir(typ: &str, org: &str, proj: &str) -> PathBuf {
     let proj =
         directories::ProjectDirs::from(typ, org, proj).expect("Failed to find config directory");
     let mut path: PathBuf = proj.data_dir().clone().into();
-    path.push("modules");
     path
 }

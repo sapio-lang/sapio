@@ -137,6 +137,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
       )
       (@subcommand create =>
        (about: "create a contract to a specific UTXO")
+       (@arg workspace: -w --workspace +takes_value "Where to search for the cache / copy the contract file")
        (@group from +required =>
         (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
         (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
@@ -145,10 +146,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
       )
       (@subcommand load =>
        (about: "Load a wasm contract module, returns the hex sha3 hash key")
+       (@arg workspace: -w --workspace +takes_value "Where to copy the contract file")
        (@arg file: -f --file +required +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
       )
       (@subcommand api =>
        (about: "Machine Readable API for a plugin, pipe into jq for pretty formatting.")
+       (@arg workspace: -w --workspace +takes_value "Where to search for the cache / copy the contract file")
        (@group from +required =>
         (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
         (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
@@ -156,6 +159,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
       )
       (@subcommand logo =>
        (about: "base64 encoded png image")
+       (@arg workspace: -w --workspace +takes_value "Where to search for the cache / copy the contract file")
        (@group from +required =>
         (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
         (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
@@ -163,6 +167,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
       )
       (@subcommand info =>
        (about: "View human readable basic information for a plugin")
+       (@arg workspace: -w --workspace +takes_value "Where to search for the cache / copy the contract file")
        (@group from +required =>
         (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
         (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
@@ -170,6 +175,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
       )
       (@subcommand list =>
        (about: "list available contracts")
+       (@arg workspace: -w --workspace +takes_value "Where to search for.")
       )
       )
       );
@@ -261,7 +267,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use bitcoin::network::constants::Network;
     use rand::prelude::*;
     use std::str::FromStr;
-    let module_path = util::get_path("org", "judica", "sapio-cli");
     match matches.subcommand() {
         Some(("signer", sign_matches)) => match sign_matches.subcommand() {
             Some(("sign", args)) => {
@@ -375,251 +380,265 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             _ => unreachable!(),
         },
-        Some(("contract", matches)) => match matches.subcommand() {
-            Some(("list", _args)) => {
-                let plugins = WasmPluginHandle::load_all_keys(
-                    module_path,
-                    emulator,
-                    config.network,
-                    plugin_map,
-                )?;
-                for plugin in plugins {
-                    println!("{} -- {}", plugin.get_name()?, plugin.id().to_string());
-                }
-            }
-            Some(("bind", args)) => {
-                fn create_mock_output() -> bitcoin::OutPoint {
-                    bitcoin::OutPoint {
-                        txid: bitcoin::hashes::sha256d::Hash::from_inner(
-                            bitcoin::hashes::sha256::Hash::hash(format!("mock:{}", 0).as_bytes())
-                                .into_inner(),
-                        )
-                        .into(),
-                        vout: 0,
+        Some(("contract", matches)) => {
+            let module_path = |args: &clap::ArgMatches| {
+                let mut p = args
+                    .value_of("workspace")
+                    .map(Into::into)
+                    .unwrap_or_else(|| util::get_data_dir("org", "judica", "sapio-cli"));
+                p.push("modules");
+                p
+            };
+
+            match matches.subcommand() {
+                Some(("list", args)) => {
+                    let plugins = WasmPluginHandle::load_all_keys(
+                        module_path(args),
+                        emulator,
+                        config.network,
+                        plugin_map,
+                    )?;
+                    for plugin in plugins {
+                        println!("{} -- {}", plugin.get_name()?, plugin.id().to_string());
                     }
                 }
-                let use_mock = args.is_present("mock");
-                let use_base64 = args.is_present("base64_psbt");
-                let outpoint: Option<bitcoin::OutPoint> = args
-                    .value_of("outpoint")
-                    .map(serde_json::from_str)
-                    .transpose()?;
-                let use_txn = args
-                    .value_of("txn")
-                    .map(|buf| base64::decode(buf.as_bytes()))
-                    .transpose()?
-                    .map(|b| PartiallySignedTransaction::consensus_decode(&b[..]))
-                    .transpose()?;
-                let client = rpc::Client::new(
-                    config.active.api_node.url.clone(),
-                    config.active.api_node.auth.clone(),
-                )
-                .await?;
-                let j: Compiled = if let Some(json) = args.value_of("json") {
-                    serde_json::from_str(json)?
-                } else {
-                    let mut s = String::new();
-                    tokio::io::stdin().read_to_string(&mut s).await?;
-                    serde_json::from_str(&s)?
-                };
-
-                let (tx, vout) = if use_mock {
-                    let ctx = Context::new(
-                        config.network,
-                        j.amount_range.max(),
-                        emulator.clone(),
-                        "mock".try_into()?,
-                        Arc::new(MapEffectDB::default()),
-                    );
-                    let mut tx = ctx
-                        .template()
-                        .add_output(j.amount_range.max(), &j, None)?
-                        .get_tx();
-                    tx.input[0].previous_output = create_mock_output();
-                    (tx, 0)
-                } else if let Some(outpoint) = outpoint {
-                    let res = client.get_raw_transaction(&outpoint.txid, None).await?;
-                    (res, outpoint.vout)
-                } else {
-                    let mut spends = HashMap::new();
-                    if let ExtendedAddress::Address(ref a) = j.address {
-                        spends.insert(format!("{}", a), j.amount_range.max());
-
-                        if let Some(psbt) = use_txn {
-                            let script = a.script_pubkey();
-                            if let Some(pos) = psbt
-                                .unsigned_tx
-                                .output
-                                .iter()
-                                .enumerate()
-                                .find(|(_, o)| o.script_pubkey == script)
-                                .map(|(i, _)| i)
-                            {
-                                (psbt.extract_tx(), pos as u32)
-                            } else {
-                                return Err(format!(
-                                    "No Output found {:?} {:?}",
-                                    psbt.unsigned_tx, a
+                Some(("bind", args)) => {
+                    fn create_mock_output() -> bitcoin::OutPoint {
+                        bitcoin::OutPoint {
+                            txid: bitcoin::hashes::sha256d::Hash::from_inner(
+                                bitcoin::hashes::sha256::Hash::hash(
+                                    format!("mock:{}", 0).as_bytes(),
                                 )
-                                .into());
+                                .into_inner(),
+                            )
+                            .into(),
+                            vout: 0,
+                        }
+                    }
+                    let use_mock = args.is_present("mock");
+                    let use_base64 = args.is_present("base64_psbt");
+                    let outpoint: Option<bitcoin::OutPoint> = args
+                        .value_of("outpoint")
+                        .map(serde_json::from_str)
+                        .transpose()?;
+                    let use_txn = args
+                        .value_of("txn")
+                        .map(|buf| base64::decode(buf.as_bytes()))
+                        .transpose()?
+                        .map(|b| PartiallySignedTransaction::consensus_decode(&b[..]))
+                        .transpose()?;
+                    let client = rpc::Client::new(
+                        config.active.api_node.url.clone(),
+                        config.active.api_node.auth.clone(),
+                    )
+                    .await?;
+                    let j: Compiled = if let Some(json) = args.value_of("json") {
+                        serde_json::from_str(json)?
+                    } else {
+                        let mut s = String::new();
+                        tokio::io::stdin().read_to_string(&mut s).await?;
+                        serde_json::from_str(&s)?
+                    };
+
+                    let (tx, vout) = if use_mock {
+                        let ctx = Context::new(
+                            config.network,
+                            j.amount_range.max(),
+                            emulator.clone(),
+                            "mock".try_into()?,
+                            Arc::new(MapEffectDB::default()),
+                        );
+                        let mut tx = ctx
+                            .template()
+                            .add_output(j.amount_range.max(), &j, None)?
+                            .get_tx();
+                        tx.input[0].previous_output = create_mock_output();
+                        (tx, 0)
+                    } else if let Some(outpoint) = outpoint {
+                        let res = client.get_raw_transaction(&outpoint.txid, None).await?;
+                        (res, outpoint.vout)
+                    } else {
+                        let mut spends = HashMap::new();
+                        if let ExtendedAddress::Address(ref a) = j.address {
+                            spends.insert(format!("{}", a), j.amount_range.max());
+
+                            if let Some(psbt) = use_txn {
+                                let script = a.script_pubkey();
+                                if let Some(pos) = psbt
+                                    .unsigned_tx
+                                    .output
+                                    .iter()
+                                    .enumerate()
+                                    .find(|(_, o)| o.script_pubkey == script)
+                                    .map(|(i, _)| i)
+                                {
+                                    (psbt.extract_tx(), pos as u32)
+                                } else {
+                                    return Err(format!(
+                                        "No Output found {:?} {:?}",
+                                        psbt.unsigned_tx, a
+                                    )
+                                    .into());
+                                }
+                            } else {
+                                let res = client
+                                    .wallet_create_funded_psbt(&[], &spends, None, None, None)
+                                    .await?;
+                                let psbt = PartiallySignedTransaction::consensus_decode(
+                                    &base64::decode(&res.psbt)?[..],
+                                )?;
+                                let tx = psbt.extract_tx();
+                                // if change pos is -1, then +1%len == 0. if it is 0, then 1. if 1, then 2 % len == 0.
+                                let vout = ((res.change_position + 1) as usize) % tx.output.len();
+                                (tx, vout as u32)
                             }
                         } else {
-                            let res = client
-                                .wallet_create_funded_psbt(&[], &spends, None, None, None)
-                                .await?;
-                            let psbt = PartiallySignedTransaction::consensus_decode(
-                                &base64::decode(&res.psbt)?[..],
-                            )?;
-                            let tx = psbt.extract_tx();
-                            // if change pos is -1, then +1%len == 0. if it is 0, then 1. if 1, then 2 % len == 0.
-                            let vout = ((res.change_position + 1) as usize) % tx.output.len();
-                            (tx, vout as u32)
+                            return Err("Must have a valid address".into());
                         }
+                    };
+                    let logger = Rc::new(TxIndexLogger::new());
+                    (*logger).add_tx(Arc::new(tx.clone()))?;
+
+                    let mut bound = j.bind_psbt(
+                        OutPoint::new(tx.txid(), vout as u32),
+                        BTreeMap::new(),
+                        logger,
+                        emulator.as_ref(),
+                    )?;
+
+                    if outpoint.is_none() {
+                        let added_output_metadata = vec![OutputMeta::default(); tx.output.len()];
+                        let output_metadata = vec![ObjectMetadata::default(); tx.output.len()];
+                        let out = tx.input[0].previous_output;
+                        let psbt = PartiallySignedTransaction::from_unsigned_tx(tx)?;
+                        bound.program.insert(
+                            SArc(Arc::new("funding".try_into()?)),
+                            SapioStudioObject {
+                                metadata: Default::default(),
+                                out,
+                                continue_apis: Default::default(),
+                                txs: vec![LinkedPSBT {
+                                    psbt,
+                                    metadata: TemplateMetadata {
+                                        label: Some("funding".into()),
+                                        color: Some("pink".into()),
+                                        extra: BTreeMap::new(),
+                                        simp: Default::default(),
+                                    },
+                                    output_metadata,
+                                    added_output_metadata,
+                                }
+                                .into()],
+                            },
+                        );
+                    }
+                    if use_base64 {
+                        println!("{}", serde_json::to_string_pretty(&bound)?);
                     } else {
-                        return Err("Must have a valid address".into());
+                        println!("{}", serde_json::to_string_pretty(&bound)?);
                     }
-                };
-                let logger = Rc::new(TxIndexLogger::new());
-                (*logger).add_tx(Arc::new(tx.clone()))?;
+                }
+                Some(("create", args)) => {
+                    let sph = WasmPluginHandle::new_async(
+                        module_path(args),
+                        &emulator,
+                        args.value_of("key"),
+                        args.value_of_os("file"),
+                        config.network,
+                        plugin_map,
+                    )
+                    .await?;
+                    let api = sph.get_api()?;
+                    let validator = jsonschema_valid::Config::from_schema(
+                        &api,
+                        Some(jsonschema_valid::schemas::Draft::Draft6),
+                    )?;
+                    let params = if let Some(params) = args.value_of("json") {
+                        serde_json::from_str(params)?
+                    } else {
+                        let mut s = String::new();
+                        tokio::io::stdin().read_to_string(&mut s).await?;
+                        serde_json::from_str(&s)?
+                    };
+                    if let Err(it) = validator.validate(&params) {
+                        for err in it {
+                            println!("Error: {}", err);
+                        }
+                        return Ok(());
+                    }
+                    let create_args: CreateArgs<serde_json::Value> =
+                        serde_json::from_value(params)?;
 
-                let mut bound = j.bind_psbt(
-                    OutPoint::new(tx.txid(), vout as u32),
-                    BTreeMap::new(),
-                    logger,
-                    emulator.as_ref(),
-                )?;
-
-                if outpoint.is_none() {
-                    let added_output_metadata = vec![OutputMeta::default(); tx.output.len()];
-                    let output_metadata = vec![ObjectMetadata::default(); tx.output.len()];
-                    let out = tx.input[0].previous_output;
-                    let psbt = PartiallySignedTransaction::from_unsigned_tx(tx)?;
-                    bound.program.insert(
-                        SArc(Arc::new("funding".try_into()?)),
-                        SapioStudioObject {
-                            metadata: Default::default(),
-                            out,
-                            continue_apis: Default::default(),
-                            txs: vec![LinkedPSBT {
-                                psbt,
-                                metadata: TemplateMetadata {
-                                    label: Some("funding".into()),
-                                    color: Some("pink".into()),
-                                    extra: BTreeMap::new(),
-                                    simp: Default::default(),
-                                },
-                                output_metadata,
-                                added_output_metadata,
-                            }
-                            .into()],
-                        },
+                    let v = sph.create(&PathFragment::Root.into(), &create_args)?;
+                    println!("{}", serde_json::to_string(&v)?);
+                }
+                Some(("api", args)) => {
+                    let sph = WasmPluginHandle::new_async(
+                        module_path(args),
+                        &emulator,
+                        args.value_of("key"),
+                        args.value_of_os("file"),
+                        config.network,
+                        plugin_map,
+                    )
+                    .await?;
+                    println!("{}", sph.get_api()?);
+                }
+                Some(("logo", args)) => {
+                    let sph = WasmPluginHandle::new_async(
+                        module_path(args),
+                        &emulator,
+                        args.value_of("key"),
+                        args.value_of_os("file"),
+                        config.network,
+                        plugin_map,
+                    )
+                    .await?;
+                    println!("{}", sph.get_logo()?);
+                }
+                Some(("info", args)) => {
+                    let sph = WasmPluginHandle::new_async(
+                        module_path(args),
+                        &emulator,
+                        args.value_of("key"),
+                        args.value_of_os("file"),
+                        config.network,
+                        plugin_map,
+                    )
+                    .await?;
+                    println!("Name: {}", sph.get_name()?);
+                    let api = sph.get_api()?;
+                    println!(
+                        "Description:\n{}",
+                        api.get("description").unwrap().as_str().unwrap()
                     );
-                }
-                if use_base64 {
-                    println!("{}", serde_json::to_string_pretty(&bound)?);
-                } else {
-                    println!("{}", serde_json::to_string_pretty(&bound)?);
-                }
-            }
-            Some(("create", args)) => {
-                let sph = WasmPluginHandle::new_async(
-                    module_path,
-                    &emulator,
-                    args.value_of("key"),
-                    args.value_of_os("file"),
-                    config.network,
-                    plugin_map,
-                )
-                .await?;
-                let api = sph.get_api()?;
-                let validator = jsonschema_valid::Config::from_schema(
-                    &api,
-                    Some(jsonschema_valid::schemas::Draft::Draft6),
-                )?;
-                let params = if let Some(params) = args.value_of("json") {
-                    serde_json::from_str(params)?
-                } else {
-                    let mut s = String::new();
-                    tokio::io::stdin().read_to_string(&mut s).await?;
-                    serde_json::from_str(&s)?
-                };
-                if let Err(it) = validator.validate(&params) {
-                    for err in it {
-                        println!("Error: {}", err);
+                    println!("Parameters:");
+                    for (i, param) in api
+                        .get("properties")
+                        .unwrap()
+                        .as_object()
+                        .unwrap()
+                        .keys()
+                        .enumerate()
+                    {
+                        println!("{}. {}", i, param)
                     }
-                    return Ok(());
                 }
-                let create_args: CreateArgs<serde_json::Value> = serde_json::from_value(params)?;
-
-                let v = sph.create(&PathFragment::Root.into(), &create_args)?;
-                println!("{}", serde_json::to_string(&v)?);
-            }
-            Some(("api", args)) => {
-                let sph = WasmPluginHandle::new_async(
-                    module_path,
-                    &emulator,
-                    args.value_of("key"),
-                    args.value_of_os("file"),
-                    config.network,
-                    plugin_map,
-                )
-                .await?;
-                println!("{}", sph.get_api()?);
-            }
-            Some(("logo", args)) => {
-                let sph = WasmPluginHandle::new_async(
-                    module_path,
-                    &emulator,
-                    args.value_of("key"),
-                    args.value_of_os("file"),
-                    config.network,
-                    plugin_map,
-                )
-                .await?;
-                println!("{}", sph.get_logo()?);
-            }
-            Some(("info", args)) => {
-                let sph = WasmPluginHandle::new_async(
-                    module_path,
-                    &emulator,
-                    args.value_of("key"),
-                    args.value_of_os("file"),
-                    config.network,
-                    plugin_map,
-                )
-                .await?;
-                println!("Name: {}", sph.get_name()?);
-                let api = sph.get_api()?;
-                println!(
-                    "Description:\n{}",
-                    api.get("description").unwrap().as_str().unwrap()
-                );
-                println!("Parameters:");
-                for (i, param) in api
-                    .get("properties")
-                    .unwrap()
-                    .as_object()
-                    .unwrap()
-                    .keys()
-                    .enumerate()
-                {
-                    println!("{}. {}", i, param)
+                Some(("load", args)) => {
+                    let sph = WasmPluginHandle::new_async(
+                        module_path(args),
+                        &emulator,
+                        None,
+                        args.value_of_os("file"),
+                        config.network,
+                        plugin_map,
+                    )
+                    .await?;
+                    println!("{}", sph.id().to_string());
                 }
+                _ => unreachable!(),
             }
-            Some(("load", args)) => {
-                let sph = WasmPluginHandle::new_async(
-                    module_path,
-                    &emulator,
-                    None,
-                    args.value_of_os("file"),
-                    config.network,
-                    plugin_map,
-                )
-                .await?;
-                println!("{}", sph.id().to_string());
-            }
-            _ => unreachable!(),
-        },
+        }
         _ => unreachable!(),
     };
 
