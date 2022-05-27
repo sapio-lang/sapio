@@ -81,7 +81,6 @@ impl HDOracleEmulatorConnection {
     }
 }
 
-use bitcoin::util::psbt::Map;
 use tokio::sync::Mutex;
 impl CTVEmulator for HDOracleEmulatorConnection {
     fn get_signer_for(&self, h: Sha256) -> Result<Clause, EmulatorError> {
@@ -108,7 +107,7 @@ impl CTVEmulator for HDOracleEmulatorConnection {
                 })
             });
 
-        b.merge(inp?)
+        b.combine(inp?)
             .or_else(|_e| input_error("Fault Signed PSBT"))?;
         Ok(b)
     }

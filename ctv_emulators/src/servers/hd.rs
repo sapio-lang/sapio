@@ -78,14 +78,14 @@ impl HDOracleEmulator {
             .map_err(|_| input_err("Could Not Derive Key"))?;
         let untweaked = key.to_keypair(secp);
         let pk = XOnlyPublicKey::from_keypair(&untweaked);
-        let mut sighash = bitcoin::util::sighash::SigHashCache::new(&tx);
+        let mut sighash = bitcoin::util::sighash::SighashCache::new(&tx);
         let input_zero = &mut b.inputs[0];
         use bitcoin::schnorr::TapTweak;
         let tweaked = untweaked
             .tap_tweak(secp, input_zero.tap_merkle_root)
             .into_inner();
         let tweaked_pk = tweaked.public_key();
-        let hash_ty = bitcoin::util::sighash::SchnorrSigHashType::All;
+        let hash_ty = bitcoin::util::sighash::SchnorrSighashType::All;
         let prevouts = &Prevouts::All(&utxos);
         let mut get_sig = |path, kp| {
             let annex = None;
@@ -98,7 +98,10 @@ impl HDOracleEmulator {
             SchnorrSig { sig, hash_ty }
         };
         if let Some(true) = input_zero.witness_utxo.as_ref().map(|v| {
-            v.script_pubkey == Script::new_v1_p2tr_tweaked(tweaked_pk.dangerous_assume_tweaked())
+            v.script_pubkey
+                == Script::new_v1_p2tr_tweaked(
+                    XOnlyPublicKey::from(tweaked_pk).dangerous_assume_tweaked(),
+                )
         }) {
             let sig = get_sig(None, &tweaked);
             input_zero.tap_key_sig = Some(sig);
@@ -109,7 +112,7 @@ impl HDOracleEmulator {
             .map(|(script, ver)| TapLeafHash::from_script(script, *ver))
         {
             let sig = get_sig(Some((tlh, 0xffffffff)), &untweaked);
-            input_zero.tap_script_sigs.insert((pk.clone(), tlh), sig);
+            input_zero.tap_script_sigs.insert((pk.0.clone(), tlh), sig);
         }
         Ok(b)
     }

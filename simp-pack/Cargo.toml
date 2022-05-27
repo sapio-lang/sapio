@@ -19,5 +19,5 @@ version = "0.2.0"
 
 [dependencies.bitcoin]
 package = "sapio-bitcoin"
-version = "0.28.0-rc.2"
+version = "0.28.0"
 features = ['use-serde']

@@ -30,12 +30,12 @@ version = "0.2.0"
 
 [dependencies.bitcoin]
 package = "sapio-bitcoin"
-version = "0.28.0-rc.2"
+version = "0.28.0"
 features = ['use-serde', 'rand', 'base64']
 
 [dependencies.miniscript]
 package = "sapio-miniscript"
-version = "^7.0.0-4"
+version = "^7.0.0"
 features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 
 [dependencies.sapio-base]

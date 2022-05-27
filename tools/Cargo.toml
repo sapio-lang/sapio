@@ -18,12 +18,12 @@ bitcoincore-rpc-async = "4.0.1-alpha.1"
 
 [dependencies.miniscript]
 package = "sapio-miniscript"
-version = "^7.0.0-0"
+version = "^7.0.0"
 features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 
 [dependencies.bitcoin]
 package = "sapio-bitcoin"
-version = "0.28.0-rc.2"
+version = "0.28.0"
 features = ['use-serde', 'rand']
 
 [dependencies.sapio-base]
