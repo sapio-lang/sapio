@@ -127,31 +127,42 @@ where
     /// TODO: Better Document Semantics
     fn compile(&self, mut ctx: Context) -> Result<Compiled, CompilationError> {
         let self_ref = self.get_inner_ref();
-
         let guard_clauses = std::cell::RefCell::new(GuardCache::new());
-
         let dummy_root = Arc::new(ReversePath::from(PathFragment::Root));
 
-        let mut ctv_to_tx = BTreeMap::new();
-        let mut suggested_txs = BTreeMap::new();
+        // The below maps track metadata that is useful for consumers / verification.
+        // track transactions that are *guaranteed* via CTV
+        let mut ctv_ensured_txns = BTreeMap::new();
+        // All other transactions
+        let mut other_txns = BTreeMap::new();
+
+        // the min and max amount of funds spendable in the transactions
         let mut amount_range = AmountRange::new();
+
+        // amount ensuring that the funds required don't get tweaked
+        // during recompilation passes
         // TODO: Maybe do not just cloned?
         let mut amount_range_ctx = ctx.derive(PathFragment::Cloned)?;
-        amount_range.update_range(self.ensure_amount(amount_range_ctx)?);
+        let ensured_amount = self.ensure_amount(amount_range_ctx)?;
+        amount_range.update_range(ensured_amount);
 
         // The code for then_fns and finish_or_fns is very similar, differing
         // only in that then_fns have a CTV enforcing the contract and
         // finish_or_fns do not. We can lazily chain iterators to process them
         // in a row.
+        //
+        // we need a unique context for each.
         let mut finish_or_fns_ctx = ctx.derive(PathFragment::FinishOrFn)?;
         let mut then_fn_ctx = ctx.derive(PathFragment::ThenFn)?;
         let (mut continue_apis, clause_accumulator): (
             BTreeMap<SArc<EffectPath>, ContinuationPoint>,
-            Vec<Vec<Clause>>
+            Vec<Vec<Clause>>,
         ) = self
             .then_fns()
             .iter()
             .filter_map(|func| func())
+            // We currently need to allocate for the the Callable as a
+            // trait object since it only exists temporarily.
             // TODO: Without allocations?
             .map(|x| -> Box<dyn CallableAsFoF<_, _>> { Box::new(x) })
             // TOOD: What is flat map doing here?
@@ -170,36 +181,45 @@ where
                     })
                     .map(|x| (UseCTV::No, x)),
             )
+            // flat_map will discard any
+            // skippable / never branches here
             .flat_map(|(ctv, (mut f_ctx, func))| {
                 f_ctx
+                    // this should always be Ok(_)
                     .derive(PathFragment::CondCompIf)
-                    .map(|mut this_ctx| {
-                        // TODO: Merge logic?
+                    .and_then(|mut this_ctx| {
                         match CCILWrapper(func.get_conditional_compile_if())
                             .assemble(self_ref, &mut this_ctx)
                         {
+                            // Throw errors
                             ConditionalCompileType::Fail(errors) => {
-                                Some((f_ctx, func, errors, Nullable::No, ctv))
+                                Err(CompilationError::ConditionalCompilationFailed(errors))
                             }
+                            // Non nullable
                             ConditionalCompileType::Required
                             | ConditionalCompileType::NoConstraint => {
-                                Some((f_ctx, func, LinkedList::new(), Nullable::No, ctv))
+                                Ok(Some((f_ctx, func, Nullable::No, ctv)))
                             }
+                            // Nullable
                             ConditionalCompileType::Nullable => {
-                                Some((f_ctx, func, LinkedList::new(), Nullable::Yes, ctv))
+                                Ok(Some((f_ctx, func, Nullable::Yes, ctv)))
                             }
+                            // Drop these
                             ConditionalCompileType::Skippable | ConditionalCompileType::Never => {
-                                None
+                                Ok(None)
                             }
                         }
                     })
+                    // trasnpose will flip: - Ok(None) into None; - Err() into
+                    // Some(Err()) - Ok(Some()) into Some(Ok()) When this hits
+                    // the flat_map, all None values will be dropped, and errors
+                    // will be passed on.
                     .transpose()
             })
             .map(|r| {
-                r.and_then(|(mut f_ctx, func, errors, nullability, ctv)| {
+                r.and_then(|(mut f_ctx, func, nullability, ctv)| {
                     let gctx = f_ctx.derive(PathFragment::Guard)?;
                     // TODO: Suggested path frag?
-                    let ntx_ctx = f_ctx.derive(PathFragment::Next)?;
                     let guards = create_guards(
                         self_ref,
                         gctx,
@@ -207,52 +227,30 @@ where
                         &mut guard_clauses.borrow_mut(),
                     );
                     let effect_ctx = f_ctx.derive(PathFragment::Suggested)?;
-                    let cont = if ctv == UseCTV::Yes {
-                        (
-                            SArc(dummy_root.clone()),
-                            ContinuationPoint::at(None, dummy_root.clone()),
-                        )
+                    let effect_path = effect_ctx.path().clone();
+                    let transactions = if ctv == UseCTV::Yes {
+                        let ntx_ctx = f_ctx.derive(PathFragment::Next)?;
+                        func.call(self_ref, ntx_ctx, Default::default())
                     } else {
-                        (
-                            SArc(effect_ctx.path().clone()),
-                            ContinuationPoint::at(
-                                func.get_schema().clone(),
-                                effect_ctx.path().clone(),
-                            ),
-                        )
+                        // finish_or_fns may be used to compute additional
+                        // transactions with a given argument, but for building
+                        // the ABI we only precompute with the default argument.
+                        compute_all_effects(effect_ctx, self_ref, func.as_ref())
                     };
-                    let transactions = if errors.is_empty() {
-                        if ctv == UseCTV::Yes {
-                            func.call(self_ref, ntx_ctx, Default::default())
-                        } else {
-                            // finish_or_fns may be used to compute additional transactions with
-                            // a given argument, but for building the ABI we only precompute with
-                            // the default argument.
-                            compute_all_effects(effect_ctx, self_ref, func.as_ref())
-                        }
-                    } else {
-                        Err(CompilationError::ConditionalCompilationFailed(errors))
-                    };
-                    Ok((cont, (nullability, ctv, guards, transactions)))
-                })
-            })
-            // If no guards and not CTV, then nothing gets added (not interpreted as Trivial True)
-            // If CTV and no guards, just CTV added.
-            // If CTV and guards, CTV & guards added.
-
-            // TODO: What does flat_map do here?
-            .flat_map(|r| {
-                r.map(|(cont, (nullability, uses_ctv, guards, r_txtmpls))| {
-                    // it would be an error if any of r_txtmpls is an error instead of just an empty
-                    // iterator.
-                    let txtmpl_clauses = r_txtmpls?
+                    // If no guards and not CTV, then nothing gets added (not
+                    // interpreted as Trivial True)
+                    //   - If CTV and no guards, just CTV added.
+                    //   - If CTV and guards, CTV & guards added.
+                    // it would be an error if any of r_txtmpls is an error
+                    // instead of just an empty iterator.
+                    let txtmpl_clauses = transactions?
                         .map(|r_txtmpl| {
                             let txtmpl = r_txtmpl?;
                             let h = txtmpl.hash();
                             amount_range.update_range(txtmpl.max);
                             // Add the addition guards to these clauses
-                            if uses_ctv == UseCTV::Yes {
-                                let txtmpl = ctv_to_tx.entry(h).or_insert(txtmpl);
+                            if ctv == UseCTV::Yes {
+                                let txtmpl = ctv_ensured_txns.entry(h).or_insert(txtmpl);
                                 if txtmpl.guards.len() == 0 {
                                     ctx.ctv_emulator(h).map(Some)
                                 } else {
@@ -261,12 +259,16 @@ where
                                     Ok(Some(Clause::And(g)))
                                 }
                             } else {
-                                let txtmpl = suggested_txs.entry(h).or_insert(txtmpl);
-                                // Don't return or use the extra guards here because we're within a
-                                // non-CTV context... if we did, then it would destabilize compilation
+                                let txtmpl = other_txns.entry(h).or_insert(txtmpl);
+                                // Don't return or use the extra guards here
+                                // because we're within a non-CTV context... if
+                                // we did, then it would destabilize compilation
                                 // with effect arguments.
                                 if txtmpl.guards.len() != 0 {
-                                    // todo: In theory, the *default* effect could pass up something here.
+                                    // N.B.: In theory, the *default* effect
+                                    // could pass up something here.
+                                    // However, we don't do that since there's
+                                    // not much point to it.
                                     Err(CompilationError::AdditionalGuardsNotAllowedHere)
                                 } else {
                                     // Don't add anything...
@@ -279,16 +281,23 @@ where
                         // Forces any error to abort the whole thing
                         .collect::<Result<Vec<Clause>, CompilationError>>()?;
 
-                    match (uses_ctv, nullability, txtmpl_clauses.len(), guards) {
-                        // Mark this branch dead.
-                        // Nullable branch without anything
-                        (UseCTV::Yes, Nullable::Yes, 0, _) => Ok((cont, vec![])),
+                    let dummy = (
+                        SArc(dummy_root.clone()),
+                        ContinuationPoint::at(None, dummy_root.clone()),
+                    );
+                    // N.B. the order of the matches below is significant
+                    match (ctv, nullability, txtmpl_clauses.len(), guards) {
+                        // This is a nullable branch without any proposed
+                        // transactions.
+                        // Therefore, mark this branch dead.
+                        (UseCTV::Yes, Nullable::Yes, 0, _) => Ok((dummy, vec![])),
                         // Error if we expect CTV, returned some templates, but our guard
                         // was unsatisfiable, irrespective of nullability. This is because
                         // the behavior should be captured through a compile_if if it is
                         // intended.
                         (UseCTV::Yes, _, n, Clause::Unsatisfiable) if n > 0 => {
-                            // TODO: Turn into a warning that the intended behavior should be to compile_if
+                            // TODO: Turn into a warning that the intended
+                            // behavior should be to compile_if
                             Err(CompilationError::MissingTemplates)
                         }
                         // Error if 0 templates return and we don't want to be nullable
@@ -296,26 +305,36 @@ where
                             Err(CompilationError::MissingTemplates)
                         }
                         // If the guard is trivial, return the hashes standalone
-                        (UseCTV::Yes, _, _, Clause::Trivial) => Ok((cont, txtmpl_clauses)),
+                        (UseCTV::Yes, _, _, Clause::Trivial) => Ok((dummy, txtmpl_clauses)),
                         // If the guard is non-trivial, zip it to each hash
                         // TODO: Arc in miniscript to dedup memory?
                         //       This could be Clause::Shared(x) or something...
                         (UseCTV::Yes, _, _, guards) => Ok((
-                            cont,
+                            dummy,
                             txtmpl_clauses
                                 .into_iter()
                                 // extra_guards will contain any CTV
                                 .map(|extra_guards| Clause::And(vec![guards.clone(), extra_guards]))
                                 .collect(),
                         )),
-                        (UseCTV::No, _, _, guards) => Ok((cont, vec![guards])),
+                        (UseCTV::No, _, _, guards) => Ok((
+                            (
+                                SArc(effect_path.clone()),
+                                ContinuationPoint::at(func.get_schema().clone(), effect_path),
+                            ),
+                            vec![guards],
+                        )),
                     }
                 })
             })
-            .collect::<Result<Vec<((SArc<EffectPath>, ContinuationPoint), Vec<Clause>)>, CompilationError>>()?
+            .collect::<Result<Vec<(_, Vec<Clause>)>, CompilationError>>()?
             .into_iter()
             .unzip();
+
+        // All of the CTV Branches add the dummy_root path,
+        // so we remove it here.
         continue_apis.remove(&SArc(dummy_root.clone()));
+
         let finish_fns: Vec<_> = {
             let mut finish_fns_ctx = ctx.derive(PathFragment::FinishFn)?;
             // Compute all finish_functions at this level, caching if requested.
@@ -372,7 +391,7 @@ where
         let descriptor = Some(descriptor.into());
         let root_path = SArc(ctx.path().clone());
 
-        let failed_estimate = ctv_to_tx.values().any(|a| {
+        let failed_estimate = ctv_ensured_txns.values().any(|a| {
             // witness space not scaled
             let tx_size = a.tx.get_weight() + estimated_max_size;
             let fees = amount_range.max() - a.total_amount();
@@ -385,8 +404,8 @@ where
         } else {
             let mut metadata_ctx = ctx.derive(PathFragment::Metadata)?;
             Ok(Compiled {
-                ctv_to_tx,
-                suggested_txs,
+                ctv_to_tx: ctv_ensured_txns,
+                suggested_txs: other_txns,
                 continue_apis,
                 root_path,
                 address,
