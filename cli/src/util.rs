@@ -58,14 +58,14 @@ pub fn sign_psbt(
         .ok_or_else(|| input_err("Could not find one of the UTXOs to be signed over"))?;
     let untweaked = xpriv.to_keypair(secp);
     let pk = XOnlyPublicKey::from_keypair(&untweaked);
-    let mut sighash = bitcoin::util::sighash::SigHashCache::new(&tx);
+    let mut sighash = bitcoin::util::sighash::SighashCache::new(&tx);
     let input_zero = &mut b.inputs[0];
     use bitcoin::schnorr::TapTweak;
     let tweaked = untweaked
         .tap_tweak(secp, input_zero.tap_merkle_root)
         .into_inner();
     let tweaked_pk = tweaked.public_key();
-    let hash_ty = bitcoin::util::sighash::SchnorrSigHashType::All;
+    let hash_ty = bitcoin::util::sighash::SchnorrSighashType::All;
     let prevouts = &Prevouts::All(&utxos);
     let mut get_sig = |path, kp| {
         let annex = None;
@@ -77,7 +77,7 @@ pub fn sign_psbt(
         let sig = secp.sign_schnorr_no_aux_rand(&msg, kp);
         SchnorrSig { sig, hash_ty }
     };
-    if input_zero.tap_internal_key == Some(pk) {
+    if input_zero.tap_internal_key == Some(pk.0) {
         let sig = get_sig(None, &tweaked);
         input_zero.tap_key_sig = Some(sig);
     }
@@ -87,7 +87,7 @@ pub fn sign_psbt(
         .map(|(script, ver)| TapLeafHash::from_script(script, *ver))
     {
         let sig = get_sig(Some((tlh, 0xffffffff)), &untweaked);
-        input_zero.tap_script_sigs.insert((pk.clone(), tlh), sig);
+        input_zero.tap_script_sigs.insert((pk.0.clone(), tlh), sig);
     }
     Ok(b)
 }
