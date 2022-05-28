@@ -285,7 +285,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             Some(("new", args)) => {
-                let mut entropy: [u8; 32] = rand::thread_rng().gen();
+                let entropy: [u8; 32] = rand::thread_rng().gen();
                 let xpriv = ExtendedPrivKey::new_master(
                     Network::from_str(args.value_of("network").unwrap())?,
                     &entropy,

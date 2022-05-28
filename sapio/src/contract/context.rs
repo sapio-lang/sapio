@@ -7,21 +7,16 @@
 //! general non-parameter compilation state required by all contracts
 use super::{Amount, Compilable, CompilationError, Compiled};
 use crate::contract::compiler::InternalCompilerTag;
-use crate::contract::object::SupportedDescriptors;
-use crate::util::amountrange::AmountRange;
+
 use bitcoin::Network;
-use miniscript::Descriptor;
-use miniscript::DescriptorTrait;
-use miniscript::MiniscriptKey;
-use miniscript::ToPublicKey;
+
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
 pub use sapio_base::effects::{EffectDB, MapEffectDB};
-use sapio_base::serialization_helpers::SArc;
+
 use sapio_ctv_emulator_trait::CTVEmulator;
 use std::convert::TryInto;
 
-use std::collections::BTreeMap;
 use std::collections::HashSet;
 
 use std::sync::Arc;

@@ -13,7 +13,7 @@ use super::Context;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::contract::actions::conditional_compile::CCILWrapper;
 use crate::contract::actions::CallableAsFoF;
-use crate::contract::actions::ThenFuncTypeTag;
+
 use crate::contract::TxTmplIt;
 use crate::util::amountrange::AmountRange;
 use ::miniscript::descriptor::TapTree;
@@ -33,7 +33,7 @@ use sapio_base::Clause;
 use std::cmp::Reverse;
 
 use std::collections::BTreeMap;
-use std::collections::LinkedList;
+
 use std::sync::Arc;
 mod cache;
 use cache::*;
@@ -142,7 +142,7 @@ where
         // amount ensuring that the funds required don't get tweaked
         // during recompilation passes
         // TODO: Maybe do not just cloned?
-        let mut amount_range_ctx = ctx.derive(PathFragment::Cloned)?;
+        let amount_range_ctx = ctx.derive(PathFragment::Cloned)?;
         let ensured_amount = self.ensure_amount(amount_range_ctx)?;
         amount_range.update_range(ensured_amount);
 
@@ -402,7 +402,7 @@ where
         if failed_estimate {
             Err(CompilationError::MinFeerateError)
         } else {
-            let mut metadata_ctx = ctx.derive(PathFragment::Metadata)?;
+            let metadata_ctx = ctx.derive(PathFragment::Metadata)?;
             Ok(Compiled {
                 ctv_to_tx: ctv_ensured_txns,
                 suggested_txs: other_txns,

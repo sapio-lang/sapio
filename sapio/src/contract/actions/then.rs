@@ -19,7 +19,7 @@ pub struct ThenFuncTypeTag(pub(crate) ());
 
 impl ThenFuncTypeTag {
     /// coerce of Self maps onto Self
-    pub fn coerce_args<StatefulArguments>(f: StatefulArguments) -> Result<Self, CompilationError> {
+    pub fn coerce_args<StatefulArguments>(_f: StatefulArguments) -> Result<Self, CompilationError> {
         Ok(ThenFuncTypeTag(()))
     }
 }
