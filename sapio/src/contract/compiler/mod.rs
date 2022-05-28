@@ -22,6 +22,7 @@ use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::schnorr::TweakedPublicKey;
 use std::collections::BinaryHeap;
+use sapio_base::reverse_path::ReversePath;
 
 use bitcoin::XOnlyPublicKey;
 use sapio_base::effects::EffectDB;
@@ -129,94 +130,56 @@ where
 
         let guard_clauses = std::cell::RefCell::new(GuardCache::new());
 
+
+        let dummy_root = Arc::new(ReversePath::from(PathFragment::Root));
         // The code for then_fns and finish_or_fns is very similar, differing
         // only in that then_fns have a CTV enforcing the contract and
         // finish_or_fns do not. We can lazily chain iterators to process them
         // in a row.
-        let then_fns: Vec<_> = {
-            let mut then_fn_ctx = ctx.derive(PathFragment::ThenFn)?;
-            let mut conditional_compile_ctx = then_fn_ctx.derive(PathFragment::CondCompIf)?;
-            let mut guards_ctx = then_fn_ctx.derive(PathFragment::Guard)?;
-            let mut next_tx_ctx = then_fn_ctx.derive(PathFragment::Next)?;
-            self.then_fns()
-                .iter()
-                .filter_map(|func| func())
-                .flat_map(|func| {
-                    let name = PathFragment::Named(SArc(func.name.clone()));
-                    conditional_compile_ctx
-                        .derive(name.clone())
-                        .map(|mut this_ctx| {
-                            match CCILWrapper(func.conditional_compile_if)
-                                .assemble(self_ref, &mut this_ctx)
-                            {
-                                ConditionalCompileType::Fail(errors) => {
-                                    Some((func, name, (errors, Nullable::No)))
-                                }
-                                ConditionalCompileType::Required
-                                | ConditionalCompileType::NoConstraint => {
-                                    Some((func, name, (LinkedList::new(), Nullable::No)))
-                                }
-                                ConditionalCompileType::Nullable => {
-                                    Some((func, name, (LinkedList::new(), Nullable::Yes)))
-                                }
-                                ConditionalCompileType::Skippable
-                                | ConditionalCompileType::Never => None,
-                            }
-                        })
-                        .transpose()
-                })
-                .map(|r| {
-                    r.and_then(|(func, name, (errors, nullability))| {
-                        let gctx = guards_ctx.derive(name.clone())?;
-                        let ntx_ctx = next_tx_ctx.derive(name)?;
-                        let guards = create_guards(
-                            self_ref,
-                            gctx,
-                            func.guard,
-                            &mut guard_clauses.borrow_mut(),
-                        );
-                        Ok((
-                            nullability,
-                            UseCTV::Yes,
-                            guards,
-                            if errors.is_empty() {
-                                (func.func)(self_ref, ntx_ctx, ThenFuncTypeTag(()))
-                            } else {
-                                Err(CompilationError::ConditionalCompilationFailed(errors))
-                            },
-                        ))
-                    })
-                })
-                .collect::<Result<Vec<_>, CompilationError>>()?
-        };
-        // finish_or_fns may be used to compute additional transactions with
-        // a given argument, but for building the ABI we only precompute with
-        // the default argument.
-        let (continue_apis, finish_or_fns): (
+        let (mut continue_apis, then_fns): (
             BTreeMap<SArc<EffectPath>, ContinuationPoint>,
             Vec<(Nullable, UseCTV, Clause, TxTmplIt)>,
         ) = {
+            let mut then_fn_ctx = ctx.derive(PathFragment::ThenFn)?;
             let mut finish_or_fns_ctx = ctx.derive(PathFragment::FinishOrFn)?;
-            let mut conditional_compile_ctx = finish_or_fns_ctx.derive(PathFragment::CondCompIf)?;
-            let mut guard_ctx = finish_or_fns_ctx.derive(PathFragment::Guard)?;
-            let mut suggested_tx_ctx = finish_or_fns_ctx.derive(PathFragment::Suggested)?;
-            self.finish_or_fns()
+            self.then_fns()
                 .iter()
                 .filter_map(|func| func())
-                // TODO: De-duplicate this code?
-                .filter_map(|func| {
-                    let name = PathFragment::Named(SArc(func.get_name().clone()));
-                    conditional_compile_ctx
-                        .derive(name.clone())
+                // TODO: Without allocations?
+                .map(|x| -> Box<dyn CallableAsFoF<_, _>> { Box::new(x) })
+                // TOOD: What is flat map doing here?
+                .flat_map(|x| {
+                    let name = PathFragment::Named(SArc(x.get_name().clone()));
+                    then_fn_ctx.derive(name).map(|p| (p, x))
+                })
+                .map(|x| (UseCTV::Yes, x))
+                .chain(
+                    self.finish_or_fns()
+                        .iter()
+                        .filter_map(|func| func())
+                        .flat_map(|x| {
+                            let name = PathFragment::Named(SArc(x.get_name().clone()));
+                            finish_or_fns_ctx.derive(name).map(|p| (p, x))
+                        })
+                        .map(|x| (UseCTV::No, x)),
+                )
+                .flat_map(|(ctv, (mut f_ctx, func))| {
+                    f_ctx
+                        .derive(PathFragment::CondCompIf)
                         .map(|mut this_ctx| {
-                            let constraint = CCILWrapper(func.get_conditional_compile_if())
-                                .assemble(self_ref, &mut this_ctx);
-                            match constraint {
-                                ConditionalCompileType::Fail(errors) => Some((func, name, errors)),
+                            // TODO: Merge logic?
+                            match CCILWrapper(func.get_conditional_compile_if())
+                                .assemble(self_ref, &mut this_ctx)
+                            {
+                                ConditionalCompileType::Fail(errors) => {
+                                    Some((f_ctx, func, errors, Nullable::No, ctv))
+                                }
                                 ConditionalCompileType::Required
-                                | ConditionalCompileType::NoConstraint
-                                | ConditionalCompileType::Nullable => {
-                                    Some((func, name, LinkedList::new()))
+                                | ConditionalCompileType::NoConstraint => {
+                                    Some((f_ctx, func, LinkedList::new(), Nullable::No, ctv))
+                                }
+                                ConditionalCompileType::Nullable => {
+                                    Some((f_ctx, func, LinkedList::new(), Nullable::Yes, ctv))
                                 }
                                 ConditionalCompileType::Skippable
                                 | ConditionalCompileType::Never => None,
@@ -225,33 +188,41 @@ where
                         .transpose()
                 })
                 .map(|r| {
-                    r.and_then(|(func, name, errors)| {
-                        let top_effect_ctx = suggested_tx_ctx.derive(name.clone())?;
-                        let guard = create_guards(
+                    r.and_then(|(mut f_ctx, func, errors, nullability, ctv)| {
+                        let gctx = f_ctx.derive(PathFragment::Guard)?;
+                        // TODO: Suggested path frag?
+                        let ntx_ctx = f_ctx.derive(PathFragment::Next)?;
+                        let guards = create_guards(
                             self_ref,
-                            guard_ctx.derive(name)?,
+                            gctx,
                             func.get_guard(),
                             &mut guard_clauses.borrow_mut(),
                         );
-                        Ok((
+                        let effect_ctx = f_ctx.derive(PathFragment::Suggested)?;
+                        let cont = if ctv == UseCTV::Yes {
+                            (SArc(dummy_root.clone()), ContinuationPoint::at(None, dummy_root.clone()))
+                        } else {
                             (
-                                SArc(top_effect_ctx.path().clone()),
+                                SArc(effect_ctx.path().clone()),
                                 ContinuationPoint::at(
                                     func.get_schema().clone(),
-                                    top_effect_ctx.path().clone(),
+                                    effect_ctx.path().clone(),
                                 ),
-                            ),
-                            (
-                                Nullable::Yes,
-                                UseCTV::No,
-                                guard,
-                                if errors.is_empty() {
-                                    compute_all_effects(top_effect_ctx, self_ref, func.as_ref())
-                                } else {
-                                    Err(CompilationError::ConditionalCompilationFailed(errors))
-                                },
-                            ),
-                        ))
+                            )
+                        };
+                        let transactions = if errors.is_empty() {
+                            if ctv == UseCTV::Yes {
+                                func.call(self_ref, ntx_ctx, Default::default())
+                            } else {
+                                // finish_or_fns may be used to compute additional transactions with
+                                // a given argument, but for building the ABI we only precompute with
+                                // the default argument.
+                                compute_all_effects(effect_ctx, self_ref, func.as_ref())
+                            }
+                        } else {
+                            Err(CompilationError::ConditionalCompilationFailed(errors))
+                        };
+                        Ok((cont, (nullability, ctv, guards, transactions)))
                     })
                 })
                 .collect::<Result<
@@ -264,6 +235,7 @@ where
                 .into_iter()
                 .unzip()
         };
+        continue_apis.remove(&SArc(dummy_root.clone()));
 
         let mut ctv_to_tx = BTreeMap::new();
         let mut suggested_txs = BTreeMap::new();
@@ -277,7 +249,6 @@ where
         // If CTV and guards, CTV & guards added.
         let clause_accumulator = then_fns
             .into_iter()
-            .chain(finish_or_fns.into_iter())
             .map(|(nullability, uses_ctv, guards, r_txtmpls)| {
                 // it would be an error if any of r_txtmpls is an error instead of just an empty
                 // iterator.
