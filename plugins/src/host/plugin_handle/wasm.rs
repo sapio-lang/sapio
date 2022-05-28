@@ -13,6 +13,7 @@ use sapio::contract::CompilationError;
 use sapio_base::effects::EffectPath;
 use sapio_ctv_emulator_trait::CTVEmulator;
 use std::error::Error;
+use std::path::PathBuf;
 use wasmer::Memory;
 pub struct WasmPluginHandle {
     store: Store,
@@ -30,20 +31,16 @@ impl WasmPluginHandle {
     }
 
     /// load all the cached keys as plugins upfront.
-    pub fn load_all_keys(
-        typ: String,
-        org: String,
-        proj: String,
+    pub fn load_all_keys<I: Into<PathBuf> + Clone>(
+        path: I,
         emulator: NullEmulator,
         net: bitcoin::Network,
         plugin_map: Option<BTreeMap<Vec<u8>, [u8; 32]>>,
     ) -> Result<Vec<Self>, Box<dyn Error>> {
         let mut r = vec![];
-        for key in get_all_keys_from_fs(&typ, &org, &proj)? {
+        for key in get_all_keys_from_fs(path.clone())? {
             let wph = Self::new(
-                typ.clone(),
-                org.clone(),
-                proj.clone(),
+                path.clone(),
                 &emulator,
                 Some(&key),
                 None,
@@ -55,10 +52,8 @@ impl WasmPluginHandle {
         Ok(r)
     }
 
-    pub async fn new_async(
-        typ: String,
-        org: String,
-        proj: String,
+    pub async fn new_async<I: Into<PathBuf> + Clone>(
+        path: I,
         emulator: &Arc<dyn CTVEmulator>,
         key: Option<&str>,
         file: Option<&OsStr>,
@@ -70,24 +65,13 @@ impl WasmPluginHandle {
         } else {
             None
         };
-        Self::new(
-            typ,
-            org,
-            proj,
-            emulator,
-            key,
-            file.as_ref(),
-            net,
-            plugin_map,
-        )
+        Self::new(path, emulator, key, file.as_ref(), net, plugin_map)
     }
     /// Create an plugin handle. Only one of key or file should be set, and one
     /// should be set.
     /// TODO: Revert to async?
-    pub fn new(
-        typ: String,
-        org: String,
-        proj: String,
+    pub fn new<I: Into<PathBuf> + Clone>(
+        path: I,
         emulator: &Arc<dyn CTVEmulator>,
         key: Option<&str>,
         file: Option<&Vec<u8>>,
@@ -101,20 +85,19 @@ impl WasmPluginHandle {
 
         let (module, key) = match (file, key) {
             (Some(wasm_bytes), _) => {
-                match wasm_cache::load_module(&typ, &org, &proj, &store, &wasm_bytes) {
+                match wasm_cache::load_module(path.clone(), &store, &wasm_bytes) {
                     Ok(module) => module,
                     Err(_) => {
                         let store = Store::default();
                         let module = Module::new(&store, &wasm_bytes)?;
-                        let key =
-                            wasm_cache::store_module(&typ, &org, &proj, &module, &wasm_bytes)?;
+                        let key = wasm_cache::store_module(path.clone(), &module, &wasm_bytes)?;
                         (module, key)
                     }
                 }
             }
             (_, Some(key)) => {
                 let key = WASMCacheID::from_str(key)?;
-                wasm_cache::load_module_key("org", "judica", "sapio-cli", &store, key)?
+                wasm_cache::load_module_key(path.clone(), &store, key)?
             }
             _ => unreachable!(),
         };
@@ -132,9 +115,7 @@ impl WasmPluginHandle {
         let mut this = [0; 32];
         this.clone_from_slice(&hex::decode(key.to_string())?);
         let mut wasm_ctv_emulator = Arc::new(Mutex::new(HostEnvironmentInner {
-            typ,
-            org,
-            proj,
+            path: path.into().clone(),
             this,
             module_map: plugin_map.unwrap_or_else(BTreeMap::new).into(),
             store: Arc::new(Mutex::new(store.clone())),

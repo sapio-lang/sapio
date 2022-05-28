@@ -12,7 +12,7 @@ description = "Libarary for building client/host sapio plugin bindings"
 
 [features]
 default = ["client"]
-host = ["wasmer", "wasmer-cache", "tokio", "directories"]
+host = ["wasmer", "wasmer-cache", "tokio"]
 client = ["miniscript"]
 
 [dependencies]
@@ -26,10 +26,6 @@ hex = "0.4.3"
 [dependencies.sapio-trait]
 version = "0.2.0"
 path = "../sapio-trait"
-
-[dependencies.directories]
-version = "3.0.1"
-optional = true
 
 [dependencies.wasmer]
 version = "1"

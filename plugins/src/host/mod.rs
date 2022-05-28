@@ -14,6 +14,7 @@ use sapio_ctv_emulator_trait::CTVEmulator;
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::io::Write;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use wasmer::*;
 
@@ -24,9 +25,7 @@ pub mod wasm_cache;
 /// Also handles the imports of plugin-side functions
 #[derive(WasmerEnv, Clone)]
 pub struct HostEnvironmentInner {
-    pub typ: String,
-    pub org: String,
-    pub proj: String,
+    pub path: PathBuf,
     pub this: [u8; 32],
     pub module_map: BTreeMap<Vec<u8>, [u8; 32]>,
     pub store: Arc<Mutex<Store>>,
@@ -202,12 +201,10 @@ mod exports {
         };
         let emulator = env.emulator.clone();
         let mmap = env.module_map.clone();
-        let typ = env.typ.clone();
-        let org = env.org.clone();
-        let proj = env.proj.clone();
+        let path = env.path.clone();
         let net = env.net;
 
-        match WasmPluginHandle::new(typ, org, proj, &emulator, Some(&h), None, net, Some(mmap)) {
+        match WasmPluginHandle::new(path, &emulator, Some(&h), None, net, Some(mmap)) {
             Ok(sph) => {
                 let comp_s = (move || -> Result<serde_json::Value, CompilationError> {
                     let value = match action_to_take {
