@@ -105,13 +105,12 @@ fn compute_all_effects<C, A: Default>(
             // always gets the default expansion, but will also attempt
             // operating with the effects passed in through the Context Object.
             .fold(def, |a: TxTmplIt, (k, arg)| -> TxTmplIt {
-                a.and_then(|v| {
-                    let c = applied_effects_ctx
-                        .derive(PathFragment::Named(SArc(k.clone())))
-                        .expect("Must be a valid derivation or internal invariant not held");
-                    func.call_json(self_ref, c, arg.clone())
-                        .and_then(|w| -> TxTmplIt { Ok(Box::new(v.chain(w))) })
-                })
+                let v = a?;
+                let c = applied_effects_ctx
+                    .derive(PathFragment::Named(SArc(k.clone())))
+                    .expect("Must be a valid derivation or internal invariant not held");
+                let w = func.call_json(self_ref, c, arg.clone())?;
+                Ok(Box::new(v.chain(w)))
             })
     }
 }
@@ -182,128 +181,116 @@ where
             // flat_map will discard any
             // skippable / never branches here
             .flat_map(|(ctv, (mut f_ctx, func))| {
-                f_ctx
+                let mut this_ctx = f_ctx
                     // this should always be Ok(_)
                     .derive(PathFragment::CondCompIf)
-                    .and_then(|mut this_ctx| {
-                        match CCILWrapper(func.get_conditional_compile_if())
-                            .assemble(self_ref, &mut this_ctx)
-                        {
-                            // Throw errors
-                            ConditionalCompileType::Fail(errors) => {
-                                Err(CompilationError::ConditionalCompilationFailed(errors))
+                    .expect("Must be a valid derivation or internal invariant not held");
+                match CCILWrapper(func.get_conditional_compile_if())
+                    .assemble(self_ref, &mut this_ctx)
+                {
+                    // Throw errors
+                    ConditionalCompileType::Fail(errors) => {
+                        Some(Err(CompilationError::ConditionalCompilationFailed(errors)))
+                    }
+                    // Non nullable
+                    ConditionalCompileType::Required | ConditionalCompileType::NoConstraint => {
+                        Some(Ok((f_ctx, func, Nullable::No, ctv)))
+                    }
+                    // Nullable
+                    ConditionalCompileType::Nullable => Some(Ok((f_ctx, func, Nullable::Yes, ctv))),
+                    // Drop these
+                    ConditionalCompileType::Skippable | ConditionalCompileType::Never => None,
+                }
+            })
+            .map(|r| {
+                let (mut f_ctx, func, nullability, ctv) = r?;
+                let gctx = f_ctx.derive(PathFragment::Guard)?;
+                // TODO: Suggested path frag?
+                let guards = create_guards(
+                    self_ref,
+                    gctx,
+                    func.get_guard(),
+                    &mut guard_clauses.borrow_mut(),
+                );
+                let effect_ctx = f_ctx.derive(if ctv == UseCTV::Yes {
+                    PathFragment::Next
+                } else {
+                    PathFragment::Suggested
+                })?;
+                let effect_path = effect_ctx.path().clone();
+                let transactions = compute_all_effects(effect_ctx, self_ref, func.as_ref());
+                // If no guards and not CTV, then nothing gets added (not
+                // interpreted as Trivial True)
+                //   - If CTV and no guards, just CTV added.
+                //   - If CTV and guards, CTV & guards added.
+                // it would be an error if any of r_txtmpls is an error
+                // instead of just an empty iterator.
+                let txtmpl_clauses = transactions?
+                    .map(|r_txtmpl| {
+                        let txtmpl = r_txtmpl?;
+                        let h = txtmpl.hash();
+                        amount_range.update_range(txtmpl.max);
+                        // Add the addition guards to these clauses
+                        if ctv == UseCTV::Yes {
+                            let txtmpl = ctv_ensured_txns.entry(h).or_insert(txtmpl);
+                            if txtmpl.guards.len() == 0 {
+                                ctx.ctv_emulator(h).map(Some)
+                            } else {
+                                let mut g = txtmpl.guards.clone();
+                                g.push(ctx.ctv_emulator(h)?);
+                                Ok(Some(Clause::And(g)))
                             }
-                            // Non nullable
-                            ConditionalCompileType::Required
-                            | ConditionalCompileType::NoConstraint => {
-                                Ok(Some((f_ctx, func, Nullable::No, ctv)))
-                            }
-                            // Nullable
-                            ConditionalCompileType::Nullable => {
-                                Ok(Some((f_ctx, func, Nullable::Yes, ctv)))
-                            }
-                            // Drop these
-                            ConditionalCompileType::Skippable | ConditionalCompileType::Never => {
+                        } else {
+                            let txtmpl = other_txns.entry(h).or_insert(txtmpl);
+                            // Don't return or use the extra guards here
+                            // because we're within a non-CTV context... if
+                            // we did, then it would destabilize compilation
+                            // with effect arguments.
+                            if txtmpl.guards.len() != 0 {
+                                // N.B.: In theory, the *default* effect
+                                // could pass up something here.
+                                // However, we don't do that since there's
+                                // not much point to it.
+                                Err(CompilationError::AdditionalGuardsNotAllowedHere)
+                            } else {
+                                // Don't add anything...
                                 Ok(None)
                             }
                         }
                     })
-                    // trasnpose will flip: - Ok(None) into None; - Err() into
-                    // Some(Err()) - Ok(Some()) into Some(Ok()) When this hits
-                    // the flat_map, all None values will be dropped, and errors
-                    // will be passed on.
-                    .transpose()
-            })
-            .map(|r| {
-                r.and_then(|(mut f_ctx, func, nullability, ctv)| {
-                    let gctx = f_ctx.derive(PathFragment::Guard)?;
-                    // TODO: Suggested path frag?
-                    let guards = create_guards(
-                        self_ref,
-                        gctx,
-                        func.get_guard(),
-                        &mut guard_clauses.borrow_mut(),
-                    );
-                    let effect_ctx = f_ctx.derive(if ctv == UseCTV::Yes {
-                        PathFragment::Next
-                    } else {
-                        PathFragment::Suggested
-                    })?;
-                    let effect_path = effect_ctx.path().clone();
-                    let transactions = compute_all_effects(effect_ctx, self_ref, func.as_ref());
-                    // If no guards and not CTV, then nothing gets added (not
-                    // interpreted as Trivial True)
-                    //   - If CTV and no guards, just CTV added.
-                    //   - If CTV and guards, CTV & guards added.
-                    // it would be an error if any of r_txtmpls is an error
-                    // instead of just an empty iterator.
-                    let txtmpl_clauses = transactions?
-                        .map(|r_txtmpl| {
-                            let txtmpl = r_txtmpl?;
-                            let h = txtmpl.hash();
-                            amount_range.update_range(txtmpl.max);
-                            // Add the addition guards to these clauses
-                            if ctv == UseCTV::Yes {
-                                let txtmpl = ctv_ensured_txns.entry(h).or_insert(txtmpl);
-                                if txtmpl.guards.len() == 0 {
-                                    ctx.ctv_emulator(h).map(Some)
-                                } else {
-                                    let mut g = txtmpl.guards.clone();
-                                    g.push(ctx.ctv_emulator(h)?);
-                                    Ok(Some(Clause::And(g)))
-                                }
-                            } else {
-                                let txtmpl = other_txns.entry(h).or_insert(txtmpl);
-                                // Don't return or use the extra guards here
-                                // because we're within a non-CTV context... if
-                                // we did, then it would destabilize compilation
-                                // with effect arguments.
-                                if txtmpl.guards.len() != 0 {
-                                    // N.B.: In theory, the *default* effect
-                                    // could pass up something here.
-                                    // However, we don't do that since there's
-                                    // not much point to it.
-                                    Err(CompilationError::AdditionalGuardsNotAllowedHere)
-                                } else {
-                                    // Don't add anything...
-                                    Ok(None)
-                                }
-                            }
-                        })
-                        // Drop None values
-                        .filter_map(|s| s.transpose())
-                        // Forces any error to abort the whole thing
-                        .collect::<Result<Vec<Clause>, CompilationError>>()?;
+                    // Drop None values
+                    .filter_map(|s| s.transpose())
+                    // Forces any error to abort the whole thing
+                    .collect::<Result<Vec<Clause>, CompilationError>>()?;
 
-                    let dummy = (
-                        SArc(dummy_root.clone()),
-                        ContinuationPoint::at(None, dummy_root.clone()),
-                    );
-                    // N.B. the order of the matches below is significant
-                    match (ctv, nullability, txtmpl_clauses.len(), guards) {
+                let dummy = (
+                    SArc(dummy_root.clone()),
+                    ContinuationPoint::at(None, dummy_root.clone()),
+                );
+                // N.B. the order of the matches below is significant
+                if ctv == UseCTV::Yes {
+                    match (nullability, txtmpl_clauses.len(), guards) {
                         // This is a nullable branch without any proposed
                         // transactions.
                         // Therefore, mark this branch dead.
-                        (UseCTV::Yes, Nullable::Yes, 0, _) => Ok((dummy, vec![])),
+                        (Nullable::Yes, 0, _) => Ok((dummy, vec![])),
                         // Error if we expect CTV, returned some templates, but our guard
                         // was unsatisfiable, irrespective of nullability. This is because
                         // the behavior should be captured through a compile_if if it is
                         // intended.
-                        (UseCTV::Yes, _, n, Clause::Unsatisfiable) if n > 0 => {
+                        (_, n, Clause::Unsatisfiable) if n > 0 => {
                             // TODO: Turn into a warning that the intended
                             // behavior should be to compile_if
                             Err(CompilationError::MissingTemplates)
                         }
                         // Error if 0 templates return and we don't want to be nullable
-                        (UseCTV::Yes, Nullable::No, 0, _) => {
-                            Err(CompilationError::MissingTemplates)
-                        }
+                        (Nullable::No, 0, _) => Err(CompilationError::MissingTemplates),
                         // If the guard is trivial, return the hashes standalone
-                        (UseCTV::Yes, _, _, Clause::Trivial) => Ok((dummy, txtmpl_clauses)),
+                        (_, _, Clause::Trivial) => Ok((dummy, txtmpl_clauses)),
                         // If the guard is non-trivial, zip it to each hash
                         // TODO: Arc in miniscript to dedup memory?
                         //       This could be Clause::Shared(x) or something...
-                        (UseCTV::Yes, _, _, guards) => Ok((
+                        (_, _, guards) => Ok((
                             dummy,
                             txtmpl_clauses
                                 .into_iter()
@@ -311,15 +298,16 @@ where
                                 .map(|extra_guards| Clause::And(vec![guards.clone(), extra_guards]))
                                 .collect(),
                         )),
-                        (UseCTV::No, _, _, guards) => Ok((
-                            (
-                                SArc(effect_path.clone()),
-                                ContinuationPoint::at(func.get_schema().clone(), effect_path),
-                            ),
-                            vec![guards],
-                        )),
                     }
-                })
+                } else {
+                    Ok((
+                        (
+                            SArc(effect_path.clone()),
+                            ContinuationPoint::at(func.get_schema().clone(), effect_path),
+                        ),
+                        vec![guards],
+                    ))
+                }
             })
             .collect::<Result<Vec<(_, Vec<Clause>)>, CompilationError>>()?
             .into_iter()
