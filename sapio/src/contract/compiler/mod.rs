@@ -224,17 +224,13 @@ where
                         func.get_guard(),
                         &mut guard_clauses.borrow_mut(),
                     );
-                    let effect_ctx = f_ctx.derive(PathFragment::Suggested)?;
-                    let effect_path = effect_ctx.path().clone();
-                    let transactions = if ctv == UseCTV::Yes {
-                        let ntx_ctx = f_ctx.derive(PathFragment::Next)?;
-                        func.call(self_ref, ntx_ctx, Default::default())
+                    let effect_ctx = f_ctx.derive(if ctv == UseCTV::Yes {
+                        PathFragment::Next
                     } else {
-                        // finish_or_fns may be used to compute additional
-                        // transactions with a given argument, but for building
-                        // the ABI we only precompute with the default argument.
-                        compute_all_effects(effect_ctx, self_ref, func.as_ref())
-                    };
+                        PathFragment::Suggested
+                    })?;
+                    let effect_path = effect_ctx.path().clone();
+                    let transactions = compute_all_effects(effect_ctx, self_ref, func.as_ref());
                     // If no guards and not CTV, then nothing gets added (not
                     // interpreted as Trivial True)
                     //   - If CTV and no guards, just CTV added.
