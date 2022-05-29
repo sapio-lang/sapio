@@ -93,29 +93,27 @@ fn compute_all_effects<C, A: Default>(
     self_ref: &C,
     func: &dyn CallableAsFoF<C, A>,
 ) -> TxTmplIt {
-    let mut applied_effects_ctx = top_effect_ctx.derive(PathFragment::Effects)?;
     let default_applied_effect_ctx = top_effect_ctx.derive(PathFragment::DefaultEffect)?;
-    top_effect_ctx
-        .get_effects(InternalCompilerTag { _secret: () })
-        .get_value(top_effect_ctx.path())
-        .flat_map(|(k, arg)| {
-            let c = applied_effects_ctx
-                .derive(PathFragment::Named(SArc(k.clone())))
-                .expect("Must be a valid derivation or internal invariant not held");
-            func.call_json(self_ref, c, arg.clone())
-        })
-        // always gets the default expansion, but will also attempt
-        // operating with the effects passed in through the Context Object.:write!
-        .fold(
-            func.call(self_ref, default_applied_effect_ctx, Default::default()),
-            |a: TxTmplIt, b: TxTmplIt| -> TxTmplIt {
-                match (a, b) {
-                    (Err(x), _) => Err(x),
-                    (_, Err(y)) => Err(y),
-                    (Ok(v), Ok(w)) => Ok(Box::new(v.chain(w))),
-                }
-            },
-        )
+    let def = func.call(self_ref, default_applied_effect_ctx, Default::default());
+    if func.web_api() {
+        def
+    } else {
+        let mut applied_effects_ctx = top_effect_ctx.derive(PathFragment::Effects)?;
+        top_effect_ctx
+            .get_effects(InternalCompilerTag { _secret: () })
+            .get_value(top_effect_ctx.path())
+            // always gets the default expansion, but will also attempt
+            // operating with the effects passed in through the Context Object.
+            .fold(def, |a: TxTmplIt, (k, arg)| -> TxTmplIt {
+                a.and_then(|v| {
+                    let c = applied_effects_ctx
+                        .derive(PathFragment::Named(SArc(k.clone())))
+                        .expect("Must be a valid derivation or internal invariant not held");
+                    func.call_json(self_ref, c, arg.clone())
+                        .and_then(|w| -> TxTmplIt { Ok(Box::new(v.chain(w))) })
+                })
+            })
+    }
 }
 
 impl<'a, T> Compilable for T

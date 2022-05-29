@@ -53,13 +53,12 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     /// Calls the internal function, should convert `StatefulArguments` to `SpecificArgs`.
     fn call(&self, cself: &ContractSelf, ctx: Context, o: StatefulArguments) -> TxTmplIt;
     /// Calls the internal function, should convert `StatefulArguments` to `SpecificArgs`.
-    fn call_json(
-        &self,
-        _cself: &ContractSelf,
-        _ctx: Context,
-        _o: serde_json::Value,
-    ) -> Option<TxTmplIt> {
-        None
+    fn call_json(&self, _cself: &ContractSelf, _ctx: Context, _o: serde_json::Value) -> TxTmplIt {
+        Err(CompilationError::WebAPIDisabled)
+    }
+    /// to be set to true if call_json may return a non-error type.
+    fn web_api(&self) -> bool {
+        false
     }
     /// Getter Method for internal field
     fn get_conditional_compile_if(&self) -> ConditionallyCompileIfList<'_, ContractSelf>;
@@ -69,10 +68,6 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     fn get_name(&self) -> &Arc<String>;
     /// Get the RootSchema for calling this with an update
     fn get_schema(&self) -> &Option<Arc<RootSchema>>;
-    /// If the call_json is implemented
-    fn has_call_json(&self) -> bool {
-        false
-    }
 }
 
 /// Type Tag for FinishOrFunc Variant
@@ -110,20 +105,13 @@ where
         let args = (self.coerce_args)(o)?;
         (self.func)(cself, ctx, args)
     }
-    fn call_json(
-        &self,
-        cself: &ContractSelf,
-        ctx: Context,
-        o: serde_json::Value,
-    ) -> Option<TxTmplIt> {
-        Some(
-            serde_json::from_value(o)
-                .map_err(EffectDBError::SerializationError)
-                .map_err(CompilationError::EffectDBError)
-                .and_then(|args| (self.func)(cself, ctx, args)),
-        )
+    fn call_json(&self, cself: &ContractSelf, ctx: Context, o: serde_json::Value) -> TxTmplIt {
+        serde_json::from_value(o)
+            .map_err(EffectDBError::SerializationError)
+            .map_err(CompilationError::EffectDBError)
+            .and_then(|args| (self.func)(cself, ctx, args))
     }
-    fn has_call_json(&self) -> bool {
+    fn web_api(&self) -> bool {
         true
     }
     fn get_conditional_compile_if(&self) -> ConditionallyCompileIfList<'_, ContractSelf> {
