@@ -148,7 +148,7 @@ where
         let mut then_fn_ctx = ctx.derive(PathFragment::ThenFn)?;
         let (mut continue_apis, clause_accumulator): (
             BTreeMap<SArc<EffectPath>, ContinuationPoint>,
-            Vec<Vec<Clause>>,
+            Vec<Vec<Miniscript<XOnlyPublicKey, Tap>>>,
         ) = self
             .then_fns()
             .iter()
@@ -262,7 +262,15 @@ where
                         // Error if 0 templates return and we don't want to be nullable
                         (Nullable::No, 0, _) => Err(CompilationError::MissingTemplates),
                         // If the guard is trivial, return the hashes standalone
-                        (_, _, Clause::Trivial) => Ok((dummy, txtmpl_clauses)),
+                        (_, _, Clause::Trivial) => Ok((
+                            dummy,
+                            txtmpl_clauses
+                                .into_iter()
+                                .map(|policy| {
+                                    policy.compile().map_err(Into::<CompilationError>::into)
+                                })
+                                .collect::<Result<Vec<_>, _>>()?,
+                        )),
                         // If the guard is non-trivial, zip it to each hash
                         // TODO: Arc in miniscript to dedup memory?
                         //       This could be Clause::Shared(x) or something...
@@ -271,8 +279,12 @@ where
                             txtmpl_clauses
                                 .into_iter()
                                 // extra_guards will contain any CTV
-                                .map(|extra_guards| Clause::And(vec![guards.clone(), extra_guards]))
-                                .collect(),
+                                .map(|extra_guards| {
+                                    Clause::And(vec![guards.clone(), extra_guards])
+                                        .compile()
+                                        .map_err(Into::<CompilationError>::into)
+                                })
+                                .collect::<Result<Vec<_>, _>>()?,
                         )),
                     }
                 } else {
@@ -281,11 +293,11 @@ where
                             SArc(effect_path.clone()),
                             ContinuationPoint::at(func.get_schema().clone(), effect_path),
                         ),
-                        vec![guards],
+                        vec![guards.compile().map_err(Into::<CompilationError>::into)?],
                     ))
                 }
             })
-            .collect::<Result<Vec<(_, Vec<Clause>)>, CompilationError>>()?
+            .collect::<Result<Vec<(_, Vec<Miniscript<XOnlyPublicKey, Tap>>)>, CompilationError>>()?
             .into_iter()
             .unzip();
 
@@ -293,7 +305,7 @@ where
         // so we remove it here.
         continue_apis.remove(&SArc(dummy_root.clone()));
 
-        let finish_fns: Vec<_> = {
+        let branches: Vec<Miniscript<XOnlyPublicKey, Tap>> = {
             let mut finish_fns_ctx = ctx.derive(PathFragment::FinishFn)?;
             // Compute all finish_functions at this level, caching if requested.
             self.finish_fns()
@@ -304,13 +316,10 @@ where
                         .filter_map(|i| finish_fns_ctx.derive(PathFragment::Branch(i as u64)).ok()),
                 )
                 .filter_map(|(func, c)| guard_clauses.borrow_mut().get(self_ref, *func, c))
-                .collect()
+                .map(|policy| policy.compile().map_err(Into::<CompilationError>::into))
+                .chain(clause_accumulator.into_iter().flatten().map(Ok))
+                .collect::<Result<Vec<_>, _>>()?
         };
-        let branches: Vec<Miniscript<XOnlyPublicKey, Tap>> = finish_fns
-            .iter()
-            .chain(clause_accumulator.iter().flatten())
-            .map(|policy| policy.compile().map_err(Into::<CompilationError>::into))
-            .collect::<Result<Vec<_>, _>>()?;
         // TODO: Pick a better branch that is guaranteed to work!
         let some_key = branches
             .iter()
