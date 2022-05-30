@@ -9,6 +9,7 @@ use super::*;
 use crate::host::exports::*;
 use crate::host::wasm_cache::get_all_keys_from_fs;
 use crate::host::{HostEnvironment, HostEnvironmentInner};
+use crate::API;
 use sapio::contract::CompilationError;
 use sapio_base::effects::EffectPath;
 use sapio_ctv_emulator_trait::CTVEmulator;
@@ -228,12 +229,10 @@ impl WasmPluginHandle {
     }
 }
 
-impl PluginHandle for WasmPluginHandle {
-    fn create(
-        &self,
-        path: &EffectPath,
-        c: &CreateArgs<serde_json::Value>,
-    ) -> Result<Compiled, CompilationError> {
+type Input = CreateArgs<serde_json::Value>;
+type Output = Compiled;
+impl PluginHandle<Input, Output> for WasmPluginHandle {
+    fn create(&self, path: &EffectPath, c: &Input) -> Result<Output, CompilationError> {
         let arg_str = serde_json::to_string(c).map_err(CompilationError::SerializationError)?;
         let args_ptr = self.pass_string(&arg_str)?;
         let path_str = serde_json::to_string(path).map_err(CompilationError::SerializationError)?;
@@ -255,7 +254,7 @@ impl PluginHandle for WasmPluginHandle {
             serde_json::from_slice(&buf).map_err(CompilationError::DeserializationError)?;
         v.map_err(CompilationError::ModuleCompilationErrorUnsendable)
     }
-    fn get_api(&self) -> Result<serde_json::value::Value, CompilationError> {
+    fn get_api(&self) -> Result<API<Input, Output>, CompilationError> {
         let p = self
             .env
             .lock()
@@ -266,7 +265,11 @@ impl PluginHandle for WasmPluginHandle {
             .map_err(|e| CompilationError::ModuleCouldNotGetAPI(e.into()))?;
         let v = self.read_to_vec(p)?;
         self.forget(p)?;
-        serde_json::from_slice(&v).map_err(CompilationError::DeserializationError)
+        Ok(API {
+            input: serde_json::from_slice(&v).map_err(CompilationError::DeserializationError)?,
+            output: schemars::schema_for!(Output),
+            _pd: Default::default(),
+        })
     }
     fn get_name(&self) -> Result<String, CompilationError> {
         let p = self

@@ -549,8 +549,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     )
                     .await?;
                     let api = sph.get_api()?;
+                    let schema = serde_json::to_value(api.input())?;
                     let validator = jsonschema_valid::Config::from_schema(
-                        &api,
+                        &schema,
                         Some(jsonschema_valid::schemas::Draft::Draft6),
                     )?;
                     let params = if let Some(params) = args.value_of("json") {
@@ -582,7 +583,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         plugin_map,
                     )
                     .await?;
-                    println!("{}", sph.get_api()?);
+                    println!("{}", serde_json::to_value(sph.get_api()?)?);
                 }
                 Some(("logo", args)) => {
                     let sph = WasmPluginHandle::new_async(
@@ -610,19 +611,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let api = sph.get_api()?;
                     println!(
                         "Description:\n{}",
-                        api.get("description").unwrap().as_str().unwrap()
+                        api.input()
+                            .schema
+                            .metadata
+                            .as_ref()
+                            .and_then(|m| m.description.as_ref())
+                            .unwrap()
                     );
-                    println!("Parameters:");
-                    for (i, param) in api
-                        .get("properties")
-                        .unwrap()
-                        .as_object()
-                        .unwrap()
-                        .keys()
-                        .enumerate()
-                    {
-                        println!("{}. {}", i, param)
-                    }
                 }
                 Some(("load", args)) => {
                     let sph = WasmPluginHandle::new_async(

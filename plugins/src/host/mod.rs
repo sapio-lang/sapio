@@ -208,7 +208,9 @@ mod exports {
             Ok(sph) => {
                 let comp_s = (move || -> Result<serde_json::Value, CompilationError> {
                     let value = match action_to_take {
-                        None => Ok(sph.get_api()),
+                        None => Ok(sph.get_api().map(|v| v.input().clone()).and_then(|m| {
+                            serde_json::to_value(m).map_err(CompilationError::DeserializationError)
+                        })),
                         Some((create_args, path)) => {
                             sph.create(&path?, &create_args?).map(|comp| {
                                 serde_json::to_value(comp)
