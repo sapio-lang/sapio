@@ -17,8 +17,6 @@ use crate::contract::TxTmplIt;
 use crate::util::amountrange::AmountRange;
 use ::miniscript::descriptor::TapTree;
 use ::miniscript::*;
-use bitcoin::hashes::sha256::Hash as Sha256;
-use bitcoin::hashes::Hash;
 use bitcoin::schnorr::TweakedPublicKey;
 use bitcoin::XOnlyPublicKey;
 use sapio_base::effects::EffectDB;
@@ -27,13 +25,13 @@ use sapio_base::effects::PathFragment;
 use sapio_base::reverse_path::ReversePath;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::Clause;
-use std::cmp::Reverse;
-use std::collections::BinaryHeap;
 use std::collections::{BTreeMap, BTreeSet};
 use std::iter::FromIterator;
 use std::sync::Arc;
 mod cache;
+mod util;
 use cache::*;
+use util::*;
 /// Used to prevent unintended callers to internal_clone.
 pub struct InternalCompilerTag {
     _secret: (),
@@ -372,43 +370,4 @@ fn combine_txtmpls(
             })
             .collect::<Result<Vec<_>, _>>()?),
     }
-}
-
-/// picks a key from an iter of miniscripts, or returns a static default key
-fn pick_key_from_miniscripts<'a, I: Iterator<Item = &'a Miniscript<XOnlyPublicKey, Tap>>>(
-    branches: I,
-) -> XOnlyPublicKey {
-    branches
-        .filter_map(|f| {
-            if let Terminal::Check(check) = &f.node {
-                if let Terminal::PkK(k) = &check.node {
-                    return Some(k.clone());
-                }
-            }
-            None
-        })
-        .next()
-        .map(|x| bitcoin::util::schnorr::UntweakedPublicKey::from(x))
-        .unwrap_or(
-            XOnlyPublicKey::from_slice(&Sha256::hash(&[1u8; 32]).into_inner()).expect("constant"),
-        )
-}
-
-/// Convert the branches into a heap for taproot tree consumption
-fn branches_to_tree(
-    branches: Vec<Miniscript<XOnlyPublicKey, Tap>>,
-) -> Option<TapTree<XOnlyPublicKey>> {
-    let mut scripts: BinaryHeap<(Reverse<u64>, TapTree<XOnlyPublicKey>)> = branches
-        .into_iter()
-        .map(|b| (Reverse(1), TapTree::Leaf(Arc::new(b))))
-        .collect();
-    while scripts.len() > 1 {
-        let (w1, v1) = scripts.pop().unwrap();
-        let (w2, v2) = scripts.pop().unwrap();
-        scripts.push((
-            Reverse(w1.0.saturating_add(w2.0)),
-            TapTree::Tree(Arc::new(v1), Arc::new(v2)),
-        ));
-    }
-    scripts.pop().map(|v| v.1)
 }
