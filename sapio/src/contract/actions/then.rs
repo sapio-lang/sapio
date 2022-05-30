@@ -5,11 +5,28 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Functionality for a function that uses CTV
+use super::CompilationError;
 use super::Context;
 use super::TxTmplIt;
 use crate::contract::actions::ConditionallyCompileIfList;
 use crate::contract::actions::GuardList;
+use crate::contract::actions::{FinishOrFunc, WebAPIDisabled};
+use std::marker::PhantomData;
 use std::sync::Arc;
+
+/// ThenFuncTypeTag is used as the args type of a ThenFunc
+pub struct ThenFuncTypeTag(pub(crate) ());
+
+impl ThenFuncTypeTag {
+    /// coerce of Self maps onto Self
+    pub fn coerce_args<StatefulArguments>(f: StatefulArguments) -> Result<Self, CompilationError> {
+        Ok(ThenFuncTypeTag(()))
+    }
+}
+
+/// Alias for representation of ThenFunc as FinishOrFunc
+pub type ThenFuncAsFinishOrFunc<'a, ContractSelf, StatefulArguments> =
+    FinishOrFunc<'a, ContractSelf, StatefulArguments, ThenFuncTypeTag, WebAPIDisabled>;
 
 /// A ThenFunc takes a list of Guards and a TxTmplIt generator.  Each TxTmpl returned from the
 /// ThenFunc is Covenant Permitted only if the AND of all guards is satisfied.
@@ -23,7 +40,23 @@ pub struct ThenFunc<'a, ContractSelf> {
     /// func returns an iterator of possible transactions
     /// Implementors should aim to return as few `TxTmpl`s as possible for enhanced
     /// semantics, preferring to split across multiple `ThenFunc`'s
-    pub func: fn(&ContractSelf, Context) -> TxTmplIt,
+    pub func: fn(&ContractSelf, Context, ThenFuncTypeTag) -> TxTmplIt,
     /// name derived from Function Name.
     pub name: Arc<String>,
+}
+
+impl<'a, ContractSelf, StatefulArgs> From<ThenFunc<'a, ContractSelf>>
+    for ThenFuncAsFinishOrFunc<'a, ContractSelf, StatefulArgs>
+{
+    fn from(f: ThenFunc<'a, ContractSelf>) -> Self {
+        FinishOrFunc {
+            guard: f.guard,
+            conditional_compile_if: f.conditional_compile_if,
+            func: f.func,
+            name: f.name,
+            coerce_args: ThenFuncTypeTag::coerce_args,
+            schema: None,
+            f: PhantomData::default(),
+        }
+    }
 }

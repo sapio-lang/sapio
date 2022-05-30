@@ -17,13 +17,15 @@ use std::sync::Arc;
 /// Demonstrates how to make a contract object without known functionality at
 /// (rust) compile time. `D` Binds statically to the AnyContract interface though!
 struct D<'a> {
-    v: Vec<fn() -> Option<actions::ThenFunc<'a, D<'a>>>>,
+    v: Vec<fn() -> Option<actions::ThenFuncAsFinishOrFunc<'a, D<'a>, ()>>>,
 }
 
 impl AnyContract for D<'static> {
     type StatefulArguments = ();
     type Ref = Self;
-    fn then_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::ThenFunc<'a, Self>>]
+    fn then_fns<'a>(
+        &'a self,
+    ) -> &'a [fn() -> Option<actions::ThenFuncAsFinishOrFunc<'a, Self, Self::StatefulArguments>>]
     where
         Self::Ref: 'a,
     {
@@ -54,17 +56,21 @@ pub struct DynamicExample;
 impl DynamicExample {
     #[then]
     fn next(self, ctx: sapio::Context) {
-        let v: Vec<fn() -> Option<actions::ThenFunc<'static, D<'static>>>> = vec![];
+        let v: Vec<fn() -> Option<actions::ThenFuncAsFinishOrFunc<'static, D<'static>, ()>>> =
+            vec![];
         let d: D<'_> = D { v };
 
         let d2 = DynamicContract::<(), String> {
             then: vec![|| None, || {
-                Some(sapio::contract::actions::ThenFunc {
-                    conditional_compile_if: &[],
-                    guard: &[],
-                    func: |_s, _ctx| Err(CompilationError::TerminateCompilation),
-                    name: Arc::new("Empty".into()),
-                })
+                Some(
+                    sapio::contract::actions::ThenFunc {
+                        conditional_compile_if: &[],
+                        guard: &[],
+                        func: |_s, _ctx, _t| Err(CompilationError::TerminateCompilation),
+                        name: Arc::new("Empty".into()),
+                    }
+                    .into(),
+                )
             }],
             finish: vec![],
             finish_or: vec![],

@@ -60,7 +60,7 @@ pub struct Staker<T: StakingState> {
 /// Functional Interface for Staking Contracts
 pub trait StakerInterface
 where
-    Self: Sized,
+    Self: Sized + Contract,
 {
     decl_guard!(
         /// The key used to sign messages

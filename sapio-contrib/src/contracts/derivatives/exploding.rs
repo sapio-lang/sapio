@@ -9,7 +9,7 @@ use super::*;
 use sapio_base::timelocks::*;
 use sapio_macros::guard;
 /// Generic functionality required for Exploding contracts
-pub trait Explodes: 'static + Sized {
+pub trait Explodes: 'static + Sized + Contract {
     decl_then! {
         /// What to do when the timeout expires
         explodes

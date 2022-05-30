@@ -60,7 +60,7 @@ impl BState for Finish {
 
 trait ExampleBThen
 where
-    Self: Sized,
+    Self: Sized + Contract,
 {
     decl_then! {begin_contest}
 }

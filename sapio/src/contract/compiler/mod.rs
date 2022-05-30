@@ -13,6 +13,7 @@ use super::Context;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::contract::actions::conditional_compile::CCILWrapper;
 use crate::contract::actions::CallableAsFoF;
+use crate::contract::actions::ThenFuncTypeTag;
 use crate::contract::TxTmplIt;
 use crate::util::amountrange::AmountRange;
 use ::miniscript::descriptor::TapTree;
@@ -20,6 +21,7 @@ use ::miniscript::*;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::schnorr::TweakedPublicKey;
+use sapio_base::reverse_path::ReversePath;
 use std::collections::BinaryHeap;
 
 use bitcoin::XOnlyPublicKey;
@@ -128,141 +130,7 @@ where
 
         let guard_clauses = std::cell::RefCell::new(GuardCache::new());
 
-        // The code for then_fns and finish_or_fns is very similar, differing
-        // only in that then_fns have a CTV enforcing the contract and
-        // finish_or_fns do not. We can lazily chain iterators to process them
-        // in a row.
-        let then_fns: Vec<_> = {
-            let mut then_fn_ctx = ctx.derive(PathFragment::ThenFn)?;
-            let mut conditional_compile_ctx = then_fn_ctx.derive(PathFragment::CondCompIf)?;
-            let mut guards_ctx = then_fn_ctx.derive(PathFragment::Guard)?;
-            let mut next_tx_ctx = then_fn_ctx.derive(PathFragment::Next)?;
-            self.then_fns()
-                .iter()
-                .filter_map(|func| func())
-                .flat_map(|func| {
-                    let name = PathFragment::Named(SArc(func.name.clone()));
-                    conditional_compile_ctx
-                        .derive(name.clone())
-                        .map(|mut this_ctx| {
-                            match CCILWrapper(func.conditional_compile_if)
-                                .assemble(self_ref, &mut this_ctx)
-                            {
-                                ConditionalCompileType::Fail(errors) => {
-                                    Some((func, name, (errors, Nullable::No)))
-                                }
-                                ConditionalCompileType::Required
-                                | ConditionalCompileType::NoConstraint => {
-                                    Some((func, name, (LinkedList::new(), Nullable::No)))
-                                }
-                                ConditionalCompileType::Nullable => {
-                                    Some((func, name, (LinkedList::new(), Nullable::Yes)))
-                                }
-                                ConditionalCompileType::Skippable
-                                | ConditionalCompileType::Never => None,
-                            }
-                        })
-                        .transpose()
-                })
-                .map(|r| {
-                    r.and_then(|(func, name, (errors, nullability))| {
-                        let gctx = guards_ctx.derive(name.clone())?;
-                        let ntx_ctx = next_tx_ctx.derive(name)?;
-                        let guards = create_guards(
-                            self_ref,
-                            gctx,
-                            func.guard,
-                            &mut guard_clauses.borrow_mut(),
-                        );
-                        Ok((
-                            nullability,
-                            UseCTV::Yes,
-                            guards,
-                            if errors.is_empty() {
-                                (func.func)(self_ref, ntx_ctx)
-                            } else {
-                                Err(CompilationError::ConditionalCompilationFailed(errors))
-                            },
-                        ))
-                    })
-                })
-                .collect::<Result<Vec<_>, CompilationError>>()?
-        };
-        // finish_or_fns may be used to compute additional transactions with
-        // a given argument, but for building the ABI we only precompute with
-        // the default argument.
-        let (continue_apis, finish_or_fns): (
-            BTreeMap<SArc<EffectPath>, ContinuationPoint>,
-            Vec<(Nullable, UseCTV, Clause, TxTmplIt)>,
-        ) = {
-            let mut finish_or_fns_ctx = ctx.derive(PathFragment::FinishOrFn)?;
-            let mut conditional_compile_ctx = finish_or_fns_ctx.derive(PathFragment::CondCompIf)?;
-            let mut guard_ctx = finish_or_fns_ctx.derive(PathFragment::Guard)?;
-            let mut suggested_tx_ctx = finish_or_fns_ctx.derive(PathFragment::Suggested)?;
-            self.finish_or_fns()
-                .iter()
-                .filter_map(|func| func())
-                // TODO: De-duplicate this code?
-                .filter_map(|func| {
-                    let name = PathFragment::Named(SArc(func.get_name().clone()));
-                    conditional_compile_ctx
-                        .derive(name.clone())
-                        .map(|mut this_ctx| {
-                            let constraint = CCILWrapper(func.get_conditional_compile_if())
-                                .assemble(self_ref, &mut this_ctx);
-                            match constraint {
-                                ConditionalCompileType::Fail(errors) => Some((func, name, errors)),
-                                ConditionalCompileType::Required
-                                | ConditionalCompileType::NoConstraint
-                                | ConditionalCompileType::Nullable => {
-                                    Some((func, name, LinkedList::new()))
-                                }
-                                ConditionalCompileType::Skippable
-                                | ConditionalCompileType::Never => None,
-                            }
-                        })
-                        .transpose()
-                })
-                .map(|r| {
-                    r.and_then(|(func, name, errors)| {
-                        let top_effect_ctx = suggested_tx_ctx.derive(name.clone())?;
-                        let guard = create_guards(
-                            self_ref,
-                            guard_ctx.derive(name)?,
-                            func.get_guard(),
-                            &mut guard_clauses.borrow_mut(),
-                        );
-                        Ok((
-                            (
-                                SArc(top_effect_ctx.path().clone()),
-                                ContinuationPoint::at(
-                                    func.get_schema().clone(),
-                                    top_effect_ctx.path().clone(),
-                                ),
-                            ),
-                            (
-                                Nullable::Yes,
-                                UseCTV::No,
-                                guard,
-                                if errors.is_empty() {
-                                    compute_all_effects(top_effect_ctx, self_ref, func.as_ref())
-                                } else {
-                                    Err(CompilationError::ConditionalCompilationFailed(errors))
-                                },
-                            ),
-                        ))
-                    })
-                })
-                .collect::<Result<
-                    Vec<(
-                        (SArc<EffectPath>, ContinuationPoint),
-                        (Nullable, UseCTV, Clause, TxTmplIt),
-                    )>,
-                    CompilationError,
-                >>()?
-                .into_iter()
-                .unzip()
-        };
+        let dummy_root = Arc::new(ReversePath::from(PathFragment::Root));
 
         let mut ctv_to_tx = BTreeMap::new();
         let mut suggested_txs = BTreeMap::new();
@@ -271,77 +139,183 @@ where
         let mut amount_range_ctx = ctx.derive(PathFragment::Cloned)?;
         amount_range.update_range(self.ensure_amount(amount_range_ctx)?);
 
-        // If no guards and not CTV, then nothing gets added (not interpreted as Trivial True)
-        // If CTV and no guards, just CTV added.
-        // If CTV and guards, CTV & guards added.
-        let clause_accumulator = then_fns
-            .into_iter()
-            .chain(finish_or_fns.into_iter())
-            .map(|(nullability, uses_ctv, guards, r_txtmpls)| {
-                // it would be an error if any of r_txtmpls is an error instead of just an empty
-                // iterator.
-                let txtmpl_clauses = r_txtmpls?
-                    .map(|r_txtmpl| {
-                        let txtmpl = r_txtmpl?;
-                        let h = txtmpl.hash();
-                        amount_range.update_range(txtmpl.max);
-                        // Add the addition guards to these clauses
-                        if uses_ctv == UseCTV::Yes {
-                            let txtmpl = ctv_to_tx.entry(h).or_insert(txtmpl);
-                            if txtmpl.guards.len() == 0 {
-                                ctx.ctv_emulator(h).map(Some)
-                            } else {
-                                let mut g = txtmpl.guards.clone();
-                                g.push(ctx.ctv_emulator(h)?);
-                                Ok(Some(Clause::And(g)))
+        // The code for then_fns and finish_or_fns is very similar, differing
+        // only in that then_fns have a CTV enforcing the contract and
+        // finish_or_fns do not. We can lazily chain iterators to process them
+        // in a row.
+        let mut finish_or_fns_ctx = ctx.derive(PathFragment::FinishOrFn)?;
+        let mut then_fn_ctx = ctx.derive(PathFragment::ThenFn)?;
+        let (mut continue_apis, clause_accumulator): (
+            BTreeMap<SArc<EffectPath>, ContinuationPoint>,
+            Vec<Vec<Clause>>
+        ) = self
+            .then_fns()
+            .iter()
+            .filter_map(|func| func())
+            // TODO: Without allocations?
+            .map(|x| -> Box<dyn CallableAsFoF<_, _>> { Box::new(x) })
+            // TOOD: What is flat map doing here?
+            .flat_map(|x| {
+                let name = PathFragment::Named(SArc(x.get_name().clone()));
+                then_fn_ctx.derive(name).map(|p| (p, x))
+            })
+            .map(|x| (UseCTV::Yes, x))
+            .chain(
+                self.finish_or_fns()
+                    .iter()
+                    .filter_map(|func| func())
+                    .flat_map(|x| {
+                        let name = PathFragment::Named(SArc(x.get_name().clone()));
+                        finish_or_fns_ctx.derive(name).map(|p| (p, x))
+                    })
+                    .map(|x| (UseCTV::No, x)),
+            )
+            .flat_map(|(ctv, (mut f_ctx, func))| {
+                f_ctx
+                    .derive(PathFragment::CondCompIf)
+                    .map(|mut this_ctx| {
+                        // TODO: Merge logic?
+                        match CCILWrapper(func.get_conditional_compile_if())
+                            .assemble(self_ref, &mut this_ctx)
+                        {
+                            ConditionalCompileType::Fail(errors) => {
+                                Some((f_ctx, func, errors, Nullable::No, ctv))
                             }
-                        } else {
-                            let txtmpl = suggested_txs.entry(h).or_insert(txtmpl);
-                            // Don't return or use the extra guards here because we're within a
-                            // non-CTV context... if we did, then it would destabilize compilation
-                            // with effect arguments.
-                            if txtmpl.guards.len() != 0 {
-                                // todo: In theory, the *default* effect could pass up something here.
-                                Err(CompilationError::AdditionalGuardsNotAllowedHere)
-                            } else {
-                                // Don't add anything...
-                                Ok(None)
+                            ConditionalCompileType::Required
+                            | ConditionalCompileType::NoConstraint => {
+                                Some((f_ctx, func, LinkedList::new(), Nullable::No, ctv))
+                            }
+                            ConditionalCompileType::Nullable => {
+                                Some((f_ctx, func, LinkedList::new(), Nullable::Yes, ctv))
+                            }
+                            ConditionalCompileType::Skippable | ConditionalCompileType::Never => {
+                                None
                             }
                         }
                     })
-                    // Drop None values
-                    .filter_map(|s| s.transpose())
-                    // Forces any error to abort the whole thing
-                    .collect::<Result<Vec<Clause>, CompilationError>>()?;
-
-                match (uses_ctv, nullability, txtmpl_clauses.len(), guards) {
-                    // Mark this branch dead.
-                    // Nullable branch without anything
-                    (UseCTV::Yes, Nullable::Yes, 0, _) => Ok(vec![]),
-                    // Error if we expect CTV, returned some templates, but our guard
-                    // was unsatisfiable, irrespective of nullability. This is because
-                    // the behavior should be captured through a compile_if if it is
-                    // intended.
-                    (UseCTV::Yes, _, n, Clause::Unsatisfiable) if n > 0 => {
-                        // TODO: Turn into a warning that the intended behavior should be to compile_if
-                        Err(CompilationError::MissingTemplates)
-                    }
-                    // Error if 0 templates return and we don't want to be nullable
-                    (UseCTV::Yes, Nullable::No, 0, _) => Err(CompilationError::MissingTemplates),
-                    // If the guard is trivial, return the hashes standalone
-                    (UseCTV::Yes, _, _, Clause::Trivial) => Ok(txtmpl_clauses),
-                    // If the guard is non-trivial, zip it to each hash
-                    // TODO: Arc in miniscript to dedup memory?
-                    //       This could be Clause::Shared(x) or something...
-                    (UseCTV::Yes, _, _, guards) => Ok(txtmpl_clauses
-                        .into_iter()
-                        // extra_guards will contain any CTV
-                        .map(|extra_guards| Clause::And(vec![guards.clone(), extra_guards]))
-                        .collect()),
-                    (UseCTV::No, _, _, guards) => Ok(vec![guards]),
-                }
+                    .transpose()
             })
-            .collect::<Result<Vec<Vec<Clause>>, CompilationError>>()?;
+            .map(|r| {
+                r.and_then(|(mut f_ctx, func, errors, nullability, ctv)| {
+                    let gctx = f_ctx.derive(PathFragment::Guard)?;
+                    // TODO: Suggested path frag?
+                    let ntx_ctx = f_ctx.derive(PathFragment::Next)?;
+                    let guards = create_guards(
+                        self_ref,
+                        gctx,
+                        func.get_guard(),
+                        &mut guard_clauses.borrow_mut(),
+                    );
+                    let effect_ctx = f_ctx.derive(PathFragment::Suggested)?;
+                    let cont = if ctv == UseCTV::Yes {
+                        (
+                            SArc(dummy_root.clone()),
+                            ContinuationPoint::at(None, dummy_root.clone()),
+                        )
+                    } else {
+                        (
+                            SArc(effect_ctx.path().clone()),
+                            ContinuationPoint::at(
+                                func.get_schema().clone(),
+                                effect_ctx.path().clone(),
+                            ),
+                        )
+                    };
+                    let transactions = if errors.is_empty() {
+                        if ctv == UseCTV::Yes {
+                            func.call(self_ref, ntx_ctx, Default::default())
+                        } else {
+                            // finish_or_fns may be used to compute additional transactions with
+                            // a given argument, but for building the ABI we only precompute with
+                            // the default argument.
+                            compute_all_effects(effect_ctx, self_ref, func.as_ref())
+                        }
+                    } else {
+                        Err(CompilationError::ConditionalCompilationFailed(errors))
+                    };
+                    Ok((cont, (nullability, ctv, guards, transactions)))
+                })
+            })
+            // If no guards and not CTV, then nothing gets added (not interpreted as Trivial True)
+            // If CTV and no guards, just CTV added.
+            // If CTV and guards, CTV & guards added.
+
+            // TODO: What does flat_map do here?
+            .flat_map(|r| {
+                r.map(|(cont, (nullability, uses_ctv, guards, r_txtmpls))| {
+                    // it would be an error if any of r_txtmpls is an error instead of just an empty
+                    // iterator.
+                    let txtmpl_clauses = r_txtmpls?
+                        .map(|r_txtmpl| {
+                            let txtmpl = r_txtmpl?;
+                            let h = txtmpl.hash();
+                            amount_range.update_range(txtmpl.max);
+                            // Add the addition guards to these clauses
+                            if uses_ctv == UseCTV::Yes {
+                                let txtmpl = ctv_to_tx.entry(h).or_insert(txtmpl);
+                                if txtmpl.guards.len() == 0 {
+                                    ctx.ctv_emulator(h).map(Some)
+                                } else {
+                                    let mut g = txtmpl.guards.clone();
+                                    g.push(ctx.ctv_emulator(h)?);
+                                    Ok(Some(Clause::And(g)))
+                                }
+                            } else {
+                                let txtmpl = suggested_txs.entry(h).or_insert(txtmpl);
+                                // Don't return or use the extra guards here because we're within a
+                                // non-CTV context... if we did, then it would destabilize compilation
+                                // with effect arguments.
+                                if txtmpl.guards.len() != 0 {
+                                    // todo: In theory, the *default* effect could pass up something here.
+                                    Err(CompilationError::AdditionalGuardsNotAllowedHere)
+                                } else {
+                                    // Don't add anything...
+                                    Ok(None)
+                                }
+                            }
+                        })
+                        // Drop None values
+                        .filter_map(|s| s.transpose())
+                        // Forces any error to abort the whole thing
+                        .collect::<Result<Vec<Clause>, CompilationError>>()?;
+
+                    match (uses_ctv, nullability, txtmpl_clauses.len(), guards) {
+                        // Mark this branch dead.
+                        // Nullable branch without anything
+                        (UseCTV::Yes, Nullable::Yes, 0, _) => Ok((cont, vec![])),
+                        // Error if we expect CTV, returned some templates, but our guard
+                        // was unsatisfiable, irrespective of nullability. This is because
+                        // the behavior should be captured through a compile_if if it is
+                        // intended.
+                        (UseCTV::Yes, _, n, Clause::Unsatisfiable) if n > 0 => {
+                            // TODO: Turn into a warning that the intended behavior should be to compile_if
+                            Err(CompilationError::MissingTemplates)
+                        }
+                        // Error if 0 templates return and we don't want to be nullable
+                        (UseCTV::Yes, Nullable::No, 0, _) => {
+                            Err(CompilationError::MissingTemplates)
+                        }
+                        // If the guard is trivial, return the hashes standalone
+                        (UseCTV::Yes, _, _, Clause::Trivial) => Ok((cont, txtmpl_clauses)),
+                        // If the guard is non-trivial, zip it to each hash
+                        // TODO: Arc in miniscript to dedup memory?
+                        //       This could be Clause::Shared(x) or something...
+                        (UseCTV::Yes, _, _, guards) => Ok((
+                            cont,
+                            txtmpl_clauses
+                                .into_iter()
+                                // extra_guards will contain any CTV
+                                .map(|extra_guards| Clause::And(vec![guards.clone(), extra_guards]))
+                                .collect(),
+                        )),
+                        (UseCTV::No, _, _, guards) => Ok((cont, vec![guards])),
+                    }
+                })
+            })
+            .collect::<Result<Vec<((SArc<EffectPath>, ContinuationPoint), Vec<Clause>)>, CompilationError>>()?
+            .into_iter()
+            .unzip();
+        continue_apis.remove(&SArc(dummy_root.clone()));
         let finish_fns: Vec<_> = {
             let mut finish_fns_ctx = ctx.derive(PathFragment::FinishFn)?;
             // Compute all finish_functions at this level, caching if requested.
