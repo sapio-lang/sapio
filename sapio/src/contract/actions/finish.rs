@@ -10,7 +10,9 @@ use super::Context;
 use super::TxTmplIt;
 use crate::contract::actions::ConditionallyCompileIfList;
 use crate::contract::actions::GuardList;
+use crate::template::Template;
 use sapio_base::effects::EffectDBError;
+use sapio_base::Clause;
 
 use core::marker::PhantomData;
 use schemars::schema::RootSchema;
@@ -42,6 +44,11 @@ pub struct FinishOrFunc<'a, ContractSelf, StatefulArguments, SpecificArgs, WebAP
     /// Type switch to enable/disable compilation with serialized fields
     /// (if negative trait bounds, could remove!)
     pub f: PhantomData<WebAPIStatus>,
+    /// if txtmpls returned by the func should modify guards.
+    pub returned_txtmpls_modify_guards: bool,
+    /// extract a clause from the txtmpl
+    pub extract_clause_from_txtmpl:
+        fn(&Template, &Context) -> Result<Option<Clause>, CompilationError>,
 }
 
 /// This trait hides the generic parameter `SpecificArgs` in FinishOrFunc
@@ -68,6 +75,12 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     fn get_name(&self) -> &Arc<String>;
     /// Get the RootSchema for calling this with an update
     fn get_schema(&self) -> &Option<Arc<RootSchema>>;
+    /// get if txtmpls returned by the func should modify guards.
+    fn get_returned_txtmpls_modify_guards(&self) -> bool;
+    /// extract a clause from the txtmpl
+    fn get_extract_clause_from_txtmpl(
+        &self,
+    ) -> fn(&Template, &Context) -> Result<Option<Clause>, CompilationError>;
 }
 
 /// Type Tag for FinishOrFunc Variant
@@ -93,6 +106,14 @@ impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, 
     }
     fn get_schema(&self) -> &Option<Arc<RootSchema>> {
         &self.schema
+    }
+    fn get_returned_txtmpls_modify_guards(&self) -> bool {
+        self.returned_txtmpls_modify_guards
+    }
+    fn get_extract_clause_from_txtmpl(
+        &self,
+    ) -> fn(&Template, &Context) -> Result<Option<Clause>, CompilationError> {
+        self.extract_clause_from_txtmpl
     }
 }
 
@@ -125,5 +146,35 @@ where
     }
     fn get_schema(&self) -> &Option<Arc<RootSchema>> {
         &self.schema
+    }
+    fn get_returned_txtmpls_modify_guards(&self) -> bool {
+        self.returned_txtmpls_modify_guards
+    }
+
+    fn get_extract_clause_from_txtmpl(
+        &self,
+    ) -> fn(&Template, &Context) -> Result<Option<Clause>, CompilationError> {
+        self.extract_clause_from_txtmpl
+    }
+}
+
+/// default clause extractor should not attempt to do anything, but should fail if the txtmpl has attached guards
+pub fn default_extract_clause_from_txtmpl(
+    t: &Template,
+    _ctx: &Context,
+) -> Result<Option<Clause>, CompilationError> {
+    // Don't return or use the extra guards here
+    // because we're within a non-CTV context... if
+    // we did, then it would destabilize compilation
+    // with effect arguments.
+    if !t.guards.is_empty() {
+        // N.B.: In theory, the *default* effect
+        // could pass up something here.
+        // However, we don't do that since there's
+        // not much point to it.
+        Err(CompilationError::AdditionalGuardsNotAllowedHere)
+    } else {
+        // Don't add anything...
+        Ok(None)
     }
 }

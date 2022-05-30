@@ -78,11 +78,6 @@ impl Compilable for bitcoin::XOnlyPublicKey {
 }
 
 #[derive(PartialEq, Eq)]
-enum UseCTV {
-    Yes,
-    No,
-}
-#[derive(PartialEq, Eq)]
 enum Nullable {
     Yes,
     No,
@@ -129,7 +124,7 @@ where
 
         // The below maps track metadata that is useful for consumers / verification.
         // track transactions that are *guaranteed* via CTV
-        let mut ctv_ensured_txns = BTreeMap::new();
+        let mut comitted_txns = BTreeMap::new();
         // All other transactions
         let mut other_txns = BTreeMap::new();
 
@@ -167,7 +162,6 @@ where
                 let name = PathFragment::Named(SArc(x.get_name().clone()));
                 then_fn_ctx.derive(name).map(|p| (p, x))
             })
-            .map(|x| (UseCTV::Yes, x))
             .chain(
                 self.finish_or_fns()
                     .iter()
@@ -175,12 +169,11 @@ where
                     .flat_map(|x| {
                         let name = PathFragment::Named(SArc(x.get_name().clone()));
                         finish_or_fns_ctx.derive(name).map(|p| (p, x))
-                    })
-                    .map(|x| (UseCTV::No, x)),
+                    }),
             )
             // flat_map will discard any
             // skippable / never branches here
-            .flat_map(|(ctv, (mut f_ctx, func))| {
+            .flat_map(|(mut f_ctx, func)| {
                 let mut this_ctx = f_ctx
                     // this should always be Ok(_)
                     .derive(PathFragment::CondCompIf)
@@ -194,16 +187,16 @@ where
                     }
                     // Non nullable
                     ConditionalCompileType::Required | ConditionalCompileType::NoConstraint => {
-                        Some(Ok((f_ctx, func, Nullable::No, ctv)))
+                        Some(Ok((f_ctx, func, Nullable::No)))
                     }
                     // Nullable
-                    ConditionalCompileType::Nullable => Some(Ok((f_ctx, func, Nullable::Yes, ctv))),
+                    ConditionalCompileType::Nullable => Some(Ok((f_ctx, func, Nullable::Yes))),
                     // Drop these
                     ConditionalCompileType::Skippable | ConditionalCompileType::Never => None,
                 }
             })
             .map(|r| {
-                let (mut f_ctx, func, nullability, ctv) = r?;
+                let (mut f_ctx, func, nullability) = r?;
                 let gctx = f_ctx.derive(PathFragment::Guard)?;
                 // TODO: Suggested path frag?
                 let guards = create_guards(
@@ -212,7 +205,7 @@ where
                     func.get_guard(),
                     &mut guard_clauses.borrow_mut(),
                 );
-                let effect_ctx = f_ctx.derive(if ctv == UseCTV::Yes {
+                let effect_ctx = f_ctx.derive(if func.get_returned_txtmpls_modify_guards() {
                     PathFragment::Next
                 } else {
                     PathFragment::Suggested
@@ -231,32 +224,15 @@ where
                         let h = txtmpl.hash();
                         amount_range.update_range(txtmpl.max);
                         // Add the addition guards to these clauses
-                        if ctv == UseCTV::Yes {
-                            let txtmpl = ctv_ensured_txns.entry(h).or_insert(txtmpl);
-                            if txtmpl.guards.len() == 0 {
-                                ctx.ctv_emulator(h).map(Some)
-                            } else {
-                                let mut g = txtmpl.guards.clone();
-                                g.push(ctx.ctv_emulator(h)?);
-                                Ok(Some(Clause::And(g)))
-                            }
+                        let txtmpl = if func.get_returned_txtmpls_modify_guards() {
+                            &mut comitted_txns
                         } else {
-                            let txtmpl = other_txns.entry(h).or_insert(txtmpl);
-                            // Don't return or use the extra guards here
-                            // because we're within a non-CTV context... if
-                            // we did, then it would destabilize compilation
-                            // with effect arguments.
-                            if txtmpl.guards.len() != 0 {
-                                // N.B.: In theory, the *default* effect
-                                // could pass up something here.
-                                // However, we don't do that since there's
-                                // not much point to it.
-                                Err(CompilationError::AdditionalGuardsNotAllowedHere)
-                            } else {
-                                // Don't add anything...
-                                Ok(None)
-                            }
+                            &mut other_txns
                         }
+                        .entry(h)
+                        .or_insert(txtmpl);
+                        let extractor = func.get_extract_clause_from_txtmpl();
+                        (extractor)(&txtmpl, &ctx)
                     })
                     // Drop None values
                     .filter_map(|s| s.transpose())
@@ -268,7 +244,7 @@ where
                     ContinuationPoint::at(None, dummy_root.clone()),
                 );
                 // N.B. the order of the matches below is significant
-                if ctv == UseCTV::Yes {
+                if func.get_returned_txtmpls_modify_guards() {
                     match (nullability, txtmpl_clauses.len(), guards) {
                         // This is a nullable branch without any proposed
                         // transactions.
@@ -373,7 +349,7 @@ where
         let descriptor = Some(descriptor.into());
         let root_path = SArc(ctx.path().clone());
 
-        let failed_estimate = ctv_ensured_txns.values().any(|a| {
+        let failed_estimate = comitted_txns.values().any(|a| {
             // witness space not scaled
             let tx_size = a.tx.get_weight() + estimated_max_size;
             let fees = amount_range.max() - a.total_amount();
@@ -386,7 +362,7 @@ where
         } else {
             let metadata_ctx = ctx.derive(PathFragment::Metadata)?;
             Ok(Compiled {
-                ctv_to_tx: ctv_ensured_txns,
+                ctv_to_tx: comitted_txns,
                 suggested_txs: other_txns,
                 continue_apis,
                 root_path,
