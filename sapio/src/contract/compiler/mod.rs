@@ -83,6 +83,8 @@ enum Nullable {
     No,
 }
 
+const UNIQUE_DERIVE_PANIC_MSG: &'static str =
+    "Must be a valid derivation or internal invariant not held";
 fn compute_all_effects<C, A: Default>(
     mut top_effect_ctx: Context,
     self_ref: &C,
@@ -103,7 +105,7 @@ fn compute_all_effects<C, A: Default>(
                 let v = a?;
                 let c = applied_effects_ctx
                     .derive(PathFragment::Named(SArc(k.clone())))
-                    .expect("Must be a valid derivation or internal invariant not held");
+                    .expect(UNIQUE_DERIVE_PANIC_MSG);
                 let w = func.call_json(self_ref, c, arg.clone())?;
                 Ok(Box::new(v.chain(w)))
             })
@@ -181,12 +183,12 @@ where
             // TODO: Without allocations?
             .map(|x| -> Box<dyn CallableAsFoF<_, _>> { Box::new(x) })
             .chain(self.finish_or_fns().iter().filter_map(|func| func()))
-            // TOOD: What is flat map doing here?
-            .flat_map(|mut x| {
+            .map(|mut x| {
                 let new_name = Arc::new(renamer.get_name(x.get_name().as_ref()));
                 x.rename(new_name.clone());
                 let name = PathFragment::Named(SArc(new_name));
-                action_ctx.derive(name).map(|p| (p, x))
+                let f_ctx = action_ctx.derive(name).expect(UNIQUE_DERIVE_PANIC_MSG);
+                (f_ctx, x)
             })
             // flat_map will discard any
             // skippable / never branches here
@@ -194,7 +196,7 @@ where
                 let mut this_ctx = f_ctx
                     // this should always be Ok(_)
                     .derive(PathFragment::CondCompIf)
-                    .expect("Must be a valid derivation or internal invariant not held");
+                    .expect(UNIQUE_DERIVE_PANIC_MSG);
                 match CCILWrapper(func.get_conditional_compile_if())
                     .assemble(self_ref, &mut this_ctx)
                 {
