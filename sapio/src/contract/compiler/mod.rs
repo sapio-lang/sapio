@@ -142,7 +142,7 @@ where
     /// TODO: Better Document Semantics
     fn compile(&self, mut ctx: Context) -> Result<Compiled, CompilationError> {
         let self_ref = self.get_inner_ref();
-        let guard_clauses = std::cell::RefCell::new(GuardCache::new());
+        let mut guard_clauses = GuardCache::new();
         let dummy_root = Arc::new(ReversePath::from(PathFragment::Root));
 
         // The below maps track metadata that is useful for consumers / verification.
@@ -168,7 +168,7 @@ where
         //
         // we need a unique context for each.
         let mut action_ctx = ctx.derive(PathFragment::Action)?;
-        let mut renamer = std::cell::RefCell::new(Renamer::new());
+        let mut renamer = Renamer::new();
         let (mut continue_apis, clause_accumulator): (
             BTreeMap<SArc<EffectPath>, ContinuationPoint>,
             Vec<Vec<Miniscript<XOnlyPublicKey, Tap>>>,
@@ -183,7 +183,7 @@ where
             .chain(self.finish_or_fns().iter().filter_map(|func| func()))
             // TOOD: What is flat map doing here?
             .flat_map(|mut x| {
-                let new_name = Arc::new(renamer.borrow_mut().get_name(x.get_name().as_ref()));
+                let new_name = Arc::new(renamer.get_name(x.get_name().as_ref()));
                 x.rename(new_name.clone());
                 let name = PathFragment::Named(SArc(new_name));
                 action_ctx.derive(name).map(|p| (p, x))
@@ -216,12 +216,7 @@ where
                 let (mut f_ctx, func, nullability) = r?;
                 let gctx = f_ctx.derive(PathFragment::Guard)?;
                 // TODO: Suggested path frag?
-                let guards = create_guards(
-                    self_ref,
-                    gctx,
-                    func.get_guard(),
-                    &mut guard_clauses.borrow_mut(),
-                );
+                let guards = create_guards(self_ref, gctx, func.get_guard(), &mut guard_clauses);
                 let effect_ctx = f_ctx.derive(if func.get_returned_txtmpls_modify_guards() {
                     PathFragment::Next
                 } else {
@@ -332,7 +327,7 @@ where
                     (0..)
                         .filter_map(|i| finish_fns_ctx.derive(PathFragment::Branch(i as u64)).ok()),
                 )
-                .filter_map(|(func, c)| guard_clauses.borrow_mut().get(self_ref, *func, c))
+                .filter_map(|(func, c)| guard_clauses.get(self_ref, *func, c))
                 .map(|policy| policy.compile().map_err(Into::<CompilationError>::into))
                 .chain(clause_accumulator.into_iter().flatten().map(Ok))
                 .collect::<Result<Vec<_>, _>>()?
