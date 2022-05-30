@@ -22,8 +22,7 @@ use std::sync::Arc;
 pub enum PathFragment {
     Root,
     Cloned,
-    ThenFn,
-    FinishOrFn,
+    Action,
     FinishFn,
     CondCompIf,
     Guard,
@@ -46,8 +45,7 @@ impl From<&PathFragment> for String {
         match a {
             PathFragment::Root => "@root".into(),
             PathFragment::Cloned => "@cloned".into(),
-            PathFragment::ThenFn => "@then_fn".into(),
-            PathFragment::FinishOrFn => "@finish_or_fn".into(),
+            PathFragment::Action => "@action".into(),
             PathFragment::FinishFn => "@finish_fn".into(),
             PathFragment::CondCompIf => "@cond_comp_if".into(),
             PathFragment::Guard => "@guard".into(),
@@ -94,8 +92,7 @@ impl TryFrom<&str> for PathFragment {
         Ok(match s.as_ref() {
             "@root" => PathFragment::Root,
             "@cloned" => PathFragment::Cloned,
-            "@then_fn" => PathFragment::ThenFn,
-            "@finish_or_fn" => PathFragment::FinishOrFn,
+            "@action" => PathFragment::Action,
             "@finish_fn" => PathFragment::FinishFn,
             "@cond_comp_if" => PathFragment::CondCompIf,
             "@guard" => PathFragment::Guard,

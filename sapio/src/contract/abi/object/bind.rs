@@ -6,31 +6,27 @@
 
 //!  binding Object to a specific UTXO
 use super::descriptors::*;
-use crate::contract::abi::continuation::ContinuationPoint;
+
 pub use crate::contract::abi::studio::*;
 use crate::contract::object::Object;
 use crate::contract::object::ObjectError;
 use crate::template::Template;
-use crate::util::amountrange::AmountRange;
-use crate::util::extended_address::ExtendedAddress;
-use ::miniscript::{self, *};
-use bitcoin::hashes::sha256;
+
+use ::miniscript::*;
+
 use bitcoin::hashes::sha256::Hash as Sha256;
-use bitcoin::util::amount::Amount;
+
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use bitcoin::util::taproot::TaprootBuilder;
 use bitcoin::util::taproot::TaprootSpendInfo;
 use bitcoin::OutPoint;
-use bitcoin::PublicKey;
-use bitcoin::Script;
-use bitcoin::XOnlyPublicKey;
+
 use sapio_base::effects::EffectPath;
-use sapio_base::effects::PathFragment;
+
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::txindex::TxIndex;
 use sapio_ctv_emulator_trait::CTVEmulator;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+
 use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::sync::Arc;

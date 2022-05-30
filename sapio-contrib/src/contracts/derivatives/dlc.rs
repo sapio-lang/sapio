@@ -217,7 +217,7 @@ mod tests {
     }
 
     impl DLCOracle for CachedOracle {
-        fn get_r_for_event(&self, event: &Event) -> R {
+        fn get_r_for_event(&self, _event: &Event) -> R {
             self.event.clone()
         }
         fn get_x_for_oracle(&self) -> X {

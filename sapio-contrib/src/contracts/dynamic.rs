@@ -42,10 +42,10 @@ impl AnyContract for D<'static> {
     fn get_inner_ref<'a>(&'a self) -> &Self {
         self
     }
-    fn metadata<'a>(&'a self, ctx: Context) -> Result<ObjectMetadata, CompilationError> {
+    fn metadata<'a>(&'a self, _ctx: Context) -> Result<ObjectMetadata, CompilationError> {
         Ok(Default::default())
     }
-    fn ensure_amount<'a>(&'a self, ctx: Context) -> Result<Amount, CompilationError> {
+    fn ensure_amount<'a>(&'a self, _ctx: Context) -> Result<Amount, CompilationError> {
         Ok(Amount::from_sat(0))
     }
 }
@@ -75,8 +75,8 @@ impl DynamicExample {
             finish: vec![],
             finish_or: vec![],
             data: "E.g., Create a Vault".into(),
-            metadata_f: Box::new(|s, c| Ok(Default::default())),
-            ensure_amount_f: Box::new(|s, c| Ok(Default::default())),
+            metadata_f: Box::new(|_s, _c| Ok(Default::default())),
+            ensure_amount_f: Box::new(|_s, _c| Ok(Default::default())),
         };
         let mut bld = ctx.template();
         let amt = bld.ctx().funds() / 2;

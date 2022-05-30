@@ -48,12 +48,12 @@ where
     declare! { updatable<> }
     declare! {finish}
     /// Generate metadata for this contract object
-    fn metadata(&self, ctx: Context) -> Result<ObjectMetadata, CompilationError> {
+    fn metadata(&self, _ctx: Context) -> Result<ObjectMetadata, CompilationError> {
         Ok(Default::default())
     }
 
     /// minimum balance to have in this coin
-    fn ensure_amount(&self, ctx: Context) -> Result<Amount, CompilationError> {
+    fn ensure_amount(&self, _ctx: Context) -> Result<Amount, CompilationError> {
         Ok(Amount::from_sat(0))
     }
 }

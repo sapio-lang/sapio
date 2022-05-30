@@ -5,32 +5,17 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Wrapper for supported descriptor types
-use crate::contract::abi::continuation::ContinuationPoint;
+
 pub use crate::contract::abi::studio::*;
-use crate::template::Template;
-use crate::util::amountrange::AmountRange;
-use crate::util::extended_address::ExtendedAddress;
-use ::miniscript::{self, *};
-use bitcoin::hashes::sha256;
-use bitcoin::hashes::sha256::Hash as Sha256;
-use bitcoin::util::amount::Amount;
-use bitcoin::util::psbt::PartiallySignedTransaction;
-use bitcoin::util::taproot::TaprootBuilder;
-use bitcoin::util::taproot::TaprootSpendInfo;
-use bitcoin::OutPoint;
+
+use ::miniscript::*;
+
 use bitcoin::PublicKey;
 use bitcoin::Script;
 use bitcoin::XOnlyPublicKey;
-use sapio_base::effects::EffectPath;
-use sapio_base::effects::PathFragment;
-use sapio_base::serialization_helpers::SArc;
-use sapio_base::txindex::TxIndex;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use std::rc::Rc;
-use std::sync::Arc;
 
 /// Multiple Types of Allowed Descriptor
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]

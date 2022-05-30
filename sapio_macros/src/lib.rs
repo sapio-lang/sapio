@@ -279,7 +279,9 @@ pub fn continuation(args: TokenStream, input: TokenStream) -> TokenStream {
                     func: Self::#continue_name,
                     schema: Self::#continue_schema_for_name.map(|f|f()),
                     name: std::sync::Arc::new(std::stringify!(#name).into()),
-                    f: std::default::Default::default()
+                    f: std::default::Default::default(),
+                    returned_txtmpls_modify_guards: false,
+                    extract_clause_from_txtmpl: sapio::contract::actions::default_extract_clause_from_txtmpl
                 };
                 Some(Box::new(f))
             }

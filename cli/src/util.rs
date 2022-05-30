@@ -41,7 +41,7 @@ use bitcoin::util::sighash::Prevouts;
 use bitcoin::util::taproot::TapLeafHash;
 use bitcoin::util::taproot::TapSighashHash;
 use bitcoin::SchnorrSig;
-use bitcoin::Script;
+
 use bitcoin::TxOut;
 use bitcoin::XOnlyPublicKey;
 pub fn sign_psbt(
@@ -64,7 +64,7 @@ pub fn sign_psbt(
     let tweaked = untweaked
         .tap_tweak(secp, input_zero.tap_merkle_root)
         .into_inner();
-    let tweaked_pk = tweaked.public_key();
+    let _tweaked_pk = tweaked.public_key();
     let hash_ty = bitcoin::util::sighash::SchnorrSighashType::All;
     let prevouts = &Prevouts::All(&utxos);
     let mut get_sig = |path, kp| {

@@ -11,6 +11,8 @@ use super::TxTmplIt;
 use crate::contract::actions::ConditionallyCompileIfList;
 use crate::contract::actions::GuardList;
 use crate::contract::actions::{FinishOrFunc, WebAPIDisabled};
+use crate::template::Template;
+use sapio_base::Clause;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -19,7 +21,7 @@ pub struct ThenFuncTypeTag(pub(crate) ());
 
 impl ThenFuncTypeTag {
     /// coerce of Self maps onto Self
-    pub fn coerce_args<StatefulArguments>(f: StatefulArguments) -> Result<Self, CompilationError> {
+    pub fn coerce_args<StatefulArguments>(_f: StatefulArguments) -> Result<Self, CompilationError> {
         Ok(ThenFuncTypeTag(()))
     }
 }
@@ -57,6 +59,20 @@ impl<'a, ContractSelf, StatefulArgs> From<ThenFunc<'a, ContractSelf>>
             coerce_args: ThenFuncTypeTag::coerce_args,
             schema: None,
             f: PhantomData::default(),
+            returned_txtmpls_modify_guards: true,
+            extract_clause_from_txtmpl: ctv_clause_extractor,
         }
     }
+}
+
+fn ctv_clause_extractor(t: &Template, ctx: &Context) -> Result<Option<Clause>, CompilationError> {
+    let h = t.hash();
+    if t.guards.is_empty() {
+        ctx.ctv_emulator(h)
+    } else {
+        let mut g = t.guards.clone();
+        g.push(ctx.ctv_emulator(h)?);
+        Ok(Clause::And(g))
+    }
+    .map(Some)
 }

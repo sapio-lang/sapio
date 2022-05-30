@@ -104,6 +104,8 @@ pub enum CompilationError {
     SerializationError(serde_json::Error),
     /// Error while deserializing
     DeserializationError(serde_json::Error),
+    /// No Web API enabled, but call_json was called
+    WebAPIDisabled,
     /// Unknown Error type -- either from a user or from some unhandled dependency
     Custom(Box<dyn std::error::Error>),
 }
