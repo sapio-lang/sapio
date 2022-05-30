@@ -167,8 +167,7 @@ where
         // in a row.
         //
         // we need a unique context for each.
-        let mut finish_or_fns_ctx = ctx.derive(PathFragment::FinishOrFn)?;
-        let mut then_fn_ctx = ctx.derive(PathFragment::ThenFn)?;
+        let mut action_ctx = ctx.derive(PathFragment::Action)?;
         let mut renamer = std::cell::RefCell::new(Renamer::new());
         let (mut continue_apis, clause_accumulator): (
             BTreeMap<SArc<EffectPath>, ContinuationPoint>,
@@ -181,25 +180,14 @@ where
             // trait object since it only exists temporarily.
             // TODO: Without allocations?
             .map(|x| -> Box<dyn CallableAsFoF<_, _>> { Box::new(x) })
+            .chain(self.finish_or_fns().iter().filter_map(|func| func()))
             // TOOD: What is flat map doing here?
             .flat_map(|mut x| {
                 let new_name = Arc::new(renamer.borrow_mut().get_name(x.get_name().as_ref()));
                 x.rename(new_name.clone());
                 let name = PathFragment::Named(SArc(new_name));
-                then_fn_ctx.derive(name).map(|p| (p, x))
+                action_ctx.derive(name).map(|p| (p, x))
             })
-            .chain(
-                self.finish_or_fns()
-                    .iter()
-                    .filter_map(|func| func())
-                    .flat_map(|mut x| {
-                        let new_name =
-                            Arc::new(renamer.borrow_mut().get_name(x.get_name().as_ref()));
-                        x.rename(new_name.clone());
-                        let name = PathFragment::Named(SArc(new_name));
-                        finish_or_fns_ctx.derive(name).map(|p| (p, x))
-                    }),
-            )
             // flat_map will discard any
             // skippable / never branches here
             .flat_map(|(mut f_ctx, func)| {
