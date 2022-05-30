@@ -253,54 +253,15 @@ where
                     // Forces any error to abort the whole thing
                     .collect::<Result<Vec<Clause>, CompilationError>>()?;
 
-                let dummy = (
-                    SArc(dummy_root.clone()),
-                    ContinuationPoint::at(None, dummy_root.clone()),
-                );
                 // N.B. the order of the matches below is significant
                 if func.get_returned_txtmpls_modify_guards() {
-                    match (nullability, txtmpl_clauses.len(), guards) {
-                        // This is a nullable branch without any proposed
-                        // transactions.
-                        // Therefore, mark this branch dead.
-                        (Nullable::Yes, 0, _) => Ok((dummy, vec![])),
-                        // Error if we expect CTV, returned some templates, but our guard
-                        // was unsatisfiable, irrespective of nullability. This is because
-                        // the behavior should be captured through a compile_if if it is
-                        // intended.
-                        (_, n, Clause::Unsatisfiable) if n > 0 => {
-                            // TODO: Turn into a warning that the intended
-                            // behavior should be to compile_if
-                            Err(CompilationError::MissingTemplates)
-                        }
-                        // Error if 0 templates return and we don't want to be nullable
-                        (Nullable::No, 0, _) => Err(CompilationError::MissingTemplates),
-                        // If the guard is trivial, return the hashes standalone
-                        (_, _, Clause::Trivial) => Ok((
-                            dummy,
-                            txtmpl_clauses
-                                .into_iter()
-                                .map(|policy| {
-                                    policy.compile().map_err(Into::<CompilationError>::into)
-                                })
-                                .collect::<Result<Vec<_>, _>>()?,
-                        )),
-                        // If the guard is non-trivial, zip it to each hash
-                        // TODO: Arc in miniscript to dedup memory?
-                        //       This could be Clause::Shared(x) or something...
-                        (_, _, guards) => Ok((
-                            dummy,
-                            txtmpl_clauses
-                                .into_iter()
-                                // extra_guards will contain any CTV
-                                .map(|extra_guards| {
-                                    Clause::And(vec![guards.clone(), extra_guards])
-                                        .compile()
-                                        .map_err(Into::<CompilationError>::into)
-                                })
-                                .collect::<Result<Vec<_>, _>>()?,
-                        )),
-                    }
+                    Ok((
+                        (
+                            SArc(dummy_root.clone()),
+                            ContinuationPoint::at(None, dummy_root.clone()),
+                        ),
+                        combine_txtmpls(nullability, txtmpl_clauses, guards)?,
+                    ))
                 } else {
                     Ok((
                         (
@@ -367,6 +328,47 @@ where
                 metadata: self.metadata(metadata_ctx)?,
             })
         }
+    }
+}
+
+fn combine_txtmpls(
+    nullability: Nullable,
+    txtmpl_clauses: Vec<Clause>,
+    guards: Clause,
+) -> Result<Vec<Miniscript<XOnlyPublicKey, Tap>>, CompilationError> {
+    match (nullability, txtmpl_clauses.len(), guards) {
+        // This is a nullable branch without any proposed
+        // transactions.
+        // Therefore, mark this branch dead.
+        (Nullable::Yes, 0, _) => Ok(vec![]),
+        // Error if we expect CTV, returned some templates, but our guard
+        // was unsatisfiable, irrespective of nullability. This is because
+        // the behavior should be captured through a compile_if if it is
+        // intended.
+        (_, n, Clause::Unsatisfiable) if n > 0 => {
+            // TODO: Turn into a warning that the intended
+            // behavior should be to compile_if
+            Err(CompilationError::MissingTemplates)
+        }
+        // Error if 0 templates return and we don't want to be nullable
+        (Nullable::No, 0, _) => Err(CompilationError::MissingTemplates),
+        // If the guard is trivial, return the hashes standalone
+        (_, _, Clause::Trivial) => Ok(txtmpl_clauses
+            .into_iter()
+            .map(|policy| policy.compile().map_err(Into::<CompilationError>::into))
+            .collect::<Result<Vec<_>, _>>()?),
+        // If the guard is non-trivial, zip it to each hash
+        // TODO: Arc in miniscript to dedup memory?
+        //       This could be Clause::Shared(x) or something...
+        (_, _, guards) => Ok(txtmpl_clauses
+            .into_iter()
+            // extra_guards will contain any CTV
+            .map(|extra_guards| {
+                Clause::And(vec![guards.clone(), extra_guards])
+                    .compile()
+                    .map_err(Into::<CompilationError>::into)
+            })
+            .collect::<Result<Vec<_>, _>>()?),
     }
 }
 
