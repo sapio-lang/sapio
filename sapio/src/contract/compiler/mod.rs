@@ -32,7 +32,7 @@ use sapio_base::serialization_helpers::SArc;
 use sapio_base::Clause;
 use std::cmp::Reverse;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use std::sync::Arc;
 mod cache;
@@ -110,6 +110,29 @@ fn compute_all_effects<C, A: Default>(
     }
 }
 
+struct Renamer {
+    used_names: BTreeSet<String>,
+}
+
+impl Renamer {
+    fn new() -> Self {
+        Renamer {
+            used_names: Default::default(),
+        }
+    }
+    fn get_name(&mut self, a: &String) -> String {
+        let count = 0u64;
+        let mut name: String = a.clone();
+        loop {
+            if self.used_names.insert(name.clone()) {
+                return name;
+            } else {
+                name = format!("{}_renamed_{}", a, count);
+            }
+        }
+    }
+}
+
 impl<'a, T> Compilable for T
 where
     T: AnyContract + 'a,
@@ -146,6 +169,7 @@ where
         // we need a unique context for each.
         let mut finish_or_fns_ctx = ctx.derive(PathFragment::FinishOrFn)?;
         let mut then_fn_ctx = ctx.derive(PathFragment::ThenFn)?;
+        let mut renamer = std::cell::RefCell::new(Renamer::new());
         let (mut continue_apis, clause_accumulator): (
             BTreeMap<SArc<EffectPath>, ContinuationPoint>,
             Vec<Vec<Miniscript<XOnlyPublicKey, Tap>>>,
@@ -158,16 +182,21 @@ where
             // TODO: Without allocations?
             .map(|x| -> Box<dyn CallableAsFoF<_, _>> { Box::new(x) })
             // TOOD: What is flat map doing here?
-            .flat_map(|x| {
-                let name = PathFragment::Named(SArc(x.get_name().clone()));
+            .flat_map(|mut x| {
+                let new_name = Arc::new(renamer.borrow_mut().get_name(x.get_name().as_ref()));
+                x.rename(new_name.clone());
+                let name = PathFragment::Named(SArc(new_name));
                 then_fn_ctx.derive(name).map(|p| (p, x))
             })
             .chain(
                 self.finish_or_fns()
                     .iter()
                     .filter_map(|func| func())
-                    .flat_map(|x| {
-                        let name = PathFragment::Named(SArc(x.get_name().clone()));
+                    .flat_map(|mut x| {
+                        let new_name =
+                            Arc::new(renamer.borrow_mut().get_name(x.get_name().as_ref()));
+                        x.rename(new_name.clone());
+                        let name = PathFragment::Named(SArc(new_name));
                         finish_or_fns_ctx.derive(name).map(|p| (p, x))
                     }),
             )

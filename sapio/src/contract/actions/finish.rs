@@ -40,6 +40,7 @@ pub struct FinishOrFunc<'a, ContractSelf, StatefulArguments, SpecificArgs, WebAP
     /// implementation to decide if the trait exists.
     pub schema: Option<Arc<RootSchema>>,
     /// name derived from Function Name.
+    /// N.B. must be renamable by changing this field!
     pub name: Arc<String>,
     /// Type switch to enable/disable compilation with serialized fields
     /// (if negative trait bounds, could remove!)
@@ -81,6 +82,8 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     fn get_extract_clause_from_txtmpl(
         &self,
     ) -> fn(&Template, &Context) -> Result<Option<Clause>, CompilationError>;
+    /// rename this object
+    fn rename(&mut self, a: Arc<String>);
 }
 
 /// Type Tag for FinishOrFunc Variant
@@ -114,6 +117,10 @@ impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, 
         &self,
     ) -> fn(&Template, &Context) -> Result<Option<Clause>, CompilationError> {
         self.extract_clause_from_txtmpl
+    }
+
+    fn rename(&mut self, a: Arc<String>) {
+        self.name = a;
     }
 }
 
@@ -155,6 +162,10 @@ where
         &self,
     ) -> fn(&Template, &Context) -> Result<Option<Clause>, CompilationError> {
         self.extract_clause_from_txtmpl
+    }
+
+    fn rename(&mut self, a: Arc<String>) {
+        self.name = a;
     }
 }
 
