@@ -13,7 +13,6 @@ use super::Context;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::contract::actions::conditional_compile::CCILWrapper;
 use crate::contract::actions::CallableAsFoF;
-
 use crate::contract::TxTmplIt;
 use crate::util::amountrange::AmountRange;
 use ::miniscript::descriptor::TapTree;
@@ -21,19 +20,17 @@ use ::miniscript::*;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::schnorr::TweakedPublicKey;
-use sapio_base::reverse_path::ReversePath;
-use std::collections::BinaryHeap;
-
 use bitcoin::XOnlyPublicKey;
 use sapio_base::effects::EffectDB;
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
+use sapio_base::reverse_path::ReversePath;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::Clause;
 use std::cmp::Reverse;
-
+use std::collections::BinaryHeap;
 use std::collections::{BTreeMap, BTreeSet};
-
+use std::iter::FromIterator;
 use std::sync::Arc;
 mod cache;
 use cache::*;
@@ -135,6 +132,22 @@ impl Renamer {
     }
 }
 
+#[derive(Default)]
+struct ContinueAPIs {
+    inner: BTreeMap<SArc<EffectPath>, ContinuationPoint>,
+}
+
+type ContinueAPIEntry = Option<(SArc<EffectPath>, ContinuationPoint)>;
+
+impl Extend<ContinueAPIEntry> for ContinueAPIs {
+    fn extend<T>(&mut self, iter: T)
+    where
+        T: IntoIterator<Item = ContinueAPIEntry>,
+    {
+        self.inner.extend(iter.into_iter().filter_map(|v| v))
+    }
+}
+
 impl<'a, T> Compilable for T
 where
     T: AnyContract + 'a,
@@ -145,7 +158,6 @@ where
     fn compile(&self, mut ctx: Context) -> Result<Compiled, CompilationError> {
         let self_ref = self.get_inner_ref();
         let mut guard_clauses = GuardCache::new();
-        let dummy_root = Arc::new(ReversePath::from(PathFragment::Root));
 
         // The below maps track metadata that is useful for consumers / verification.
         // track transactions that are *guaranteed* via CTV
@@ -172,7 +184,7 @@ where
         let mut action_ctx = ctx.derive(PathFragment::Action)?;
         let mut renamer = Renamer::new();
         let (mut continue_apis, clause_accumulator): (
-            BTreeMap<SArc<EffectPath>, ContinuationPoint>,
+            ContinueAPIs,
             Vec<Vec<Miniscript<XOnlyPublicKey, Tap>>>,
         ) = self
             .then_fns()
@@ -255,19 +267,13 @@ where
 
                 // N.B. the order of the matches below is significant
                 if func.get_returned_txtmpls_modify_guards() {
-                    Ok((
-                        (
-                            SArc(dummy_root.clone()),
-                            ContinuationPoint::at(None, dummy_root.clone()),
-                        ),
-                        combine_txtmpls(nullability, txtmpl_clauses, guards)?,
-                    ))
+                    Ok((None, combine_txtmpls(nullability, txtmpl_clauses, guards)?))
                 } else {
                     Ok((
-                        (
+                        Some((
                             SArc(effect_path.clone()),
                             ContinuationPoint::at(func.get_schema().clone(), effect_path),
-                        ),
+                        )),
                         vec![guards.compile().map_err(Into::<CompilationError>::into)?],
                     ))
                 }
@@ -275,10 +281,6 @@ where
             .collect::<Result<Vec<(_, Vec<Miniscript<XOnlyPublicKey, Tap>>)>, CompilationError>>()?
             .into_iter()
             .unzip();
-
-        // All of the CTV Branches add the dummy_root path,
-        // so we remove it here.
-        continue_apis.remove(&SArc(dummy_root.clone()));
 
         let branches: Vec<Miniscript<XOnlyPublicKey, Tap>> = {
             let mut finish_fns_ctx = ctx.derive(PathFragment::FinishFn)?;
@@ -320,7 +322,7 @@ where
             Ok(Compiled {
                 ctv_to_tx: comitted_txns,
                 suggested_txs: other_txns,
-                continue_apis,
+                continue_apis: continue_apis.inner,
                 root_path,
                 address,
                 descriptor,
