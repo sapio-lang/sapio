@@ -29,15 +29,23 @@ where
 
 /// The `Plugin` trait is used to provide bindings for a WASM Plugin.
 /// It's not intended to be used internally, just as bindings.
-pub trait Plugin: JsonSchema + Sized + for<'a> Deserialize<'a>
+pub trait Plugin
 where
-    <<Self as client::plugin::Plugin>::CallableType as std::convert::TryFrom<Self>>::Error:
-        std::error::Error + 'static,
+    Self: JsonSchema + Sized + for<'a> Deserialize<'a>,
+    // read as: The return type of CallableType::try_from(self) is
+    // Result<CallableType, X>, where X must be able to x.into() a
+    // CompilationError.
     CompilationError: From<<<Self as Plugin>::CallableType as TryFrom<Self>>::Error>,
-    Self::CallableType: Callable<Output=Self::Output>,
+    // CallableType must be Callable and produce an Output. We must also be able
+    // to get one from Self, potentially falliably
+    Self::CallableType: Callable<Output=Self::Output> + TryFrom<Self>,
+    // We must be able to serialize/describe the outputs
+    Self::Output: Serialize + JsonSchema,
 {
-    type Output: Serialize + JsonSchema;
-    type CallableType: TryFrom<Self>;
+    /// The return value from this module
+    type Output;
+    /// The type that actually implements the trait.
+    type CallableType;
     /// gets the jsonschema for the plugin type, which is the API for calling create.
     fn get_api_inner() -> *mut c_char {
         encode_json(&schemars::schema_for!(API<CreateArgs::<Self>, Self::Output>))
