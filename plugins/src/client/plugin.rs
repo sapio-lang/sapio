@@ -13,13 +13,15 @@ use sapio_base::serialization_helpers::SArc;
 
 use std::convert::TryFrom;
 
-pub trait Callable<Output> {
-    fn call(&self, ctx: Context) -> Result<Output, CompilationError>;
+pub trait Callable {
+    type Output;
+    fn call(&self, ctx: Context) -> Result<Self::Output, CompilationError>;
 }
-impl<T> Callable<Compiled> for T
+impl<T> Callable for T
 where
     T: Compilable,
 {
+    type Output = Compiled;
     fn call(&self, ctx: Context) -> Result<Compiled, CompilationError> {
         self.compile(ctx)
     }
@@ -32,7 +34,7 @@ where
     <<Self as client::plugin::Plugin>::CallableType as std::convert::TryFrom<Self>>::Error:
         std::error::Error + 'static,
     CompilationError: From<<<Self as Plugin>::CallableType as TryFrom<Self>>::Error>,
-    Self::CallableType: Callable<Self::Output>,
+    Self::CallableType: Callable<Output=Self::Output>,
 {
     type Output: Serialize + JsonSchema;
     type CallableType: TryFrom<Self>;
