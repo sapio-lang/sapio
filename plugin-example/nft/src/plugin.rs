@@ -47,7 +47,6 @@ impl Contract for SimpleNFT {
     fn ensure_amount(&self, ctx: Context) -> Result<Amount, CompilationError> {
         Ok(ctx.funds())
     }
-
 }
 
 impl SimpleNFT {
@@ -97,7 +96,7 @@ impl SellableNFT for SimpleNFT {
                 arguments: sale_impl::Versions::NFT_Sale_Trait_Version_0_1_0(sale_info.clone()),
             };
             // use the sale API we passed in
-            let compiled = create_contract_by_key(sale_ctx, &which_sale.key, create_args)?;
+            let compiled = which_sale.call(sale_ctx, create_args)?;
             // send to this sale!
             let pays = compiled.amount_range.max() - ctx.funds();
             let mut builder = ctx.template().add_amount(pays);
@@ -123,7 +122,7 @@ impl TryFrom<Versions> for SimpleNFT {
     type Error = CompilationError;
     fn try_from(v: Versions) -> Result<Self, Self::Error> {
         let Versions::Mint_NFT_Trait_Version_0_1_0(mut data) = v;
-        let this: SapioHostAPI<Mint_NFT_Trait_Version_0_1_0> = LookupFrom::This
+        let this: NFTMintingModule = LookupFrom::This
             .try_into()
             .map_err(|_| CompilationError::TerminateWith("Failed to Lookup".into()))?;
         // required otherwise cross-moudle calls get bungled

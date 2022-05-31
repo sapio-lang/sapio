@@ -229,10 +229,10 @@ impl WasmPluginHandle {
     }
 }
 
-type Input = CreateArgs<serde_json::Value>;
-type Output = Compiled;
-impl PluginHandle<Input, Output> for WasmPluginHandle {
-    fn create(&self, path: &EffectPath, c: &Input) -> Result<Output, CompilationError> {
+impl PluginHandle for WasmPluginHandle {
+    type Input = CreateArgs<serde_json::Value>;
+    type Output = Compiled;
+    fn create(&self, path: &EffectPath, c: &Self::Input) -> Result<Self::Output, CompilationError> {
         let arg_str = serde_json::to_string(c).map_err(CompilationError::SerializationError)?;
         let args_ptr = self.pass_string(&arg_str)?;
         let path_str = serde_json::to_string(path).map_err(CompilationError::SerializationError)?;
@@ -250,11 +250,11 @@ impl PluginHandle<Input, Output> for WasmPluginHandle {
             })?;
         let buf = self.read_to_vec(result_ptr)?;
         self.forget(result_ptr)?;
-        let v: Result<Compiled, String> =
+        let v: Result<Self::Output, String> =
             serde_json::from_slice(&buf).map_err(CompilationError::DeserializationError)?;
         v.map_err(CompilationError::ModuleCompilationErrorUnsendable)
     }
-    fn get_api(&self) -> Result<API<Input, Output>, CompilationError> {
+    fn get_api(&self) -> Result<API<Self::Input, Self::Output>, CompilationError> {
         let p = self
             .env
             .lock()
@@ -265,11 +265,7 @@ impl PluginHandle<Input, Output> for WasmPluginHandle {
             .map_err(|e| CompilationError::ModuleCouldNotGetAPI(e.into()))?;
         let v = self.read_to_vec(p)?;
         self.forget(p)?;
-        Ok(API {
-            input: serde_json::from_slice(&v).map_err(CompilationError::DeserializationError)?,
-            output: schemars::schema_for!(Output),
-            _pd: Default::default(),
-        })
+        Ok(serde_json::from_slice(&v).map_err(CompilationError::DeserializationError)?)
     }
     fn get_name(&self) -> Result<String, CompilationError> {
         let p = self

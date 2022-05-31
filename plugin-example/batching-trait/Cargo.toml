@@ -41,3 +41,8 @@ version = "^7.0.0"
 features = ['compiler', 'use-serde', 'use-schemars', 'serde']
 optional = true
 
+
+[dependencies.sapio-wasm-plugin]
+path = "../../plugins"
+version = "0.2.0"
+features = ["client"]

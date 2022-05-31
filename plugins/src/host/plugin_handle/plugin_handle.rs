@@ -13,9 +13,11 @@ use std::marker::PhantomData;
 /// Generic plugin handle interface.
 ///
 /// TODO: trait objects for being able to e.g. run plugins remotely.
-pub trait PluginHandle<Input, Output> {
-    fn create(&self, path: &EffectPath, c: &Input) -> Result<Output, CompilationError>;
-    fn get_api(&self) -> Result<API<Input, Output>, CompilationError>;
+pub trait PluginHandle {
+    type Input;
+    type Output;
+    fn create(&self, path: &EffectPath, c: &Self::Input) -> Result<Self::Output, CompilationError>;
+    fn get_api(&self) -> Result<API<Self::Input, Self::Output>, CompilationError>;
     fn get_name(&self) -> Result<String, CompilationError>;
     fn get_logo(&self) -> Result<String, CompilationError>;
 }

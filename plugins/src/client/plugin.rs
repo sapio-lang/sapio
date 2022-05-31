@@ -12,18 +12,33 @@ use sapio_base::effects::PathFragment;
 use sapio_base::serialization_helpers::SArc;
 
 use std::convert::TryFrom;
+
+pub trait Callable<Output> {
+    fn call(&self, ctx: Context) -> Result<Output, CompilationError>;
+}
+impl<T> Callable<Compiled> for T
+where
+    T: Compilable,
+{
+    fn call(&self, ctx: Context) -> Result<Compiled, CompilationError> {
+        self.compile(ctx)
+    }
+}
+
 /// The `Plugin` trait is used to provide bindings for a WASM Plugin.
 /// It's not intended to be used internally, just as bindings.
 pub trait Plugin: JsonSchema + Sized + for<'a> Deserialize<'a>
 where
-    <<Self as client::plugin::Plugin>::ToType as std::convert::TryFrom<Self>>::Error:
+    <<Self as client::plugin::Plugin>::CallableType as std::convert::TryFrom<Self>>::Error:
         std::error::Error + 'static,
-    CompilationError: From<<<Self as Plugin>::ToType as TryFrom<Self>>::Error>,
+    CompilationError: From<<<Self as Plugin>::CallableType as TryFrom<Self>>::Error>,
+    Self::CallableType: Callable<Self::Output>,
 {
-    type ToType: Compilable + TryFrom<Self>;
+    type Output: Serialize + JsonSchema;
+    type CallableType: TryFrom<Self>;
     /// gets the jsonschema for the plugin type, which is the API for calling create.
     fn get_api_inner() -> *mut c_char {
-        encode_json(&schemars::schema_for!(CreateArgs::<Self>))
+        encode_json(&schemars::schema_for!(API<CreateArgs::<Self>, Self::Output>))
     }
 
     /// creates an instance of the plugin from a json pointer and outputs a result pointer
@@ -32,7 +47,10 @@ where
         encode_json(&res)
     }
 
-    unsafe fn create_result(p: *mut c_char, c: *mut c_char) -> Result<Compiled, CompilationError> {
+    unsafe fn create_result(
+        p: *mut c_char,
+        c: *mut c_char,
+    ) -> Result<Self::Output, CompilationError> {
         let s = CString::from_raw(c);
         let path = CString::from_raw(p);
         let CreateArgs::<Self> {
@@ -75,8 +93,8 @@ where
             // TODO: load database?
             Arc::new(effects),
         );
-        let converted = Self::ToType::try_from(arguments)?;
-        converted.compile(ctx)
+        let converted = Self::CallableType::try_from(arguments)?;
+        converted.call(ctx)
     }
     /// binds this type to the wasm interface, must be called before the plugin can be used.
     unsafe fn register(name: &'static str, logo: Option<&'static [u8]>) {
@@ -109,7 +127,8 @@ macro_rules! REGISTER {
     };
     [[$to:ident,$plugin:ident]$(, $logo:expr)?] => {
         impl Plugin for $plugin {
-            type ToType = $to;
+            type CallableType = $to;
+            type Output = sapio::contract::Compiled;
         }
         #[no_mangle]
         unsafe fn sapio_v1_wasm_plugin_entry_point() {

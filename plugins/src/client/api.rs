@@ -18,11 +18,11 @@ pub fn log(s: &str) {
 }
 
 /// Given a 32 byte plugin identifier, create a new contract instance.
-pub fn create_contract_by_key<S: Serialize>(
+pub fn call<S: Serialize, T: for<'a> Deserialize<'a>>(
     ctx: Context,
     key: &[u8; 32],
     args: CreateArgs<S>,
-) -> Result<Compiled, CompilationError> {
+) -> Result<T, CompilationError> {
     let path =
         serde_json::to_string(ctx.path().as_ref()).map_err(CompilationError::SerializationError)?;
     unsafe {
@@ -39,7 +39,7 @@ pub fn create_contract_by_key<S: Serialize>(
         );
         if p != 0 {
             let cs = CString::from_raw(p as *mut c_char);
-            let res: Result<Compiled, String> = serde_json::from_slice(cs.as_bytes())
+            let res: Result<T, String> = serde_json::from_slice(cs.as_bytes())
                 .map_err(CompilationError::DeserializationError)?;
             res.map_err(CompilationError::ModuleCompilationErrorUnsendable)
         } else {
@@ -113,18 +113,26 @@ impl LookupFrom {
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Eq)]
-#[serde(try_from = "SapioHostAPIVerifier<T>")]
-pub struct SapioHostAPI<T: SapioJSONTrait> {
+#[serde(try_from = "SapioHostAPIVerifier<T, R>")]
+pub struct SapioHostAPI<T: SapioJSONTrait, R: for<'a> Deserialize<'a>> {
     pub which_plugin: LookupFrom,
     #[serde(skip, default)]
     pub key: [u8; 32],
     #[serde(skip, default)]
     pub api: serde_json::Value,
     #[serde(default, skip)]
-    _pd: PhantomData<T>,
+    _pd: PhantomData<(T, R)>,
 }
 
-impl<T: SapioJSONTrait> SapioHostAPI<T> {
+pub type ContractModule<T> = SapioHostAPI<T, Compiled>;
+
+impl<T: SapioJSONTrait, R: for<'a> Deserialize<'a>> SapioHostAPI<T, R> {
+    pub fn call(&self, ctx: Context, args: CreateArgs<T>) -> Result<R, CompilationError> {
+        call(ctx, &self.key, args)
+    }
+}
+
+impl<T: SapioJSONTrait, R: for<'a> Deserialize<'a>> SapioHostAPI<T, R> {
     pub fn canonicalize(&self) -> Self {
         use bitcoin::hashes::hex::ToHex;
         SapioHostAPI {
@@ -138,24 +146,26 @@ impl<T: SapioJSONTrait> SapioHostAPI<T> {
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 /// # Helper for Serialization...
-struct SapioHostAPIVerifier<T: SapioJSONTrait> {
+struct SapioHostAPIVerifier<T: SapioJSONTrait, R: for<'a> Deserialize<'a>> {
     which_plugin: LookupFrom,
     #[serde(default, skip)]
-    _pd: PhantomData<T>,
+    _pd: PhantomData<(T, R)>,
 }
 
-impl<T: SapioJSONTrait> TryFrom<LookupFrom> for SapioHostAPI<T> {
+impl<T: SapioJSONTrait, R: for<'a> Deserialize<'a>> TryFrom<LookupFrom> for SapioHostAPI<T, R> {
     type Error = CompilationError;
-    fn try_from(which_plugin: LookupFrom) -> Result<SapioHostAPI<T>, CompilationError> {
+    fn try_from(which_plugin: LookupFrom) -> Result<SapioHostAPI<T, R>, CompilationError> {
         SapioHostAPI::try_from(SapioHostAPIVerifier {
             which_plugin,
             _pd: Default::default(),
         })
     }
 }
-impl<T: SapioJSONTrait> TryFrom<SapioHostAPIVerifier<T>> for SapioHostAPI<T> {
+impl<T: SapioJSONTrait, R: for<'a> Deserialize<'a>> TryFrom<SapioHostAPIVerifier<T, R>>
+    for SapioHostAPI<T, R>
+{
     type Error = CompilationError;
-    fn try_from(shapv: SapioHostAPIVerifier<T>) -> Result<SapioHostAPI<T>, CompilationError> {
+    fn try_from(shapv: SapioHostAPIVerifier<T, R>) -> Result<SapioHostAPI<T, R>, CompilationError> {
         let SapioHostAPIVerifier { which_plugin, _pd } = shapv;
         let key = match which_plugin.to_key() {
             Some(key) => key,
@@ -191,7 +201,7 @@ pub fn create_contract<S: Serialize>(
     args: CreateArgs<S>,
 ) -> Result<Compiled, CompilationError> {
     let key = lookup_module_name(key).ok_or(CompilationError::UnknownModule)?;
-    create_contract_by_key(context, &key, args)
+    call(context, &key, args)
 }
 
 /// A empty type tag to bind the dynamically linked host emulator functionality

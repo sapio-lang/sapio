@@ -53,13 +53,10 @@ impl SimpleNFTSale {
         let amt = ctx.funds();
         // first, let's get the module that should be used to 're-mint' this NFT
         // to the new owner
-        let key = self
-            .0
-            .data
-            .minting_module
-            .clone()
-            .ok_or_else(|| CompilationError::TerminateWith("Must Provide Module Hash".into()))?
-            .key;
+        let minting_module =
+            self.0.data.minting_module.as_ref().ok_or_else(|| {
+                CompilationError::TerminateWith("Must Provide Module Hash".into())
+            })?;
         // let's make a copy of the old nft metadata..
         let mut mint_data = self.0.data.clone();
         // and change the owner to the buyer
@@ -74,7 +71,7 @@ impl SimpleNFTSale {
             },
             arguments: mint_impl::Versions::Mint_NFT_Trait_Version_0_1_0(mint_data),
         };
-        let new_nft_contract = create_contract_by_key(new_ctx, &key, new_nft_args)?;
+        let new_nft_contract = minting_module.call(new_ctx, new_nft_args)?;
         // Now for the magic:
         // This is a transaction that creates at output 0 the new nft for the
         // person, and must add another input that pays sufficiently to pay the
