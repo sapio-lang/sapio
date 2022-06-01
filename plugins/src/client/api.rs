@@ -9,6 +9,8 @@ use core::convert::TryFrom;
 ///! Wraps the external API with friendly methods
 use sapio::contract::CompilationError;
 use sapio_trait::SapioJSONTrait;
+use sapio_base::effects::EffectPath;
+use crate::plugin_handle::PluginHandle;
 use std::marker::PhantomData;
 /// Print a &str to the parent's console.
 pub fn log(s: &str) {
@@ -18,13 +20,12 @@ pub fn log(s: &str) {
 }
 
 /// Given a 32 byte plugin identifier, create a new contract instance.
-pub fn call<S: Serialize, T: for<'a> Deserialize<'a>>(
-    ctx: Context,
+pub fn call_path<S: Serialize, T: for<'a> Deserialize<'a>>(
+    path: &EffectPath,
     key: &[u8; 32],
     args: CreateArgs<S>,
 ) -> Result<T, CompilationError> {
-    let path =
-        serde_json::to_string(ctx.path().as_ref()).map_err(CompilationError::SerializationError)?;
+    let path = serde_json::to_string(path).map_err(CompilationError::SerializationError)?;
     unsafe {
         let s = serde_json::to_value(args)
             .map_err(CompilationError::SerializationError)?
@@ -46,6 +47,13 @@ pub fn call<S: Serialize, T: for<'a> Deserialize<'a>>(
             Err(CompilationError::InternalModuleError("Unknown".into()))
         }
     }
+}
+pub fn call<S: Serialize, T: for<'a> Deserialize<'a>>(
+    ctx: Context,
+    key: &[u8; 32],
+    args: CreateArgs<S>,
+) -> Result<T, CompilationError> {
+    call_path(ctx.path(), key, args)
 }
 
 /// lookup a plugin module's key given a human readable name
@@ -131,6 +139,33 @@ impl<T: SapioJSONTrait, R: for<'a> Deserialize<'a>> SapioHostAPI<T, R> {
         call(ctx, &self.key, args)
     }
 }
+
+
+impl<T: SapioJSONTrait + Clone, R: for<'a> Deserialize<'a>> PluginHandle for SapioHostAPI<T, R> {
+    type Input = CreateArgs<T>;
+    type Output = R;
+    fn create(&self, path: &EffectPath, c: &Self::Input) -> Result<Self::Output, CompilationError> {
+        call_path(path, &self.key, c.clone())
+    }
+    fn get_api(&self) -> Result<API<Self::Input, Self::Output>, CompilationError> {
+        let p = self.key.as_ptr() as i32;
+        let api_buf = unsafe { sapio_v1_wasm_plugin_get_api(p) };
+        if api_buf == 0 {
+            return Err(CompilationError::InternalModuleError(
+                "API Not Available".into(),
+            ));
+        }
+        let cs = unsafe{ CString::from_raw(api_buf as *mut c_char) };
+        Ok(serde_json::from_slice(cs.as_bytes()).map_err(CompilationError::DeserializationError)?)
+    }
+    fn get_name(&self) -> Result<String, CompilationError> {
+        Ok("Lies".into())
+    }
+    fn get_logo(&self) -> Result<String, CompilationError> {
+        Ok("Lies".into())
+    }
+}
+
 
 impl<T: SapioJSONTrait, R: for<'a> Deserialize<'a>> SapioHostAPI<T, R> {
     pub fn canonicalize(&self) -> Self {

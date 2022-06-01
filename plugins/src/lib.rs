@@ -29,6 +29,9 @@ pub mod host;
 #[cfg(feature = "client")]
 pub mod client;
 
+
+pub mod plugin_handle;
+
 pub use sapio_base::plugin_args::*;
 
 /// A bundle of input/output types

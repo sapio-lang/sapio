@@ -7,7 +7,7 @@
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::util::psbt::PartiallySignedTransaction;
-pub use plugin_handle::PluginHandle;
+pub use crate::plugin_handle::PluginHandle;
 pub use plugin_handle::WasmPluginHandle;
 use sapio::contract::CompilationError;
 use sapio_ctv_emulator_trait::CTVEmulator;

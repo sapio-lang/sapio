@@ -9,6 +9,7 @@ use super::*;
 use crate::host::exports::*;
 use crate::host::wasm_cache::get_all_keys_from_fs;
 use crate::host::{HostEnvironment, HostEnvironmentInner};
+use crate::plugin_handle::PluginHandle;
 use crate::API;
 use sapio::contract::CompilationError;
 use sapio_base::effects::EffectPath;
