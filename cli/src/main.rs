@@ -570,7 +570,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let create_args: CreateArgs<serde_json::Value> =
                         serde_json::from_value(params)?;
 
-                    let v = sph.create(&PathFragment::Root.into(), &create_args)?;
+                    let v = sph.call(&PathFragment::Root.into(), &create_args)?;
                     println!("{}", serde_json::to_string(&v)?);
                 }
                 Some(("api", args)) => {

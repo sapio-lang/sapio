@@ -110,7 +110,7 @@ pub struct NFT_Sale_Trait_Version_0_1_0 {
 /// Boilerplate for the Sale trait
 pub mod sale_impl {
     use super::*;
-    #[derive(Serialize, Deserialize, JsonSchema)]
+    #[derive(Serialize, Deserialize, JsonSchema, Clone)]
     pub enum Versions {
         /// # Batching Trait API
         NFT_Sale_Trait_Version_0_1_0(NFT_Sale_Trait_Version_0_1_0),

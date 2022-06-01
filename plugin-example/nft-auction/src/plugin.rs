@@ -1,16 +1,14 @@
 use bitcoin::util::amount::Amount;
 use sapio::contract::CompilationError;
 use sapio::contract::Contract;
-
 use sapio::util::amountrange::AmountU64;
 use sapio::*;
 use sapio_base::timelocks::AbsHeight;
 use sapio_base::Clause;
 use sapio_wasm_nft_trait::*;
 use sapio_wasm_plugin::client::*;
-
+use sapio_wasm_plugin::plugin_handle::PluginHandle;
 use sapio_wasm_plugin::*;
-
 use schemars::*;
 use serde::*;
 use std::convert::TryFrom;
@@ -162,7 +160,7 @@ impl NFTDutchAuction {
                 arguments: mint_impl::Versions::Mint_NFT_Trait_Version_0_1_0(mint_data),
             };
             let new_nft_contract = minting_module
-                .call(new_ctx, create_args)
+                .call(new_ctx.path(), &create_args)
                 .map_err(|_| CompilationError::TerminateCompilation)?;
             // Now for the magic:
             // This is a transaction that creates at output 0 the new nft for the

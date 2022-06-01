@@ -16,7 +16,7 @@ use std::marker::PhantomData;
 pub trait PluginHandle {
     type Input;
     type Output;
-    fn create(&self, path: &EffectPath, c: &Self::Input) -> Result<Self::Output, CompilationError>;
+    fn call(&self, path: &EffectPath, c: &Self::Input) -> Result<Self::Output, CompilationError>;
     fn get_api(&self) -> Result<API<Self::Input, Self::Output>, CompilationError>;
     fn get_name(&self) -> Result<String, CompilationError>;
     fn get_logo(&self) -> Result<String, CompilationError>;

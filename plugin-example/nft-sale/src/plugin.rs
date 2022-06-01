@@ -3,20 +3,17 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
-
+#[deny(missing_docs)]
 use bitcoin::Amount;
 use sapio::contract::CompilationError;
 use sapio::contract::Contract;
 use sapio::*;
-
 use sapio_wasm_nft_trait::*;
 use sapio_wasm_plugin::client::*;
+use sapio_wasm_plugin::plugin_handle::PluginHandle;
 use sapio_wasm_plugin::*;
-
 use schemars::*;
 use serde::*;
-
-#[deny(missing_docs)]
 use std::sync::Arc;
 /// # Simple NFT Sale
 /// A Sale which simply transfers the NFT for a fixed price.
@@ -71,7 +68,7 @@ impl SimpleNFTSale {
             },
             arguments: mint_impl::Versions::Mint_NFT_Trait_Version_0_1_0(mint_data),
         };
-        let new_nft_contract = minting_module.call(new_ctx, new_nft_args)?;
+        let new_nft_contract = minting_module.call(new_ctx.path(), &new_nft_args)?;
         // Now for the magic:
         // This is a transaction that creates at output 0 the new nft for the
         // person, and must add another input that pays sufficiently to pay the

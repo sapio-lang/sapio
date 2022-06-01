@@ -239,7 +239,7 @@ mod exports {
                             serde_json::to_value(m).map_err(CompilationError::DeserializationError)
                         })),
                         InternalAction::Create(create_args, path) => {
-                            sph.create(&path, &create_args).map(|comp| {
+                            sph.call(&path, &create_args).map(|comp| {
                                 serde_json::to_value(comp)
                                     .map_err(CompilationError::DeserializationError)
                             })

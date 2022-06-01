@@ -22,7 +22,7 @@ pub struct BatchingTraitVersion0_1_1 {
     pub feerate_per_byte: bitcoin::util::amount::Amount,
 }
 
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub enum Versions {
     BatchingTraitVersion0_1_1(BatchingTraitVersion0_1_1),
 }

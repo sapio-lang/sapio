@@ -10,6 +10,7 @@ use batching_trait::{BatchingModule, BatchingTraitVersion0_1_1};
 use sapio::contract::*;
 use sapio::*;
 use sapio_wasm_plugin::client::*;
+use sapio_wasm_plugin::plugin_handle::PluginHandle;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
@@ -31,8 +32,8 @@ impl TrampolinePay {
     #[then]
     fn expand(self, mut ctx: Context) {
         let contract = self.handle.call(
-            ctx.derive_str(Arc::new("plugin_trampoline".into()))?,
-            CreateArgs {
+            &ctx.derive_str(Arc::new("plugin_trampoline".into()))?.path(),
+            &CreateArgs {
                 context: ContextualArguments {
                     amount: ctx.funds(),
                     network: ctx.network,

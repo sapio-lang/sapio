@@ -1,26 +1,23 @@
 use bitcoin::hashes::hex::ToHex;
-
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::util::amount::Amount;
+use bitcoin::XOnlyPublicKey;
 use sapio::contract::empty;
 use sapio::contract::object::ObjectMetadata;
 use sapio::contract::CompilationError;
-
 use sapio::contract::Contract;
-
 use sapio::*;
 use sapio_base::Clause;
 use sapio_wasm_nft_trait::*;
 use sapio_wasm_plugin::client::*;
+use sapio_wasm_plugin::plugin_handle::PluginHandle;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::sync::Arc;
-
-use bitcoin::XOnlyPublicKey;
 /// # SimpleNFT
 /// A really simple NFT... not much too it!
 #[derive(JsonSchema, Serialize, Deserialize)]
@@ -90,7 +87,7 @@ impl SellableNFT for SimpleNFT {
                 arguments: sale_impl::Versions::NFT_Sale_Trait_Version_0_1_0(sale_info.clone()),
             };
             // use the sale API we passed in
-            let compiled = which_sale.call(sale_ctx, create_args)?;
+            let compiled = which_sale.call(sale_ctx.path(), &create_args)?;
             // send to this sale!
             let pays = compiled.amount_range.max() - ctx.funds();
             let mut builder = ctx.template().add_amount(pays);

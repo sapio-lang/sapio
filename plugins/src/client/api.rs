@@ -138,22 +138,13 @@ pub struct SapioHostAPI<T: SapioJSONTrait, R: for<'a> Deserialize<'a> + JsonSche
 
 pub type ContractModule<T> = SapioHostAPI<T, Compiled>;
 
-impl<T: SapioJSONTrait, R> SapioHostAPI<T, R>
-where
-    R: for<'a> Deserialize<'a> + JsonSchema,
-{
-    pub fn call(&self, ctx: Context, args: CreateArgs<T>) -> Result<R, CompilationError> {
-        call(ctx, &self.key, args)
-    }
-}
-
 impl<T: SapioJSONTrait + Clone, R> PluginHandle for SapioHostAPI<T, R>
 where
     R: for<'a> Deserialize<'a> + JsonSchema,
 {
     type Input = CreateArgs<T>;
     type Output = R;
-    fn create(&self, path: &EffectPath, c: &Self::Input) -> Result<Self::Output, CompilationError> {
+    fn call(&self, path: &EffectPath, c: &Self::Input) -> Result<Self::Output, CompilationError> {
         call_path(path, &self.key, c.clone())
     }
     fn get_api(&self) -> Result<API<Self::Input, Self::Output>, CompilationError> {
