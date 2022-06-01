@@ -15,8 +15,8 @@ rustc --version
 export CARGO_TERM_VERBOSE=true
 
 # Defaults / sanity checks
-cargo build --all
-cargo test --all
+cargo build --release --all
+cargo test --release --all
 
 if [ "$DO_FEATURE_MATRIX" = true ]; then
     cargo build --all
@@ -28,14 +28,6 @@ if [ "$DO_DOCS" = true ]; then
     cargo doc --all
 fi
 
-# Webassembly stuff
-if [ "$DO_WASM" = true ]; then
-    clang --version &&
-    CARGO_TARGET_DIR=wasm cargo install --force wasm-pack &&
-    printf '\n[lib]\ncrate-type = ["cdylib", "rlib"]\n' >> Cargo.toml &&
-    CC=clang-9 wasm-pack build &&
-    CC=clang-9 wasm-pack test --node;
-fi
 
 # Address Sanitizer
 if [ "$DO_ASAN" = true ]; then
