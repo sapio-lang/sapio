@@ -140,6 +140,8 @@ impl WasmPluginHandle {
             sapio_v1_wasm_plugin_debug_log_string,
             sapio_v1_wasm_plugin_create_contract,
             sapio_v1_wasm_plugin_get_api,
+            sapio_v1_wasm_plugin_get_name,
+            sapio_v1_wasm_plugin_get_logo,
             sapio_v1_wasm_plugin_lookup_module_name
         );
 

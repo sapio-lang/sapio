@@ -4,12 +4,13 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+pub use crate::plugin_handle::PluginHandle;
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::util::psbt::PartiallySignedTransaction;
-pub use crate::plugin_handle::PluginHandle;
 pub use plugin_handle::WasmPluginHandle;
 use sapio::contract::CompilationError;
+use sapio_base::plugin_args::CreateArgs;
 use sapio_ctv_emulator_trait::CTVEmulator;
 use std::cell::Cell;
 use std::collections::BTreeMap;
@@ -110,6 +111,16 @@ mod exports {
     }
     /// Create an instance of a contract by "trampolining" through the host to use another
     /// plugin identified by key.
+    pub fn sapio_v1_wasm_plugin_get_name(env: &HostEnvironment, key: i32) -> i32 {
+        wasm_plugin_action(env, key, Action::GetName)
+    }
+    /// Create an instance of a contract by "trampolining" through the host to use another
+    /// plugin identified by key.
+    pub fn sapio_v1_wasm_plugin_get_logo(env: &HostEnvironment, key: i32) -> i32 {
+        wasm_plugin_action(env, key, Action::GetLogo)
+    }
+    /// Create an instance of a contract by "trampolining" through the host to use another
+    /// plugin identified by key.
     pub fn sapio_v1_wasm_plugin_create_contract(
         env: &HostEnvironment,
         path: i32,
@@ -137,6 +148,8 @@ mod exports {
             json_len: i32,
         },
         GetAPI,
+        GetName,
+        GetLogo,
     }
 
     fn wasm_plugin_action(env: &HostEnvironment, key: i32, action: Action) -> i32 {
@@ -155,8 +168,16 @@ mod exports {
             buf
         })
         .to_string();
+        enum InternalAction {
+            GetAPI,
+            GetName,
+            GetLogo,
+            Create(CreateArgs<serde_json::Value>, EffectPath),
+        }
         let action_to_take = match action {
-            Action::GetAPI => None,
+            Action::GetAPI => Ok(InternalAction::GetAPI),
+            Action::GetName => Ok(InternalAction::GetName),
+            Action::GetLogo => Ok(InternalAction::GetLogo),
             Action::Create {
                 path,
                 path_len,
@@ -196,7 +217,7 @@ mod exports {
                 )
                 .map_err(CompilationError::DeserializationError);
 
-                Some((create_args, effectpath))
+                create_args.and_then(|c| effectpath.map(|e| InternalAction::Create(c, e)))
             }
         };
         let emulator = env.emulator.clone();
@@ -207,12 +228,18 @@ mod exports {
         match WasmPluginHandle::new(path, &emulator, Some(&h), None, net, Some(mmap)) {
             Ok(sph) => {
                 let comp_s = (move || -> Result<serde_json::Value, CompilationError> {
-                    let value = match action_to_take {
-                        None => Ok(sph.get_api().map(|v| v.input().clone()).and_then(|m| {
+                    let value = match action_to_take? {
+                        InternalAction::GetName => Ok(sph.get_name().and_then(|m| {
                             serde_json::to_value(m).map_err(CompilationError::DeserializationError)
                         })),
-                        Some((create_args, path)) => {
-                            sph.create(&path?, &create_args?).map(|comp| {
+                        InternalAction::GetLogo => Ok(sph.get_logo().and_then(|m| {
+                            serde_json::to_value(m).map_err(CompilationError::DeserializationError)
+                        })),
+                        InternalAction::GetAPI => Ok(sph.get_api().and_then(|m| {
+                            serde_json::to_value(m).map_err(CompilationError::DeserializationError)
+                        })),
+                        InternalAction::Create(create_args, path) => {
+                            sph.create(&path, &create_args).map(|comp| {
                                 serde_json::to_value(comp)
                                     .map_err(CompilationError::DeserializationError)
                             })
