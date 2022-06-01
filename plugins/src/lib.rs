@@ -40,6 +40,7 @@ pub struct API<Input, Output> {
     input: RootSchema,
     /// What is expected to be returned from the module
     output: RootSchema,
+    #[serde(skip, default)]
     _pd: PhantomData<(Input, Output)>,
 }
 impl<Input, Output> API<Input, Output>
