@@ -1,5 +1,11 @@
 # Based on https://github.com/rust-bitcoin/bitcoin_hashes/blob/master/.github/workflows/rust.yml
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
 name: Continuous integration
 jobs:
   bench_nightly:
@@ -29,12 +35,12 @@ jobs:
         run: ./contrib/test.sh
 
   wasm: 
-    name: Stable - Docs / WebAssembly Build
+    name: Nightly - Docs / WebAssembly Build + Tests
     runs-on: ubuntu-latest
     strategy:
       matrix:
         rust:
-          - stable
+          - nightly
     steps:
       - name: Checkout Crate
         uses: actions/checkout@v2
@@ -43,6 +49,7 @@ jobs:
         with:
           profile: minimal
           toolchain: ${{ matrix.rust }}
+          target: wasm32-unknown-unknown
           override: true
       - name: Building docs
         env:
@@ -50,7 +57,7 @@ jobs:
         run: ./contrib/test.sh
       - name: Running WASM build
         env:
-          DO_WASM: true
+          DO_SAPIO_WASM: true
         run: ./contrib/test.sh
 
   Tests:

@@ -1,0 +1,27 @@
+{
+  "main": null,
+  "regtest": {
+    "active": true,
+    "api_node": {
+      "auth": {
+        "UserPass": [
+          "exampleusername",
+          "examplepassword"
+        ]
+      },
+      "url": "http://127.0.0.1:18443"
+    },
+    "emulator_nodes": {
+      "emulators": [
+        [
+          "tpubD6NzVbkrYhZ4Wf398td3H8YhWBsXx9Sxa4W3cQWkNW3N3DHSNB2qtPoUMXrA6JNaPxodQfRpoZNE5tGM9iZ4xfUEFRJEJvfs8W5paUagYCE",
+          "example.please.change.this.before.using:8367"
+        ]
+      ],
+      "enabled": false,
+      "threshold": 1
+    }
+  },
+  "signet": null,
+  "testnet": null
+}
