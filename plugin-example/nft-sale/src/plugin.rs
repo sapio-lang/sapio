@@ -8,7 +8,7 @@ use bitcoin::Amount;
 use sapio::contract::CompilationError;
 use sapio::contract::Contract;
 use sapio::*;
-use sapio_base::Clause;
+
 use sapio_wasm_nft_trait::*;
 use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;

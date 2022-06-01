@@ -118,7 +118,7 @@ pub mod sale_impl {
     impl SapioJSONTrait for sale_impl::Versions {
         fn get_example_for_api_checking() -> Value {
             let key = "9c7ad3670650f427bedac55f9a3f6779c1e7a26ab7715299aa0eadb1a09c0e62";
-            let ipfs_hash = "bafkreig7r2tdlwqxzlwnd7aqhkkvzjqv53oyrkfnhksijkvmc6k57uqk6a";
+            let _ipfs_hash = "bafkreig7r2tdlwqxzlwnd7aqhkkvzjqv53oyrkfnhksijkvmc6k57uqk6a";
             serde_json::to_value(sale_impl::Versions::NFT_Sale_Trait_Version_0_1_0(
                 NFT_Sale_Trait_Version_0_1_0 {
                     sell_to: bitcoin::XOnlyPublicKey::from_str(key).unwrap(),

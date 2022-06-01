@@ -1,16 +1,16 @@
 use bitcoin::util::amount::Amount;
 use sapio::contract::CompilationError;
 use sapio::contract::Contract;
-use sapio::template::Template;
+
 use sapio::util::amountrange::AmountU64;
 use sapio::*;
 use sapio_base::timelocks::AbsHeight;
 use sapio_base::Clause;
 use sapio_wasm_nft_trait::*;
 use sapio_wasm_plugin::client::*;
-use sapio_wasm_plugin::client::*;
+
 use sapio_wasm_plugin::*;
-use sapio_wasm_plugin::*;
+
 use schemars::*;
 use serde::*;
 use std::convert::TryFrom;
@@ -125,13 +125,13 @@ impl NFTDutchAuction {
     /// # signed
     /// sales must be signed by the current owner
     #[guard]
-    fn signed(self, ctx: Context) {
+    fn signed(self, _ctx: Context) {
         Clause::Key(self.main.data.owner.clone())
     }
     /// # transfer
     /// transfer exchanges the NFT for cold hard Bitcoinz
     #[continuation(guarded_by = "[Self::signed]", web_api, coerce_args = "default_coerce")]
-    fn transfer(self, base_ctx: Context, u: ()) {
+    fn transfer(self, base_ctx: Context, _u: ()) {
         let mut ret = vec![];
         let schedule = self.extra.create_schedule(self.main.sale_time)?;
         let mut base_ctx = base_ctx;
@@ -174,7 +174,7 @@ impl NFTDutchAuction {
             // cleanly if the buyer identifys an output they are spending before requesting
             // a purchase.
             let price: Amount = sched.1.into();
-            let mut tmpl = ctx
+            let tmpl = ctx
                 .template()
                 .add_output(amt, &new_nft_contract, None)?
                 .add_amount(price)
