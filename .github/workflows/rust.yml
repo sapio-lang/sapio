@@ -1,5 +1,11 @@
 # Based on https://github.com/rust-bitcoin/bitcoin_hashes/blob/master/.github/workflows/rust.yml
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
 name: Continuous integration
 jobs:
   bench_nightly:
