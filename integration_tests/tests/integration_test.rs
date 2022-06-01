@@ -29,7 +29,7 @@ pub struct TestEmulation<T> {
     pub timeout: u16,
 }
 
-impl<T> TestEmulation<T>
+impl<T: 'static> TestEmulation<T>
 where
     T: Compilable,
 {
