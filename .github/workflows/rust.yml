@@ -51,6 +51,7 @@ jobs:
       - name: Running WASM build
         env:
           DO_WASM: true
+          DO_SAPIO_WASM: true
         run: ./contrib/test.sh
 
   Tests:

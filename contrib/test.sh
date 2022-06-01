@@ -55,4 +55,7 @@ if [ "$DO_BENCH" = true ]; then
     cargo bench --all
 fi
 
+if [ "$DO_SAPIO_WASM" = true ]; then
+    sh contrib/sapio_wasm.sh
+fi
 
