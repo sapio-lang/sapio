@@ -29,12 +29,12 @@ jobs:
         run: ./contrib/test.sh
 
   wasm: 
-    name: Stable - Docs / WebAssembly Build
+    name: Nightly - Docs / WebAssembly Build + Tests
     runs-on: ubuntu-latest
     strategy:
       matrix:
         rust:
-          - stable
+          - nightly
     steps:
       - name: Checkout Crate
         uses: actions/checkout@v2
@@ -43,6 +43,7 @@ jobs:
         with:
           profile: minimal
           toolchain: ${{ matrix.rust }}
+          target: wasm32-unknown-unknown
           override: true
       - name: Building docs
         env:
