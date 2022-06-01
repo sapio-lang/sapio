@@ -1,32 +1,23 @@
 use bitcoin::hashes::hex::ToHex;
-#[deny(missing_docs)]
-// Copyright Judica, Inc 2021
-//
-// This Source Code Form is subject to the terms of the Mozilla Public
-//  License, v. 2.0. If a copy of the MPL was not distributed with this
-//  file, You can obtain one at https://mozilla.org/MPL/2.0/.
-use bitcoin::hashes::sha256;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::util::amount::Amount;
+use bitcoin::XOnlyPublicKey;
 use sapio::contract::empty;
 use sapio::contract::object::ObjectMetadata;
 use sapio::contract::CompilationError;
-use sapio::contract::Compiled;
 use sapio::contract::Contract;
-use sapio::template::OutputMeta;
 use sapio::*;
 use sapio_base::Clause;
 use sapio_wasm_nft_trait::*;
 use sapio_wasm_plugin::client::*;
+use sapio_wasm_plugin::plugin_handle::PluginHandle;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
 use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::sync::Arc;
-
-use bitcoin::XOnlyPublicKey;
 /// # SimpleNFT
 /// A really simple NFT... not much too it!
 #[derive(JsonSchema, Serialize, Deserialize)]
@@ -41,13 +32,12 @@ impl Contract for SimpleNFT {
     declare! {updatable<Sell>, Self::sell}
     // embeds metadata
     declare! {finish, Self::metadata_commit}
-    fn metadata(&self, ctx: Context) -> Result<ObjectMetadata, CompilationError> {
+    fn metadata(&self, _ctx: Context) -> Result<ObjectMetadata, CompilationError> {
         Ok(ObjectMetadata::default().add_simp(self.data.ipfs_nft.clone())?)
     }
     fn ensure_amount(&self, ctx: Context) -> Result<Amount, CompilationError> {
         Ok(ctx.funds())
     }
-
 }
 
 impl SimpleNFT {
@@ -57,7 +47,7 @@ impl SimpleNFT {
     /// help us embed metadata inside of our contract...
     /// TODO: Check this is OK
     #[guard]
-    fn metadata_commit(self, ctx: Context) {
+    fn metadata_commit(self, _ctx: Context) {
         Clause::And(vec![
             Clause::Key(
                 XOnlyPublicKey::from_slice(&Sha256::hash(&[1u8; 32]).into_inner())
@@ -69,7 +59,7 @@ impl SimpleNFT {
     /// # signed
     /// Get the current owners signature.
     #[guard]
-    fn signed(self, ctx: Context) {
+    fn signed(self, _ctx: Context) {
         Clause::Key(self.data.owner.clone())
     }
 }
@@ -97,7 +87,7 @@ impl SellableNFT for SimpleNFT {
                 arguments: sale_impl::Versions::NFT_Sale_Trait_Version_0_1_0(sale_info.clone()),
             };
             // use the sale API we passed in
-            let compiled = create_contract_by_key(sale_ctx, &which_sale.key, create_args)?;
+            let compiled = which_sale.call(sale_ctx.path(), &create_args)?;
             // send to this sale!
             let pays = compiled.amount_range.max() - ctx.funds();
             let mut builder = ctx.template().add_amount(pays);
@@ -123,7 +113,7 @@ impl TryFrom<Versions> for SimpleNFT {
     type Error = CompilationError;
     fn try_from(v: Versions) -> Result<Self, Self::Error> {
         let Versions::Mint_NFT_Trait_Version_0_1_0(mut data) = v;
-        let this: SapioHostAPI<Mint_NFT_Trait_Version_0_1_0> = LookupFrom::This
+        let this: NFTMintingModule = LookupFrom::This
             .try_into()
             .map_err(|_| CompilationError::TerminateWith("Failed to Lookup".into()))?;
         // required otherwise cross-moudle calls get bungled

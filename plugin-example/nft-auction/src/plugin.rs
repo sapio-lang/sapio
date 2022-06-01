@@ -1,15 +1,13 @@
 use bitcoin::util::amount::Amount;
 use sapio::contract::CompilationError;
 use sapio::contract::Contract;
-use sapio::template::Template;
 use sapio::util::amountrange::AmountU64;
 use sapio::*;
 use sapio_base::timelocks::AbsHeight;
 use sapio_base::Clause;
 use sapio_wasm_nft_trait::*;
 use sapio_wasm_plugin::client::*;
-use sapio_wasm_plugin::client::*;
-use sapio_wasm_plugin::*;
+use sapio_wasm_plugin::plugin_handle::PluginHandle;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
@@ -125,13 +123,13 @@ impl NFTDutchAuction {
     /// # signed
     /// sales must be signed by the current owner
     #[guard]
-    fn signed(self, ctx: Context) {
+    fn signed(self, _ctx: Context) {
         Clause::Key(self.main.data.owner.clone())
     }
     /// # transfer
     /// transfer exchanges the NFT for cold hard Bitcoinz
     #[continuation(guarded_by = "[Self::signed]", web_api, coerce_args = "default_coerce")]
-    fn transfer(self, base_ctx: Context, u: ()) {
+    fn transfer(self, base_ctx: Context, _u: ()) {
         let mut ret = vec![];
         let schedule = self.extra.create_schedule(self.main.sale_time)?;
         let mut base_ctx = base_ctx;
@@ -141,13 +139,12 @@ impl NFTDutchAuction {
             let amt = ctx.funds();
             // first, let's get the module that should be used to 're-mint' this NFT
             // to the new owner
-            let key = self
+            let minting_module = self
                 .main
                 .data
                 .minting_module
                 .clone()
-                .ok_or(CompilationError::TerminateCompilation)?
-                .key;
+                .ok_or(CompilationError::TerminateCompilation)?;
             // let's make a copy of the old nft metadata..
             let mut mint_data = self.main.data.clone();
             // and change the owner to the buyer
@@ -162,7 +159,8 @@ impl NFTDutchAuction {
                 },
                 arguments: mint_impl::Versions::Mint_NFT_Trait_Version_0_1_0(mint_data),
             };
-            let new_nft_contract = create_contract_by_key(new_ctx, &key, create_args)
+            let new_nft_contract = minting_module
+                .call(new_ctx.path(), &create_args)
                 .map_err(|_| CompilationError::TerminateCompilation)?;
             // Now for the magic:
             // This is a transaction that creates at output 0 the new nft for the
@@ -174,7 +172,7 @@ impl NFTDutchAuction {
             // cleanly if the buyer identifys an output they are spending before requesting
             // a purchase.
             let price: Amount = sched.1.into();
-            let mut tmpl = ctx
+            let tmpl = ctx
                 .template()
                 .add_output(amt, &new_nft_contract, None)?
                 .add_amount(price)

@@ -15,5 +15,5 @@ pub mod api;
 mod exports;
 mod ext;
 use exports::*;
-mod plugin;
+pub mod plugin;
 pub use plugin::Plugin;

@@ -1,3 +1,4 @@
+use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoin::Amount;
 #[deny(missing_docs)]
 // Copyright Judica, Inc 2021
@@ -15,7 +16,6 @@ use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
-use bitcoin::util::bip32::ExtendedPubKey;
 use std::marker::PhantomData;
 
 /// A type tag which tracks state for compile_if inside of Vault
@@ -108,7 +108,10 @@ impl<S: State> Vault<S> {
     /// make a guard with the timeout condition and the hot key.
     #[guard]
     fn hot_key_cl(self, _ctx: Context) {
-        Clause::And(vec![Clause::Key(self.hot_key.to_x_only_pub()), self.timeout.into()])
+        Clause::And(vec![
+            Clause::Key(self.hot_key.to_x_only_pub()),
+            self.timeout.into(),
+        ])
     }
     /// allow spending with the satisfaction of hot_key_cl, but only in state =
     /// Redeeming.

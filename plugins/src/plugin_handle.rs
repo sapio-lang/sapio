@@ -5,18 +5,19 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use super::*;
+use crate::API;
 use sapio::contract::CompilationError;
 use sapio_base::effects::EffectPath;
+use std::marker::PhantomData;
+
 /// Generic plugin handle interface.
 ///
 /// TODO: trait objects for being able to e.g. run plugins remotely.
 pub trait PluginHandle {
-    fn create(
-        &self,
-        path: &EffectPath,
-        c: &CreateArgs<serde_json::Value>,
-    ) -> Result<Compiled, CompilationError>;
-    fn get_api(&self) -> Result<serde_json::value::Value, CompilationError>;
+    type Input;
+    type Output;
+    fn call(&self, path: &EffectPath, c: &Self::Input) -> Result<Self::Output, CompilationError>;
+    fn get_api(&self) -> Result<API<Self::Input, Self::Output>, CompilationError>;
     fn get_name(&self) -> Result<String, CompilationError>;
     fn get_logo(&self) -> Result<String, CompilationError>;
 }

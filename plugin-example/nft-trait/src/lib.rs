@@ -26,7 +26,7 @@ pub struct Mint_NFT_Trait_Version_0_1_0 {
     /// # Minting Module
     /// If a specific sub-module is to be used / known -- when in doubt, should
     /// be None.
-    pub minting_module: Option<SapioHostAPI<Mint_NFT_Trait_Version_0_1_0>>,
+    pub minting_module: Option<NFTMintingModule>,
     /// how much royalty, should be paid, as a fraction of sale (0.0 to 1.0)
     pub royalty: f64,
 }
@@ -38,10 +38,13 @@ impl Mint_NFT_Trait_Version_0_1_0 {
     }
 }
 
+pub type NFTMintingModule = ContractModule<mint_impl::Versions>;
+pub type NFTSaleModule = ContractModule<sale_impl::Versions>;
+
 /// Boilerplate for the Mint trait
 pub mod mint_impl {
     use super::*;
-    #[derive(Serialize, Deserialize, JsonSchema)]
+    #[derive(Serialize, Deserialize, JsonSchema, Clone)]
     pub enum Versions {
         Mint_NFT_Trait_Version_0_1_0(Mint_NFT_Trait_Version_0_1_0),
     }
@@ -70,10 +73,12 @@ pub mod mint_impl {
         }
     }
     /// we must provide an example!
-    impl SapioJSONTrait for Mint_NFT_Trait_Version_0_1_0 {
+    impl SapioJSONTrait for mint_impl::Versions {
         fn get_example_for_api_checking() -> Value {
-            serde_json::to_value(Versions::Mint_NFT_Trait_Version_0_1_0(Self::get_example()))
-                .unwrap()
+            serde_json::to_value(Versions::Mint_NFT_Trait_Version_0_1_0(
+                Mint_NFT_Trait_Version_0_1_0::get_example(),
+            ))
+            .unwrap()
         }
     }
 }
@@ -105,15 +110,15 @@ pub struct NFT_Sale_Trait_Version_0_1_0 {
 /// Boilerplate for the Sale trait
 pub mod sale_impl {
     use super::*;
-    #[derive(Serialize, Deserialize, JsonSchema)]
+    #[derive(Serialize, Deserialize, JsonSchema, Clone)]
     pub enum Versions {
         /// # Batching Trait API
         NFT_Sale_Trait_Version_0_1_0(NFT_Sale_Trait_Version_0_1_0),
     }
-    impl SapioJSONTrait for NFT_Sale_Trait_Version_0_1_0 {
+    impl SapioJSONTrait for sale_impl::Versions {
         fn get_example_for_api_checking() -> Value {
             let key = "9c7ad3670650f427bedac55f9a3f6779c1e7a26ab7715299aa0eadb1a09c0e62";
-            let ipfs_hash = "bafkreig7r2tdlwqxzlwnd7aqhkkvzjqv53oyrkfnhksijkvmc6k57uqk6a";
+            let _ipfs_hash = "bafkreig7r2tdlwqxzlwnd7aqhkkvzjqv53oyrkfnhksijkvmc6k57uqk6a";
             serde_json::to_value(sale_impl::Versions::NFT_Sale_Trait_Version_0_1_0(
                 NFT_Sale_Trait_Version_0_1_0 {
                     sell_to: bitcoin::XOnlyPublicKey::from_str(key).unwrap(),
@@ -178,7 +183,7 @@ pub enum Sell {
     MakeSale {
         /// # Which Sale Contract to use?
         /// Specify a hash/name for a contract to generate the sale with.
-        which_sale: SapioHostAPI<NFT_Sale_Trait_Version_0_1_0>,
+        which_sale: NFTSaleModule,
         /// # The information needed to create the sale
         sale_info_partial: NFT_Sale_Trait_Version_0_1_0_Partial,
     },

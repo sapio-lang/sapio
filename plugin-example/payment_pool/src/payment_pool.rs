@@ -25,7 +25,7 @@ use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
-use std::collections::{BTreeMap};
+use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::io::Write;
 use std::str::FromStr;

@@ -5,11 +5,12 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 #[deny(missing_docs)]
-use batching_trait::BatchingTraitVersion0_1_1;
+use batching_trait::{BatchingModule, BatchingTraitVersion0_1_1};
 
 use sapio::contract::*;
 use sapio::*;
 use sapio_wasm_plugin::client::*;
+use sapio_wasm_plugin::plugin_handle::PluginHandle;
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
@@ -21,31 +22,24 @@ use std::sync::Arc;
 pub struct TrampolinePay {
     /// # Which Plugin to Use
     /// Specify which contract plugin to call out to.
-    handle: SapioHostAPI<BatchingTraitVersion0_1_1>,
+    handle: BatchingModule,
     /// # Data for the Contract
     // Just do this to get the data... not always necessary (could be computed any way)
     data: BatchingTraitVersion0_1_1,
 }
 
-/// # Versions Trait Wrapper
-#[derive(Serialize, Deserialize, JsonSchema)]
-enum Versions {
-    /// # Batching Trait API
-    BatchingTraitVersion0_1_1(BatchingTraitVersion0_1_1),
-}
 impl TrampolinePay {
     #[then]
     fn expand(self, mut ctx: Context) {
-        let contract = create_contract_by_key(
-            ctx.derive_str(Arc::new("plugin_trampoline".into()))?,
-            &self.handle.key,
-            CreateArgs {
+        let contract = self.handle.call(
+            &ctx.derive_str(Arc::new("plugin_trampoline".into()))?.path(),
+            &CreateArgs {
                 context: ContextualArguments {
                     amount: ctx.funds(),
                     network: ctx.network,
                     effects: unsafe { ctx.get_effects_internal() }.as_ref().clone(),
                 },
-                arguments: Versions::BatchingTraitVersion0_1_1(self.data.clone()),
+                arguments: batching_trait::Versions::BatchingTraitVersion0_1_1(self.data.clone()),
             },
         )?;
         let mut builder = ctx.template();

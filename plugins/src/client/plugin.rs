@@ -12,18 +12,42 @@ use sapio_base::effects::PathFragment;
 use sapio_base::serialization_helpers::SArc;
 
 use std::convert::TryFrom;
+
+pub trait Callable {
+    type Output;
+    fn call(&self, ctx: Context) -> Result<Self::Output, CompilationError>;
+}
+impl<T> Callable for T
+where
+    T: Compilable,
+{
+    type Output = Compiled;
+    fn call(&self, ctx: Context) -> Result<Compiled, CompilationError> {
+        self.compile(ctx)
+    }
+}
+
 /// The `Plugin` trait is used to provide bindings for a WASM Plugin.
 /// It's not intended to be used internally, just as bindings.
-pub trait Plugin: JsonSchema + Sized + for<'a> Deserialize<'a>
+pub trait Plugin
 where
-    <<Self as client::plugin::Plugin>::ToType as std::convert::TryFrom<Self>>::Error:
-        std::error::Error + 'static,
-    CompilationError: From<<<Self as Plugin>::ToType as TryFrom<Self>>::Error>,
+    // Self must be Callable and produce an Output. We must also be able
+    // to get one from Self::InputWrapper, potentially falliably
+    Self: Callable + TryFrom<Self::InputWrapper>,
+    // InputWrapper must be deserializable and describable
+    Self::InputWrapper: JsonSchema + Sized + for<'a> Deserialize<'a>,
+    // read as: The return type of CallableType::try_from(self) is
+    // Result<CallableType, X>, where X must be able to x.into() a
+    // CompilationError.
+    CompilationError: From<<Self as TryFrom<Self::InputWrapper>>::Error>,
+    // We must be able to serialize/describe the outputs
+    Self::Output: Serialize + JsonSchema,
 {
-    type ToType: Compilable + TryFrom<Self>;
+    // A type which wraps Self, but can be converted into Self.
+    type InputWrapper;
     /// gets the jsonschema for the plugin type, which is the API for calling create.
     fn get_api_inner() -> *mut c_char {
-        encode_json(&schemars::schema_for!(CreateArgs::<Self>))
+        encode_json(&API::<CreateArgs<Self::InputWrapper>, Self::Output>::new())
     }
 
     /// creates an instance of the plugin from a json pointer and outputs a result pointer
@@ -32,10 +56,13 @@ where
         encode_json(&res)
     }
 
-    unsafe fn create_result(p: *mut c_char, c: *mut c_char) -> Result<Compiled, CompilationError> {
+    unsafe fn create_result(
+        p: *mut c_char,
+        c: *mut c_char,
+    ) -> Result<Self::Output, CompilationError> {
         let s = CString::from_raw(c);
         let path = CString::from_raw(p);
-        let CreateArgs::<Self> {
+        let CreateArgs::<Self::InputWrapper> {
             arguments,
             context:
                 ContextualArguments {
@@ -75,8 +102,8 @@ where
             // TODO: load database?
             Arc::new(effects),
         );
-        let converted = Self::ToType::try_from(arguments)?;
-        converted.compile(ctx)
+        let converted = Self::try_from(arguments)?;
+        converted.call(ctx)
     }
     /// binds this type to the wasm interface, must be called before the plugin can be used.
     unsafe fn register(name: &'static str, logo: Option<&'static [u8]>) {
@@ -107,14 +134,41 @@ macro_rules! REGISTER {
     [$plugin:ident$(, $logo:expr)?] => {
         REGISTER![[$plugin, $plugin]$(, $logo)*];
     };
-    [[$to:ident,$plugin:ident]$(, $logo:expr)?] => {
-        impl Plugin for $plugin {
-            type ToType = $to;
-        }
-        #[no_mangle]
-        unsafe fn sapio_v1_wasm_plugin_entry_point() {
-            $plugin::register(stringify!($to), optional_logo!($($logo)*));
-        }
+    [[$to:ident,$wrapper:ident]$(, $logo:expr)?] => {
+        const _ : () = {
+            use sapio_wasm_plugin::client::Plugin;
+            use sapio_wasm_plugin::client::plugin::Callable;
+            use schemars::JsonSchema;
+            use serde::*;
+            use core::convert::TryFrom;
+            use sapio::contract::CompilationError;
+            use sapio::Context;
+            #[derive(Deserialize, JsonSchema)]
+            #[serde(transparent)]
+            struct SapioInternalWrapperAroundInput($wrapper);
+            impl TryFrom<SapioInternalWrapperAroundInput> for SapioInternalWrapperAroundCallable {
+                type Error = <$to as TryFrom<$wrapper>>::Error;
+                fn try_from(v: SapioInternalWrapperAroundInput) -> Result<SapioInternalWrapperAroundCallable, Self::Error> {
+                    $to::try_from(v.0).map(SapioInternalWrapperAroundCallable)
+                }
+            }
+
+            struct SapioInternalWrapperAroundCallable($to);
+            impl Callable for SapioInternalWrapperAroundCallable {
+                type Output = <$to as Callable>::Output;
+                fn call(&self, ctx: Context) -> Result<Self::Output, CompilationError> {
+                    self.0.call(ctx)
+                }
+            }
+
+            impl Plugin for SapioInternalWrapperAroundCallable {
+                type InputWrapper = SapioInternalWrapperAroundInput;
+            }
+            #[no_mangle]
+            unsafe fn sapio_v1_wasm_plugin_entry_point() {
+                SapioInternalWrapperAroundCallable::register(stringify!($to), optional_logo!($($logo)*));
+            }
+        };
     };
 }
 

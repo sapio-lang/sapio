@@ -13,13 +13,5 @@ use serde::*;
 use sapio_contrib::contracts::staked_signer::{Operational, Staker};
 /// # Bonded Staker
 type BondedStaker = Staker<Operational>;
-#[derive(JsonSchema, Deserialize)]
-#[serde(transparent)]
-struct Wrapper(BondedStaker);
 
-impl From<Wrapper> for BondedStaker {
-    fn from(v: Wrapper) -> Self {
-        v.0
-    }
-}
-REGISTER![[BondedStaker, Wrapper], "logo.png"];
+REGISTER![BondedStaker, "logo.png"];

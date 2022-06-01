@@ -6,7 +6,6 @@
 
 use super::wasm_cache;
 use crate::CreateArgs;
-pub use plugin_handle::*;
 use sapio::contract::Compiled;
 use sapio_ctv_emulator_trait::NullEmulator;
 use std::cell::Cell;
@@ -18,5 +17,4 @@ pub use wasm::*;
 use wasmer::{imports, Function, ImportObject, Instance, LazyInit, MemoryView, Module, Store};
 use wasmer_cache::Hash as WASMCacheID;
 
-mod plugin_handle;
 mod wasm;

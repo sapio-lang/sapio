@@ -9,13 +9,17 @@ use super::*;
 use crate::host::exports::*;
 use crate::host::wasm_cache::get_all_keys_from_fs;
 use crate::host::{HostEnvironment, HostEnvironmentInner};
+use crate::plugin_handle::PluginHandle;
+use crate::API;
 use sapio::contract::CompilationError;
 use sapio_base::effects::EffectPath;
 use sapio_ctv_emulator_trait::CTVEmulator;
+use serde::Deserialize;
 use std::error::Error;
+use std::marker::PhantomData;
 use std::path::PathBuf;
 use wasmer::Memory;
-pub struct WasmPluginHandle {
+pub struct WasmPluginHandle<Output> {
     store: Store,
     env: HostEnvironment,
     import_object: ImportObject,
@@ -23,8 +27,9 @@ pub struct WasmPluginHandle {
     instance: Instance,
     key: wasmer_cache::Hash,
     net: bitcoin::Network,
+    _pd: PhantomData<Output>,
 }
-impl WasmPluginHandle {
+impl<Output> WasmPluginHandle<Output> {
     /// the cache ID for this plugin
     pub fn id(&self) -> WASMCacheID {
         self.key
@@ -138,6 +143,8 @@ impl WasmPluginHandle {
             sapio_v1_wasm_plugin_debug_log_string,
             sapio_v1_wasm_plugin_create_contract,
             sapio_v1_wasm_plugin_get_api,
+            sapio_v1_wasm_plugin_get_name,
+            sapio_v1_wasm_plugin_get_logo,
             sapio_v1_wasm_plugin_lookup_module_name
         );
 
@@ -160,6 +167,7 @@ impl WasmPluginHandle {
             module,
             instance,
             key,
+            _pd: Default::default(),
         })
     }
 
@@ -228,12 +236,13 @@ impl WasmPluginHandle {
     }
 }
 
-impl PluginHandle for WasmPluginHandle {
-    fn create(
-        &self,
-        path: &EffectPath,
-        c: &CreateArgs<serde_json::Value>,
-    ) -> Result<Compiled, CompilationError> {
+impl<GOutput> PluginHandle for WasmPluginHandle<GOutput>
+where
+    GOutput: for<'a> Deserialize<'a>,
+{
+    type Input = CreateArgs<serde_json::Value>;
+    type Output = GOutput;
+    fn call(&self, path: &EffectPath, c: &Self::Input) -> Result<Self::Output, CompilationError> {
         let arg_str = serde_json::to_string(c).map_err(CompilationError::SerializationError)?;
         let args_ptr = self.pass_string(&arg_str)?;
         let path_str = serde_json::to_string(path).map_err(CompilationError::SerializationError)?;
@@ -251,11 +260,11 @@ impl PluginHandle for WasmPluginHandle {
             })?;
         let buf = self.read_to_vec(result_ptr)?;
         self.forget(result_ptr)?;
-        let v: Result<Compiled, String> =
+        let v: Result<Self::Output, String> =
             serde_json::from_slice(&buf).map_err(CompilationError::DeserializationError)?;
         v.map_err(CompilationError::ModuleCompilationErrorUnsendable)
     }
-    fn get_api(&self) -> Result<serde_json::value::Value, CompilationError> {
+    fn get_api(&self) -> Result<API<Self::Input, Self::Output>, CompilationError> {
         let p = self
             .env
             .lock()
@@ -266,7 +275,7 @@ impl PluginHandle for WasmPluginHandle {
             .map_err(|e| CompilationError::ModuleCouldNotGetAPI(e.into()))?;
         let v = self.read_to_vec(p)?;
         self.forget(p)?;
-        serde_json::from_slice(&v).map_err(CompilationError::DeserializationError)
+        Ok(serde_json::from_slice(&v).map_err(CompilationError::DeserializationError)?)
     }
     fn get_name(&self) -> Result<String, CompilationError> {
         let p = self
