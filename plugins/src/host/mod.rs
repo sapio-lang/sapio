@@ -225,7 +225,15 @@ mod exports {
         let path = env.path.clone();
         let net = env.net;
 
-        match WasmPluginHandle::new(path, &emulator, Some(&h), None, net, Some(mmap)) {
+        // Use serde_json::Value for the WasmPluginHandle Output type
+        match WasmPluginHandle::<serde_json::Value>::new(
+            path,
+            &emulator,
+            Some(&h),
+            None,
+            net,
+            Some(mmap),
+        ) {
             Ok(sph) => {
                 let comp_s = (move || -> Result<serde_json::Value, CompilationError> {
                     let value = match action_to_take? {

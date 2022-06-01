@@ -10,6 +10,7 @@ use crate::plugin_handle::PluginHandle;
 use core::convert::TryFrom;
 use sapio::contract::CompilationError;
 use sapio_base::effects::EffectPath;
+use sapio_base::Clause;
 use sapio_trait::SapioJSONTrait;
 use std::marker::PhantomData;
 
@@ -24,6 +25,7 @@ pub struct SapioHostAPI<T: SapioJSONTrait, R: for<'a> Deserialize<'a> + JsonSche
 }
 
 pub type ContractModule<T> = SapioHostAPI<T, Compiled>;
+pub type ClauseModule<T> = SapioHostAPI<T, Clause>;
 
 impl<T: SapioJSONTrait + Clone, R> PluginHandle for SapioHostAPI<T, R>
 where

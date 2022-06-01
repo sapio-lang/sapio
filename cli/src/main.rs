@@ -36,6 +36,7 @@ use sapio_base::txindex::TxIndexLogger;
 use sapio_base::util::CTVHash;
 use sapio_wasm_plugin::host::{PluginHandle, WasmPluginHandle};
 use sapio_wasm_plugin::CreateArgs;
+use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -44,7 +45,6 @@ use std::sync::Arc;
 #[deny(missing_docs)]
 use tokio::io::AsyncReadExt;
 use util::*;
-
 pub mod config;
 mod util;
 
@@ -392,7 +392,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             match matches.subcommand() {
                 Some(("list", args)) => {
-                    let plugins = WasmPluginHandle::load_all_keys(
+                    let plugins = WasmPluginHandle::<Value>::load_all_keys(
                         module_path(args),
                         emulator,
                         config.network,
@@ -539,7 +539,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 Some(("create", args)) => {
-                    let sph = WasmPluginHandle::new_async(
+                    let sph = WasmPluginHandle::<Value>::new_async(
                         module_path(args),
                         &emulator,
                         args.value_of("key"),
@@ -574,7 +574,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("{}", serde_json::to_string(&v)?);
                 }
                 Some(("api", args)) => {
-                    let sph = WasmPluginHandle::new_async(
+                    let sph = WasmPluginHandle::<Value>::new_async(
                         module_path(args),
                         &emulator,
                         args.value_of("key"),
@@ -586,7 +586,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("{}", serde_json::to_value(sph.get_api()?)?);
                 }
                 Some(("logo", args)) => {
-                    let sph = WasmPluginHandle::new_async(
+                    let sph = WasmPluginHandle::<Value>::new_async(
                         module_path(args),
                         &emulator,
                         args.value_of("key"),
@@ -598,7 +598,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     println!("{}", sph.get_logo()?);
                 }
                 Some(("info", args)) => {
-                    let sph = WasmPluginHandle::new_async(
+                    let sph = WasmPluginHandle::<Value>::new_async(
                         module_path(args),
                         &emulator,
                         args.value_of("key"),
@@ -620,7 +620,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     );
                 }
                 Some(("load", args)) => {
-                    let sph = WasmPluginHandle::new_async(
+                    let sph = WasmPluginHandle::<Value>::new_async(
                         module_path(args),
                         &emulator,
                         None,

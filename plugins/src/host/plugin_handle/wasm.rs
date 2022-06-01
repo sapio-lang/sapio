@@ -14,10 +14,12 @@ use crate::API;
 use sapio::contract::CompilationError;
 use sapio_base::effects::EffectPath;
 use sapio_ctv_emulator_trait::CTVEmulator;
+use serde::Deserialize;
 use std::error::Error;
+use std::marker::PhantomData;
 use std::path::PathBuf;
 use wasmer::Memory;
-pub struct WasmPluginHandle {
+pub struct WasmPluginHandle<Output> {
     store: Store,
     env: HostEnvironment,
     import_object: ImportObject,
@@ -25,8 +27,9 @@ pub struct WasmPluginHandle {
     instance: Instance,
     key: wasmer_cache::Hash,
     net: bitcoin::Network,
+    _pd: PhantomData<Output>,
 }
-impl WasmPluginHandle {
+impl<Output> WasmPluginHandle<Output> {
     /// the cache ID for this plugin
     pub fn id(&self) -> WASMCacheID {
         self.key
@@ -164,6 +167,7 @@ impl WasmPluginHandle {
             module,
             instance,
             key,
+            _pd: Default::default(),
         })
     }
 
@@ -232,9 +236,12 @@ impl WasmPluginHandle {
     }
 }
 
-impl PluginHandle for WasmPluginHandle {
+impl<GOutput> PluginHandle for WasmPluginHandle<GOutput>
+where
+    GOutput: for<'a> Deserialize<'a>,
+{
     type Input = CreateArgs<serde_json::Value>;
-    type Output = Compiled;
+    type Output = GOutput;
     fn call(&self, path: &EffectPath, c: &Self::Input) -> Result<Self::Output, CompilationError> {
         let arg_str = serde_json::to_string(c).map_err(CompilationError::SerializationError)?;
         let args_ptr = self.pass_string(&arg_str)?;
