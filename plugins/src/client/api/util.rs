@@ -30,26 +30,26 @@ where
     T: for<'a> Deserialize<'a> + JsonSchema,
 {
     let path = serde_json::to_string(path).map_err(CompilationError::SerializationError)?;
-    unsafe {
-        let s = serde_json::to_value(args)
-            .map_err(CompilationError::SerializationError)?
-            .to_string();
-        let l = s.len();
-        let p = sapio_v1_wasm_plugin_create_contract(
+    let s = serde_json::to_value(args)
+        .map_err(CompilationError::SerializationError)?
+        .to_string();
+    let l = s.len();
+    let p = unsafe {
+        sapio_v1_wasm_plugin_create_contract(
             path.as_ptr() as i32,
             path.len() as i32,
             key.as_ptr() as i32,
             s.as_ptr() as i32,
             l as i32,
-        );
-        if p != 0 {
-            let cs = CString::from_raw(p as *mut c_char);
-            let res: Result<T, String> = serde_json::from_slice(cs.as_bytes())
-                .map_err(CompilationError::DeserializationError)?;
-            res.map_err(CompilationError::ModuleCompilationErrorUnsendable)
-        } else {
-            Err(CompilationError::InternalModuleError("Unknown".into()))
-        }
+        )
+    };
+    if p != 0 {
+        let cs = unsafe { CString::from_raw(p as *mut c_char) };
+        let res: Result<T, String> = serde_json::from_slice(cs.as_bytes())
+            .map_err(CompilationError::DeserializationError)?;
+        res.map_err(CompilationError::ModuleCompilationErrorUnsendable)
+    } else {
+        Err(CompilationError::InternalModuleError("Unknown".into()))
     }
 }
 
@@ -111,39 +111,39 @@ where
 
 /// lookup a plugin module's key given a human readable name
 pub fn lookup_module_name(key: &str) -> Option<[u8; 32]> {
+    let mut res = [0u8; 32];
+    let mut ok = 0u8;
     unsafe {
-        let mut res = [0u8; 32];
-        let mut ok = 0u8;
         sapio_v1_wasm_plugin_lookup_module_name(
             key.as_ptr() as i32,
             key.len() as i32,
             &mut res as *mut [u8; 32] as i32,
             &mut ok as *mut u8 as i32,
-        );
-        if ok == 0 {
-            None
-        } else {
-            Some(res)
-        }
+        )
+    };
+    if ok == 0 {
+        None
+    } else {
+        Some(res)
     }
 }
 
 /// Get the current executing module's hash
 pub fn lookup_this_module_name() -> Option<[u8; 32]> {
+    let mut res = [0u8; 32];
+    let mut ok = 0u8;
     unsafe {
-        let mut res = [0u8; 32];
-        let mut ok = 0u8;
         sapio_v1_wasm_plugin_lookup_module_name(
             0i32,
             0i32,
             &mut res as *mut [u8; 32] as i32,
             &mut ok as *mut u8 as i32,
-        );
-        if ok == 0 {
-            None
-        } else {
-            Some(res)
-        }
+        )
+    };
+    if ok == 0 {
+        None
+    } else {
+        Some(res)
     }
 }
 
