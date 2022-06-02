@@ -15,4 +15,5 @@ members = ["treepay"
           , "nft"
           , "nft-sale"
           , "nft-auction"
-          , "clause-module"]
+          , "clause-module"
+          , "clause-module-trampoline"]

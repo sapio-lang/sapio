@@ -37,9 +37,9 @@ pub use sapio_base::plugin_args::*;
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct API<Input, Output> {
     /// What is expected to be passed to the module
-    input: RootSchema,
+    arguments: RootSchema,
     /// What is expected to be returned from the module
-    output: RootSchema,
+    returns: RootSchema,
     #[serde(skip, default)]
     _pd: PhantomData<(Input, Output)>,
 }
@@ -50,15 +50,15 @@ where
 {
     pub fn new() -> Self {
         API {
-            input: schemars::schema_for!(Input),
-            output: schemars::schema_for!(Output),
+            arguments: schemars::schema_for!(Input),
+            returns: schemars::schema_for!(Output),
             _pd: Default::default(),
         }
     }
     pub fn input(&self) -> &RootSchema {
-        &self.input
+        &self.arguments
     }
     pub fn output(&self) -> &RootSchema {
-        &self.output
+        &self.returns
     }
 }

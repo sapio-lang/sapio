@@ -253,9 +253,10 @@ mod exports {
                             })
                         }
                     };
-                    serde_json::to_value(&value??).map_err(CompilationError::SerializationError)
+                    Ok(value??)
                 })();
                 return (move || -> Result<i32, CompilationError> {
+                    // serialize the reuslt, not just the output.
                     let comp_s = serde_json::to_string(&comp_s.map_err(|s| s.to_string()))
                         .map_err(CompilationError::SerializationError)?;
                     let bytes: i32 = env
