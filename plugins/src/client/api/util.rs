@@ -52,6 +52,52 @@ where
         }
     }
 }
+
+pub fn get_logo(key: &[u8; 32]) -> Result<String, CompilationError> {
+    let p = key.as_ptr() as i32;
+    let logo: Result<String, String> = {
+        let buf = unsafe { sapio_v1_wasm_plugin_get_logo(p) };
+        if buf == 0 {
+            return Err(CompilationError::InternalModuleError(
+                "Logo Not Available".into(),
+            ));
+        }
+        let cs = unsafe { CString::from_raw(buf as *mut c_char) };
+        serde_json::from_slice(cs.as_bytes()).map_err(CompilationError::DeserializationError)?
+    };
+    logo.map_err(CompilationError::InternalModuleError)
+}
+
+pub fn get_name(key: &[u8; 32]) -> Result<String, CompilationError> {
+    let p = key.as_ptr() as i32;
+    let name: Result<String, String> = {
+        let buf = unsafe { sapio_v1_wasm_plugin_get_name(p) };
+        if buf == 0 {
+            return Err(CompilationError::InternalModuleError(
+                "Name Not Available".into(),
+            ));
+        }
+        let cs = unsafe { CString::from_raw(buf as *mut c_char) };
+        serde_json::from_slice(cs.as_bytes()).map_err(CompilationError::DeserializationError)?
+    };
+    name.map_err(CompilationError::InternalModuleError)
+}
+
+pub fn get_api<T, R>(key: &[u8; 32]) -> Result<API<T, R>, CompilationError> {
+    let p = key.as_ptr() as i32;
+    let api: Result<API<T, R>, String> = {
+        let api_buf = unsafe { sapio_v1_wasm_plugin_get_api(p) };
+        if api_buf == 0 {
+            return Err(CompilationError::InternalModuleError(
+                "API Not Available".into(),
+            ));
+        }
+        let cs = unsafe { CString::from_raw(api_buf as *mut c_char) };
+        serde_json::from_slice(cs.as_bytes()).map_err(CompilationError::DeserializationError)?
+    };
+    api.map_err(CompilationError::InternalModuleError)
+}
+
 pub fn call<S: Serialize, T>(
     ctx: Context,
     key: &[u8; 32],
