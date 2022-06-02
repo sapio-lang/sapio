@@ -21,10 +21,15 @@ lazy_static = "1.4.0"
 bitcoincore-rpc-async = "4.0.1-alpha.1"
 tokio = { version = "1", features = ["full"] }
 directories = "3.0.1"
-wasmer= "1.0"
-wasmer-cache = "1.0"
 rand="^0.6"
 jsonschema-valid = "0.4.0"
+
+
+[dependencies.wasmer]
+version = "2.2.1"
+
+[dependencies.wasmer-cache]
+version = "2.2.1"
 
 [dependencies.bitcoin]
 package = "sapio-bitcoin"
