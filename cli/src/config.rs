@@ -24,11 +24,12 @@ use tokio::sync::Mutex;
 /// EmulatorConfig is used to determine how this sapio-cli instance should stub
 /// out CTV. Emulators are specified by EPK and interface address. Threshold
 /// should be <= emulators.len().
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct EmulatorConfig {
     /// if the emulator should be used or not. We tag explicitly for convenience
     /// in the config file format.
     pub enabled: bool,
+    #[schemars(with = "Vec<(String, String)>")]
     pub emulators: Vec<(ExtendedPubKey, String)>,
     /// threshold could be larger than u8, but that seems very unlikely/an error.
     pub threshold: u8,

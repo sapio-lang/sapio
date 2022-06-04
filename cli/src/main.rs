@@ -3,6 +3,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
+use crate::contracts::server::Server;
 #[deny(missing_docs)]
 use crate::contracts::Api;
 use crate::contracts::Bind;
@@ -31,6 +32,7 @@ use sapio_base::util::CTVHash;
 use std::ffi::OsString;
 use std::sync::Arc;
 use tokio::io::AsyncReadExt;
+use tokio::sync::oneshot;
 use util::*;
 pub mod config;
 mod contracts;
@@ -387,8 +389,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 net: network,
                 plugin_map,
             };
+            let (server, send_server, shutdown_server) = Server::new();
 
-            match matches.subcommand() {
+            let msg = match matches.subcommand() {
                 Some(("bind", args)) => {
                     let use_mock = args.is_present("mock");
                     let use_base64 = args.is_present("base64_psbt");
@@ -418,17 +421,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             compiled,
                         }),
                     }
-                    .handle()
-                    .await?;
                 }
-                Some(("list", args)) => {
-                    Request {
-                        context: context(&args),
-                        command: Command::List(List),
-                    }
-                    .handle()
-                    .await?;
-                }
+                Some(("list", args)) => Request {
+                    context: context(&args),
+                    command: Command::List(List),
+                },
                 Some(("create", args)) => {
                     let json = args.value_of("json").map(|x| x.to_string());
                     let params = if let Some(params) = json {
@@ -442,43 +439,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         context: context(&args),
                         command: Command::Call(Call { params }),
                     }
-                    .handle()
-                    .await?;
                 }
-                Some(("api", args)) => {
-                    Request {
-                        context: context(&args),
-                        command: Command::Api(Api),
-                    }
-                    .handle()
-                    .await?;
-                }
-                Some(("logo", args)) => {
-                    Request {
-                        context: context(&args),
-                        command: Command::Logo(Logo),
-                    }
-                    .handle()
-                    .await?;
-                }
-                Some(("info", args)) => {
-                    Request {
-                        context: context(&args),
-                        command: Command::Info(Info),
-                    }
-                    .handle()
-                    .await?;
-                }
-                Some(("load", args)) => {
-                    Request {
-                        context: context(&args),
-                        command: Command::Load(Load),
-                    }
-                    .handle()
-                    .await?;
-                }
+                Some(("api", args)) => Request {
+                    context: context(&args),
+                    command: Command::Api(Api),
+                },
+                Some(("logo", args)) => Request {
+                    context: context(&args),
+                    command: Command::Logo(Logo),
+                },
+                Some(("info", args)) => Request {
+                    context: context(&args),
+                    command: Command::Info(Info),
+                },
+                Some(("load", args)) => Request {
+                    context: context(&args),
+                    command: Command::Load(Load),
+                },
                 _ => unreachable!(),
-            }
+            };
+            server.run();
+            let (tx, rx) = oneshot::channel();
+            send_server.send((msg, tx)).map_err(|e| "Failed to Send")?;
+            rx.await?;
+            shutdown_server.send(())?;
         }
         _ => unreachable!(),
     };
