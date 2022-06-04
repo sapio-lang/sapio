@@ -5,6 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use bitcoin::consensus::deserialize;
+use bitcoin::hashes::Hash;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use std::path::PathBuf;
 /// Checks that a file exists during argument parsing
@@ -102,4 +103,14 @@ pub(crate) fn get_data_dir(typ: &str, org: &str, proj: &str) -> PathBuf {
         directories::ProjectDirs::from(typ, org, proj).expect("Failed to find config directory");
     let mut path: PathBuf = proj.data_dir().clone().into();
     path
+}
+
+pub(crate) fn create_mock_output() -> bitcoin::OutPoint {
+    bitcoin::OutPoint {
+        txid: bitcoin::hashes::sha256d::Hash::from_inner(
+            bitcoin::hashes::sha256::Hash::hash(format!("mock:{}", 0).as_bytes()).into_inner(),
+        )
+        .into(),
+        vout: 0,
+    }
 }
