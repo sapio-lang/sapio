@@ -16,15 +16,17 @@ use tokio::{
 
 use crate::contracts::Request;
 
+type Response = Result<(), Value>;
+
 pub struct Server {
-    chan: UnboundedReceiver<(Request, oneshot::Sender<()>)>,
+    chan: UnboundedReceiver<(Request, oneshot::Sender<Response>)>,
     shutdown: tokio::sync::broadcast::Receiver<()>,
 }
 
 impl Server {
     pub fn new() -> (
         Self,
-        UnboundedSender<(Request, oneshot::Sender<()>)>,
+        UnboundedSender<(Request, oneshot::Sender<Response>)>,
         broadcast::Sender<()>,
     ) {
         let (a, b) = unbounded_channel();
@@ -44,8 +46,7 @@ impl Server {
                         break 'terminate;
                     }
                     Some((req, resp)) = self.chan.recv() => {
-                        req.handle().await;
-                        resp.send(());
+                        resp.send(req.handle().await);
                     }
                 }
             }

@@ -108,7 +108,14 @@ impl Request {
         };
         Ok(emulator)
     }
-    pub async fn handle(self) -> ResultT<()> {
+    pub async fn handle(self) -> Result<(), Value> {
+        let v = self
+            .handle_inner()
+            .await
+            .map_err(|e| serde_json::json!({"error": e.to_string()}));
+        v
+    }
+    pub async fn handle_inner(self) -> ResultT<()> {
         let emulator = self.get_emulator().await?;
         // create the future to get the sph,
         // but do not await it since not all calls will use it.
