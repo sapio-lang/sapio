@@ -28,7 +28,7 @@ use sapio_wasm_plugin::{
 use schemars::JsonSchema;
 use serde::*;
 use serde_json::Value;
-use std::fmt::Write;
+use std::fmt::{Display, Write};
 use std::{
     collections::{BTreeMap, HashMap},
     convert::TryInto,
@@ -94,6 +94,17 @@ pub struct Request {
     pub command: Command,
 }
 
+#[derive(Serialize, Deserialize, JsonSchema, Debug)]
+pub struct RequestError(Value);
+
+impl Display for RequestError {
+    fn fmt(&self, f: &mut __private::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl Error for RequestError {}
+
 type ResultT<T> = Result<T, Box<dyn Error>>;
 impl Request {
     async fn get_emulator(&self) -> ResultT<Arc<dyn CTVEmulator>> {
@@ -108,14 +119,15 @@ impl Request {
         };
         Ok(emulator)
     }
-    pub async fn handle(self) -> Result<(), Value> {
-        let v = self
-            .handle_inner()
-            .await
-            .map_err(|e| serde_json::json!({"error": e.to_string()}));
+    pub async fn handle(self) -> Result<Value, RequestError> {
+        let v = self.handle_inner().await.map_err(|e| -> RequestError {
+            e.downcast::<RequestError>()
+                .map(|d| *d)
+                .unwrap_or_else(|e| RequestError(e.to_string().into()))
+        });
         v
     }
-    pub async fn handle_inner(self) -> ResultT<()> {
+    pub async fn handle_inner(self) -> ResultT<Value> {
         let emulator = self.get_emulator().await?;
         // create the future to get the sph,
         // but do not await it since not all calls will use it.
@@ -151,7 +163,7 @@ impl Request {
                     .iter()
                     .map(|p| p.get_name().map(|name| (p.id().to_string(), name)))
                     .collect::<Result<BTreeMap<_, _>, _>>()?;
-                println!("{}", serde_json::to_string(&m)?);
+                Ok(serde_json::to_value(&m)?)
             }
             Command::Call(call) => {
                 let params = call.params;
@@ -169,43 +181,38 @@ impl Request {
                         writeln!(w, "Error: {}", err)?;
                     }
                     // returns
-                    Err(w)?;
+                    Err(RequestError(w.into()))?;
                 }
                 let create_args: CreateArgs<serde_json::Value> = serde_json::from_value(params)?;
                 let v = sph.call(&PathFragment::Root.into(), &create_args)?;
-                println!("{}", serde_json::to_string(&v)?);
+                Ok(serde_json::to_value(&v)?)
             }
-            Command::Bind(bind) => {
-                bind.call(net, emulator).await?;
-            }
+            Command::Bind(bind) => bind.call(net, emulator).await,
             Command::Api(api) => {
                 let sph = default_sph().await?;
-                println!("{}", serde_json::to_value(sph.get_api()?)?);
+                Ok(serde_json::to_value(sph.get_api()?)?)
             }
             Command::Logo(logo) => {
                 let sph = default_sph().await?;
-                println!("{}", sph.get_logo()?);
+                Ok(sph.get_logo()?.into())
             }
             Command::Info(info) => {
                 let sph = default_sph().await?;
-                println!("Name: {}", sph.get_name()?);
                 let api = sph.get_api()?;
-                println!(
-                    "Description:\n{}",
-                    api.input()
+                Ok(serde_json::json!({
+                    "name": sph.get_name()?,
+                    "info": api.input()
                         .schema
                         .metadata
                         .as_ref()
                         .and_then(|m| m.description.as_ref())
-                        .unwrap()
-                );
+                        .unwrap()}))
             }
             Command::Load(load) => {
                 let sph = default_sph().await?;
-                println!("{}", sph.id().to_string());
+                Ok(serde_json::json!({"id": sph.id().to_string()}))
             }
         }
-        Ok(())
     }
 }
 
@@ -214,7 +221,7 @@ impl Bind {
         self,
         net: bitcoin::Network,
         emulator: Arc<dyn CTVEmulator>,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<Value, Box<dyn Error>> {
         let Bind {
             client_url,
             client_auth,
@@ -264,9 +271,9 @@ impl Bind {
                     {
                         (psbt.extract_tx(), pos as u32)
                     } else {
-                        return Err(
-                            format!("No Output found {:?} {:?}", psbt.unsigned_tx, a).into()
-                        );
+                        return Err(Err(RequestError(
+                            format!("No Output found {:?} {:?}", psbt.unsigned_tx, a).into(),
+                        ))?);
                     }
                 } else {
                     let res = client
@@ -281,7 +288,7 @@ impl Bind {
                     (tx, vout as u32)
                 }
             } else {
-                return Err("Must have a valid address".into());
+                return Err(Err(RequestError("Must have a valid address".into()))?);
             }
         };
         let logger = Rc::new(TxIndexLogger::new());
@@ -318,10 +325,10 @@ impl Bind {
                 },
             );
         }
-        Ok(if use_base64 {
-            println!("{}", serde_json::to_string_pretty(&bound)?);
+        if use_base64 {
+            Ok(serde_json::to_value(&bound)?)
         } else {
-            println!("{}", serde_json::to_string_pretty(&bound)?);
-        })
+            Ok(serde_json::to_value(&bound)?)
+        }
     }
 }

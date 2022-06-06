@@ -16,7 +16,9 @@ use tokio::{
 
 use crate::contracts::Request;
 
-type Response = Result<(), Value>;
+use super::RequestError;
+
+type Response = Result<Value, RequestError>;
 
 pub struct Server {
     chan: UnboundedReceiver<(Request, oneshot::Sender<Response>)>,
