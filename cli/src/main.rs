@@ -461,14 +461,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             server.run();
             let (tx, rx) = oneshot::channel();
             send_server.send((msg, tx)).map_err(|e| "Failed to Send")?;
-            match rx.await? {
-                Ok(v) => {
-                    println!("{}", serde_json::to_string_pretty(&v)?);
-                }
-                Err(e) => {
-                    Err(serde_json::to_string_pretty(&e)?)?;
-                }
-            }
+            println!("{}", serde_json::to_string_pretty(&rx.await?)?);
             shutdown_server.send(())?;
         }
         _ => unreachable!(),

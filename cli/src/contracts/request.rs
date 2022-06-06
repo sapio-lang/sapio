@@ -9,7 +9,7 @@ use bitcoincore_rpc_async::RpcApi;
 use emulator_connect::{CTVAvailable, CTVEmulator};
 use sapio::{
     contract::{
-        object::{LinkedPSBT, ObjectMetadata, SapioStudioObject},
+        object::{LinkedPSBT, ObjectMetadata, Program, SapioStudioObject},
         Compiled,
     },
     template::{OutputMeta, TemplateMetadata},
@@ -23,12 +23,12 @@ use sapio_base::{
 };
 use sapio_wasm_plugin::{
     host::{PluginHandle, WasmPluginHandle},
-    CreateArgs,
+    CreateArgs, API,
 };
 use schemars::JsonSchema;
 use serde::*;
 use serde_json::Value;
-use std::fmt::{Display, Write};
+use std::fmt::{Display, Formatter, Write};
 use std::{
     collections::{BTreeMap, HashMap},
     convert::TryInto,
@@ -54,8 +54,16 @@ pub struct Common {
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct List;
 #[derive(Serialize, Deserialize, JsonSchema)]
+pub struct ListReturn {
+    items: BTreeMap<String, String>,
+}
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct Call {
     pub params: serde_json::Value,
+}
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct CallReturn {
+    result: Value,
 }
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct Bind {
@@ -68,14 +76,32 @@ pub struct Bind {
     pub use_txn: Option<String>,
     pub compiled: Compiled,
 }
+pub type BindReturn = Program;
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct Api;
 #[derive(Serialize, Deserialize, JsonSchema)]
+pub struct ApiReturn {
+    api: API<CreateArgs<Value>, Value>,
+}
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct Logo;
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct LogoReturn {
+    logo: String,
+}
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct Info;
 #[derive(Serialize, Deserialize, JsonSchema)]
+pub struct InfoReturn {
+    name: String,
+    description: String,
+}
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct Load;
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct LoadReturn {
+    key: String,
+}
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub enum Command {
@@ -87,6 +113,16 @@ pub enum Command {
     Info(Info),
     Load(Load),
 }
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub enum CommandReturn {
+    List(ListReturn),
+    Call(CallReturn),
+    Bind(BindReturn),
+    Api(ApiReturn),
+    Logo(LogoReturn),
+    Info(InfoReturn),
+    Load(LoadReturn),
+}
 
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct Request {
@@ -94,11 +130,16 @@ pub struct Request {
     pub command: Command,
 }
 
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub struct Response {
+    pub result: Result<CommandReturn, RequestError>,
+}
+
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
 pub struct RequestError(Value);
 
 impl Display for RequestError {
-    fn fmt(&self, f: &mut __private::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
     }
 }
@@ -119,15 +160,15 @@ impl Request {
         };
         Ok(emulator)
     }
-    pub async fn handle(self) -> Result<Value, RequestError> {
+    pub async fn handle(self) -> Response {
         let v = self.handle_inner().await.map_err(|e| -> RequestError {
             e.downcast::<RequestError>()
                 .map(|d| *d)
                 .unwrap_or_else(|e| RequestError(e.to_string().into()))
         });
-        v
+        Response { result: v }
     }
-    pub async fn handle_inner(self) -> ResultT<Value> {
+    pub async fn handle_inner(self) -> ResultT<CommandReturn> {
         let emulator = self.get_emulator().await?;
         // create the future to get the sph,
         // but do not await it since not all calls will use it.
@@ -163,7 +204,7 @@ impl Request {
                     .iter()
                     .map(|p| p.get_name().map(|name| (p.id().to_string(), name)))
                     .collect::<Result<BTreeMap<_, _>, _>>()?;
-                Ok(serde_json::to_value(&m)?)
+                Ok(CommandReturn::List(ListReturn { items: m }))
             }
             Command::Call(call) => {
                 let params = call.params;
@@ -185,32 +226,41 @@ impl Request {
                 }
                 let create_args: CreateArgs<serde_json::Value> = serde_json::from_value(params)?;
                 let v = sph.call(&PathFragment::Root.into(), &create_args)?;
-                Ok(serde_json::to_value(&v)?)
+                Ok(CommandReturn::Call(CallReturn { result: v }))
             }
-            Command::Bind(bind) => bind.call(net, emulator).await,
+            Command::Bind(bind) => Ok(CommandReturn::Bind(bind.call(net, emulator).await?)),
             Command::Api(api) => {
                 let sph = default_sph().await?;
-                Ok(serde_json::to_value(sph.get_api()?)?)
+                Ok(CommandReturn::Api(ApiReturn {
+                    api: sph.get_api()?,
+                }))
             }
             Command::Logo(logo) => {
                 let sph = default_sph().await?;
-                Ok(sph.get_logo()?.into())
+                Ok(CommandReturn::Logo(LogoReturn {
+                    logo: sph.get_logo()?.into(),
+                }))
             }
             Command::Info(info) => {
                 let sph = default_sph().await?;
                 let api = sph.get_api()?;
-                Ok(serde_json::json!({
-                    "name": sph.get_name()?,
-                    "info": api.input()
+                Ok(CommandReturn::Info(InfoReturn {
+                    name: sph.get_name()?,
+                    description: api
+                        .input()
                         .schema
                         .metadata
                         .as_ref()
                         .and_then(|m| m.description.as_ref())
-                        .unwrap()}))
+                        .unwrap()
+                        .clone(),
+                }))
             }
             Command::Load(load) => {
                 let sph = default_sph().await?;
-                Ok(serde_json::json!({"id": sph.id().to_string()}))
+                Ok(CommandReturn::Load(LoadReturn {
+                    key: sph.id().to_string(),
+                }))
             }
         }
     }
@@ -221,7 +271,7 @@ impl Bind {
         self,
         net: bitcoin::Network,
         emulator: Arc<dyn CTVEmulator>,
-    ) -> Result<Value, Box<dyn Error>> {
+    ) -> Result<BindReturn, Box<dyn Error>> {
         let Bind {
             client_url,
             client_auth,
@@ -325,10 +375,6 @@ impl Bind {
                 },
             );
         }
-        if use_base64 {
-            Ok(serde_json::to_value(&bound)?)
-        } else {
-            Ok(serde_json::to_value(&bound)?)
-        }
+        Ok(bound)
     }
 }
