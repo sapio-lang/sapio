@@ -28,6 +28,7 @@ use sapio_wasm_plugin::{
 use schemars::JsonSchema;
 use serde::*;
 use serde_json::Value;
+use std::fmt::Write;
 use std::{
     collections::{BTreeMap, HashMap},
     convert::TryInto,
@@ -156,13 +157,14 @@ impl Request {
                     Some(jsonschema_valid::schemas::Draft::Draft6),
                 )?;
                 if let Err(it) = validator.validate(&params) {
+                    let mut w = String::new();
                     for err in it {
-                        println!("Error: {}", err);
+                        writeln!(w, "Error: {}", err)?;
                     }
-                    return Ok(());
+                    // returns
+                    Err(w)?;
                 }
                 let create_args: CreateArgs<serde_json::Value> = serde_json::from_value(params)?;
-
                 let v = sph.call(&PathFragment::Root.into(), &create_args)?;
                 println!("{}", serde_json::to_string(&v)?);
             }
