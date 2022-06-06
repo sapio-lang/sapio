@@ -139,9 +139,11 @@ impl Request {
                     context.net,
                     plugin_map,
                 )?;
-                for plugin in plugins {
-                    println!("{} -- {}", plugin.get_name()?, plugin.id().to_string());
-                }
+                let m = plugins
+                    .iter()
+                    .map(|p| p.get_name().map(|name| (p.id().to_string(), name)))
+                    .collect::<Result<BTreeMap<_, _>, _>>()?;
+                println!("{}", serde_json::to_string(&m)?);
             }
             Command::Call(call) => {
                 let params = call.params;
