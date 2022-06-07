@@ -33,7 +33,6 @@ use std::{
     collections::{BTreeMap, HashMap},
     convert::TryInto,
     error::Error,
-    ffi::OsString,
     path::PathBuf,
     rc::Rc,
     sync::Arc,
@@ -189,7 +188,7 @@ impl Request {
             )
         };
         match command {
-            Command::List(list) => {
+            Command::List(_list) => {
                 let plugins = WasmPluginHandle::<Value>::load_all_keys(
                     &path,
                     emulator.clone(),
@@ -225,19 +224,19 @@ impl Request {
                 Ok(CommandReturn::Call(CallReturn { result: v }))
             }
             Command::Bind(bind) => Ok(CommandReturn::Bind(bind.call(net, emulator).await?)),
-            Command::Api(api) => {
+            Command::Api(_api) => {
                 let sph = default_sph().await?;
                 Ok(CommandReturn::Api(ApiReturn {
                     api: sph.get_api()?,
                 }))
             }
-            Command::Logo(logo) => {
+            Command::Logo(_logo) => {
                 let sph = default_sph().await?;
                 Ok(CommandReturn::Logo(LogoReturn {
                     logo: sph.get_logo()?.into(),
                 }))
             }
-            Command::Info(info) => {
+            Command::Info(_info) => {
                 let sph = default_sph().await?;
                 let api = sph.get_api()?;
                 Ok(CommandReturn::Info(InfoReturn {
@@ -252,7 +251,7 @@ impl Request {
                         .clone(),
                 }))
             }
-            Command::Load(load) => {
+            Command::Load(_load) => {
                 let sph = default_sph().await?;
                 Ok(CommandReturn::Load(LoadReturn {
                     key: sph.id().to_string(),
@@ -271,7 +270,7 @@ impl Bind {
         let Bind {
             client_url,
             client_auth,
-            use_base64,
+            use_base64: _,
             use_mock,
             use_txn,
             compiled,

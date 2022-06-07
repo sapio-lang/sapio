@@ -37,7 +37,7 @@ use sapio_wasm_plugin::host::plugin_handle::ModuleLocator;
 use schemars::schema_for;
 use serde_json::Deserializer;
 use std::error::Error;
-use std::ffi::OsString;
+
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::io::AsyncReadExt;

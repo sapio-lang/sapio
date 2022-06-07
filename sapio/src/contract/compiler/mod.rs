@@ -15,18 +15,18 @@ use crate::contract::actions::conditional_compile::CCILWrapper;
 use crate::contract::actions::CallableAsFoF;
 use crate::contract::TxTmplIt;
 use crate::util::amountrange::AmountRange;
-use ::miniscript::descriptor::TapTree;
+
 use ::miniscript::*;
 use bitcoin::schnorr::TweakedPublicKey;
 use bitcoin::XOnlyPublicKey;
 use sapio_base::effects::EffectDB;
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
-use sapio_base::reverse_path::ReversePath;
+
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::Clause;
 use std::collections::{BTreeMap, BTreeSet};
-use std::iter::FromIterator;
+
 use std::sync::Arc;
 mod cache;
 mod util;
@@ -181,7 +181,7 @@ where
         // we need a unique context for each.
         let mut action_ctx = ctx.derive(PathFragment::Action)?;
         let mut renamer = Renamer::new();
-        let (mut continue_apis, clause_accumulator): (
+        let (continue_apis, clause_accumulator): (
             ContinueAPIs,
             Vec<Vec<Miniscript<XOnlyPublicKey, Tap>>>,
         ) = self

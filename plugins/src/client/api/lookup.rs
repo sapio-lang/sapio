@@ -6,12 +6,6 @@
 
 ///! Utility struct for looking up and decoding modules
 use super::*;
-use crate::plugin_handle::PluginHandle;
-use core::convert::TryFrom;
-use sapio::contract::CompilationError;
-use sapio_base::effects::EffectPath;
-use sapio_trait::SapioJSONTrait;
-use std::marker::PhantomData;
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Eq)]
 /// # Lookup Parameters

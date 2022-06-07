@@ -6,12 +6,9 @@
 
 ///! Various utils for working with modules
 use super::*;
-use crate::plugin_handle::PluginHandle;
-use core::convert::TryFrom;
+
 use sapio::contract::CompilationError;
 use sapio_base::effects::EffectPath;
-use sapio_trait::SapioJSONTrait;
-use std::marker::PhantomData;
 
 /// Print a &str to the parent's console.
 pub fn log(s: &str) {

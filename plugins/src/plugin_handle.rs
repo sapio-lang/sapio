@@ -4,11 +4,9 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use super::*;
 use crate::API;
 use sapio::contract::CompilationError;
 use sapio_base::effects::EffectPath;
-use std::marker::PhantomData;
 
 /// Generic plugin handle interface.
 ///

@@ -6,7 +6,7 @@
 
 use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoincore_rpc_async as rpc;
-use bitcoincore_rpc_async::RpcApi;
+
 use directories::BaseDirs;
 use emulator_connect::connections::federated::FederatedEmulatorConnection;
 use emulator_connect::connections::hd::HDOracleEmulatorConnection;
@@ -48,7 +48,7 @@ impl EmulatorConfig {
         let _n_emulators = self.emulators.len();
         let rt = Handle::try_current()
             .err()
-            .map(|e| Arc::new(tokio::runtime::Runtime::new().unwrap()));
+            .map(|_e| Arc::new(tokio::runtime::Runtime::new().unwrap()));
         let secp = Arc::new(bitcoin::secp256k1::Secp256k1::new());
         let mut it =
             self.emulators

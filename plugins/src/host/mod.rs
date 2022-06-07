@@ -61,7 +61,7 @@ mod exports {
     //! They must be manually bound when instantiating the client.
     use std::str::FromStr;
 
-    use crate::host::plugin_handle::{ModuleLocator, SyncModuleLocator};
+    use crate::host::plugin_handle::SyncModuleLocator;
 
     use super::*;
     use sapio_base::effects::EffectPath;

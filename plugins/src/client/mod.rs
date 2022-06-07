@@ -6,10 +6,9 @@
 
 use super::*;
 pub use api::*;
-use bitcoin::hashes::Hash;
+
 use ext::*;
 use sapio::contract::Compiled;
-use sapio_ctv_emulator_trait::CTVEmulator;
 
 pub mod api;
 mod exports;

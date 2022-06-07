@@ -4,7 +4,6 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use serde_json::Value;
 use tokio::{
     select,
     sync::{
@@ -16,7 +15,7 @@ use tokio::{
 
 use crate::contracts::Request;
 
-use super::{CommandReturn, RequestError, Response};
+use super::Response;
 
 pub struct Server {
     chan: UnboundedReceiver<(Request, oneshot::Sender<Response>)>,
