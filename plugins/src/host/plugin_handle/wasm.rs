@@ -25,6 +25,7 @@ pub enum ModuleLocator {
     Key(String),
     FileName(String),
     Bytes(Vec<u8>),
+    Unknown,
 }
 
 impl ModuleLocator {
@@ -36,6 +37,7 @@ impl ModuleLocator {
             }
             ModuleLocator::FileName(f) => Ok(SyncModuleLocator::Bytes(tokio::fs::read(f).await?)),
             ModuleLocator::Bytes(b) => Ok(SyncModuleLocator::Bytes(b)),
+            ModuleLocator::Unknown => Err(Err(CompilationError::UnknownModule)?),
         }
     }
 }
