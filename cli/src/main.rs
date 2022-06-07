@@ -4,8 +4,8 @@ use crate::contracts::Response;
 // This Source Code Form is subject to the terms of the Mozilla Public
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
-use crate::contracts::server::Server;
 #[deny(missing_docs)]
+use crate::contracts::server::Server;
 use crate::contracts::Api;
 use crate::contracts::Bind;
 use crate::contracts::Call;
@@ -18,21 +18,26 @@ use crate::contracts::Logo;
 use crate::contracts::Request;
 use bitcoin::consensus::serialize;
 use bitcoin::consensus::Decodable;
+use bitcoin::network::constants::Network;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::bip32::ExtendedPrivKey;
 use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use clap::clap_app;
+use clap::ArgMatches;
 use config::*;
 use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::CTVAvailable;
 use emulator_connect::CTVEmulator;
 use miniscript::psbt::PsbtExt;
+use rand::prelude::*;
 use sapio::contract::Compiled;
 use sapio_base::util::CTVHash;
 use schemars::schema_for;
 use serde_json::Deserializer;
+use std::error::Error;
 use std::ffi::OsString;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::io::AsyncReadExt;
 use tokio::sync::oneshot;
@@ -40,6 +45,10 @@ use util::*;
 pub mod config;
 mod contracts;
 mod util;
+
+async fn config(matches: &ArgMatches) -> Result<Config, Box<dyn Error>> {
+    Config::setup(&matches, "org", "judica", "sapio-cli").await
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -187,30 +196,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
       )
       );
     let matches = app.get_matches();
-    if let Some(("configure", config_matches)) = matches.subcommand() {
-        if let Some(("wizard", args)) = config_matches.subcommand() {
-            let config = ConfigVerifier::wizard().await?;
-            if args.is_present("write") {
-                let proj = directories::ProjectDirs::from("org", "judica", "sapio-cli")
-                    .expect("Failed to find config directory");
-                let path = proj.config_dir();
-                tokio::fs::create_dir_all(path).await?;
-                let mut pb = path.to_path_buf();
-                pb.push("config.json");
-                tokio::fs::write(&pb, &serde_json::to_string_pretty(&config)?).await?;
-            } else {
-                println!(
-                    "Please write this to the config file location (see sapio-cli configure files)"
-                );
-            }
-            return Ok(());
-        }
-    }
-
-    let config = Config::setup(&matches, "org", "judica", "sapio-cli").await?;
 
     match matches.subcommand() {
         Some(("configure", config_matches)) => match config_matches.subcommand() {
+            Some(("wizard", args)) => {
+                let config = ConfigVerifier::wizard().await?;
+                if args.is_present("write") {
+                    let proj = directories::ProjectDirs::from("org", "judica", "sapio-cli")
+                        .expect("Failed to find config directory");
+                    let path = proj.config_dir();
+                    tokio::fs::create_dir_all(path).await?;
+                    let mut pb = path.to_path_buf();
+                    pb.push("config.json");
+                    tokio::fs::write(&pb, &serde_json::to_string_pretty(&config)?).await?;
+                } else {
+                    println!(
+                    "Please write this to the config file location (see sapio-cli configure files)"
+                );
+                }
+                return Ok(());
+            }
             Some(("files", args)) => {
                 let proj = directories::ProjectDirs::from("org", "judica", "sapio-cli")
                     .expect("Failed to find config directory");
@@ -236,45 +241,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
             Some(("show", _)) => {
+                let config = config(&matches).await?;
                 println!(
                     "{}",
-                    serde_json::to_value(ConfigVerifier::from(config.clone()))
+                    serde_json::to_value(ConfigVerifier::from(config))
                         .and_then(|v| serde_json::to_string_pretty(&v))?
                 );
                 return Ok(());
             }
             _ => unreachable!(),
         },
-        _ => (),
-    }
-
-    let emulator: Arc<dyn CTVEmulator> = if let Some(emcfg) = &config.active.emulator_nodes {
-        if emcfg.enabled {
-            emcfg.get_emulator()?.into()
-        } else {
-            Arc::new(CTVAvailable)
-        }
-    } else {
-        Arc::new(CTVAvailable)
-    };
-    let plugin_map = config.active.plugin_map.map(|x| {
-        x.into_iter()
-            .map(|(x, y)| (x.into_bytes().into(), y.into()))
-            .collect()
-    });
-    {
-        let mut emulator = emulator.clone();
-        // Drop Emulator from own thread...
-        std::thread::spawn(move || loop {
-            if let Some(_) = Arc::get_mut(&mut emulator) {
-                break;
-            }
-        });
-    }
-    use bitcoin::network::constants::Network;
-    use rand::prelude::*;
-    use std::str::FromStr;
-    match matches.subcommand() {
         Some(("signer", sign_matches)) => match sign_matches.subcommand() {
             Some(("sign", args)) => {
                 let buf = tokio::fs::read(args.value_of_os("input").unwrap()).await?;
@@ -313,42 +289,65 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             _ => unreachable!(),
         },
-        Some(("emulator", sign_matches)) => match sign_matches.subcommand() {
-            Some(("sign", args)) => {
-                let psbt = decode_psbt_file(args, "psbt")?;
-                let psbt = emulator.sign(psbt)?;
-                let bytes = serialize(&psbt);
-                std::fs::write(args.value_of_os("out").unwrap(), &base64::encode(bytes))?;
+        Some(("emulator", sign_matches)) => {
+            let config = config(&matches).await?;
+            let emulator: Arc<dyn CTVEmulator> = if let Some(emcfg) = &config.active.emulator_nodes
+            {
+                if emcfg.enabled {
+                    emcfg.get_emulator()?.into()
+                } else {
+                    Arc::new(CTVAvailable)
+                }
+            } else {
+                Arc::new(CTVAvailable)
+            };
+            // TODO: is this still required to drop the emulator from a unique thread?
+            {
+                let mut emulator = emulator.clone();
+                // Drop Emulator from own thread...
+                std::thread::spawn(move || loop {
+                    if let Some(_) = Arc::get_mut(&mut emulator) {
+                        break;
+                    }
+                });
             }
-            Some(("get_key", args)) => {
-                let psbt = decode_psbt_file(args, "psbt")?;
-                let h = emulator.get_signer_for(psbt.extract_tx().get_ctv_hash(0))?;
-                println!("{}", h);
-            }
-            Some(("show", args)) => {
-                let psbt = decode_psbt_file(args, "psbt")?;
-                println!("{:?}", psbt);
-            }
-            Some(("server", args)) => {
-                let filename = args.value_of("seed").unwrap();
-                let contents = tokio::fs::read(filename).await?;
+            match sign_matches.subcommand() {
+                Some(("sign", args)) => {
+                    let psbt = decode_psbt_file(args, "psbt")?;
+                    let psbt = emulator.sign(psbt)?;
+                    let bytes = serialize(&psbt);
+                    std::fs::write(args.value_of_os("out").unwrap(), &base64::encode(bytes))?;
+                }
+                Some(("get_key", args)) => {
+                    let psbt = decode_psbt_file(args, "psbt")?;
+                    let h = emulator.get_signer_for(psbt.extract_tx().get_ctv_hash(0))?;
+                    println!("{}", h);
+                }
+                Some(("show", args)) => {
+                    let psbt = decode_psbt_file(args, "psbt")?;
+                    println!("{:?}", psbt);
+                }
+                Some(("server", args)) => {
+                    let filename = args.value_of("seed").unwrap();
+                    let contents = tokio::fs::read(filename).await?;
 
-                let root = ExtendedPrivKey::new_master(config.network, &contents[..]).unwrap();
-                let pk_root = ExtendedPubKey::from_priv(&Secp256k1::new(), &root);
-                let sync_mode = args.is_present("sync");
-                let oracle = HDOracleEmulator::new(root, sync_mode);
-                let interface = args.value_of("interface").unwrap();
-                let server = oracle.bind(interface);
-                let status = serde_json::json! {{
-                    "interface": interface,
-                    "pk": pk_root,
-                    "sync": sync_mode,
-                }};
-                println!("{}", serde_json::to_string_pretty(&status).unwrap());
-                server.await?;
+                    let root = ExtendedPrivKey::new_master(config.network, &contents[..]).unwrap();
+                    let pk_root = ExtendedPubKey::from_priv(&Secp256k1::new(), &root);
+                    let sync_mode = args.is_present("sync");
+                    let oracle = HDOracleEmulator::new(root, sync_mode);
+                    let interface = args.value_of("interface").unwrap();
+                    let server = oracle.bind(interface);
+                    let status = serde_json::json! {{
+                        "interface": interface,
+                        "pk": pk_root,
+                        "sync": sync_mode,
+                    }};
+                    println!("{}", serde_json::to_string_pretty(&status).unwrap());
+                    server.await?;
+                }
+                _ => unreachable!(),
             }
-            _ => unreachable!(),
-        },
+        }
         Some(("psbt", matches)) => match matches.subcommand() {
             Some(("finalize", args)) => {
                 let psbt: PartiallySignedTransaction =
@@ -412,7 +411,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let (b_tx, b_rx) = oneshot::channel();
                         send_server
                             .send((json?, b_tx))
-                            .map_err(|e| "Failed to Send")?;
+                            .map_err(|_e| "Failed to Send")?;
 
                         println!("{}", serde_json::to_string_pretty(&b_rx.await?)?);
                     }
@@ -431,6 +430,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => unreachable!(),
         },
         Some(("contract", matches)) => {
+            let config = config(&matches).await?;
             let module_path = |args: &clap::ArgMatches| {
                 let mut p = args
                     .value_of("workspace")
@@ -441,6 +441,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             let network = config.network;
             let emulator_args = config.active.emulator_nodes;
+            let plugin_map = config.active.plugin_map.map(|x| {
+                x.into_iter()
+                    .map(|(x, y)| (x.into_bytes().into(), y.into()))
+                    .collect()
+            });
             let context = |args: &clap::ArgMatches| Common {
                 path: module_path(args),
                 emulator: emulator_args,
@@ -520,7 +525,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             server.run();
             let (tx, rx) = oneshot::channel();
-            send_server.send((msg, tx)).map_err(|e| "Failed to Send")?;
+            send_server.send((msg, tx)).map_err(|_e| "Failed to Send")?;
             println!("{}", serde_json::to_string_pretty(&rx.await?)?);
             shutdown_server.send(())?;
         }
