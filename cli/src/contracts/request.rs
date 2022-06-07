@@ -22,7 +22,7 @@ use sapio_base::{
     txindex::{TxIndex, TxIndexLogger},
 };
 use sapio_wasm_plugin::{
-    host::{PluginHandle, WasmPluginHandle},
+    host::{plugin_handle::ModuleLocator, PluginHandle, WasmPluginHandle},
     CreateArgs, API,
 };
 use schemars::JsonSchema;
@@ -45,8 +45,7 @@ use crate::{config::EmulatorConfig, util::create_mock_output};
 pub struct Common {
     pub path: PathBuf,
     pub emulator: Option<EmulatorConfig>,
-    pub key: Option<String>,
-    pub file: Option<OsString>,
+    pub module_locator: ModuleLocator,
     #[schemars(with = "String")]
     pub net: bitcoin::Network,
     pub plugin_map: Option<BTreeMap<Vec<u8>, [u8; 32]>>,
@@ -175,19 +174,16 @@ impl Request {
         let Request { context, command } = self;
         let Common {
             path,
-            key,
-            file,
+            module_locator,
             net,
             plugin_map,
             ..
         } = context;
-        let file = file.as_ref().map(|m| OsString::as_os_str(&m));
         let default_sph = || {
             WasmPluginHandle::<Value>::new_async(
                 &path,
                 &emulator,
-                key.as_ref().map(|m| m.as_str()),
-                file,
+                module_locator,
                 net,
                 plugin_map.clone(),
             )

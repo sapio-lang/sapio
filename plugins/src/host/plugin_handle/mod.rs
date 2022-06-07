@@ -15,6 +15,6 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 pub use wasm::*;
 use wasmer::{imports, Function, ImportObject, Instance, LazyInit, MemoryView, Module, Store};
-use wasmer_cache::Hash as WASMCacheID;
+pub use wasmer_cache::Hash as WASMCacheID;
 
 mod wasm;

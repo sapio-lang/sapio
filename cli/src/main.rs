@@ -33,6 +33,7 @@ use miniscript::psbt::PsbtExt;
 use rand::prelude::*;
 use sapio::contract::Compiled;
 use sapio_base::util::CTVHash;
+use sapio_wasm_plugin::host::plugin_handle::ModuleLocator;
 use schemars::schema_for;
 use serde_json::Deserializer;
 use std::error::Error;
@@ -370,13 +371,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .map(|(x, y)| (x.into_bytes().into(), y.into()))
                     .collect()
             });
-            let context = |args: &clap::ArgMatches| Common {
-                path: module_path(args),
-                emulator: emulator_args,
-                key: args.value_of("key").map(ToString::to_string),
-                file: args.value_of_os("file").map(OsString::from),
-                net: network,
-                plugin_map,
+            let context = |args: &clap::ArgMatches| -> Result<Common, &'static str> {
+                let module_locator = args
+                    .value_of("file")
+                    .map(String::from)
+                    .map(ModuleLocator::FileName)
+                    .xor(
+                        args.value_of("key")
+                            .map(ToString::to_string)
+                            .map(ModuleLocator::Key),
+                    )
+                    .ok_or("Expected to have exactly one of key or file")?;
+                Ok(Common {
+                    path: module_path(args),
+                    emulator: emulator_args,
+                    module_locator,
+                    net: network,
+                    plugin_map,
+                })
             };
             let (server, send_server, shutdown_server) = Server::new();
 
@@ -385,12 +397,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let client_url = config.active.api_node.url.clone();
                     let client_auth = config.active.api_node.auth.clone();
                     Request {
-                        context: context(&args),
+                        context: context(&args)?,
                         command: bind_command(&args, client_url, client_auth).await?,
                     }
                 }
                 Some(("list", args)) => Request {
-                    context: context(&args),
+                    context: context(&args)?,
                     command: Command::List(List),
                 },
                 Some(("create", args)) => {
@@ -403,24 +415,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         serde_json::from_str(&s)?
                     };
                     Request {
-                        context: context(&args),
+                        context: context(&args)?,
                         command: Command::Call(Call { params }),
                     }
                 }
                 Some(("api", args)) => Request {
-                    context: context(&args),
+                    context: context(&args)?,
                     command: Command::Api(Api),
                 },
                 Some(("logo", args)) => Request {
-                    context: context(&args),
+                    context: context(&args)?,
                     command: Command::Logo(Logo),
                 },
                 Some(("info", args)) => Request {
-                    context: context(&args),
+                    context: context(&args)?,
                     command: Command::Info(Info),
                 },
                 Some(("load", args)) => Request {
-                    context: context(&args),
+                    context: context(&args)?,
                     command: Command::Load(Load),
                 },
                 _ => unreachable!(),
