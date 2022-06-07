@@ -5,10 +5,13 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use bitcoin::util::bip32::ExtendedPubKey;
+use bitcoincore_rpc_async as rpc;
+
 use directories::BaseDirs;
 use emulator_connect::connections::federated::FederatedEmulatorConnection;
 use emulator_connect::connections::hd::HDOracleEmulatorConnection;
 use emulator_connect::CTVEmulator;
+use schemars::JsonSchema;
 use serde::*;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
@@ -16,16 +19,17 @@ use std::net::ToSocketAddrs;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
-use tokio::io::BufReader;
 use tokio::sync::Mutex;
+use tokio::{io::BufReader, runtime::Handle};
 /// EmulatorConfig is used to determine how this sapio-cli instance should stub
 /// out CTV. Emulators are specified by EPK and interface address. Threshold
 /// should be <= emulators.len().
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 pub struct EmulatorConfig {
     /// if the emulator should be used or not. We tag explicitly for convenience
     /// in the config file format.
     pub enabled: bool,
+    #[schemars(with = "Vec<(String, String)>")]
     pub emulators: Vec<(ExtendedPubKey, String)>,
     /// threshold could be larger than u8, but that seems very unlikely/an error.
     pub threshold: u8,
@@ -42,13 +46,19 @@ impl EmulatorConfig {
             Err(String::from("Too High Thresh"))?;
         }
         let _n_emulators = self.emulators.len();
-        let rt = Arc::new(tokio::runtime::Runtime::new().unwrap());
+        let rt = Handle::try_current()
+            .err()
+            .map(|_e| Arc::new(tokio::runtime::Runtime::new().unwrap()));
         let secp = Arc::new(bitcoin::secp256k1::Secp256k1::new());
         let mut it =
             self.emulators
                 .iter()
                 .map(|(epk, host)| -> Result<_, Box<dyn std::error::Error>> {
+                    let handle = Handle::try_current().unwrap_or_else(|_e| {
+                        rt.as_ref().expect("must have own runtime").handle().clone()
+                    });
                     Ok(HDOracleEmulatorConnection {
+                        handle,
                         runtime: rt.clone(),
                         connection: Mutex::new(None),
                         reconnect: host.to_socket_addrs()?.next().unwrap(),
@@ -86,7 +96,7 @@ impl Into<PathBuf> for PathBufWrapped {
     }
 }
 /// Used to serailize/deserialize pathbufs for config
-mod pathbuf {
+mod pathbuf_serde {
     use serde::*;
     use std::path::PathBuf;
     pub fn serialize<S>(p: &PathBuf, s: S) -> Result<S::Ok, S::Error>
@@ -105,12 +115,16 @@ mod pathbuf {
 
 /// Remote type Derivation for rpc::Auth
 /// TODO: Move to the RPC Library?
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(remote = "super::rpc::Auth")]
-enum Auth {
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+#[serde(remote = "rpc::Auth")]
+pub enum Auth {
     None,
     UserPass(String, String),
-    CookieFile(#[serde(with = "pathbuf")] PathBuf),
+    CookieFile(
+        #[serde(with = "pathbuf_serde")]
+        #[schemars(with = "String")]
+        PathBuf,
+    ),
 }
 
 /// Which Bitcoin Node should Sapio use
@@ -118,7 +132,7 @@ enum Auth {
 pub struct Node {
     pub url: String,
     #[serde(with = "Auth")]
-    pub auth: super::rpc::Auth,
+    pub auth: rpc::Auth,
 }
 
 /// A configuration for any network (regtest, main, signet, testnet)
@@ -370,7 +384,7 @@ impl ConfigVerifier {
                     break;
                 }
             }
-            super::rpc::Auth::CookieFile(cookie.into())
+            rpc::Auth::CookieFile(cookie.into())
         } else {
             let mut username: String;
             loop {
@@ -396,7 +410,7 @@ impl ConfigVerifier {
                     }
                 }
             }
-            super::rpc::Auth::UserPass(username, password)
+            rpc::Auth::UserPass(username, password)
         };
 
         println!("Configuration Complete!");
@@ -449,7 +463,7 @@ impl std::default::Default for ConfigVerifier {
         b.push(".cookie");
         let regtest = NetworkConfig {
             active: true,
-            api_node: Node{url: "http://127.0.0.1:18443".into(), auth: super::rpc::Auth::CookieFile(b.into())},
+            api_node: Node{url: "http://127.0.0.1:18443".into(), auth: rpc::Auth::CookieFile(b.into())},
             emulator_nodes: Some(EmulatorConfig{
                 enabled: true,
                 threshold: 1u8,

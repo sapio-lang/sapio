@@ -6,15 +6,15 @@
 
 use super::wasm_cache;
 use crate::CreateArgs;
-use sapio::contract::Compiled;
+
 use sapio_ctv_emulator_trait::NullEmulator;
 use std::cell::Cell;
 use std::collections::BTreeMap;
-use std::ffi::OsStr;
+
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 pub use wasm::*;
 use wasmer::{imports, Function, ImportObject, Instance, LazyInit, MemoryView, Module, Store};
-use wasmer_cache::Hash as WASMCacheID;
+pub use wasmer_cache::Hash as WASMCacheID;
 
 mod wasm;

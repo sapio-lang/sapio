@@ -59,6 +59,10 @@ pub type HostEnvironment = Arc<Mutex<HostEnvironmentInner>>;
 mod exports {
     //! the exports that the client will be able to use.
     //! They must be manually bound when instantiating the client.
+    use std::str::FromStr;
+
+    use crate::host::plugin_handle::SyncModuleLocator;
+
     use super::*;
     use sapio_base::effects::EffectPath;
     /// lookup a plugin key from a human reable name.
@@ -224,17 +228,18 @@ mod exports {
         let mmap = env.module_map.clone();
         let path = env.path.clone();
         let net = env.net;
-
+        let key = wasmer_cache::Hash::from_str(&h).map(SyncModuleLocator::Key);
         // Use serde_json::Value for the WasmPluginHandle Output type
-        match WasmPluginHandle::<serde_json::Value>::new(
-            path,
-            &emulator,
-            Some(&h),
-            None,
-            net,
-            Some(mmap),
-        ) {
-            Ok(sph) => {
+        match key.map(|module_locator| {
+            WasmPluginHandle::<serde_json::Value>::new(
+                path,
+                &emulator,
+                module_locator,
+                net,
+                Some(mmap),
+            )
+        }) {
+            Ok(Ok(sph)) => {
                 let comp_s = (move || -> Result<serde_json::Value, CompilationError> {
                     let value = match action_to_take? {
                         InternalAction::GetName => Ok(sph.get_name().and_then(|m| {

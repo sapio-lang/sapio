@@ -14,11 +14,37 @@ use crate::API;
 use sapio::contract::CompilationError;
 use sapio_base::effects::EffectPath;
 use sapio_ctv_emulator_trait::CTVEmulator;
-use serde::Deserialize;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use wasmer::Memory;
+#[derive(Serialize, Deserialize, JsonSchema)]
+pub enum ModuleLocator {
+    Key(String),
+    FileName(String),
+    Bytes(Vec<u8>),
+    Unknown,
+}
+
+impl ModuleLocator {
+    async fn locate(self) -> Result<SyncModuleLocator, Box<dyn std::error::Error>> {
+        match self {
+            ModuleLocator::Key(k) => {
+                let key = WASMCacheID::from_str(&k)?;
+                Ok(SyncModuleLocator::Key(key))
+            }
+            ModuleLocator::FileName(f) => Ok(SyncModuleLocator::Bytes(tokio::fs::read(f).await?)),
+            ModuleLocator::Bytes(b) => Ok(SyncModuleLocator::Bytes(b)),
+            ModuleLocator::Unknown => Err(Err(CompilationError::UnknownModule)?),
+        }
+    }
+}
+pub enum SyncModuleLocator {
+    Key(wasmer_cache::Hash),
+    Bytes(Vec<u8>),
+}
 pub struct WasmPluginHandle<Output> {
     store: Store,
     env: HostEnvironment,
@@ -47,8 +73,7 @@ impl<Output> WasmPluginHandle<Output> {
             let wph = Self::new(
                 path.clone(),
                 &emulator,
-                Some(&key),
-                None,
+                SyncModuleLocator::Key(WASMCacheID::from_str(&key)?),
                 net,
                 plugin_map.clone(),
             )?;
@@ -60,17 +85,17 @@ impl<Output> WasmPluginHandle<Output> {
     pub async fn new_async<I: Into<PathBuf> + Clone>(
         path: I,
         emulator: &Arc<dyn CTVEmulator>,
-        key: Option<&str>,
-        file: Option<&OsStr>,
+        module_locator: ModuleLocator,
         net: bitcoin::Network,
         plugin_map: Option<BTreeMap<Vec<u8>, [u8; 32]>>,
     ) -> Result<Self, Box<dyn Error>> {
-        let file = if let Some(f) = file {
-            Some(tokio::fs::read(f).await?)
-        } else {
-            None
-        };
-        Self::new(path, emulator, key, file.as_ref(), net, plugin_map)
+        Self::new(
+            path,
+            emulator,
+            module_locator.locate().await?,
+            net,
+            plugin_map,
+        )
     }
     /// Create an plugin handle. Only one of key or file should be set, and one
     /// should be set.
@@ -78,19 +103,15 @@ impl<Output> WasmPluginHandle<Output> {
     pub fn new<I: Into<PathBuf> + Clone>(
         path: I,
         emulator: &Arc<dyn CTVEmulator>,
-        key: Option<&str>,
-        file: Option<&Vec<u8>>,
+        module_locator: SyncModuleLocator,
         net: bitcoin::Network,
         plugin_map: Option<BTreeMap<Vec<u8>, [u8; 32]>>,
     ) -> Result<Self, Box<dyn Error>> {
-        // ensures that either key or file is passed
-        key.xor(file.and(Some("")))
-            .ok_or("Passed Both Key and File or Neither")?;
         let store = Store::default();
 
-        let (module, key) = match (file, key) {
-            (Some(wasm_bytes), _) => {
-                match wasm_cache::load_module(path.clone(), &store, &wasm_bytes) {
+        let (module, key) = match module_locator {
+            SyncModuleLocator::Bytes(wasm_bytes) => {
+                match wasm_cache::load_module(path.clone(), &store, &wasm_bytes[..]) {
                     Ok(module) => module,
                     Err(_) => {
                         let store = Store::default();
@@ -100,11 +121,7 @@ impl<Output> WasmPluginHandle<Output> {
                     }
                 }
             }
-            (_, Some(key)) => {
-                let key = WASMCacheID::from_str(key)?;
-                wasm_cache::load_module_key(path.clone(), &store, key)?
-            }
-            _ => unreachable!(),
+            SyncModuleLocator::Key(key) => wasm_cache::load_module_key(path.clone(), &store, key)?,
         };
 
         macro_rules! create_imports {

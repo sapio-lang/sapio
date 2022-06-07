@@ -1,52 +1,55 @@
+use crate::contracts::Response;
 // Copyright Judica, Inc 2021
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
-
+#[deny(missing_docs)]
+use crate::contracts::server::Server;
+use crate::contracts::Api;
+use crate::contracts::Bind;
+use crate::contracts::Call;
+use crate::contracts::Command;
+use crate::contracts::Common;
+use crate::contracts::Info;
+use crate::contracts::List;
+use crate::contracts::Load;
+use crate::contracts::Logo;
+use crate::contracts::Request;
 use bitcoin::consensus::serialize;
 use bitcoin::consensus::Decodable;
-use bitcoin::hashes::Hash;
+use bitcoin::network::constants::Network;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::bip32::ExtendedPrivKey;
 use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoin::util::psbt::PartiallySignedTransaction;
-use bitcoin::OutPoint;
-use bitcoincore_rpc_async as rpc;
-use bitcoincore_rpc_async::RpcApi;
 use clap::clap_app;
+use clap::ArgMatches;
 use config::*;
 use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::CTVAvailable;
 use emulator_connect::CTVEmulator;
 use miniscript::psbt::PsbtExt;
-use sapio::contract::context::MapEffectDB;
-use sapio::contract::object::LinkedPSBT;
-use sapio::contract::object::ObjectMetadata;
-use sapio::contract::object::SapioStudioObject;
+use rand::prelude::*;
 use sapio::contract::Compiled;
-use sapio::contract::Context;
-use sapio::template::output::OutputMeta;
-use sapio::template::TemplateMetadata;
-use sapio::util::extended_address::ExtendedAddress;
-use sapio_base::effects::PathFragment;
-use sapio_base::serialization_helpers::SArc;
-use sapio_base::txindex::TxIndex;
-use sapio_base::txindex::TxIndexLogger;
 use sapio_base::util::CTVHash;
-use sapio_wasm_plugin::host::{PluginHandle, WasmPluginHandle};
-use sapio_wasm_plugin::CreateArgs;
-use serde_json::Value;
-use std::collections::BTreeMap;
-use std::collections::HashMap;
-use std::convert::TryInto;
-use std::rc::Rc;
+use sapio_wasm_plugin::host::plugin_handle::ModuleLocator;
+use schemars::schema_for;
+use serde_json::Deserializer;
+use std::error::Error;
+
+use std::str::FromStr;
 use std::sync::Arc;
-#[deny(missing_docs)]
 use tokio::io::AsyncReadExt;
+use tokio::sync::oneshot;
 use util::*;
 pub mod config;
+mod contracts;
 mod util;
+
+async fn config(matches: &ArgMatches) -> Result<Config, Box<dyn Error>> {
+    Config::setup(&matches, "org", "judica", "sapio-cli").await
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -89,6 +92,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
      (@subcommand show =>
       (about: "Show xpub for file")
       (@arg input: -i --input +takes_value +required #{1,2} {check_file} "The file to read the key from")
+     )
+    )
+    (@subcommand studio =>
+     (@setting SubcommandRequiredElseHelp)
+     (about: "commands for sapio studio integration")
+     (@subcommand server =>
+      (about: "run a studio server")
+      (@group from +required =>
+        (@arg stdin: --stdin  "Run in Synchronous mode")
+        (@arg interface: --interface +takes_value "The Interface to Bind")
+      )
+     )
+     (@subcommand schemas =>
+      (about: "print input and output schemas")
      )
     )
     (@subcommand emulator =>
@@ -180,30 +197,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
       )
       );
     let matches = app.get_matches();
-    if let Some(("configure", config_matches)) = matches.subcommand() {
-        if let Some(("wizard", args)) = config_matches.subcommand() {
-            let config = ConfigVerifier::wizard().await?;
-            if args.is_present("write") {
-                let proj = directories::ProjectDirs::from("org", "judica", "sapio-cli")
-                    .expect("Failed to find config directory");
-                let path = proj.config_dir();
-                tokio::fs::create_dir_all(path).await?;
-                let mut pb = path.to_path_buf();
-                pb.push("config.json");
-                tokio::fs::write(&pb, &serde_json::to_string_pretty(&config)?).await?;
-            } else {
-                println!(
-                    "Please write this to the config file location (see sapio-cli configure files)"
-                );
-            }
-            return Ok(());
-        }
-    }
-
-    let config = Config::setup(&matches, "org", "judica", "sapio-cli").await?;
 
     match matches.subcommand() {
         Some(("configure", config_matches)) => match config_matches.subcommand() {
+            Some(("wizard", args)) => {
+                let config = ConfigVerifier::wizard().await?;
+                if args.is_present("write") {
+                    let proj = directories::ProjectDirs::from("org", "judica", "sapio-cli")
+                        .expect("Failed to find config directory");
+                    let path = proj.config_dir();
+                    tokio::fs::create_dir_all(path).await?;
+                    let mut pb = path.to_path_buf();
+                    pb.push("config.json");
+                    tokio::fs::write(&pb, &serde_json::to_string_pretty(&config)?).await?;
+                } else {
+                    println!(
+                    "Please write this to the config file location (see sapio-cli configure files)"
+                );
+                }
+                return Ok(());
+            }
             Some(("files", args)) => {
                 let proj = directories::ProjectDirs::from("org", "judica", "sapio-cli")
                     .expect("Failed to find config directory");
@@ -229,158 +242,120 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
             Some(("show", _)) => {
+                let config = config(&matches).await?;
                 println!(
                     "{}",
-                    serde_json::to_value(ConfigVerifier::from(config.clone()))
+                    serde_json::to_value(ConfigVerifier::from(config))
                         .and_then(|v| serde_json::to_string_pretty(&v))?
                 );
                 return Ok(());
             }
             _ => unreachable!(),
         },
-        _ => (),
-    }
-
-    let emulator: Arc<dyn CTVEmulator> = if let Some(emcfg) = &config.active.emulator_nodes {
-        if emcfg.enabled {
-            emcfg.get_emulator()?.into()
-        } else {
-            Arc::new(CTVAvailable)
-        }
-    } else {
-        Arc::new(CTVAvailable)
-    };
-    let plugin_map = config.active.plugin_map.map(|x| {
-        x.into_iter()
-            .map(|(x, y)| (x.into_bytes().into(), y.into()))
-            .collect()
-    });
-    {
-        let mut emulator = emulator.clone();
-        // Drop Emulator from own thread...
-        std::thread::spawn(move || loop {
-            if let Some(_) = Arc::get_mut(&mut emulator) {
-                break;
-            }
-        });
-    }
-    use bitcoin::network::constants::Network;
-    use rand::prelude::*;
-    use std::str::FromStr;
-    match matches.subcommand() {
         Some(("signer", sign_matches)) => match sign_matches.subcommand() {
             Some(("sign", args)) => {
-                let buf = tokio::fs::read(args.value_of_os("input").unwrap()).await?;
-                let xpriv = ExtendedPrivKey::decode(&buf)?;
-                let psbt: PartiallySignedTransaction =
-                    PartiallySignedTransaction::consensus_decode(
-                        &base64::decode(&if let Some(psbt) = args.value_of("psbt") {
-                            psbt.into()
-                        } else {
-                            let mut s = String::new();
-                            tokio::io::stdin().read_to_string(&mut s).await?;
-                            s
-                        })?[..],
-                    )?;
-                let psbt = sign_psbt(&xpriv, psbt, &Secp256k1::new())?;
-                let bytes = serialize(&psbt);
-                if let Some(file_out) = args.value_of_os("out") {
-                    std::fs::write(file_out, &base64::encode(bytes))?;
-                } else {
-                    println!("{}", base64::encode(bytes));
-                }
+                let input = args.value_of_os("input").unwrap();
+                let psbt_str = args.value_of("psbt");
+                let output = args.value_of_os("out");
+                signer::sign(input, psbt_str, output).await?;
             }
             Some(("new", args)) => {
-                let entropy: [u8; 32] = rand::thread_rng().gen();
-                let xpriv = ExtendedPrivKey::new_master(
-                    Network::from_str(args.value_of("network").unwrap())?,
-                    &entropy,
-                )?;
-                std::fs::write(args.value_of_os("out").unwrap(), &xpriv.encode())?;
-                println!("{}", ExtendedPubKey::from_priv(&Secp256k1::new(), &xpriv));
+                let network = args.value_of("network").unwrap();
+                let out = args.value_of_os("out").unwrap();
+                signer::new_key(network, out)?;
             }
             Some(("show", args)) => {
-                let buf = tokio::fs::read(args.value_of_os("input").unwrap()).await?;
-                let xpriv = ExtendedPrivKey::decode(&buf)?;
-                println!("{}", ExtendedPubKey::from_priv(&Secp256k1::new(), &xpriv));
+                let input = args.value_of_os("input").unwrap();
+                signer::show_pubkey(input).await?;
             }
             _ => unreachable!(),
         },
-        Some(("emulator", sign_matches)) => match sign_matches.subcommand() {
-            Some(("sign", args)) => {
-                let psbt = decode_psbt_file(args, "psbt")?;
-                let psbt = emulator.sign(psbt)?;
-                let bytes = serialize(&psbt);
-                std::fs::write(args.value_of_os("out").unwrap(), &base64::encode(bytes))?;
+        Some(("emulator", sign_matches)) => {
+            let config = config(&matches).await?;
+            let emulator: Arc<dyn CTVEmulator> = if let Some(emcfg) = &config.active.emulator_nodes
+            {
+                if emcfg.enabled {
+                    emcfg.get_emulator()?.into()
+                } else {
+                    Arc::new(CTVAvailable)
+                }
+            } else {
+                Arc::new(CTVAvailable)
+            };
+            // TODO: is this still required to drop the emulator from a unique thread?
+            {
+                let mut emulator = emulator.clone();
+                // Drop Emulator from own thread...
+                std::thread::spawn(move || loop {
+                    if let Some(_) = Arc::get_mut(&mut emulator) {
+                        break;
+                    }
+                });
             }
-            Some(("get_key", args)) => {
-                let psbt = decode_psbt_file(args, "psbt")?;
-                let h = emulator.get_signer_for(psbt.extract_tx().get_ctv_hash(0))?;
-                println!("{}", h);
-            }
-            Some(("show", args)) => {
-                let psbt = decode_psbt_file(args, "psbt")?;
-                println!("{:?}", psbt);
-            }
-            Some(("server", args)) => {
-                let filename = args.value_of("seed").unwrap();
-                let contents = tokio::fs::read(filename).await?;
+            match sign_matches.subcommand() {
+                Some(("sign", args)) => {
+                    let psbt = decode_psbt_file(args, "psbt")?;
+                    let psbt = emulator.sign(psbt)?;
+                    let bytes = serialize(&psbt);
+                    std::fs::write(args.value_of_os("out").unwrap(), &base64::encode(bytes))?;
+                }
+                Some(("get_key", args)) => {
+                    let psbt = decode_psbt_file(args, "psbt")?;
+                    let h = emulator.get_signer_for(psbt.extract_tx().get_ctv_hash(0))?;
+                    println!("{}", h);
+                }
+                Some(("show", args)) => {
+                    let psbt = decode_psbt_file(args, "psbt")?;
+                    println!("{:?}", psbt);
+                }
+                Some(("server", args)) => {
+                    let filename = args.value_of("seed").unwrap();
+                    let contents = tokio::fs::read(filename).await?;
 
-                let root = ExtendedPrivKey::new_master(config.network, &contents[..]).unwrap();
-                let pk_root = ExtendedPubKey::from_priv(&Secp256k1::new(), &root);
-                let sync_mode = args.is_present("sync");
-                let oracle = HDOracleEmulator::new(root, sync_mode);
-                let interface = args.value_of("interface").unwrap();
-                let server = oracle.bind(interface);
-                let status = serde_json::json! {{
-                    "interface": interface,
-                    "pk": pk_root,
-                    "sync": sync_mode,
-                }};
-                println!("{}", serde_json::to_string_pretty(&status).unwrap());
-                server.await?;
+                    let root = ExtendedPrivKey::new_master(config.network, &contents[..]).unwrap();
+                    let pk_root = ExtendedPubKey::from_priv(&Secp256k1::new(), &root);
+                    let sync_mode = args.is_present("sync");
+                    let oracle = HDOracleEmulator::new(root, sync_mode);
+                    let interface = args.value_of("interface").unwrap();
+                    let server = oracle.bind(interface);
+                    let status = serde_json::json! {{
+                        "interface": interface,
+                        "pk": pk_root,
+                        "sync": sync_mode,
+                    }};
+                    println!("{}", serde_json::to_string_pretty(&status).unwrap());
+                    server.await?;
+                }
+                _ => unreachable!(),
             }
-            _ => unreachable!(),
-        },
+        }
         Some(("psbt", matches)) => match matches.subcommand() {
             Some(("finalize", args)) => {
-                let psbt: PartiallySignedTransaction =
-                    PartiallySignedTransaction::consensus_decode(
-                        &base64::decode(&if let Some(psbt) = args.value_of("psbt") {
-                            psbt.into()
-                        } else {
-                            let mut s = String::new();
-                            tokio::io::stdin().read_to_string(&mut s).await?;
-                            s
-                        })?[..],
-                    )?;
-                let secp = Secp256k1::new();
-                let js = psbt
-                    .finalize(&secp)
-                    .map(|tx| {
-                        let hex = bitcoin::consensus::encode::serialize_hex(&tx.extract_tx());
-                        serde_json::json!({
-                            "completed": true,
-                            "hex": hex
-                        })
-                    })
-                    .unwrap_or_else(|(psbt, errors)| {
-                        let errors: Vec<_> = errors.iter().map(|e| format!("{:?}", e)).collect();
-                        let encoded_psbt = base64::encode(serialize(&psbt));
-                        serde_json::json!(
-                            {
-                                 "completed": false,
-                                 "psbt": encoded_psbt,
-                                 "error": "Could not fully finalize psbt",
-                                 "errors": errors
-                            }
-                        )
-                    });
+                let psbt_str = args.value_of("psbt");
+                let js = finalize_psbt(psbt_str).await?;
                 println!("{}", serde_json::to_string_pretty(&js)?);
             }
             _ => unreachable!(),
         },
+        Some(("studio", matches)) => match matches.subcommand() {
+            Some(("server", args)) => {
+                let from_stdin = args.is_present("stdin");
+                if from_stdin {
+                    run_server_stdin().await?;
+                } else {
+                    args.value_of("interface");
+                }
+            }
+            Some(("schemas", _args)) => {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&schema_for!((Request, Response)))?,
+                );
+            }
+            _ => unreachable!(),
+        },
         Some(("contract", matches)) => {
+            let config = config(&matches).await?;
             let module_path = |args: &clap::ArgMatches| {
                 let mut p = args
                     .value_of("workspace")
@@ -389,253 +364,222 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 p.push("modules");
                 p
             };
+            let network = config.network;
+            let emulator_args = config.active.emulator_nodes;
+            let plugin_map = config.active.plugin_map.map(|x| {
+                x.into_iter()
+                    .map(|(x, y)| (x.into_bytes().into(), y.into()))
+                    .collect()
+            });
+            let context = |args: &clap::ArgMatches| -> Result<Common, &'static str> {
+                let module_locator = args
+                    .value_of("file")
+                    .map(String::from)
+                    .map(ModuleLocator::FileName)
+                    .xor(
+                        args.value_of("key")
+                            .map(ToString::to_string)
+                            .map(ModuleLocator::Key),
+                    )
+                    .ok_or("Expected to have exactly one of key or file")?;
+                Ok(Common {
+                    path: module_path(args),
+                    emulator: emulator_args,
+                    module_locator,
+                    net: network,
+                    plugin_map,
+                })
+            };
+            let (server, send_server, shutdown_server) = Server::new();
 
-            match matches.subcommand() {
-                Some(("list", args)) => {
-                    let plugins = WasmPluginHandle::<Value>::load_all_keys(
-                        module_path(args),
-                        emulator,
-                        config.network,
-                        plugin_map,
-                    )?;
-                    for plugin in plugins {
-                        println!("{} -- {}", plugin.get_name()?, plugin.id().to_string());
-                    }
-                }
+            let msg = match matches.subcommand() {
                 Some(("bind", args)) => {
-                    fn create_mock_output() -> bitcoin::OutPoint {
-                        bitcoin::OutPoint {
-                            txid: bitcoin::hashes::sha256d::Hash::from_inner(
-                                bitcoin::hashes::sha256::Hash::hash(
-                                    format!("mock:{}", 0).as_bytes(),
-                                )
-                                .into_inner(),
-                            )
-                            .into(),
-                            vout: 0,
-                        }
-                    }
-                    let use_mock = args.is_present("mock");
-                    let use_base64 = args.is_present("base64_psbt");
-                    let outpoint: Option<bitcoin::OutPoint> = args
-                        .value_of("outpoint")
-                        .map(serde_json::from_str)
-                        .transpose()?;
-                    let use_txn = args
-                        .value_of("txn")
-                        .map(|buf| base64::decode(buf.as_bytes()))
-                        .transpose()?
-                        .map(|b| PartiallySignedTransaction::consensus_decode(&b[..]))
-                        .transpose()?;
-                    let client = rpc::Client::new(
-                        config.active.api_node.url.clone(),
-                        config.active.api_node.auth.clone(),
-                    )
-                    .await?;
-                    let j: Compiled = if let Some(json) = args.value_of("json") {
-                        serde_json::from_str(json)?
-                    } else {
-                        let mut s = String::new();
-                        tokio::io::stdin().read_to_string(&mut s).await?;
-                        serde_json::from_str(&s)?
-                    };
-
-                    let (tx, vout) = if use_mock {
-                        let ctx = Context::new(
-                            config.network,
-                            j.amount_range.max(),
-                            emulator.clone(),
-                            "mock".try_into()?,
-                            Arc::new(MapEffectDB::default()),
-                        );
-                        let mut tx = ctx
-                            .template()
-                            .add_output(j.amount_range.max(), &j, None)?
-                            .get_tx();
-                        tx.input[0].previous_output = create_mock_output();
-                        (tx, 0)
-                    } else if let Some(outpoint) = outpoint {
-                        let res = client.get_raw_transaction(&outpoint.txid, None).await?;
-                        (res, outpoint.vout)
-                    } else {
-                        let mut spends = HashMap::new();
-                        if let ExtendedAddress::Address(ref a) = j.address {
-                            spends.insert(format!("{}", a), j.amount_range.max());
-
-                            if let Some(psbt) = use_txn {
-                                let script = a.script_pubkey();
-                                if let Some(pos) = psbt
-                                    .unsigned_tx
-                                    .output
-                                    .iter()
-                                    .enumerate()
-                                    .find(|(_, o)| o.script_pubkey == script)
-                                    .map(|(i, _)| i)
-                                {
-                                    (psbt.extract_tx(), pos as u32)
-                                } else {
-                                    return Err(format!(
-                                        "No Output found {:?} {:?}",
-                                        psbt.unsigned_tx, a
-                                    )
-                                    .into());
-                                }
-                            } else {
-                                let res = client
-                                    .wallet_create_funded_psbt(&[], &spends, None, None, None)
-                                    .await?;
-                                let psbt = PartiallySignedTransaction::consensus_decode(
-                                    &base64::decode(&res.psbt)?[..],
-                                )?;
-                                let tx = psbt.extract_tx();
-                                // if change pos is -1, then +1%len == 0. if it is 0, then 1. if 1, then 2 % len == 0.
-                                let vout = ((res.change_position + 1) as usize) % tx.output.len();
-                                (tx, vout as u32)
-                            }
-                        } else {
-                            return Err("Must have a valid address".into());
-                        }
-                    };
-                    let logger = Rc::new(TxIndexLogger::new());
-                    (*logger).add_tx(Arc::new(tx.clone()))?;
-
-                    let mut bound = j.bind_psbt(
-                        OutPoint::new(tx.txid(), vout as u32),
-                        BTreeMap::new(),
-                        logger,
-                        emulator.as_ref(),
-                    )?;
-
-                    if outpoint.is_none() {
-                        let added_output_metadata = vec![OutputMeta::default(); tx.output.len()];
-                        let output_metadata = vec![ObjectMetadata::default(); tx.output.len()];
-                        let out = tx.input[0].previous_output;
-                        let psbt = PartiallySignedTransaction::from_unsigned_tx(tx)?;
-                        bound.program.insert(
-                            SArc(Arc::new("funding".try_into()?)),
-                            SapioStudioObject {
-                                metadata: Default::default(),
-                                out,
-                                continue_apis: Default::default(),
-                                txs: vec![LinkedPSBT {
-                                    psbt,
-                                    metadata: TemplateMetadata {
-                                        label: Some("funding".into()),
-                                        color: Some("pink".into()),
-                                        extra: BTreeMap::new(),
-                                        simp: Default::default(),
-                                    },
-                                    output_metadata,
-                                    added_output_metadata,
-                                }
-                                .into()],
-                            },
-                        );
-                    }
-                    if use_base64 {
-                        println!("{}", serde_json::to_string_pretty(&bound)?);
-                    } else {
-                        println!("{}", serde_json::to_string_pretty(&bound)?);
+                    let client_url = config.active.api_node.url.clone();
+                    let client_auth = config.active.api_node.auth.clone();
+                    Request {
+                        context: context(&args)?,
+                        command: bind_command(&args, client_url, client_auth).await?,
                     }
                 }
+                Some(("list", args)) => Request {
+                    context: context(&args)?,
+                    command: Command::List(List),
+                },
                 Some(("create", args)) => {
-                    let sph = WasmPluginHandle::<Value>::new_async(
-                        module_path(args),
-                        &emulator,
-                        args.value_of("key"),
-                        args.value_of_os("file"),
-                        config.network,
-                        plugin_map,
-                    )
-                    .await?;
-                    let api = sph.get_api()?;
-                    let schema = serde_json::to_value(api.input())?;
-                    let validator = jsonschema_valid::Config::from_schema(
-                        &schema,
-                        Some(jsonschema_valid::schemas::Draft::Draft6),
-                    )?;
-                    let params = if let Some(params) = args.value_of("json") {
-                        serde_json::from_str(params)?
+                    let json = args.value_of("json").map(|x| x.to_string());
+                    let params = if let Some(params) = json {
+                        serde_json::from_str(&params)?
                     } else {
                         let mut s = String::new();
                         tokio::io::stdin().read_to_string(&mut s).await?;
                         serde_json::from_str(&s)?
                     };
-                    if let Err(it) = validator.validate(&params) {
-                        for err in it {
-                            println!("Error: {}", err);
-                        }
-                        return Ok(());
+                    Request {
+                        context: context(&args)?,
+                        command: Command::Call(Call { params }),
                     }
-                    let create_args: CreateArgs<serde_json::Value> =
-                        serde_json::from_value(params)?;
-
-                    let v = sph.call(&PathFragment::Root.into(), &create_args)?;
-                    println!("{}", serde_json::to_string(&v)?);
                 }
-                Some(("api", args)) => {
-                    let sph = WasmPluginHandle::<Value>::new_async(
-                        module_path(args),
-                        &emulator,
-                        args.value_of("key"),
-                        args.value_of_os("file"),
-                        config.network,
-                        plugin_map,
-                    )
-                    .await?;
-                    println!("{}", serde_json::to_value(sph.get_api()?)?);
-                }
-                Some(("logo", args)) => {
-                    let sph = WasmPluginHandle::<Value>::new_async(
-                        module_path(args),
-                        &emulator,
-                        args.value_of("key"),
-                        args.value_of_os("file"),
-                        config.network,
-                        plugin_map,
-                    )
-                    .await?;
-                    println!("{}", sph.get_logo()?);
-                }
-                Some(("info", args)) => {
-                    let sph = WasmPluginHandle::<Value>::new_async(
-                        module_path(args),
-                        &emulator,
-                        args.value_of("key"),
-                        args.value_of_os("file"),
-                        config.network,
-                        plugin_map,
-                    )
-                    .await?;
-                    println!("Name: {}", sph.get_name()?);
-                    let api = sph.get_api()?;
-                    println!(
-                        "Description:\n{}",
-                        api.input()
-                            .schema
-                            .metadata
-                            .as_ref()
-                            .and_then(|m| m.description.as_ref())
-                            .unwrap()
-                    );
-                }
-                Some(("load", args)) => {
-                    let sph = WasmPluginHandle::<Value>::new_async(
-                        module_path(args),
-                        &emulator,
-                        None,
-                        args.value_of_os("file"),
-                        config.network,
-                        plugin_map,
-                    )
-                    .await?;
-                    println!("{}", sph.id().to_string());
-                }
+                Some(("api", args)) => Request {
+                    context: context(&args)?,
+                    command: Command::Api(Api),
+                },
+                Some(("logo", args)) => Request {
+                    context: context(&args)?,
+                    command: Command::Logo(Logo),
+                },
+                Some(("info", args)) => Request {
+                    context: context(&args)?,
+                    command: Command::Info(Info),
+                },
+                Some(("load", args)) => Request {
+                    context: context(&args)?,
+                    command: Command::Load(Load),
+                },
                 _ => unreachable!(),
-            }
+            };
+            server.run();
+            let (tx, rx) = oneshot::channel();
+            send_server.send((msg, tx)).map_err(|_e| "Failed to Send")?;
+            println!("{}", serde_json::to_string_pretty(&rx.await?)?);
+            shutdown_server.send(())?;
         }
         _ => unreachable!(),
     };
 
     Ok(())
+}
+
+async fn run_server_stdin() -> Result<(), Box<dyn Error>> {
+    let (server, send_server, shutdown_server) = Server::new();
+    server.run();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let stream = tokio::task::spawn_blocking(move || {
+        let stream = Deserializer::from_reader(std::io::stdin()).into_iter::<Request>();
+        for json in stream {
+            // if a bad json is read, break.
+            if tx.send(json).is_err() {
+                break;
+            }
+        }
+    });
+    while let Some(json) = rx.recv().await {
+        let (b_tx, b_rx) = oneshot::channel();
+        send_server
+            .send((json?, b_tx))
+            .map_err(|_e| "Failed to Send")?;
+
+        println!("{}", serde_json::to_string_pretty(&b_rx.await?)?);
+    }
+    shutdown_server.send(())?;
+    stream.await?;
+    Ok(())
+}
+
+async fn finalize_psbt(psbt_str: Option<&str>) -> Result<serde_json::Value, Box<dyn Error>> {
+    let psbt: PartiallySignedTransaction = PartiallySignedTransaction::consensus_decode(
+        &base64::decode(&if let Some(psbt) = psbt_str {
+            psbt.into()
+        } else {
+            let mut s = String::new();
+            tokio::io::stdin().read_to_string(&mut s).await?;
+            s
+        })?[..],
+    )?;
+    let secp = Secp256k1::new();
+    let js = psbt
+        .finalize(&secp)
+        .map(|tx| {
+            let hex = bitcoin::consensus::encode::serialize_hex(&tx.extract_tx());
+            serde_json::json!({
+                "completed": true,
+                "hex": hex
+            })
+        })
+        .unwrap_or_else(|(psbt, errors)| {
+            let errors: Vec<_> = errors.iter().map(|e| format!("{:?}", e)).collect();
+            let encoded_psbt = base64::encode(serialize(&psbt));
+            serde_json::json!(
+                {
+                     "completed": false,
+                     "psbt": encoded_psbt,
+                     "error": "Could not fully finalize psbt",
+                     "errors": errors
+                }
+            )
+        });
+    Ok(js)
+}
+
+mod signer {
+    use super::*;
+    pub async fn sign(
+        input: &std::ffi::OsStr,
+        psbt_str: Option<&str>,
+        output: Option<&std::ffi::OsStr>,
+    ) -> Result<(), Box<dyn Error>> {
+        {
+            let buf = tokio::fs::read(input).await?;
+            let xpriv = ExtendedPrivKey::decode(&buf)?;
+            let psbt: PartiallySignedTransaction = PartiallySignedTransaction::consensus_decode(
+                &base64::decode(&if let Some(psbt) = psbt_str {
+                    psbt.into()
+                } else {
+                    let mut s = String::new();
+                    tokio::io::stdin().read_to_string(&mut s).await?;
+                    s
+                })?[..],
+            )?;
+            let psbt = sign_psbt(&xpriv, psbt, &Secp256k1::new())?;
+            let bytes = serialize(&psbt);
+            if let Some(file_out) = output {
+                std::fs::write(file_out, &base64::encode(bytes))?;
+            } else {
+                println!("{}", base64::encode(bytes));
+            }
+        };
+        Ok(())
+    }
+    pub async fn show_pubkey(input: &std::ffi::OsStr) -> Result<(), Box<dyn Error>> {
+        let buf = tokio::fs::read(input).await?;
+        let xpriv = ExtendedPrivKey::decode(&buf)?;
+        println!("{}", ExtendedPubKey::from_priv(&Secp256k1::new(), &xpriv));
+        Ok(())
+    }
+    pub fn new_key(network: &str, out: &std::ffi::OsStr) -> Result<(), Box<dyn Error>> {
+        let entropy: [u8; 32] = rand::thread_rng().gen();
+        let xpriv = ExtendedPrivKey::new_master(Network::from_str(network)?, &entropy)?;
+        std::fs::write(out, &xpriv.encode())?;
+        println!("{}", ExtendedPubKey::from_priv(&Secp256k1::new(), &xpriv));
+        Ok(())
+    }
+}
+
+async fn bind_command(
+    args: &ArgMatches,
+    client_url: String,
+    client_auth: bitcoincore_rpc_async::Auth,
+) -> Result<Command, Box<dyn Error>> {
+    let use_mock = args.is_present("mock");
+    let use_base64 = args.is_present("base64_psbt");
+    let outpoint: Option<bitcoin::OutPoint> = args
+        .value_of("outpoint")
+        .map(serde_json::from_str)
+        .transpose()?;
+    let use_txn = args.value_of("txn").map(String::from);
+    let compiled: Compiled = if let Some(json) = args.value_of("json") {
+        serde_json::from_str(json)?
+    } else {
+        let mut s = String::new();
+        tokio::io::stdin().read_to_string(&mut s).await?;
+        serde_json::from_str(&s)?
+    };
+    Ok(Command::Bind(Bind {
+        client_url,
+        client_auth,
+        use_base64,
+        use_mock,
+        outpoint,
+        use_txn,
+        compiled,
+    }))
 }
