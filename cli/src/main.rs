@@ -1,3 +1,4 @@
+use crate::contracts::Response;
 // Copyright Judica, Inc 2021
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
@@ -29,6 +30,8 @@ use emulator_connect::CTVEmulator;
 use miniscript::psbt::PsbtExt;
 use sapio::contract::Compiled;
 use sapio_base::util::CTVHash;
+use schemars::schema_for;
+use serde_json::Deserializer;
 use std::ffi::OsString;
 use std::sync::Arc;
 use tokio::io::AsyncReadExt;
@@ -79,6 +82,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
      (@subcommand show =>
       (about: "Show xpub for file")
       (@arg input: -i --input +takes_value +required #{1,2} {check_file} "The file to read the key from")
+     )
+    )
+    (@subcommand studio =>
+     (@setting SubcommandRequiredElseHelp)
+     (about: "commands for sapio studio integration")
+     (@subcommand server =>
+      (about: "run a studio server")
+      (@group from +required =>
+        (@arg stdin: --stdin  "Run in Synchronous mode")
+        (@arg interface: --interface +takes_value "The Interface to Bind")
+      )
+     )
+     (@subcommand schemas =>
+      (about: "print input and output schemas")
      )
     )
     (@subcommand emulator =>
@@ -367,6 +384,49 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         )
                     });
                 println!("{}", serde_json::to_string_pretty(&js)?);
+            }
+            _ => unreachable!(),
+        },
+        Some(("studio", matches)) => match matches.subcommand() {
+            Some(("server", args)) => {
+                let (server, send_server, shutdown_server) = Server::new();
+                server.run();
+                if args.is_present("stdin") {
+                    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+                    // TODO: This should be using Tokio, somehow...  because we
+                    // use the std::io::stdin blocking interface, we wrap it in
+                    // a spawn_blocking so that we don't ruin the runtime.  we
+                    // use a channel to send the values back & do most of the
+                    // processing there because we want to use ? error handling.
+                    let stream = tokio::task::spawn_blocking(move || {
+                        let stream =
+                            Deserializer::from_reader(std::io::stdin()).into_iter::<Request>();
+                        for json in stream {
+                            // if a bad json is read, break.
+                            if tx.send(json).is_err() {
+                                break;
+                            }
+                        }
+                    });
+                    while let Some(json) = rx.recv().await {
+                        let (b_tx, b_rx) = oneshot::channel();
+                        send_server
+                            .send((json?, b_tx))
+                            .map_err(|e| "Failed to Send")?;
+
+                        println!("{}", serde_json::to_string_pretty(&b_rx.await?)?);
+                    }
+                    shutdown_server.send(())?;
+                    stream.await?;
+                } else {
+                    args.value_of("interface");
+                }
+            }
+            Some(("schemas", _args)) => {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&schema_for!((Request, Response)))?,
+                );
             }
             _ => unreachable!(),
         },
