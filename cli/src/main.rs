@@ -253,39 +253,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         Some(("signer", sign_matches)) => match sign_matches.subcommand() {
             Some(("sign", args)) => {
-                let buf = tokio::fs::read(args.value_of_os("input").unwrap()).await?;
-                let xpriv = ExtendedPrivKey::decode(&buf)?;
-                let psbt: PartiallySignedTransaction =
-                    PartiallySignedTransaction::consensus_decode(
-                        &base64::decode(&if let Some(psbt) = args.value_of("psbt") {
-                            psbt.into()
-                        } else {
-                            let mut s = String::new();
-                            tokio::io::stdin().read_to_string(&mut s).await?;
-                            s
-                        })?[..],
-                    )?;
-                let psbt = sign_psbt(&xpriv, psbt, &Secp256k1::new())?;
-                let bytes = serialize(&psbt);
-                if let Some(file_out) = args.value_of_os("out") {
-                    std::fs::write(file_out, &base64::encode(bytes))?;
-                } else {
-                    println!("{}", base64::encode(bytes));
-                }
+                let input = args.value_of_os("input").unwrap();
+                let psbt_str = args.value_of("psbt");
+                let output = args.value_of_os("out");
+                signer::sign(input, psbt_str, output).await?;
             }
             Some(("new", args)) => {
-                let entropy: [u8; 32] = rand::thread_rng().gen();
-                let xpriv = ExtendedPrivKey::new_master(
-                    Network::from_str(args.value_of("network").unwrap())?,
-                    &entropy,
-                )?;
-                std::fs::write(args.value_of_os("out").unwrap(), &xpriv.encode())?;
-                println!("{}", ExtendedPubKey::from_priv(&Secp256k1::new(), &xpriv));
+                let network = args.value_of("network").unwrap();
+                let out = args.value_of_os("out").unwrap();
+                signer::new_key(network, out)?;
             }
             Some(("show", args)) => {
-                let buf = tokio::fs::read(args.value_of_os("input").unwrap()).await?;
-                let xpriv = ExtendedPrivKey::decode(&buf)?;
-                println!("{}", ExtendedPubKey::from_priv(&Secp256k1::new(), &xpriv));
+                let input = args.value_of_os("input").unwrap();
+                signer::show_pubkey(input).await?;
             }
             _ => unreachable!(),
         },
@@ -350,73 +330,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Some(("psbt", matches)) => match matches.subcommand() {
             Some(("finalize", args)) => {
-                let psbt: PartiallySignedTransaction =
-                    PartiallySignedTransaction::consensus_decode(
-                        &base64::decode(&if let Some(psbt) = args.value_of("psbt") {
-                            psbt.into()
-                        } else {
-                            let mut s = String::new();
-                            tokio::io::stdin().read_to_string(&mut s).await?;
-                            s
-                        })?[..],
-                    )?;
-                let secp = Secp256k1::new();
-                let js = psbt
-                    .finalize(&secp)
-                    .map(|tx| {
-                        let hex = bitcoin::consensus::encode::serialize_hex(&tx.extract_tx());
-                        serde_json::json!({
-                            "completed": true,
-                            "hex": hex
-                        })
-                    })
-                    .unwrap_or_else(|(psbt, errors)| {
-                        let errors: Vec<_> = errors.iter().map(|e| format!("{:?}", e)).collect();
-                        let encoded_psbt = base64::encode(serialize(&psbt));
-                        serde_json::json!(
-                            {
-                                 "completed": false,
-                                 "psbt": encoded_psbt,
-                                 "error": "Could not fully finalize psbt",
-                                 "errors": errors
-                            }
-                        )
-                    });
+                let psbt_str = args.value_of("psbt");
+                let js = finalize_psbt(psbt_str).await?;
                 println!("{}", serde_json::to_string_pretty(&js)?);
             }
             _ => unreachable!(),
         },
         Some(("studio", matches)) => match matches.subcommand() {
             Some(("server", args)) => {
-                let (server, send_server, shutdown_server) = Server::new();
-                server.run();
-                if args.is_present("stdin") {
-                    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-                    // TODO: This should be using Tokio, somehow...  because we
-                    // use the std::io::stdin blocking interface, we wrap it in
-                    // a spawn_blocking so that we don't ruin the runtime.  we
-                    // use a channel to send the values back & do most of the
-                    // processing there because we want to use ? error handling.
-                    let stream = tokio::task::spawn_blocking(move || {
-                        let stream =
-                            Deserializer::from_reader(std::io::stdin()).into_iter::<Request>();
-                        for json in stream {
-                            // if a bad json is read, break.
-                            if tx.send(json).is_err() {
-                                break;
-                            }
-                        }
-                    });
-                    while let Some(json) = rx.recv().await {
-                        let (b_tx, b_rx) = oneshot::channel();
-                        send_server
-                            .send((json?, b_tx))
-                            .map_err(|_e| "Failed to Send")?;
-
-                        println!("{}", serde_json::to_string_pretty(&b_rx.await?)?);
-                    }
-                    shutdown_server.send(())?;
-                    stream.await?;
+                let from_stdin = args.is_present("stdin");
+                if from_stdin {
+                    run_server_stdin().await?;
                 } else {
                     args.value_of("interface");
                 }
@@ -458,33 +382,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let msg = match matches.subcommand() {
                 Some(("bind", args)) => {
-                    let use_mock = args.is_present("mock");
-                    let use_base64 = args.is_present("base64_psbt");
-                    let outpoint: Option<bitcoin::OutPoint> = args
-                        .value_of("outpoint")
-                        .map(serde_json::from_str)
-                        .transpose()?;
-                    let use_txn = args.value_of("txn").map(String::from);
                     let client_url = config.active.api_node.url.clone();
                     let client_auth = config.active.api_node.auth.clone();
-                    let compiled: Compiled = if let Some(json) = args.value_of("json") {
-                        serde_json::from_str(json)?
-                    } else {
-                        let mut s = String::new();
-                        tokio::io::stdin().read_to_string(&mut s).await?;
-                        serde_json::from_str(&s)?
-                    };
                     Request {
                         context: context(&args),
-                        command: Command::Bind(Bind {
-                            client_url,
-                            client_auth,
-                            use_base64,
-                            use_mock,
-                            outpoint,
-                            use_txn,
-                            compiled,
-                        }),
+                        command: bind_command(&args, client_url, client_auth).await?,
                     }
                 }
                 Some(("list", args)) => Request {
@@ -533,4 +435,139 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     Ok(())
+}
+
+async fn run_server_stdin() -> Result<(), Box<dyn Error>> {
+    let (server, send_server, shutdown_server) = Server::new();
+    server.run();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let stream = tokio::task::spawn_blocking(move || {
+        let stream = Deserializer::from_reader(std::io::stdin()).into_iter::<Request>();
+        for json in stream {
+            // if a bad json is read, break.
+            if tx.send(json).is_err() {
+                break;
+            }
+        }
+    });
+    while let Some(json) = rx.recv().await {
+        let (b_tx, b_rx) = oneshot::channel();
+        send_server
+            .send((json?, b_tx))
+            .map_err(|_e| "Failed to Send")?;
+
+        println!("{}", serde_json::to_string_pretty(&b_rx.await?)?);
+    }
+    shutdown_server.send(())?;
+    stream.await?;
+    Ok(())
+}
+
+async fn finalize_psbt(psbt_str: Option<&str>) -> Result<serde_json::Value, Box<dyn Error>> {
+    let psbt: PartiallySignedTransaction = PartiallySignedTransaction::consensus_decode(
+        &base64::decode(&if let Some(psbt) = psbt_str {
+            psbt.into()
+        } else {
+            let mut s = String::new();
+            tokio::io::stdin().read_to_string(&mut s).await?;
+            s
+        })?[..],
+    )?;
+    let secp = Secp256k1::new();
+    let js = psbt
+        .finalize(&secp)
+        .map(|tx| {
+            let hex = bitcoin::consensus::encode::serialize_hex(&tx.extract_tx());
+            serde_json::json!({
+                "completed": true,
+                "hex": hex
+            })
+        })
+        .unwrap_or_else(|(psbt, errors)| {
+            let errors: Vec<_> = errors.iter().map(|e| format!("{:?}", e)).collect();
+            let encoded_psbt = base64::encode(serialize(&psbt));
+            serde_json::json!(
+                {
+                     "completed": false,
+                     "psbt": encoded_psbt,
+                     "error": "Could not fully finalize psbt",
+                     "errors": errors
+                }
+            )
+        });
+    Ok(js)
+}
+
+mod signer {
+    use super::*;
+    pub async fn sign(
+        input: &std::ffi::OsStr,
+        psbt_str: Option<&str>,
+        output: Option<&std::ffi::OsStr>,
+    ) -> Result<(), Box<dyn Error>> {
+        {
+            let buf = tokio::fs::read(input).await?;
+            let xpriv = ExtendedPrivKey::decode(&buf)?;
+            let psbt: PartiallySignedTransaction = PartiallySignedTransaction::consensus_decode(
+                &base64::decode(&if let Some(psbt) = psbt_str {
+                    psbt.into()
+                } else {
+                    let mut s = String::new();
+                    tokio::io::stdin().read_to_string(&mut s).await?;
+                    s
+                })?[..],
+            )?;
+            let psbt = sign_psbt(&xpriv, psbt, &Secp256k1::new())?;
+            let bytes = serialize(&psbt);
+            if let Some(file_out) = output {
+                std::fs::write(file_out, &base64::encode(bytes))?;
+            } else {
+                println!("{}", base64::encode(bytes));
+            }
+        };
+        Ok(())
+    }
+    pub async fn show_pubkey(input: &std::ffi::OsStr) -> Result<(), Box<dyn Error>> {
+        let buf = tokio::fs::read(input).await?;
+        let xpriv = ExtendedPrivKey::decode(&buf)?;
+        println!("{}", ExtendedPubKey::from_priv(&Secp256k1::new(), &xpriv));
+        Ok(())
+    }
+    pub fn new_key(network: &str, out: &std::ffi::OsStr) -> Result<(), Box<dyn Error>> {
+        let entropy: [u8; 32] = rand::thread_rng().gen();
+        let xpriv = ExtendedPrivKey::new_master(Network::from_str(network)?, &entropy)?;
+        std::fs::write(out, &xpriv.encode())?;
+        println!("{}", ExtendedPubKey::from_priv(&Secp256k1::new(), &xpriv));
+        Ok(())
+    }
+}
+
+async fn bind_command(
+    args: &ArgMatches,
+    client_url: String,
+    client_auth: bitcoincore_rpc_async::Auth,
+) -> Result<Command, Box<dyn Error>> {
+    let use_mock = args.is_present("mock");
+    let use_base64 = args.is_present("base64_psbt");
+    let outpoint: Option<bitcoin::OutPoint> = args
+        .value_of("outpoint")
+        .map(serde_json::from_str)
+        .transpose()?;
+    let use_txn = args.value_of("txn").map(String::from);
+    let compiled: Compiled = if let Some(json) = args.value_of("json") {
+        serde_json::from_str(json)?
+    } else {
+        let mut s = String::new();
+        tokio::io::stdin().read_to_string(&mut s).await?;
+        serde_json::from_str(&s)?
+    };
+    Ok(Command::Bind(Bind {
+        client_url,
+        client_auth,
+        use_base64,
+        use_mock,
+        outpoint,
+        use_txn,
+        compiled,
+    }))
 }
