@@ -212,12 +212,8 @@ impl Request {
                     Some(jsonschema_valid::schemas::Draft::Draft6),
                 )?;
                 if let Err(it) = validator.validate(&params) {
-                    let mut w = String::new();
-                    for err in it {
-                        writeln!(w, "Error: {}", err)?;
-                    }
-                    // returns
-                    Err(RequestError(w.into()))?;
+                    let v: Vec<_> = it.map(|e| e.to_string()).collect();
+                    Err(RequestError(v.into()))?;
                 }
                 let create_args: CreateArgs<serde_json::Value> = serde_json::from_value(params)?;
                 let v = sph.call(&PathFragment::Root.into(), &create_args)?;
