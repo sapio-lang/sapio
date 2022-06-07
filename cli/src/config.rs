@@ -19,8 +19,8 @@ use std::net::ToSocketAddrs;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
-use tokio::io::BufReader;
 use tokio::sync::Mutex;
+use tokio::{io::BufReader, runtime::Handle};
 /// EmulatorConfig is used to determine how this sapio-cli instance should stub
 /// out CTV. Emulators are specified by EPK and interface address. Threshold
 /// should be <= emulators.len().
@@ -46,13 +46,19 @@ impl EmulatorConfig {
             Err(String::from("Too High Thresh"))?;
         }
         let _n_emulators = self.emulators.len();
-        let rt = Arc::new(tokio::runtime::Runtime::new().unwrap());
+        let rt = Handle::try_current()
+            .err()
+            .map(|e| Arc::new(tokio::runtime::Runtime::new().unwrap()));
         let secp = Arc::new(bitcoin::secp256k1::Secp256k1::new());
         let mut it =
             self.emulators
                 .iter()
                 .map(|(epk, host)| -> Result<_, Box<dyn std::error::Error>> {
+                    let handle = Handle::try_current().unwrap_or_else(|_e| {
+                        rt.as_ref().expect("must have own runtime").handle().clone()
+                    });
                     Ok(HDOracleEmulatorConnection {
+                        handle,
                         runtime: rt.clone(),
                         connection: Mutex::new(None),
                         reconnect: host.to_socket_addrs()?.next().unwrap(),

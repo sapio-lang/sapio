@@ -14,7 +14,8 @@ use super::*;
 /// This seems to be a limitation with tokio / rust around using async inside non-async
 /// traits.
 pub struct HDOracleEmulatorConnection {
-    pub runtime: Arc<tokio::runtime::Runtime>,
+    pub runtime: Option<Arc<tokio::runtime::Runtime>>,
+    pub handle: tokio::runtime::Handle,
     pub connection: Mutex<Option<TcpStream>>,
     pub reconnect: SocketAddr,
     pub root: ExtendedPubKey,
@@ -42,7 +43,7 @@ impl HDOracleEmulatorConnection {
     pub async fn new<A: ToSocketAddrs + std::fmt::Display + Clone>(
         address: A,
         root: ExtendedPubKey,
-        runtime: Arc<tokio::runtime::Runtime>,
+        runtime: Option<Arc<tokio::runtime::Runtime>>,
         secp: Arc<bitcoin::secp256k1::Secp256k1<bitcoin::secp256k1::All>>,
     ) -> Result<Self, std::io::Error> {
         Ok(HDOracleEmulatorConnection {
@@ -54,6 +55,13 @@ impl HDOracleEmulatorConnection {
                     input_error::<()>(&format!("Bad Lookup Could Not Resolve Address {}", address))
                         .unwrap_err()
                 })?,
+            handle: Handle::try_current().unwrap_or_else(|_e| {
+                runtime
+                    .as_ref()
+                    .expect("Must pass a runtime if not in async context")
+                    .handle()
+                    .clone()
+            }),
             runtime,
             root,
             secp,
@@ -81,7 +89,7 @@ impl HDOracleEmulatorConnection {
     }
 }
 
-use tokio::sync::Mutex;
+use tokio::{runtime::Handle, sync::Mutex};
 impl CTVEmulator for HDOracleEmulatorConnection {
     fn get_signer_for(&self, h: Sha256) -> Result<Clause, EmulatorError> {
         Ok(Clause::Key(self.derive(h)?.to_x_only_pub()))
@@ -92,7 +100,7 @@ impl CTVEmulator for HDOracleEmulatorConnection {
     ) -> Result<PartiallySignedTransaction, EmulatorError> {
         let inp: Result<PartiallySignedTransaction, std::io::Error> =
             tokio::task::block_in_place(|| {
-                self.runtime.block_on(async {
+                self.handle.block_on(async {
                     let mut mconn = self.connection.lock().await;
                     loop {
                         if let Some(conn) = &mut *mconn {
