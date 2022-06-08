@@ -1,3 +1,16 @@
 [workspace]
-members = ["sapio", "sapio-front", "sapio-contrib", "ctv_emulators", "sapio-base", "cli", "tools", "plugins", 'emulator-trait', 'examples/dcf_mining_pool', 'sapio-trait', 'sapio_macros', 'simp-pack']
+members = ["sapio"
+          , "sapio-front"
+          , "sapio-contrib"
+          , "ctv_emulators"
+          , "sapio-base"
+          , "cli"
+          , "tools"
+          , "plugins"
+          , 'emulator-trait'
+          , 'examples/dcf_mining_pool'
+          , 'sapio-trait'
+          , 'sapio_macros'
+          , 'sapio-psbt'
+          , 'simp-pack']
 exclude = ["plugin-example", "integration_tests"]
