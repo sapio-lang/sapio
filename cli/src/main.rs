@@ -18,8 +18,6 @@ use crate::contracts::Logo;
 use crate::contracts::Request;
 use crate::contracts::Response;
 use bitcoin::consensus::serialize;
-use bitcoin::consensus::Decodable;
-use bitcoin::psbt::PartiallySignedTransaction;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::bip32::ExtendedPrivKey;
 use bitcoin::util::bip32::ExtendedPubKey;
@@ -253,7 +251,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let input = args.value_of_os("input").unwrap();
                 let psbt_str = args.value_of("psbt");
                 let output = args.value_of_os("out");
-                sapio_psbt::sign(input, psbt_str, output).await?;
+                let xpriv = sapio_psbt::read_key_from_file(input).await?;
+                let psbt = get_psbt_from(psbt_str).await?;
+                let bytes = sapio_psbt::sign(xpriv, psbt)?;
+
+                if let Some(file_out) = output {
+                    std::fs::write(file_out, &base64::encode(bytes))?;
+                } else {
+                    println!("{}", base64::encode(bytes));
+                }
             }
             Some(("new", args)) => {
                 let network = args.value_of("network").unwrap();
@@ -329,16 +335,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Some(("finalize", args)) => {
                 let psbt_str = args.value_of("psbt");
 
-                let psbt: PartiallySignedTransaction =
-                    PartiallySignedTransaction::consensus_decode(
-                        &base64::decode(&if let Some(psbt) = psbt_str {
-                            psbt.into()
-                        } else {
-                            let mut s = String::new();
-                            tokio::io::stdin().read_to_string(&mut s).await?;
-                            s
-                        })?[..],
-                    )?;
+                let psbt = get_psbt_from(psbt_str).await?;
                 let js = sapio_psbt::finalize_psbt_format_api(psbt);
                 println!("{}", serde_json::to_string_pretty(&js)?);
             }

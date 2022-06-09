@@ -4,10 +4,12 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use bitcoin::consensus::deserialize;
+use bitcoin::consensus::{deserialize, Decodable};
 use bitcoin::hashes::Hash;
 use bitcoin::util::psbt::PartiallySignedTransaction;
+use std::error::Error;
 use std::path::PathBuf;
+use tokio::io::AsyncReadExt;
 /// Checks that a file exists during argument parsing
 ///
 /// **Race Conditions** if file is deleted after this call
@@ -36,7 +38,21 @@ pub fn decode_psbt_file(
     Ok(psbt)
 }
 
-
+/// Reads a PSBT either from a string or from stdin
+pub async fn get_psbt_from(
+    psbt_str: Option<&str>,
+) -> Result<PartiallySignedTransaction, Box<dyn Error>> {
+    let psbt: PartiallySignedTransaction = PartiallySignedTransaction::consensus_decode(
+        &base64::decode(&if let Some(psbt) = psbt_str {
+            psbt.into()
+        } else {
+            let mut s = String::new();
+            tokio::io::stdin().read_to_string(&mut s).await?;
+            s
+        })?[..],
+    )?;
+    Ok(psbt)
+}
 
 /// get the path for the compiled modules
 pub(crate) fn get_data_dir(typ: &str, org: &str, proj: &str) -> PathBuf {
