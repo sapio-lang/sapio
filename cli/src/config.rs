@@ -192,12 +192,12 @@ impl Config {
     /// happening on config.json. It is assumed that the user will ensure
     /// writes to config.json are safe.
     pub async fn setup(
-        matches: &clap::ArgMatches,
+        custom_config: Option<&str>,
         typ: &str,
         org: &str,
         proj: &str,
     ) -> Result<Config, Box<dyn std::error::Error>> {
-        if let Some(p) = matches.value_of("config") {
+        if let Some(p) = custom_config {
             Ok(serde_json::from_slice(&tokio::fs::read(p).await?[..])?)
         } else {
             let proj = directories::ProjectDirs::from(typ, org, proj)

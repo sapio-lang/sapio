@@ -47,8 +47,8 @@ pub mod config;
 mod contracts;
 mod util;
 
-async fn config(matches: &ArgMatches) -> Result<Config, Box<dyn Error>> {
-    Config::setup(&matches, "org", "judica", "sapio-cli").await
+async fn config(custom_config: Option<&str>) -> Result<Config, Box<dyn Error>> {
+    Config::setup(custom_config, "org", "judica", "sapio-cli").await
 }
 
 #[tokio::main]
@@ -197,7 +197,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
       )
       );
     let matches = app.get_matches();
-
+    let custom_config = matches.value_of("config");
     match matches.subcommand() {
         Some(("configure", config_matches)) => match config_matches.subcommand() {
             Some(("wizard", args)) => {
@@ -242,7 +242,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
             Some(("show", _)) => {
-                let config = config(&matches).await?;
+                let config = config(custom_config).await?;
                 println!(
                     "{}",
                     serde_json::to_value(ConfigVerifier::from(config))
@@ -271,7 +271,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => unreachable!(),
         },
         Some(("emulator", sign_matches)) => {
-            let config = config(&matches).await?;
+            let config = config(custom_config).await?;
             let emulator: Arc<dyn CTVEmulator> = if let Some(emcfg) = &config.active.emulator_nodes
             {
                 if emcfg.enabled {
@@ -355,7 +355,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => unreachable!(),
         },
         Some(("contract", matches)) => {
-            let config = config(&matches).await?;
+            let config = config(custom_config).await?;
             let module_path = |args: &clap::ArgMatches| {
                 let mut p = args
                     .value_of("workspace")
