@@ -253,7 +253,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let output = args.value_of_os("out");
                 let xpriv = sapio_psbt::read_key_from_file(input).await?;
                 let psbt = get_psbt_from(psbt_str).await?;
-                let bytes = sapio_psbt::sign(xpriv, psbt)?;
+                let hash_ty = bitcoin::util::sighash::SchnorrSighashType::All;
+                let bytes = sapio_psbt::sign(xpriv, psbt, hash_ty)?;
 
                 if let Some(file_out) = output {
                     std::fs::write(file_out, &base64::encode(bytes))?;

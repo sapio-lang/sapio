@@ -72,8 +72,9 @@ pub async fn read_key_from_file(
 pub fn sign(
     xpriv: ExtendedPrivKey,
     mut psbt: PartiallySignedTransaction,
+    hash_ty: bitcoin::SchnorrSighashType,
 ) -> Result<Vec<u8>, PSBTSigningError> {
-    sign_psbt_inplace(&xpriv, &mut psbt, &Secp256k1::new())?;
+    sign_psbt_inplace(&xpriv, &mut psbt, &Secp256k1::new(), hash_ty)?;
     let bytes = serialize(&psbt);
     Ok(bytes)
 }
@@ -95,8 +96,9 @@ pub fn sign_psbt_inplace(
     xpriv: &ExtendedPrivKey,
     psbt: &mut PartiallySignedTransaction,
     secp: &Secp256k1<All>,
+    hash_ty: bitcoin::SchnorrSighashType,
 ) -> Result<(), PSBTSigningError> {
-    sign_psbt_input_inplace(xpriv, psbt, secp, 0)
+    sign_psbt_input_inplace(xpriv, psbt, secp, 0, hash_ty)
 }
 
 #[derive(Debug, Clone)]
@@ -117,6 +119,7 @@ pub fn sign_psbt_input_inplace(
     psbt: &mut PartiallySignedTransaction,
     secp: &Secp256k1<All>,
     idx: usize,
+    hash_ty: bitcoin::SchnorrSighashType,
 ) -> Result<(), PSBTSigningError> {
     let tx = psbt.clone().extract_tx();
     let utxos: Vec<TxOut> = psbt
@@ -137,7 +140,6 @@ pub fn sign_psbt_input_inplace(
         .inputs
         .get_mut(idx)
         .ok_or(PSBTSigningError::NoInputAtIndex(idx))?;
-    let hash_ty = bitcoin::util::sighash::SchnorrSighashType::All;
     let prevouts = &Prevouts::All(&utxos);
     sign_taproot_top_key(xpriv, secp, input, &mut sighash, prevouts, hash_ty);
     sign_all_tapleaf_branches(xpriv, secp, input, &mut sighash, prevouts, hash_ty);
