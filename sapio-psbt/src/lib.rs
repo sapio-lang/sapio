@@ -5,6 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use bitcoin::consensus::serialize;
+use bitcoin::schnorr::TapTweak;
 use bitcoin::secp256k1::rand::Rng;
 use bitcoin::secp256k1::{rand, All};
 use bitcoin::util::bip32::{ExtendedPubKey, KeySource};
@@ -70,9 +71,9 @@ pub async fn read_key_from_file(
 
 pub fn sign(
     xpriv: ExtendedPrivKey,
-    psbt: PartiallySignedTransaction,
+    mut psbt: PartiallySignedTransaction,
 ) -> Result<Vec<u8>, Box<dyn Error>> {
-    let psbt = sign_psbt(&xpriv, psbt, &Secp256k1::new())?;
+    sign_psbt_inplace(&xpriv, &mut psbt, &Secp256k1::new())?;
     let bytes = serialize(&psbt);
     Ok(bytes)
 }
@@ -93,11 +94,20 @@ pub fn new_key(network: &str, out: &std::ffi::OsStr) -> Result<(), Box<dyn Error
 fn input_err(s: &str) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::InvalidInput, s)
 }
-pub fn sign_psbt(
+pub fn sign_psbt_inplace(
     xpriv: &ExtendedPrivKey,
-    mut psbt: PartiallySignedTransaction,
+    psbt: &mut PartiallySignedTransaction,
     secp: &Secp256k1<All>,
-) -> Result<PartiallySignedTransaction, std::io::Error> {
+) -> Result<(), std::io::Error> {
+    sign_psbt_input_inplace(xpriv, psbt, secp, 0);
+    Ok(())
+}
+pub fn sign_psbt_input_inplace(
+    xpriv: &ExtendedPrivKey,
+    psbt: &mut PartiallySignedTransaction,
+    secp: &Secp256k1<All>,
+    idx: usize,
+) -> Result<(), std::io::Error> {
     let tx = psbt.clone().extract_tx();
     let utxos: Vec<TxOut> = psbt
         .inputs
@@ -108,8 +118,10 @@ pub fn sign_psbt(
     let untweaked = xpriv.to_keypair(secp);
     let pk = XOnlyPublicKey::from_keypair(&untweaked);
     let mut sighash = bitcoin::util::sighash::SighashCache::new(&tx);
-    let input_zero = &mut psbt.inputs[0];
-    use bitcoin::schnorr::TapTweak;
+    let input_zero = &mut psbt
+        .inputs
+        .get_mut(idx)
+        .ok_or_else(|| input_err("No input at idx provided"))?;
     let tweaked = untweaked
         .tap_tweak(secp, input_zero.tap_merkle_root)
         .into_inner();
@@ -138,7 +150,7 @@ pub fn sign_psbt(
                 .insert((kp.x_only_public_key().0, *tlh), sig);
         }
     }
-    Ok(psbt)
+    Ok(())
 }
 
 /// Compute keypairs for all matching fingerprints
