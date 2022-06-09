@@ -18,6 +18,8 @@ use crate::contracts::Logo;
 use crate::contracts::Request;
 use crate::contracts::Response;
 use bitcoin::consensus::serialize;
+use bitcoin::consensus::Decodable;
+use bitcoin::psbt::PartiallySignedTransaction;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::bip32::ExtendedPrivKey;
 use bitcoin::util::bip32::ExtendedPubKey;
@@ -326,7 +328,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(("psbt", matches)) => match matches.subcommand() {
             Some(("finalize", args)) => {
                 let psbt_str = args.value_of("psbt");
-                let js = sapio_psbt::finalize_psbt(psbt_str).await?;
+
+                let psbt: PartiallySignedTransaction =
+                    PartiallySignedTransaction::consensus_decode(
+                        &base64::decode(&if let Some(psbt) = psbt_str {
+                            psbt.into()
+                        } else {
+                            let mut s = String::new();
+                            tokio::io::stdin().read_to_string(&mut s).await?;
+                            s
+                        })?[..],
+                    )?;
+                let js = sapio_psbt::finalize_psbt_format_api(psbt).await?;
                 println!("{}", serde_json::to_string_pretty(&js)?);
             }
             _ => unreachable!(),

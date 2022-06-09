@@ -13,39 +13,46 @@ use bitcoin::TxOut;
 use bitcoin::XOnlyPublicKey;
 use bitcoin::{Network, SchnorrSig};
 use miniscript::psbt::PsbtExt;
+use serde::{Deserialize, Serialize};
 use tokio::io::AsyncReadExt;
 
-pub async fn finalize_psbt(psbt_str: Option<&str>) -> Result<serde_json::Value, Box<dyn Error>> {
-    let psbt: PartiallySignedTransaction = PartiallySignedTransaction::consensus_decode(
-        &base64::decode(&if let Some(psbt) = psbt_str {
-            psbt.into()
-        } else {
-            let mut s = String::new();
-            tokio::io::stdin().read_to_string(&mut s).await?;
-            s
-        })?[..],
-    )?;
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum PSBTApi {
+    Finished {
+        completed: bool,
+        hex: String,
+    },
+    NotFinished {
+        completed: bool,
+        psbt: String,
+        error: String,
+        errors: Vec<String>,
+    },
+}
+
+pub async fn finalize_psbt_format_api(
+    psbt: PartiallySignedTransaction,
+) -> Result<PSBTApi, Box<dyn Error>> {
     let secp = Secp256k1::new();
     let js = psbt
         .finalize(&secp)
         .map(|tx| {
             let hex = bitcoin::consensus::encode::serialize_hex(&tx.extract_tx());
-            serde_json::json!({
-                "completed": true,
-                "hex": hex
-            })
+            PSBTApi::Finished {
+                completed: true,
+                hex,
+            }
         })
         .unwrap_or_else(|(psbt, errors)| {
             let errors: Vec<_> = errors.iter().map(|e| format!("{:?}", e)).collect();
             let encoded_psbt = base64::encode(serialize(&psbt));
-            serde_json::json!(
-                {
-                     "completed": false,
-                     "psbt": encoded_psbt,
-                     "error": "Could not fully finalize psbt",
-                     "errors": errors
-                }
-            )
+            PSBTApi::NotFinished {
+                completed: false,
+                psbt: encoded_psbt,
+                error: "Could not fully finalize psbt".into(),
+                errors,
+            }
         });
     Ok(js)
 }
