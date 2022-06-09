@@ -19,10 +19,10 @@ use bitcoin::{
 use bitcoin::{KeyPair, TxOut};
 use bitcoin::{Network, SchnorrSig};
 use miniscript::psbt::PsbtExt;
-use miniscript::Tap;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::error::Error;
+use std::fmt::Display;
 use std::str::FromStr;
 
 #[derive(Serialize, Deserialize)]
@@ -72,7 +72,7 @@ pub async fn read_key_from_file(
 pub fn sign(
     xpriv: ExtendedPrivKey,
     mut psbt: PartiallySignedTransaction,
-) -> Result<Vec<u8>, Box<dyn Error>> {
+) -> Result<Vec<u8>, PSBTSigningError> {
     sign_psbt_inplace(&xpriv, &mut psbt, &Secp256k1::new())?;
     let bytes = serialize(&psbt);
     Ok(bytes)
@@ -91,50 +91,71 @@ pub fn new_key(network: &str, out: &std::ffi::OsStr) -> Result<(), Box<dyn Error
     Ok(())
 }
 
-fn input_err(s: &str) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::InvalidInput, s)
-}
 pub fn sign_psbt_inplace(
     xpriv: &ExtendedPrivKey,
     psbt: &mut PartiallySignedTransaction,
     secp: &Secp256k1<All>,
-) -> Result<(), std::io::Error> {
-    sign_psbt_input_inplace(xpriv, psbt, secp, 0);
-    Ok(())
+) -> Result<(), PSBTSigningError> {
+    sign_psbt_input_inplace(xpriv, psbt, secp, 0)
 }
+
+#[derive(Debug, Clone)]
+pub enum PSBTSigningError {
+    NoUTXOAtIndex(usize),
+    NoInputAtIndex(usize),
+}
+
+impl Display for PSBTSigningError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+impl Error for PSBTSigningError {}
+
 pub fn sign_psbt_input_inplace(
     xpriv: &ExtendedPrivKey,
     psbt: &mut PartiallySignedTransaction,
     secp: &Secp256k1<All>,
     idx: usize,
-) -> Result<(), std::io::Error> {
+) -> Result<(), PSBTSigningError> {
     let tx = psbt.clone().extract_tx();
     let utxos: Vec<TxOut> = psbt
         .inputs
         .iter()
-        .map(|o| o.witness_utxo.clone())
-        .collect::<Option<Vec<TxOut>>>()
-        .ok_or_else(|| input_err("Could not find one of the UTXOs to be signed over"))?;
+        .enumerate()
+        .map(|(i, o)| {
+            if let Some(ref utxo) = o.witness_utxo {
+                Ok(utxo.clone())
+            } else {
+                Err(i)
+            }
+        })
+        .collect::<Result<Vec<TxOut>, usize>>()
+        .map_err(|u| PSBTSigningError::NoUTXOAtIndex(u))?;
     let untweaked = xpriv.to_keypair(secp);
     let pk = XOnlyPublicKey::from_keypair(&untweaked);
     let mut sighash = bitcoin::util::sighash::SighashCache::new(&tx);
-    let input_zero = &mut psbt
+    let input = &mut psbt
         .inputs
         .get_mut(idx)
-        .ok_or_else(|| input_err("No input at idx provided"))?;
-    let tweaked = untweaked
-        .tap_tweak(secp, input_zero.tap_merkle_root)
-        .into_inner();
-    let _tweaked_pk = tweaked.public_key();
+        .ok_or(PSBTSigningError::NoInputAtIndex(idx))?;
     let hash_ty = bitcoin::util::sighash::SchnorrSighashType::All;
     let prevouts = &Prevouts::All(&utxos);
-    if input_zero.tap_internal_key == Some(pk.0) {
-        let sig = get_sig(&mut sighash, prevouts, hash_ty, secp, &tweaked, &None);
-        input_zero.tap_key_sig = Some(sig);
-    }
+    sign_taproot_top_key(untweaked, secp, input, pk, &mut sighash, prevouts, hash_ty);
+    sign_all_tapleaf_branches(xpriv, secp, input, sighash, prevouts, hash_ty, untweaked);
+    Ok(())
+}
 
-    let signers = compute_matching_keys(xpriv, secp, &input_zero.tap_key_origins);
-
+fn sign_all_tapleaf_branches(
+    xpriv: &ExtendedPrivKey,
+    secp: &Secp256k1<All>,
+    input: &mut bitcoin::psbt::Input,
+    mut sighash: bitcoin::util::sighash::SighashCache<&bitcoin::Transaction>,
+    prevouts: &Prevouts<TxOut>,
+    hash_ty: bitcoin::SchnorrSighashType,
+    untweaked: KeyPair,
+) {
+    let signers = compute_matching_keys(xpriv, secp, &input.tap_key_origins);
     for (kp, vtlh) in signers {
         for tlh in vtlh {
             let sig = get_sig(
@@ -145,22 +166,40 @@ pub fn sign_psbt_input_inplace(
                 &untweaked,
                 &Some((*tlh, DEFAULT_CODESEP)),
             );
-            input_zero
+            input
                 .tap_script_sigs
                 .insert((kp.x_only_public_key().0, *tlh), sig);
         }
     }
-    Ok(())
+}
+
+fn sign_taproot_top_key(
+    untweaked: KeyPair,
+    secp: &Secp256k1<All>,
+    input: &mut bitcoin::psbt::Input,
+    pk: (XOnlyPublicKey, bitcoin::secp256k1::Parity),
+    sighash: &mut bitcoin::util::sighash::SighashCache<&bitcoin::Transaction>,
+    prevouts: &Prevouts<TxOut>,
+    hash_ty: bitcoin::SchnorrSighashType,
+) {
+    let tweaked = untweaked
+        .tap_tweak(secp, input.tap_merkle_root)
+        .into_inner();
+    let _tweaked_pk = tweaked.public_key();
+    if input.tap_internal_key == Some(pk.0) {
+        let sig = get_sig(sighash, prevouts, hash_ty, secp, &tweaked, &None);
+        input.tap_key_sig = Some(sig);
+    }
 }
 
 /// Compute keypairs for all matching fingerprints
 fn compute_matching_keys<'a>(
     xpriv: &'a ExtendedPrivKey,
     secp: &'a Secp256k1<All>,
-    input_zero: &'a BTreeMap<XOnlyPublicKey, (Vec<TapLeafHash>, KeySource)>,
+    input: &'a BTreeMap<XOnlyPublicKey, (Vec<TapLeafHash>, KeySource)>,
 ) -> impl Iterator<Item = (KeyPair, &'a Vec<TapLeafHash>)> + 'a {
     let fingerprint = xpriv.fingerprint(secp);
-    input_zero
+    input
         .iter()
         .filter(move |(_, (_, (f, _)))| *f == fingerprint)
         .filter_map(|(x, (vlth, (_, path)))| {
