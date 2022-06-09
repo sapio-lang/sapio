@@ -140,7 +140,7 @@ pub fn sign_psbt_input_inplace(
     let hash_ty = bitcoin::util::sighash::SchnorrSighashType::All;
     let prevouts = &Prevouts::All(&utxos);
     sign_taproot_top_key(xpriv, secp, input, &mut sighash, prevouts, hash_ty);
-    sign_all_tapleaf_branches(xpriv, secp, input, sighash, prevouts, hash_ty);
+    sign_all_tapleaf_branches(xpriv, secp, input, &mut sighash, prevouts, hash_ty);
     Ok(())
 }
 
@@ -148,7 +148,7 @@ fn sign_all_tapleaf_branches(
     xpriv: &ExtendedPrivKey,
     secp: &Secp256k1<All>,
     input: &mut bitcoin::psbt::Input,
-    mut sighash: bitcoin::util::sighash::SighashCache<&bitcoin::Transaction>,
+    sighash: &mut bitcoin::util::sighash::SighashCache<&bitcoin::Transaction>,
     prevouts: &Prevouts<TxOut>,
     hash_ty: bitcoin::SchnorrSighashType,
 ) {
@@ -156,7 +156,7 @@ fn sign_all_tapleaf_branches(
     for (kp, vtlh) in signers {
         for tlh in vtlh {
             let sig = get_sig(
-                &mut sighash,
+                sighash,
                 prevouts,
                 hash_ty,
                 secp,
