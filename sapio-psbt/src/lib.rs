@@ -132,8 +132,6 @@ pub fn sign_psbt_input_inplace(
         })
         .collect::<Result<Vec<TxOut>, usize>>()
         .map_err(|u| PSBTSigningError::NoUTXOAtIndex(u))?;
-    let untweaked = xpriv.to_keypair(secp);
-    let pk = XOnlyPublicKey::from_keypair(&untweaked);
     let mut sighash = bitcoin::util::sighash::SighashCache::new(&tx);
     let input = &mut psbt
         .inputs
@@ -141,8 +139,8 @@ pub fn sign_psbt_input_inplace(
         .ok_or(PSBTSigningError::NoInputAtIndex(idx))?;
     let hash_ty = bitcoin::util::sighash::SchnorrSighashType::All;
     let prevouts = &Prevouts::All(&utxos);
-    sign_taproot_top_key(untweaked, secp, input, pk, &mut sighash, prevouts, hash_ty);
-    sign_all_tapleaf_branches(xpriv, secp, input, sighash, prevouts, hash_ty, untweaked);
+    sign_taproot_top_key(xpriv, secp, input, &mut sighash, prevouts, hash_ty);
+    sign_all_tapleaf_branches(xpriv, secp, input, sighash, prevouts, hash_ty);
     Ok(())
 }
 
@@ -153,7 +151,6 @@ fn sign_all_tapleaf_branches(
     mut sighash: bitcoin::util::sighash::SighashCache<&bitcoin::Transaction>,
     prevouts: &Prevouts<TxOut>,
     hash_ty: bitcoin::SchnorrSighashType,
-    untweaked: KeyPair,
 ) {
     let signers = compute_matching_keys(xpriv, secp, &input.tap_key_origins);
     for (kp, vtlh) in signers {
@@ -163,7 +160,7 @@ fn sign_all_tapleaf_branches(
                 prevouts,
                 hash_ty,
                 secp,
-                &untweaked,
+                &kp,
                 &Some((*tlh, DEFAULT_CODESEP)),
             );
             input
@@ -174,14 +171,15 @@ fn sign_all_tapleaf_branches(
 }
 
 fn sign_taproot_top_key(
-    untweaked: KeyPair,
+    xpriv: &ExtendedPrivKey,
     secp: &Secp256k1<All>,
     input: &mut bitcoin::psbt::Input,
-    pk: (XOnlyPublicKey, bitcoin::secp256k1::Parity),
     sighash: &mut bitcoin::util::sighash::SighashCache<&bitcoin::Transaction>,
     prevouts: &Prevouts<TxOut>,
     hash_ty: bitcoin::SchnorrSighashType,
 ) {
+    let untweaked = xpriv.to_keypair(secp);
+    let pk = XOnlyPublicKey::from_keypair(&untweaked);
     let tweaked = untweaked
         .tap_tweak(secp, input.tap_merkle_root)
         .into_inner();
