@@ -31,12 +31,9 @@ pub enum PSBTApi {
     },
 }
 
-pub async fn finalize_psbt_format_api(
-    psbt: PartiallySignedTransaction,
-) -> Result<PSBTApi, Box<dyn Error>> {
+pub fn finalize_psbt_format_api(psbt: PartiallySignedTransaction) -> PSBTApi {
     let secp = Secp256k1::new();
-    let js = psbt
-        .finalize(&secp)
+    psbt.finalize(&secp)
         .map(|tx| {
             let hex = bitcoin::consensus::encode::serialize_hex(&tx.extract_tx());
             PSBTApi::Finished {
@@ -53,8 +50,7 @@ pub async fn finalize_psbt_format_api(
                 error: "Could not fully finalize psbt".into(),
                 errors,
             }
-        });
-    Ok(js)
+        })
 }
 
 use std::error::Error;

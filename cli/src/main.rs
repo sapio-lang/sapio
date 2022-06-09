@@ -339,7 +339,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             s
                         })?[..],
                     )?;
-                let js = sapio_psbt::finalize_psbt_format_api(psbt).await?;
+                let js = sapio_psbt::finalize_psbt_format_api(psbt);
                 println!("{}", serde_json::to_string_pretty(&js)?);
             }
             _ => unreachable!(),
