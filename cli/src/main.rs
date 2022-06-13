@@ -21,6 +21,7 @@ use bitcoin::consensus::serialize;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::bip32::ExtendedPrivKey;
 use bitcoin::util::bip32::ExtendedPubKey;
+use bitcoin::Network;
 use clap::clap_app;
 use clap::ArgMatches;
 use config::*;
@@ -33,6 +34,7 @@ use sapio_wasm_plugin::host::plugin_handle::ModuleLocator;
 use schemars::schema_for;
 use serde_json::Deserializer;
 use std::error::Error;
+use std::str::FromStr;
 use std::sync::Arc;
 use tokio::io::AsyncReadExt;
 use tokio::sync::oneshot;
@@ -251,7 +253,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let input = args.value_of_os("input").unwrap();
                 let psbt_str = args.value_of("psbt");
                 let output = args.value_of_os("out");
-                let xpriv = sapio_psbt::SigningKey::read_key_from_file(input).await?;
+
+                let buf = tokio::fs::read(input).await?;
+                let xpriv = sapio_psbt::SigningKey::read_key_from_buf(&buf[..])?;
                 let psbt = get_psbt_from(psbt_str).await?;
                 let hash_ty = bitcoin::util::sighash::SchnorrSighashType::All;
                 let bytes = xpriv.sign(psbt, hash_ty)?;
@@ -264,12 +268,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             Some(("new", args)) => {
                 let network = args.value_of("network").unwrap();
+                let network = Network::from_str(network)?;
                 let out = args.value_of_os("out").unwrap();
-                sapio_psbt::SigningKey::new_key(network, out)?;
+                let xpriv = sapio_psbt::SigningKey::new_key(network)?;
+                let pubkey = xpriv.pubkey(&Secp256k1::new());
+                tokio::fs::write(out, &xpriv.0.encode()).await?;
+                println!("{}", pubkey);
             }
             Some(("show", args)) => {
                 let input = args.value_of_os("input").unwrap();
-                sapio_psbt::SigningKey::show_pubkey(input).await?;
+                let buf = tokio::fs::read(input).await?;
+                let xpriv = sapio_psbt::SigningKey::read_key_from_buf(&buf[..])?;
+                let pubkey = xpriv.pubkey(&Secp256k1::new());
+                println!("{}", pubkey);
             }
             _ => unreachable!(),
         },

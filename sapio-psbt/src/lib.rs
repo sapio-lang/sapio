@@ -21,29 +21,21 @@ use bitcoin::{Network, SchnorrSig};
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::Display;
-use std::str::FromStr;
-
 pub mod external_api;
 
 pub struct SigningKey(pub ExtendedPrivKey);
 
 impl SigningKey {
-    pub async fn read_key_from_file(file_name: &std::ffi::OsStr) -> Result<Self, Box<dyn Error>> {
-        let buf = tokio::fs::read(file_name).await?;
-        Ok(SigningKey(ExtendedPrivKey::decode(&buf)?))
+    pub fn read_key_from_buf(buf: &[u8]) -> Result<Self, bitcoin::util::bip32::Error > {
+        ExtendedPrivKey::decode(&buf).map(SigningKey)
     }
-    pub async fn show_pubkey(input: &std::ffi::OsStr) -> Result<(), Box<dyn Error>> {
-        let xpriv = Self::read_key_from_file(input).await?.0;
-        println!("{}", ExtendedPubKey::from_priv(&Secp256k1::new(), &xpriv));
-        Ok(())
+    pub fn pubkey<C: Signing>(&self, secp: &Secp256k1<C>) -> ExtendedPubKey {
+        ExtendedPubKey::from_priv(secp, &self.0)
     }
-
-    pub fn new_key(network: &str, out: &std::ffi::OsStr) -> Result<(), Box<dyn Error>> {
-        let entropy: [u8; 32] = rand::thread_rng().gen();
-        let xpriv = ExtendedPrivKey::new_master(Network::from_str(network)?, &entropy)?;
-        std::fs::write(out, &xpriv.encode())?;
-        println!("{}", ExtendedPubKey::from_priv(&Secp256k1::new(), &xpriv));
-        Ok(())
+    pub fn new_key(network: Network) -> Result<Self, bitcoin::util::bip32::Error> {
+        let seed: [u8; 32] = rand::thread_rng().gen();
+        let xpriv = ExtendedPrivKey::new_master(network, &seed)?;
+        Ok(SigningKey(xpriv))
     }
     pub fn sign(
         &self,
