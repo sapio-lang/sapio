@@ -56,11 +56,14 @@ impl SigningKey {
     }
     pub fn sign_psbt<C: Signing + Verification>(
         &self,
-        psbt: PartiallySignedTransaction,
+        mut psbt: PartiallySignedTransaction,
         secp: &Secp256k1<C>,
         hash_ty: bitcoin::SchnorrSighashType,
     ) -> Result<PartiallySignedTransaction, (PartiallySignedTransaction, PSBTSigningError)> {
-        self.sign_psbt_input(psbt, secp, 0, hash_ty)
+        match self.sign_psbt_mut(&mut psbt, secp, hash_ty) {
+            Ok(()) => Ok(psbt),
+            Err(e) => Err((psbt, e)),
+        }
     }
     pub fn sign_psbt_mut<C: Signing + Verification>(
         &self,
@@ -68,7 +71,11 @@ impl SigningKey {
         secp: &Secp256k1<C>,
         hash_ty: bitcoin::SchnorrSighashType,
     ) -> Result<(), PSBTSigningError> {
-        self.sign_psbt_input_mut(psbt, secp, 0, hash_ty)
+        let l = psbt.inputs.len();
+        for idx in 0..l {
+            self.sign_psbt_input_mut(psbt, secp, idx, hash_ty)?;
+        }
+        Ok(())
     }
     pub fn sign_psbt_input<C: Signing + Verification>(
         &self,
