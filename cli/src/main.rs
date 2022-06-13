@@ -251,10 +251,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let input = args.value_of_os("input").unwrap();
                 let psbt_str = args.value_of("psbt");
                 let output = args.value_of_os("out");
-                let xpriv = sapio_psbt::read_key_from_file(input).await?;
+                let xpriv = sapio_psbt::SigningKey::read_key_from_file(input).await?;
                 let psbt = get_psbt_from(psbt_str).await?;
                 let hash_ty = bitcoin::util::sighash::SchnorrSighashType::All;
-                let bytes = sapio_psbt::sign(xpriv, psbt, hash_ty)?;
+                let bytes = xpriv.sign(psbt, hash_ty)?;
 
                 if let Some(file_out) = output {
                     std::fs::write(file_out, &base64::encode(bytes))?;
@@ -265,11 +265,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Some(("new", args)) => {
                 let network = args.value_of("network").unwrap();
                 let out = args.value_of_os("out").unwrap();
-                sapio_psbt::new_key(network, out)?;
+                sapio_psbt::SigningKey::new_key(network, out)?;
             }
             Some(("show", args)) => {
                 let input = args.value_of_os("input").unwrap();
-                sapio_psbt::show_pubkey(input).await?;
+                sapio_psbt::SigningKey::show_pubkey(input).await?;
             }
             _ => unreachable!(),
         },
@@ -337,7 +337,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let psbt_str = args.value_of("psbt");
 
                 let psbt = get_psbt_from(psbt_str).await?;
-                let js = sapio_psbt::finalize_psbt_format_api(psbt);
+                let js = sapio_psbt::external_api::finalize_psbt_format_api(psbt);
                 println!("{}", serde_json::to_string_pretty(&js)?);
             }
             _ => unreachable!(),
