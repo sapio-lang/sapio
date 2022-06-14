@@ -8,7 +8,7 @@ use bitcoin::consensus::serialize;
 use bitcoin::schnorr::TapTweak;
 use bitcoin::secp256k1::rand::Rng;
 use bitcoin::secp256k1::{rand, Signing, Verification};
-use bitcoin::util::bip32::{ExtendedPubKey, KeySource};
+use bitcoin::util::bip32::{ExtendedPubKey, Fingerprint, KeySource};
 use bitcoin::util::sighash::Prevouts;
 use bitcoin::util::taproot::TapLeafHash;
 use bitcoin::util::taproot::TapSighashHash;
@@ -18,24 +18,31 @@ use bitcoin::{
 };
 use bitcoin::{KeyPair, TxOut};
 use bitcoin::{Network, SchnorrSig};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::error::Error;
 use std::fmt::Display;
 pub mod external_api;
 
-pub struct SigningKey(pub ExtendedPrivKey);
+pub struct SigningKey(pub Vec<ExtendedPrivKey>);
 
 impl SigningKey {
-    pub fn read_key_from_buf(buf: &[u8]) -> Result<Self, bitcoin::util::bip32::Error > {
-        ExtendedPrivKey::decode(&buf).map(SigningKey)
-    }
-    pub fn pubkey<C: Signing>(&self, secp: &Secp256k1<C>) -> ExtendedPubKey {
-        ExtendedPubKey::from_priv(secp, &self.0)
+    pub fn read_key_from_buf(buf: &[u8]) -> Result<Self, bitcoin::util::bip32::Error> {
+        ExtendedPrivKey::decode(&buf).map(|k| SigningKey(vec![k]))
     }
     pub fn new_key(network: Network) -> Result<Self, bitcoin::util::bip32::Error> {
         let seed: [u8; 32] = rand::thread_rng().gen();
         let xpriv = ExtendedPrivKey::new_master(network, &seed)?;
-        Ok(SigningKey(xpriv))
+        Ok(SigningKey(vec![xpriv]))
+    }
+    pub fn merge(mut self, other: SigningKey) -> SigningKey {
+        self.0.extend(other.0);
+        self
+    }
+    pub fn pubkey<C: Signing>(&self, secp: &Secp256k1<C>) -> Vec<ExtendedPubKey> {
+        self.0
+            .iter()
+            .map(|s| ExtendedPubKey::from_priv(secp, &s))
+            .collect()
     }
     pub fn sign(
         &self,
@@ -147,15 +154,19 @@ impl SigningKey {
         prevouts: &Prevouts<TxOut>,
         hash_ty: bitcoin::SchnorrSighashType,
     ) {
-        let untweaked = self.0.to_keypair(secp);
-        let pk = XOnlyPublicKey::from_keypair(&untweaked);
-        let tweaked = untweaked
-            .tap_tweak(secp, input.tap_merkle_root)
-            .into_inner();
-        let _tweaked_pk = tweaked.public_key();
-        if input.tap_internal_key == Some(pk.0) {
-            let sig = get_sig(sighash, prevouts, hash_ty, secp, &tweaked, &None);
-            input.tap_key_sig = Some(sig);
+        for kp in self.0.iter() {
+            // TODO: We should probably be trying somehow to derive a key here?
+            let untweaked = kp.to_keypair(secp);
+            let pk = XOnlyPublicKey::from_keypair(&untweaked);
+            let tweaked = untweaked
+                .tap_tweak(secp, input.tap_merkle_root)
+                .into_inner();
+            let _tweaked_pk = tweaked.public_key();
+            if input.tap_internal_key == Some(pk.0) {
+                let sig = get_sig(sighash, prevouts, hash_ty, secp, &tweaked, &None);
+                input.tap_key_sig = Some(sig);
+                break;
+            }
         }
     }
 
@@ -165,18 +176,39 @@ impl SigningKey {
         secp: &'a Secp256k1<C>,
         input: &'a BTreeMap<XOnlyPublicKey, (Vec<TapLeafHash>, KeySource)>,
     ) -> impl Iterator<Item = (KeyPair, &'a Vec<TapLeafHash>)> + 'a {
-        let fingerprint = self.0.fingerprint(secp);
-        input
-            .iter()
-            .filter(move |(_, (_, (f, _)))| *f == fingerprint)
-            .filter_map(|(x, (vlth, (_, path)))| {
-                let new_priv = self.0.derive_priv(secp, path).ok()?.to_keypair(secp);
-                if new_priv.public_key().x_only_public_key().0 == *x {
-                    Some((new_priv, vlth))
-                } else {
-                    None
+        // TODO: Cache this on type creation?
+        let keymap = self.compute_fingerprint_map(secp);
+
+        input.iter().filter_map(move |(x, (vlth, (f, path)))| {
+            for key in keymap.get(f)? {
+                match key.derive_priv(secp, path).map(|k| k.to_keypair(secp)) {
+                    Ok(kp) => {
+                        if kp.public_key().x_only_public_key().0 == *x {
+                            return Some((kp, vlth));
+                        } else {
+                            return None;
+                        }
+                    }
+                    Err(_) => continue,
                 }
-            })
+            }
+            None
+        })
+    }
+
+    /// Computes a map of all fingerprints
+    // TODO: consider more memory efficient representations
+    fn compute_fingerprint_map<'a, C: Signing>(
+        &'a self,
+        secp: &Secp256k1<C>,
+    ) -> HashMap<Fingerprint, Vec<&'a ExtendedPrivKey>> {
+        let fingerprint = self.0.iter().map(|k| (k.fingerprint(secp), k));
+        let mut keymap: HashMap<Fingerprint, Vec<&'a ExtendedPrivKey>> = HashMap::new();
+        for (f, k) in fingerprint {
+            let keys = keymap.entry(f).or_insert(Vec::new());
+            keys.push(k)
+        }
+        keymap
     }
 }
 

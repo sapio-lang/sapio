@@ -272,15 +272,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let out = args.value_of_os("out").unwrap();
                 let xpriv = sapio_psbt::SigningKey::new_key(network)?;
                 let pubkey = xpriv.pubkey(&Secp256k1::new());
-                tokio::fs::write(out, &xpriv.0.encode()).await?;
-                println!("{}", pubkey);
+                tokio::fs::write(out, &xpriv.0[0].encode()).await?;
+                println!("{}", pubkey[0]);
             }
             Some(("show", args)) => {
                 let input = args.value_of_os("input").unwrap();
                 let buf = tokio::fs::read(input).await?;
                 let xpriv = sapio_psbt::SigningKey::read_key_from_buf(&buf[..])?;
                 let pubkey = xpriv.pubkey(&Secp256k1::new());
-                println!("{}", pubkey);
+                println!("{}", pubkey[0]);
             }
             _ => unreachable!(),
         },
