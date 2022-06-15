@@ -115,8 +115,23 @@ impl SigningKey {
             .get_mut(idx)
             .ok_or(PSBTSigningError::NoInputAtIndex(idx))?;
         let prevouts = &Prevouts::All(&utxos);
-        self.sign_taproot_top_key(secp, input, &mut sighash, prevouts, hash_ty);
-        self.sign_all_tapleaf_branches(secp, input, &mut sighash, prevouts, hash_ty);
+        let fingerprints_map = self.compute_fingerprint_map(secp);
+        self.sign_taproot_top_key(
+            secp,
+            input,
+            &mut sighash,
+            prevouts,
+            hash_ty,
+            &fingerprints_map,
+        );
+        self.sign_all_tapleaf_branches(
+            secp,
+            input,
+            &mut sighash,
+            prevouts,
+            hash_ty,
+            &fingerprints_map,
+        );
         Ok(())
     }
 
@@ -127,8 +142,9 @@ impl SigningKey {
         sighash: &mut bitcoin::util::sighash::SighashCache<&bitcoin::Transaction>,
         prevouts: &Prevouts<TxOut>,
         hash_ty: bitcoin::SchnorrSighashType,
+        fingerprints_map: &HashMap<Fingerprint, Vec<&ExtendedPrivKey>>,
     ) {
-        let signers = self.compute_matching_keys(secp, &input.tap_key_origins);
+        let signers = self.compute_matching_keys(secp, &input.tap_key_origins, fingerprints_map);
         for (kp, vtlh) in signers {
             for tlh in vtlh {
                 let sig = get_sig(
@@ -153,8 +169,8 @@ impl SigningKey {
         sighash: &mut bitcoin::util::sighash::SighashCache<&bitcoin::Transaction>,
         prevouts: &Prevouts<TxOut>,
         hash_ty: bitcoin::SchnorrSighashType,
+        fingerprints_map: &HashMap<Fingerprint, Vec<&ExtendedPrivKey>>,
     ) {
-        let fingerprints_map = self.compute_fingerprint_map(secp);
         // first attempt to use derivations from the key source map
         for (ik, (_, (f, path))) in input.tap_key_origins.iter() {
             if Some(*ik) != input.tap_internal_key {
@@ -195,12 +211,11 @@ impl SigningKey {
         &'a self,
         secp: &'a Secp256k1<C>,
         input: &'a BTreeMap<XOnlyPublicKey, (Vec<TapLeafHash>, KeySource)>,
+        fingerprints_map: &'a HashMap<Fingerprint, Vec<&'a ExtendedPrivKey>>,
     ) -> impl Iterator<Item = (KeyPair, &'a Vec<TapLeafHash>)> + 'a {
         // TODO: Cache this on type creation?
-        let keymap = self.compute_fingerprint_map(secp);
-
         input.iter().filter_map(move |(x, (vlth, (f, path)))| {
-            for key in keymap.get(f)? {
+            for key in fingerprints_map.get(f)? {
                 match key.derive_priv(secp, path).map(|k| k.to_keypair(secp)) {
                     Ok(kp) => {
                         if kp.public_key().x_only_public_key().0 == *x {
