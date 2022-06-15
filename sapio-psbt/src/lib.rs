@@ -154,18 +154,38 @@ impl SigningKey {
         prevouts: &Prevouts<TxOut>,
         hash_ty: bitcoin::SchnorrSighashType,
     ) {
+        let fingerprints_map = self.compute_fingerprint_map(secp);
+        // first attempt to use derivations from the key source map
+        for (ik, (_, (f, path))) in input.tap_key_origins.iter() {
+            if Some(*ik) != input.tap_internal_key {
+                continue;
+            }
+            for key in fingerprints_map.get(f).iter().map(|f| f.iter()).flatten() {
+                if let Ok(sk) = key.derive_priv(secp, path) {
+                    let untweaked = sk.to_keypair(secp);
+                    let pk = untweaked.public_key().x_only_public_key().0;
+                    if Some(pk) == input.tap_internal_key {
+                        let tweaked = untweaked
+                            .tap_tweak(secp, input.tap_merkle_root)
+                            .into_inner();
+                        let sig = get_sig(sighash, prevouts, hash_ty, secp, &tweaked, &None);
+                        input.tap_key_sig = Some(sig);
+                        return;
+                    }
+                }
+            }
+        }
+        // Assume that the key is an exact, non derived, match for a key we know already
         for kp in self.0.iter() {
-            // TODO: We should probably be trying somehow to derive a key here?
             let untweaked = kp.to_keypair(secp);
             let pk = XOnlyPublicKey::from_keypair(&untweaked);
-            let tweaked = untweaked
-                .tap_tweak(secp, input.tap_merkle_root)
-                .into_inner();
-            let _tweaked_pk = tweaked.public_key();
             if input.tap_internal_key == Some(pk.0) {
+                let tweaked = untweaked
+                    .tap_tweak(secp, input.tap_merkle_root)
+                    .into_inner();
                 let sig = get_sig(sighash, prevouts, hash_ty, secp, &tweaked, &None);
                 input.tap_key_sig = Some(sig);
-                break;
+                return;
             }
         }
     }
