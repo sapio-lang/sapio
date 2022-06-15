@@ -34,7 +34,7 @@ impl SigningKey {
         let xpriv = ExtendedPrivKey::new_master(network, &seed)?;
         Ok(SigningKey(vec![xpriv]))
     }
-    pub fn merge(mut self, other: SigningKey) -> SigningKey {
+    pub fn merge(&mut self, other: SigningKey) -> &mut SigningKey {
         self.0.extend(other.0);
         self
     }
