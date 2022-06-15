@@ -170,41 +170,45 @@ impl SigningKey {
         prevouts: &Prevouts<TxOut>,
         hash_ty: bitcoin::SchnorrSighashType,
         fingerprints_map: &Vec<(Fingerprint, &ExtendedPrivKey)>,
-    ) {
+    ) -> Option<()> {
         // first attempt to use derivations from the key source map
-        for (ik, (_, (f, path))) in input.tap_key_origins.iter() {
-            if Some(*ik) != input.tap_internal_key {
-                continue;
-            }
-            let idx = fingerprints_map.partition_point(|(x, _)| *x < *f);
-            for (_, key) in fingerprints_map.iter().skip(idx).take_while(|k| k.0 == *f) {
-                if let Ok(sk) = key.derive_priv(secp, path) {
-                    let untweaked = sk.to_keypair(secp);
-                    let pk = untweaked.public_key().x_only_public_key().0;
-                    if Some(pk) == input.tap_internal_key {
-                        let tweaked = untweaked
-                            .tap_tweak(secp, input.tap_merkle_root)
-                            .into_inner();
-                        let sig = get_sig(sighash, prevouts, hash_ty, secp, &tweaked, &None);
-                        input.tap_key_sig = Some(sig);
-                        return;
-                    }
-                }
-            }
-        }
+        let key = input.tap_internal_key?;
+        let untweaked = self.find_internal_keypair(input, key, fingerprints_map, secp)?;
+        let tweaked = untweaked
+            .tap_tweak(secp, input.tap_merkle_root)
+            .into_inner();
+        input.tap_key_sig = Some(get_sig(sighash, prevouts, hash_ty, secp, &tweaked, &None));
+        Some(())
+    }
+
+    fn find_internal_keypair<C: Signing>(
+        &self,
+        input: &mut bitcoin::psbt::Input,
+        input_key: XOnlyPublicKey,
+        fingerprints_map: &Vec<(Fingerprint, &ExtendedPrivKey)>,
+        secp: &Secp256k1<C>,
+    ) -> Option<KeyPair> {
         // Assume that the key is an exact, non derived, match for a key we know already
         for kp in self.0.iter() {
             let untweaked = kp.to_keypair(secp);
             let pk = XOnlyPublicKey::from_keypair(&untweaked);
-            if input.tap_internal_key == Some(pk.0) {
-                let tweaked = untweaked
-                    .tap_tweak(secp, input.tap_merkle_root)
-                    .into_inner();
-                let sig = get_sig(sighash, prevouts, hash_ty, secp, &tweaked, &None);
-                input.tap_key_sig = Some(sig);
-                return;
+            if input_key == pk.0 {
+                return Some(untweaked);
             }
         }
+        // Otherwise, try to derive a key
+        let (_, (f, path)) = input.tap_key_origins.get(&input_key)?;
+        let idx = fingerprints_map.partition_point(|(x, _)| *x < *f);
+        for (_, key) in fingerprints_map.iter().skip(idx).take_while(|k| k.0 == *f) {
+            if let Ok(sk) = key.derive_priv(secp, path) {
+                let untweaked = sk.to_keypair(secp);
+                let pk = untweaked.public_key().x_only_public_key().0;
+                if pk == input_key {
+                    return Some(untweaked);
+                }
+            }
+        }
+        None
     }
 
     /// Compute keypairs for all matching fingerprints
