@@ -142,7 +142,7 @@ impl SigningKey {
         sighash: &mut bitcoin::util::sighash::SighashCache<&bitcoin::Transaction>,
         prevouts: &Prevouts<TxOut>,
         hash_ty: bitcoin::SchnorrSighashType,
-        fingerprints_map: &HashMap<Fingerprint, Vec<&ExtendedPrivKey>>,
+        fingerprints_map: &Vec<(Fingerprint, &ExtendedPrivKey)>,
     ) {
         let signers = self.compute_matching_keys(secp, &input.tap_key_origins, fingerprints_map);
         for (kp, vtlh) in signers {
@@ -169,14 +169,15 @@ impl SigningKey {
         sighash: &mut bitcoin::util::sighash::SighashCache<&bitcoin::Transaction>,
         prevouts: &Prevouts<TxOut>,
         hash_ty: bitcoin::SchnorrSighashType,
-        fingerprints_map: &HashMap<Fingerprint, Vec<&ExtendedPrivKey>>,
+        fingerprints_map: &Vec<(Fingerprint, &ExtendedPrivKey)>,
     ) {
         // first attempt to use derivations from the key source map
         for (ik, (_, (f, path))) in input.tap_key_origins.iter() {
             if Some(*ik) != input.tap_internal_key {
                 continue;
             }
-            for key in fingerprints_map.get(f).iter().map(|f| f.iter()).flatten() {
+            let idx = fingerprints_map.partition_point(|(x, _)| *x < *f);
+            for (_, key) in fingerprints_map.iter().skip(idx).take_while(|k| k.0 == *f) {
                 if let Ok(sk) = key.derive_priv(secp, path) {
                     let untweaked = sk.to_keypair(secp);
                     let pk = untweaked.public_key().x_only_public_key().0;
@@ -211,11 +212,16 @@ impl SigningKey {
         &'a self,
         secp: &'a Secp256k1<C>,
         input: &'a BTreeMap<XOnlyPublicKey, (Vec<TapLeafHash>, KeySource)>,
-        fingerprints_map: &'a HashMap<Fingerprint, Vec<&'a ExtendedPrivKey>>,
+        fingerprints_map: &'a Vec<(Fingerprint, &'a ExtendedPrivKey)>,
     ) -> impl Iterator<Item = (KeyPair, &'a Vec<TapLeafHash>)> + 'a {
         // TODO: Cache this on type creation?
         input.iter().filter_map(move |(x, (vlth, (f, path)))| {
-            for key in fingerprints_map.get(f)? {
+            let idx = fingerprints_map.partition_point(|(x, _)| *x < *f);
+            for (_, key) in fingerprints_map
+                .iter()
+                .skip(idx)
+                .take_while(|(x, _)| *x == *f)
+            {
                 match key.derive_priv(secp, path).map(|k| k.to_keypair(secp)) {
                     Ok(kp) => {
                         if kp.public_key().x_only_public_key().0 == *x {
@@ -236,14 +242,11 @@ impl SigningKey {
     fn compute_fingerprint_map<'a, C: Signing>(
         &'a self,
         secp: &Secp256k1<C>,
-    ) -> HashMap<Fingerprint, Vec<&'a ExtendedPrivKey>> {
+    ) -> Vec<(Fingerprint, &'a ExtendedPrivKey)> {
         let fingerprint = self.0.iter().map(|k| (k.fingerprint(secp), k));
-        let mut keymap: HashMap<Fingerprint, Vec<&'a ExtendedPrivKey>> = HashMap::new();
-        for (f, k) in fingerprint {
-            let keys = keymap.entry(f).or_insert(Vec::new());
-            keys.push(k)
-        }
-        keymap
+        let mut keyarr: Vec<(Fingerprint, &ExtendedPrivKey)> = fingerprint.collect();
+        keyarr.sort_by_key(|k| k.0);
+        keyarr
     }
 }
 
