@@ -44,7 +44,7 @@ use crate::{config::EmulatorConfig, util::create_mock_output};
 pub struct Common {
     pub path: PathBuf,
     pub emulator: Option<EmulatorConfig>,
-    pub module_locator: ModuleLocator,
+    pub module_locator: Option<ModuleLocator>,
     #[schemars(with = "String")]
     pub net: bitcoin::Network,
     pub plugin_map: Option<BTreeMap<Vec<u8>, [u8; 32]>>,
@@ -178,14 +178,14 @@ impl Request {
             plugin_map,
             ..
         } = context;
-        let default_sph = || {
-            WasmPluginHandle::<Value>::new_async(
+        let default_sph = || -> Result<_, &'static str> {
+            Ok(WasmPluginHandle::<Value>::new_async(
                 &path,
                 &emulator,
-                module_locator,
+                module_locator.ok_or("Expected to have exactly one of key or file")?,
                 net,
                 plugin_map.clone(),
-            )
+            ))
         };
         match command {
             Command::List(_list) => {
@@ -203,7 +203,7 @@ impl Request {
             }
             Command::Call(call) => {
                 let params = call.params;
-                let sph = default_sph().await?;
+                let sph = default_sph()?.await?;
 
                 let api = sph.get_api()?;
                 let schema = serde_json::to_value(api.input())?;
@@ -221,19 +221,19 @@ impl Request {
             }
             Command::Bind(bind) => Ok(CommandReturn::Bind(bind.call(net, emulator).await?)),
             Command::Api(_api) => {
-                let sph = default_sph().await?;
+                let sph = default_sph()?.await?;
                 Ok(CommandReturn::Api(ApiReturn {
                     api: sph.get_api()?,
                 }))
             }
             Command::Logo(_logo) => {
-                let sph = default_sph().await?;
+                let sph = default_sph()?.await?;
                 Ok(CommandReturn::Logo(LogoReturn {
                     logo: sph.get_logo()?.into(),
                 }))
             }
             Command::Info(_info) => {
-                let sph = default_sph().await?;
+                let sph = default_sph()?.await?;
                 let api = sph.get_api()?;
                 Ok(CommandReturn::Info(InfoReturn {
                     name: sph.get_name()?,
@@ -248,7 +248,7 @@ impl Request {
                 }))
             }
             Command::Load(_load) => {
-                let sph = default_sph().await?;
+                let sph = default_sph()?.await?;
                 Ok(CommandReturn::Load(LoadReturn {
                     key: sph.id().to_string(),
                 }))
