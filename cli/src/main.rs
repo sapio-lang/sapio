@@ -396,8 +396,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         args.value_of("key")
                             .map(ToString::to_string)
                             .map(ModuleLocator::Key),
-                    )
-                    .ok_or("Expected to have exactly one of key or file")?;
+                    );
                 Ok(Common {
                     path: module_path(args),
                     emulator: emulator_args,
