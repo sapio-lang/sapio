@@ -218,19 +218,19 @@ export CC=/opt/homebrew/opt/llvm/bin/clang
 export AR=/opt/homebrew/opt/llvm/bin/llvm-ar
 </code></pre>
 </blockquote>
-<ol>
+<ol start="3">
 <li>Clone this repo: </li>
 </ol>
 <pre><code>git clone --depth 1 git@github.com:sapio-lang/sapio.git &amp;&amp; cd sapio
 </code></pre>
 <p>We recommend a shallow clone unless you want the full history.</p>
-<ol>
+<ol start="4">
 <li>Build a plugin</li>
 </ol>
 <pre><code>cd plugin-example/ &amp;&amp; cargo build --release --target wasm32-unknown-unknown &amp;&amp; cd ..
 </code></pre>
 <p>If the compilation fails, you may want to check the clang version (8&lt;=), and install libraries for cross-compilation (in case of ubuntu, <code>sudo apt install gcc-multilib</code>)</p>
-<ol>
+<ol start="5">
 <li>Instantiate a contract from the plugin:</li>
 </ol>
 <pre><code>cargo run --bin sapio-cli -- contract create &quot;{\&quot;arguments\&quot;:{\&quot;ForAddress\&quot;:{\&quot;amount_step\&quot;:{\&quot;Sats\&quot;:100},\&quot;cold_storage\&quot;:\&quot;bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj\&quot;,\&quot;hot_storage\&quot;:\&quot;bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj\&quot;,\&quot;mature\&quot;:{\&quot;RH\&quot;:10},\&quot;n_steps\&quot;:10,\&quot;timeout\&quot;:{\&quot;RH\&quot;:5}}},\&quot;context\&quot;:{\&quot;amount\&quot;:1,\&quot;network\&quot;:\&quot;Regtest\&quot;}}&quot; --file=&quot;plugin-example/target/wasm32-unknown-unknown/debug/sapio_wasm_vault.wasm&quot;
@@ -239,7 +239,7 @@ export AR=/opt/homebrew/opt/llvm/bin/llvm-ar
 CLI can do! and <code>cargo run --bin sapio-cli -- &lt;subcommand&gt; help</code> to learn about
 subcommands like <code>contract</code>. If you aren't modifying Sapio itself, you'll want
 to run <code>cargo build --release</code> and use a release binary as it is much faster.</p>
-<ol>
+<ol start="6">
 <li>Install Sapio Studio</li>
 </ol>
 <p><a href="https://github.com/sapio-lang/sapio-studio">Sapio Studio</a> is an in-development
