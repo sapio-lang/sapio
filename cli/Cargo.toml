@@ -24,6 +24,9 @@ directories = "3.0.1"
 rand="^0.6"
 jsonschema-valid = "0.4.0"
 
+[dependencies.sapio-psbt]
+path = "../sapio-psbt"
+version = "0.1.0"
 
 [dependencies.wasmer]
 version = "2.2.1"

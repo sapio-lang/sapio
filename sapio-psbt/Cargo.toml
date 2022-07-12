@@ -1,0 +1,26 @@
+[package]
+name = "sapio-psbt"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jeremy Rubin <j@rubin.io>"]
+repository = "https://github.com/sapio-lang/sapio"
+homepage = "https://sapio-lang.org"
+description = "Utilities for working with Partially Signed Bitcoin Transactions (psbts)"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+base64 = "0.13.0"
+serde_json = "1.0"
+serde = "1.0"
+
+[dependencies.bitcoin]
+package = "sapio-bitcoin"
+version = "0.28.0"
+features = ['use-serde', 'rand', 'base64']
+
+[dependencies.miniscript]
+package = "sapio-miniscript"
+version = "^7.0.0"
+features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']

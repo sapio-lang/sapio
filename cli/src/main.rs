@@ -1,9 +1,9 @@
-use crate::contracts::Response;
 // Copyright Judica, Inc 2021
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #[deny(missing_docs)]
 use crate::contracts::server::Server;
 use crate::contracts::Api;
@@ -16,28 +16,24 @@ use crate::contracts::List;
 use crate::contracts::Load;
 use crate::contracts::Logo;
 use crate::contracts::Request;
+use crate::contracts::Response;
 use bitcoin::consensus::serialize;
-use bitcoin::consensus::Decodable;
-use bitcoin::network::constants::Network;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::bip32::ExtendedPrivKey;
 use bitcoin::util::bip32::ExtendedPubKey;
-use bitcoin::util::psbt::PartiallySignedTransaction;
+use bitcoin::Network;
 use clap::clap_app;
 use clap::ArgMatches;
 use config::*;
 use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::CTVAvailable;
 use emulator_connect::CTVEmulator;
-use miniscript::psbt::PsbtExt;
-use rand::prelude::*;
 use sapio::contract::Compiled;
 use sapio_base::util::CTVHash;
 use sapio_wasm_plugin::host::plugin_handle::ModuleLocator;
 use schemars::schema_for;
 use serde_json::Deserializer;
 use std::error::Error;
-
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::io::AsyncReadExt;
@@ -257,16 +253,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let input = args.value_of_os("input").unwrap();
                 let psbt_str = args.value_of("psbt");
                 let output = args.value_of_os("out");
-                signer::sign(input, psbt_str, output).await?;
+
+                let buf = tokio::fs::read(input).await?;
+                let xpriv = sapio_psbt::SigningKey::read_key_from_buf(&buf[..])?;
+                let psbt = get_psbt_from(psbt_str).await?;
+                let hash_ty = bitcoin::util::sighash::SchnorrSighashType::All;
+                let bytes = xpriv.sign(psbt, hash_ty)?;
+
+                if let Some(file_out) = output {
+                    std::fs::write(file_out, &base64::encode(bytes))?;
+                } else {
+                    println!("{}", base64::encode(bytes));
+                }
             }
             Some(("new", args)) => {
                 let network = args.value_of("network").unwrap();
+                let network = Network::from_str(network)?;
                 let out = args.value_of_os("out").unwrap();
-                signer::new_key(network, out)?;
+                let xpriv = sapio_psbt::SigningKey::new_key(network)?;
+                let pubkey = xpriv.pubkey(&Secp256k1::new());
+                tokio::fs::write(out, &xpriv.0[0].encode()).await?;
+                println!("{}", pubkey[0]);
             }
             Some(("show", args)) => {
                 let input = args.value_of_os("input").unwrap();
-                signer::show_pubkey(input).await?;
+                let buf = tokio::fs::read(input).await?;
+                let xpriv = sapio_psbt::SigningKey::read_key_from_buf(&buf[..])?;
+                let pubkey = xpriv.pubkey(&Secp256k1::new());
+                println!("{}", pubkey[0]);
             }
             _ => unreachable!(),
         },
@@ -332,7 +346,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(("psbt", matches)) => match matches.subcommand() {
             Some(("finalize", args)) => {
                 let psbt_str = args.value_of("psbt");
-                let js = finalize_psbt(psbt_str).await?;
+
+                let psbt = get_psbt_from(psbt_str).await?;
+                let js = sapio_psbt::external_api::finalize_psbt_format_api(psbt);
                 println!("{}", serde_json::to_string_pretty(&js)?);
             }
             _ => unreachable!(),
@@ -473,85 +489,6 @@ async fn run_server_stdin() -> Result<(), Box<dyn Error>> {
     shutdown_server.send(())?;
     stream.await?;
     Ok(())
-}
-
-async fn finalize_psbt(psbt_str: Option<&str>) -> Result<serde_json::Value, Box<dyn Error>> {
-    let psbt: PartiallySignedTransaction = PartiallySignedTransaction::consensus_decode(
-        &base64::decode(&if let Some(psbt) = psbt_str {
-            psbt.into()
-        } else {
-            let mut s = String::new();
-            tokio::io::stdin().read_to_string(&mut s).await?;
-            s
-        })?[..],
-    )?;
-    let secp = Secp256k1::new();
-    let js = psbt
-        .finalize(&secp)
-        .map(|tx| {
-            let hex = bitcoin::consensus::encode::serialize_hex(&tx.extract_tx());
-            serde_json::json!({
-                "completed": true,
-                "hex": hex
-            })
-        })
-        .unwrap_or_else(|(psbt, errors)| {
-            let errors: Vec<_> = errors.iter().map(|e| format!("{:?}", e)).collect();
-            let encoded_psbt = base64::encode(serialize(&psbt));
-            serde_json::json!(
-                {
-                     "completed": false,
-                     "psbt": encoded_psbt,
-                     "error": "Could not fully finalize psbt",
-                     "errors": errors
-                }
-            )
-        });
-    Ok(js)
-}
-
-mod signer {
-    use super::*;
-    pub async fn sign(
-        input: &std::ffi::OsStr,
-        psbt_str: Option<&str>,
-        output: Option<&std::ffi::OsStr>,
-    ) -> Result<(), Box<dyn Error>> {
-        {
-            let buf = tokio::fs::read(input).await?;
-            let xpriv = ExtendedPrivKey::decode(&buf)?;
-            let psbt: PartiallySignedTransaction = PartiallySignedTransaction::consensus_decode(
-                &base64::decode(&if let Some(psbt) = psbt_str {
-                    psbt.into()
-                } else {
-                    let mut s = String::new();
-                    tokio::io::stdin().read_to_string(&mut s).await?;
-                    s
-                })?[..],
-            )?;
-            let psbt = sign_psbt(&xpriv, psbt, &Secp256k1::new())?;
-            let bytes = serialize(&psbt);
-            if let Some(file_out) = output {
-                std::fs::write(file_out, &base64::encode(bytes))?;
-            } else {
-                println!("{}", base64::encode(bytes));
-            }
-        };
-        Ok(())
-    }
-    pub async fn show_pubkey(input: &std::ffi::OsStr) -> Result<(), Box<dyn Error>> {
-        let buf = tokio::fs::read(input).await?;
-        let xpriv = ExtendedPrivKey::decode(&buf)?;
-        println!("{}", ExtendedPubKey::from_priv(&Secp256k1::new(), &xpriv));
-        Ok(())
-    }
-    pub fn new_key(network: &str, out: &std::ffi::OsStr) -> Result<(), Box<dyn Error>> {
-        let entropy: [u8; 32] = rand::thread_rng().gen();
-        let xpriv = ExtendedPrivKey::new_master(Network::from_str(network)?, &entropy)?;
-        std::fs::write(out, &xpriv.encode())?;
-        println!("{}", ExtendedPubKey::from_priv(&Secp256k1::new(), &xpriv));
-        Ok(())
-    }
 }
 
 async fn bind_command(
