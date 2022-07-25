@@ -69,7 +69,7 @@ impl ObjectMetadata {
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct Object {
     /// a map of template hashes to the corresponding template, that in the
-    /// policy are a CTV protected
+    /// policy are CTV protected
     #[serde(
         rename = "template_hash_to_template_map",
         skip_serializing_if = "BTreeMap::is_empty",
