@@ -11,6 +11,8 @@ pub use error::*;
 pub mod bind;
 pub mod descriptors;
 pub use descriptors::*;
+use sapio_base::simp::CompiledObjectLT;
+use sapio_base::simp::SIMPAttachableAt;
 
 use crate::contract::abi::continuation::ContinuationPoint;
 pub use crate::contract::abi::studio::*;
@@ -51,7 +53,7 @@ impl ObjectMetadata {
     /// attempts to add a SIMP to the object meta.
     ///
     /// Returns [`SIMPError::AlreadyDefined`] if one was previously set.
-    pub fn add_simp<S: SIMP>(mut self, s: S) -> Result<Self, SIMPError> {
+    pub fn add_simp<S: SIMPAttachableAt<CompiledObjectLT>>(mut self, s: S) -> Result<Self, SIMPError> {
         let old = self
             .simp
             .insert(S::get_protocol_number(), serde_json::to_value(&s)?);

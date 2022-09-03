@@ -13,6 +13,8 @@ use bitcoin::VarInt;
 use bitcoin::Witness;
 use miniscript::DescriptorTrait;
 use sapio_base::effects::PathFragment;
+use sapio_base::simp::SIMPAttachableAt;
+use sapio_base::simp::TemplateInputLT;
 use sapio_base::timelocks::*;
 use sapio_base::CTVHash;
 use sapio_base::Clause;
@@ -166,12 +168,23 @@ impl Builder {
         self
     }
     /// set an extra metadata value
-    pub fn set_meta<I, J>(mut self, i: I, j: J) -> Result<Self, CompilationError>
+    pub fn set_extra_meta<I, J>(mut self, i: I, j: J) -> Result<Self, CompilationError>
     where
         I: Into<String>,
         J: Into<serde_json::Value>,
     {
-        self.metadata = self.metadata.set(i, j)?;
+        self.metadata = self.metadata.set_extra(i, j)?;
+        Ok(self)
+    }
+
+    /// attempts to add a SIMP to the output meta.
+    ///
+    /// Returns [`SIMPError::AlreadyDefined`] if one was previously set.
+    pub fn add_simp<S: SIMPAttachableAt<TemplateInputLT>>(
+        mut self,
+        s: S,
+    ) -> Result<Self, CompilationError> {
+        self.metadata = self.metadata.add_simp(s)?;
         Ok(self)
     }
 

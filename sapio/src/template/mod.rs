@@ -8,7 +8,9 @@
 use crate::contract::error::CompilationError;
 use bitcoin::hashes::sha256;
 use bitcoin::util::amount::Amount;
+use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::simp::SIMPError;
+use sapio_base::simp::TemplateInputLT;
 use sapio_base::simp::SIMP;
 use sapio_base::Clause;
 use schemars::JsonSchema;
@@ -50,7 +52,7 @@ impl TemplateMetadata {
         }
     }
     /// set an extra metadata value
-    pub fn set<I, J>(mut self, i: I, j: J) -> Result<Self, CompilationError>
+    pub fn set_extra<I, J>(mut self, i: I, j: J) -> Result<Self, CompilationError>
     where
         I: Into<String>,
         J: Into<serde_json::Value>,
@@ -94,7 +96,10 @@ impl TemplateMetadata {
     /// attempts to add a SIMP to the output meta.
     ///
     /// Returns [`SIMPError::AlreadyDefined`] if one was previously set.
-    pub fn add_simp<S: SIMP>(mut self, s: S) -> Result<Self, SIMPError> {
+    pub fn add_simp<S: SIMPAttachableAt<TemplateInputLT>>(
+        mut self,
+        s: S,
+    ) -> Result<Self, SIMPError> {
         let old = self
             .simp
             .insert(S::get_protocol_number(), serde_json::to_value(&s)?);
