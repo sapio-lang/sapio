@@ -41,3 +41,21 @@ pub trait SIMP: Serialize + for<'de> Deserialize<'de> + JsonSchema {
     /// SIMP repo. Proprietary SIMPs can safely use negative numbers.
     fn get_protocol_number() -> i64;
 }
+
+pub trait LocationTag {}
+
+macro_rules! gen_location {
+    ($x:ident) => {
+        pub struct $x;
+        impl LocationTag for $x{}
+    }
+}
+
+gen_location!(ContinuationPointLT);
+gen_location!(CompiledObjectLT);
+gen_location!(TemplateLT);
+gen_location!(TemplateOutputLT);
+gen_location!(GuardLT);
+gen_location!(TemplateInputLT);
+
+pub trait SIMPAttachableAt<T: LocationTag> : SIMP {}
