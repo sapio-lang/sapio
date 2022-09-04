@@ -13,9 +13,12 @@ pub mod descriptors;
 pub use descriptors::*;
 use sapio_base::simp::CompiledObjectLT;
 use sapio_base::simp::SIMPAttachableAt;
+use sapio_base::Clause;
+use serde_json::Value;
 
 use crate::contract::abi::continuation::ContinuationPoint;
 pub use crate::contract::abi::studio::*;
+use crate::contract::CompilationError;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
 use crate::util::extended_address::ExtendedAddress;
@@ -29,7 +32,6 @@ use sapio_base::effects::PathFragment;
 use sapio_base::serialization_helpers::SArc;
 
 use sapio_base::simp::SIMPError;
-use sapio_base::simp::SIMP;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -43,6 +45,8 @@ pub struct ObjectMetadata {
     pub extra: BTreeMap<String, serde_json::Value>,
     /// SIMP: Sapio Interactive Metadata Protocol
     pub simp: BTreeMap<i64, serde_json::Value>,
+    /// SIMPs for guards
+    pub simps_for_guards: BTreeMap<Clause, BTreeMap<i64, Vec<serde_json::Value>>>,
 }
 impl ObjectMetadata {
     /// Is there any metadata in this field?
@@ -62,6 +66,40 @@ impl ObjectMetadata {
             Err(SIMPError::AlreadyDefined(old))
         } else {
             Ok(self)
+        }
+    }
+
+    pub(crate) fn add_guard_simps(
+       mut self,
+        all_guard_simps: BTreeMap<
+            policy::Concrete<bitcoin::XOnlyPublicKey>,
+            Vec<Box<dyn SIMPAttachableAt<sapio_base::simp::GuardLT>>>,
+        >,
+    ) -> Result<ObjectMetadata, CompilationError> {
+        if self.simps_for_guards.is_empty() {
+            self.simps_for_guards = all_guard_simps
+                .into_iter()
+                .map(|(k, v)| {
+                    Ok((
+                        k,
+                        v.into_iter().fold(
+                            Ok(Default::default()),
+                            |ra: Result<BTreeMap<_, Vec<Value>>, CompilationError>, b| {
+                                let mut a = ra?;
+                                a.entry(b.get_protocol_number()).or_default().push(
+                                    b.to_json().map_err(CompilationError::SerializationError)?,
+                                );
+                                Ok(a)
+                            },
+                        )?,
+                    ))
+                })
+                .collect::<Result<_, CompilationError>>()?;
+            Ok(self)
+        } else {
+            Err(Err(CompilationError::Custom(
+                "Failed to add guard simps".into(),
+            ))?)
         }
     }
 }

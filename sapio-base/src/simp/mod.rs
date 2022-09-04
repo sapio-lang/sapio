@@ -67,4 +67,5 @@ pub trait SIMPAttachableAt<T: LocationTag>
 where
     Self: SIMP,
 {
+    fn make_clone(&self) -> Box<dyn SIMPAttachableAt<T>>;
 }

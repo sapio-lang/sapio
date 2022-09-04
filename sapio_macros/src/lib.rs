@@ -63,6 +63,7 @@ pub fn guard(args: TokenStream, input: TokenStream) -> TokenStream {
     let guard_name = format_ident!("guard_{}", name);
     let block = input.block;
     let mut ty = format_ident!("Fresh");
+    let simp_gen_f = simp_at(&args).unwrap_or(TokenStream::from_str("None").unwrap().into());
     for arg in args {
         match arg {
             NestedMeta::Meta(Meta::NameValue(v)) if v.path.is_ident("cached") => {
@@ -75,7 +76,7 @@ pub fn guard(args: TokenStream, input: TokenStream) -> TokenStream {
         fn #guard_name(&self, #context_arg) -> sapio::sapio_base::Clause
         #block
         fn  #name() -> Option<sapio::contract::actions::Guard<Self>> {
-            Some(sapio::contract::actions::Guard::#ty(Self::#guard_name))
+            Some(sapio::contract::actions::Guard::#ty(Self::#guard_name, #simp_gen_f))
         }
     })
 }
