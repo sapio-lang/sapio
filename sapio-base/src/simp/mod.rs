@@ -5,9 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Utilities for working with SIMPs (Sapio Interactive Metadata Protocols)
-use schemars::JsonSchema;
-use serde::Deserialize;
-use serde::Serialize;
+
 use serde_json::Value;
 
 /// Errors that may come up when working with SIMPs

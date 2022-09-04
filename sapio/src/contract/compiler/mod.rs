@@ -318,7 +318,7 @@ where
                 .collect::<Result<Vec<_>, _>>()?;
             guards
                 .iter()
-                .map(|(policy, m)| policy.compile().map_err(Into::<CompilationError>::into))
+                .map(|(policy, _m)| policy.compile().map_err(Into::<CompilationError>::into))
                 .chain(clause_accumulator.into_iter().flatten().map(Ok))
                 .collect::<Result<Vec<_>, _>>()?
         };
