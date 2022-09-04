@@ -11,15 +11,18 @@ use bitcoin::util::amount::Amount;
 use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::simp::SIMPError;
 use sapio_base::simp::TemplateInputLT;
-use sapio_base::simp::SIMP;
 use sapio_base::Clause;
+use sapio_base::simp::TemplateLT;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+pub mod input;
 pub mod output;
 pub use output::{Output, OutputMeta};
 pub mod builder;
 pub use builder::Builder;
+
+use self::input::InputMetadata;
 /// Metadata Struct which has some standard defined fields
 /// and can be extended via a hashmap
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
@@ -96,7 +99,7 @@ impl TemplateMetadata {
     /// attempts to add a SIMP to the output meta.
     ///
     /// Returns [`SIMPError::AlreadyDefined`] if one was previously set.
-    pub fn add_simp<S: SIMPAttachableAt<TemplateInputLT>>(
+    pub fn add_simp<S: SIMPAttachableAt<TemplateLT>>(
         mut self,
         s: S,
     ) -> Result<Self, SIMPError> {
@@ -149,6 +152,9 @@ pub struct Template {
     /// sapio specific information about all the outputs in the `tx`.
     #[serde(rename = "outputs_info")]
     pub outputs: Vec<Output>,
+    /// sapio specific information about all the inputs in the `tx`.
+    #[serde(rename = "inputs_info")]
+    pub inputs: Vec<InputMetadata>,
 }
 
 impl Template {
