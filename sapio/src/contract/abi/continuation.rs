@@ -42,7 +42,7 @@ impl ContinuationPoint {
     /// Returns [`SIMPError::AlreadyDefined`] if one was previously set.
     pub fn add_simp(
         mut self,
-        s: &dyn SIMPAttachableAt<ContinuationPointLT>
+        s: &dyn SIMPAttachableAt<ContinuationPointLT>,
     ) -> Result<Self, SIMPError> {
         let old = self.simp.insert(s.get_protocol_number(), s.to_json()?);
         if let Some(old) = old {

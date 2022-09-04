@@ -71,10 +71,9 @@ impl<T> GuardCache<T> {
             std::collections::btree_map::Entry::Occupied(ref mut o) => o.get_mut(),
         };
         match r {
-            Some(CacheEntry::Cached(s, v)) => Ok(Some((
-                s.clone(),
-                v.iter().map(|e| e.clone()).collect(),
-            ))),
+            Some(CacheEntry::Cached(s, v)) => {
+                Ok(Some((s.clone(), v.iter().map(|e| e.clone()).collect())))
+            }
             Some(CacheEntry::Fresh(f, s)) => Ok(Some((
                 f(t, ctx),
                 match s {

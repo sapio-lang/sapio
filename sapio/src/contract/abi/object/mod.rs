@@ -70,7 +70,7 @@ impl ObjectMetadata {
     }
 
     pub(crate) fn add_guard_simps(
-       mut self,
+        mut self,
         all_guard_simps: BTreeMap<
             policy::Concrete<bitcoin::XOnlyPublicKey>,
             Vec<Arc<dyn SIMPAttachableAt<sapio_base::simp::GuardLT>>>,

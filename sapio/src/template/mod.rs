@@ -11,8 +11,8 @@ use bitcoin::util::amount::Amount;
 use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::simp::SIMPError;
 use sapio_base::simp::TemplateInputLT;
-use sapio_base::Clause;
 use sapio_base::simp::TemplateLT;
+use sapio_base::Clause;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -99,10 +99,7 @@ impl TemplateMetadata {
     /// attempts to add a SIMP to the output meta.
     ///
     /// Returns [`SIMPError::AlreadyDefined`] if one was previously set.
-    pub fn add_simp<S: SIMPAttachableAt<TemplateLT>>(
-        mut self,
-        s: S,
-    ) -> Result<Self, SIMPError> {
+    pub fn add_simp<S: SIMPAttachableAt<TemplateLT>>(mut self, s: S) -> Result<Self, SIMPError> {
         let old = self.simp.insert(s.get_protocol_number(), s.to_json()?);
         if let Some(old) = old {
             Err(SIMPError::AlreadyDefined(old))
