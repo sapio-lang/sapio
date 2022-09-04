@@ -72,6 +72,13 @@ pub struct FinishOrFunc<'a, ContractSelf, StatefulArguments, SpecificArgs, WebAP
 pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     /// Calls the internal function, should convert `StatefulArguments` to `SpecificArgs`.
     fn call(&self, cself: &ContractSelf, ctx: Context, o: StatefulArguments) -> TxTmplIt;
+
+    /// generate any SIMPs to attach here
+    fn gen_simps(
+        &self,
+        cself: &ContractSelf,
+        ctx: Context,
+    ) -> Result<Vec<Box<dyn SIMPAttachableAt<ContinuationPointLT>>>, CompilationError>;
     /// Calls the internal function, should convert `StatefulArguments` to `SpecificArgs`.
     fn call_json(&self, _cself: &ContractSelf, _ctx: Context, _o: serde_json::Value) -> TxTmplIt {
         Err(CompilationError::WebAPIDisabled)
@@ -134,6 +141,14 @@ impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, 
     fn rename(&mut self, a: Arc<String>) {
         self.name = a;
     }
+
+    fn gen_simps(
+        &self,
+        cself: &ContractSelf,
+        ctx: Context,
+    ) -> Result<Vec<Box<dyn SIMPAttachableAt<ContinuationPointLT>>>, CompilationError> {
+        self.simp_gen.map(|f| (f)(cself, ctx)).unwrap_or(Ok(vec![]))
+    }
 }
 
 impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, StatefulArguments>
@@ -178,6 +193,14 @@ where
 
     fn rename(&mut self, a: Arc<String>) {
         self.name = a;
+    }
+
+    fn gen_simps(
+        &self,
+        cself: &ContractSelf,
+        ctx: Context,
+    ) -> Result<Vec<Box<dyn SIMPAttachableAt<ContinuationPointLT>>>, CompilationError> {
+        self.simp_gen.map(|f| (f)(cself, ctx)).unwrap_or(Ok(vec![]))
     }
 }
 

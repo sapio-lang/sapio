@@ -227,6 +227,7 @@ where
             .map(|r| {
                 let (mut f_ctx, func, nullability) = r?;
                 let gctx = f_ctx.derive(PathFragment::Guard)?;
+                let simp_ctx = f_ctx.derive(PathFragment::Metadata)?;
                 // TODO: Suggested path frag?
                 let guards = create_guards(self_ref, gctx, func.get_guard(), &mut guard_clauses);
                 let effect_ctx = f_ctx.derive(if func.get_returned_txtmpls_modify_guards() {
@@ -267,11 +268,13 @@ where
                 if func.get_returned_txtmpls_modify_guards() {
                     Ok((None, combine_txtmpls(nullability, txtmpl_clauses, guards)?))
                 } else {
+                    let mut cp =
+                        ContinuationPoint::at(func.get_schema().clone(), effect_path.clone());
+                    for simp in func.gen_simps(self_ref, simp_ctx)? {
+                        cp = cp.add_simp(simp.as_ref())?;
+                    }
                     Ok((
-                        Some((
-                            SArc(effect_path.clone()),
-                            ContinuationPoint::at(func.get_schema().clone(), effect_path),
-                        )),
+                        Some((SArc(effect_path.clone()), cp)),
                         vec![guards.compile().map_err(Into::<CompilationError>::into)?],
                     ))
                 }
