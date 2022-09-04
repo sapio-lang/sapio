@@ -7,7 +7,7 @@
 //! ABI for contract resumption
 
 use sapio_base::serialization_helpers::SArc;
-use sapio_base::simp::{SIMPAttachableAt, SIMPError};
+use sapio_base::simp::{SIMPAttachableAt, SIMPError, SIMP};
 use sapio_base::{effects::EffectPath, simp::ContinuationPointLT};
 use schemars::schema::RootSchema;
 use schemars::JsonSchema;
@@ -44,9 +44,7 @@ impl ContinuationPoint {
         mut self,
         s: S,
     ) -> Result<Self, SIMPError> {
-        let old = self
-            .simp
-            .insert(S::get_protocol_number(), serde_json::to_value(&s)?);
+        let old = self.simp.insert(s.get_protocol_number(), s.to_json()?);
         if let Some(old) = old {
             Err(SIMPError::AlreadyDefined(old))
         } else {

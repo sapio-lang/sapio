@@ -65,8 +65,19 @@ impl IpfsNFT {
     }
 }
 impl SIMP for IpfsNFT {
-    fn get_protocol_number() -> i64 {
+    fn get_protocol_number(&self) -> i64 {
         -12345
+    }
+
+    fn to_json(&self) -> Result<serde_json::Value, serde_json::Error> {
+        serde_json::to_value(self)
+    }
+
+    fn from_json(value: serde_json::Value) -> Result<Self, serde_json::Error>
+    where
+        Self: Sized,
+    {
+        serde_json::from_value(value)
     }
 }
 

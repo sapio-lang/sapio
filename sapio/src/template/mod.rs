@@ -100,9 +100,7 @@ impl TemplateMetadata {
         mut self,
         s: S,
     ) -> Result<Self, SIMPError> {
-        let old = self
-            .simp
-            .insert(S::get_protocol_number(), serde_json::to_value(&s)?);
+        let old = self.simp.insert(s.get_protocol_number(), s.to_json()?);
         if let Some(old) = old {
             Err(SIMPError::AlreadyDefined(old))
         } else {

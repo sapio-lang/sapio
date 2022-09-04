@@ -6,7 +6,7 @@
 
 //! Template Output container
 use super::*;
-use sapio_base::simp::{SIMPError, SIMP, TemplateOutputLT};
+use sapio_base::simp::{SIMPError, TemplateOutputLT, SIMP};
 use serde::{Deserialize, Serialize};
 /// Metadata for outputs, arbitrary KV set.
 #[derive(Serialize, Deserialize, Clone, JsonSchema, Debug, PartialEq, Eq)]
@@ -27,10 +27,11 @@ impl OutputMeta {
     /// attempts to add a SIMP to the output meta.
     ///
     /// Returns [`SIMPError::AlreadyDefined`] if one was previously set.
-    pub fn add_simp<S: SIMPAttachableAt<TemplateOutputLT>>(mut self, s: S) -> Result<Self, SIMPError> {
-        let old = self
-            .simp
-            .insert(S::get_protocol_number(), serde_json::to_value(&s)?);
+    pub fn add_simp<S: SIMPAttachableAt<TemplateOutputLT>>(
+        mut self,
+        s: S,
+    ) -> Result<Self, SIMPError> {
+        let old = self.simp.insert(s.get_protocol_number(), s.to_json()?);
         if let Some(old) = old {
             Err(SIMPError::AlreadyDefined(old))
         } else {

@@ -61,6 +61,8 @@ impl<'a, ContractSelf, StatefulArgs> From<ThenFunc<'a, ContractSelf>>
             f: PhantomData::default(),
             returned_txtmpls_modify_guards: true,
             extract_clause_from_txtmpl: ctv_clause_extractor,
+            // TODO: Maybe Then should be able to get simps?
+            simp_gen: None,
         }
     }
 }

@@ -9,6 +9,7 @@ mod tests {
 use core::ops::Index;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
+use std::str::FromStr;
 use syn::Lit;
 use syn::{parse_macro_input, AttributeArgs, ItemFn, Meta, NestedMeta};
 /// The compile_if macro is used to define a `ConditionallyCompileIf`.
@@ -184,6 +185,20 @@ fn coerce_args(args: &Vec<NestedMeta>) -> proc_macro2::TokenStream {
     }
     panic!("No Coerce Arguments found");
 }
+fn simp_at(args: &Vec<NestedMeta>) -> Option<proc_macro2::TokenStream> {
+    for arg in args {
+        match arg {
+            NestedMeta::Meta(Meta::NameValue(v)) if v.path.is_ident("simp") => match &v.lit {
+                Lit::Str(l) => {
+                    return Some(l.parse().expect("Token Stream Parsing"));
+                }
+                _ => panic!("Improperly Formatted {:?}", v),
+            },
+            _ => continue,
+        }
+    }
+    None
+}
 
 fn web_api_schema(
     args: &Vec<NestedMeta>,
@@ -224,19 +239,26 @@ fn web_api_schema(
 /// ) -> Result<UpdateType, CompilationError> {
 ///     Ok(k)
 /// }
-/// /// A Guarded CTV Function
-/// #[continuation(
-///     /// required: guards for the miniscript clauses required
-///     guarded_by = "[Self::guard_1,... Self::guard_n]",
-///     /// optional: Conditional compilation
-///     compile_if = "[Self::compile_if_1, ... Self::compile_if_n]",
-///     ///  optional: Enables compiling this for a json callable continuation
-///     web_api,
-///     /// helper for coercing args for json api, could be arbitrary
-///     coerce_args = "default_coerce"
-/// )]
-/// fn name(self, ctx:Context, o:UpdateType) {
-///     /*Result<Box<Iterator<TransactionTemplate>>>*/
+/// impl MyContract {
+///     fn simp_gen(&self, ctx:Context)
+/// -> Result<Vec<Box<dyn SIMPAttachableAt<ContinuationPointLT>>>, CompilationError> {}
+///
+///     /// A Guarded CTV Function
+///     #[continuation(
+///         /// required: guards for the miniscript clauses required
+///         guarded_by = "[Self::guard_1,... Self::guard_n]",
+///         /// optional: Conditional compilation
+///         compile_if = "[Self::compile_if_1, ... Self::compile_if_n]",
+///         ///  optional: Enables compiling this for a json callable continuation
+///         web_api,
+///         /// helper for coercing args for json api, could be arbitrary
+///         coerce_args = "default_coerce",
+///         /// simps
+///         simps = "simp_gen",
+///     )]
+///     fn name(self, ctx:Context, o:UpdateType) {
+///         /*Result<Box<Iterator<TransactionTemplate>>>*/
+///     }
 /// }
 /// /// Null Implementation
 /// decl_finish!(name);
@@ -263,6 +285,7 @@ pub fn continuation(args: TokenStream, input: TokenStream) -> TokenStream {
         format_ident!("CONTINUE_SCHEMA_FOR_{}", name.to_string().to_uppercase());
     let web_api_schema_s = web_api_schema(&args, &continue_schema_for_name, &arg_type);
     let coerce_args_f = coerce_args(&args);
+    let simp_gen_f = simp_at(&args).unwrap_or(TokenStream::from_str("None").unwrap().into());
     proc_macro::TokenStream::from(quote! {
             #web_api_schema_s
             /// (missing docs fix)
@@ -273,6 +296,7 @@ pub fn continuation(args: TokenStream, input: TokenStream) -> TokenStream {
                 sapio::contract::actions::CallableAsFoF<Self, <Self as sapio::contract::Contract>::StatefulArguments>>>
             {
                 let f : sapio::contract::actions::FinishOrFunc<_, _, _, #web_api_type>= sapio::contract::actions::FinishOrFunc{
+                    simp_gen: #simp_gen_f,
                     coerce_args: #coerce_args_f,
                     guard: &#gba,
                     conditional_compile_if: &#cia,

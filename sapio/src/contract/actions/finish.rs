@@ -12,6 +12,8 @@ use crate::contract::actions::ConditionallyCompileIfList;
 use crate::contract::actions::GuardList;
 use crate::template::Template;
 use sapio_base::effects::EffectDBError;
+use sapio_base::simp::ContinuationPointLT;
+use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::Clause;
 
 use core::marker::PhantomData;
@@ -22,6 +24,16 @@ use std::sync::Arc;
 /// A function which by default finishes, but may receive some context object which can induce the
 /// generation of additional transactions (as a suggestion)
 pub struct FinishOrFunc<'a, ContractSelf, StatefulArguments, SpecificArgs, WebAPIStatus> {
+    /// An (optional) function which returns a Vec of SIMPs to attach to the FinishOrFunc associated
+    /// with this continuation point.
+    pub simp_gen: Option<
+        fn(
+            &ContractSelf,
+            Context,
+            // TODO: Should this be able to observe all/any effects?
+        )
+            -> Result<Vec<Box<dyn SIMPAttachableAt<ContinuationPointLT>>>, CompilationError>,
+    >,
     /// StatefulArgs is needed to capture a general API for all calls, but SpecificArgs is required
     /// for a given function.
     pub coerce_args: fn(StatefulArguments) -> Result<SpecificArgs, CompilationError>,

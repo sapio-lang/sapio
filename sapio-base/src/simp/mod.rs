@@ -8,6 +8,7 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json::Value;
 
 /// Errors that may come up when working with SIMPs
 #[derive(Debug)]
@@ -36,10 +37,14 @@ impl From<serde_json::Error> for SIMPError {
 }
 
 /// Trait for Sapio Interactive Metadata Protocol Implementors
-pub trait SIMP: Serialize + for<'de> Deserialize<'de> + JsonSchema {
+pub trait SIMP {
     /// Get a protocol number, which should be one that is assigned through the
     /// SIMP repo. Proprietary SIMPs can safely use negative numbers.
-    fn get_protocol_number() -> i64;
+    fn get_protocol_number(&self) -> i64;
+    fn to_json(&self) -> Result<Value, serde_json::Error>;
+    fn from_json(value: Value) -> Result<Self, serde_json::Error>
+    where
+        Self: Sized;
 }
 
 pub trait LocationTag {}
@@ -47,8 +52,8 @@ pub trait LocationTag {}
 macro_rules! gen_location {
     ($x:ident) => {
         pub struct $x;
-        impl LocationTag for $x{}
-    }
+        impl LocationTag for $x {}
+    };
 }
 
 gen_location!(ContinuationPointLT);
@@ -58,4 +63,8 @@ gen_location!(TemplateOutputLT);
 gen_location!(GuardLT);
 gen_location!(TemplateInputLT);
 
-pub trait SIMPAttachableAt<T: LocationTag> : SIMP {}
+pub trait SIMPAttachableAt<T: LocationTag>
+where
+    Self: SIMP,
+{
+}
