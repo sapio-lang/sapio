@@ -15,8 +15,9 @@ use sapio_base::simp::GuardLT;
 use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::Clause;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
-pub type GuardSimps = Vec<Box<dyn SIMPAttachableAt<GuardLT>>>;
+pub type GuardSimps = Vec<Arc<dyn SIMPAttachableAt<GuardLT>>>;
 pub(crate) enum CacheEntry<T> {
     Cached(Clause, GuardSimps),
     Fresh(fn(&T, Context) -> Clause, Option<SimpGen<T>>),
@@ -72,7 +73,7 @@ impl<T> GuardCache<T> {
         match r {
             Some(CacheEntry::Cached(s, v)) => Ok(Some((
                 s.clone(),
-                v.iter().map(|e| e.make_clone()).collect(),
+                v.iter().map(|e| e.clone()).collect(),
             ))),
             Some(CacheEntry::Fresh(f, s)) => Ok(Some((
                 f(t, ctx),

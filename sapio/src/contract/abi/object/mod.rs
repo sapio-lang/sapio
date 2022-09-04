@@ -73,7 +73,7 @@ impl ObjectMetadata {
        mut self,
         all_guard_simps: BTreeMap<
             policy::Concrete<bitcoin::XOnlyPublicKey>,
-            Vec<Box<dyn SIMPAttachableAt<sapio_base::simp::GuardLT>>>,
+            Vec<Arc<dyn SIMPAttachableAt<sapio_base::simp::GuardLT>>>,
         >,
     ) -> Result<ObjectMetadata, CompilationError> {
         if self.simps_for_guards.is_empty() {

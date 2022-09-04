@@ -5,6 +5,8 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! a decorator type which is used to generate a spending condition
+use std::sync::Arc;
+
 use crate::contract::CompilationError;
 
 use super::Context;
@@ -35,7 +37,7 @@ pub type SimpGen<ContractSelf> =
     fn(
         cself: &ContractSelf,
         ctx: Context,
-    ) -> Result<Vec<Box<dyn SIMPAttachableAt<GuardLT>>>, CompilationError>;
+    ) -> Result<Vec<Arc<dyn SIMPAttachableAt<GuardLT>>>, CompilationError>;
 
 /// A List of Guards, for convenience
 pub type GuardList<'a, T> = &'a [fn() -> Option<Guard<T>>];

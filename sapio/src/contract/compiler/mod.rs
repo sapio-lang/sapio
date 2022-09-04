@@ -295,6 +295,10 @@ where
                 all_guard_simps.entry(pol).or_default().append(&mut simps)
             }
         }
+        for guard_simps in all_guard_simps.values_mut() {
+            guard_simps.sort_by_key(|k| Arc::as_ptr(k));
+            guard_simps.dedup_by(|a, b| Arc::ptr_eq(a, b));
+        }
 
         let branches: Vec<Miniscript<XOnlyPublicKey, Tap>> = {
             let mut finish_fns_ctx = ctx.derive(PathFragment::FinishFn)?;
@@ -348,7 +352,9 @@ where
                 address,
                 descriptor,
                 amount_range,
-                metadata: self.metadata(metadata_ctx)?.add_guard_simps(all_guard_simps)?
+                metadata: self
+                    .metadata(metadata_ctx)?
+                    .add_guard_simps(all_guard_simps)?,
             })
         }
     }
