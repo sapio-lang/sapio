@@ -188,7 +188,7 @@ fn coerce_args(args: &Vec<NestedMeta>) -> proc_macro2::TokenStream {
 fn simp_at(args: &Vec<NestedMeta>) -> Option<proc_macro2::TokenStream> {
     for arg in args {
         match arg {
-            NestedMeta::Meta(Meta::NameValue(v)) if v.path.is_ident("simp") => match &v.lit {
+            NestedMeta::Meta(Meta::NameValue(v)) if v.path.is_ident("simps") => match &v.lit {
                 Lit::Str(l) => {
                     return Some(l.parse().expect("Token Stream Parsing"));
                 }
