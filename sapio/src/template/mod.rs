@@ -8,16 +8,21 @@
 use crate::contract::error::CompilationError;
 use bitcoin::hashes::sha256;
 use bitcoin::util::amount::Amount;
+use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::simp::SIMPError;
-use sapio_base::simp::SIMP;
+use sapio_base::simp::TemplateInputLT;
+use sapio_base::simp::TemplateLT;
 use sapio_base::Clause;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+pub mod input;
 pub mod output;
 pub use output::{Output, OutputMeta};
 pub mod builder;
 pub use builder::Builder;
+
+use self::input::InputMetadata;
 /// Metadata Struct which has some standard defined fields
 /// and can be extended via a hashmap
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
@@ -50,7 +55,7 @@ impl TemplateMetadata {
         }
     }
     /// set an extra metadata value
-    pub fn set<I, J>(mut self, i: I, j: J) -> Result<Self, CompilationError>
+    pub fn set_extra<I, J>(mut self, i: I, j: J) -> Result<Self, CompilationError>
     where
         I: Into<String>,
         J: Into<serde_json::Value>,
@@ -94,10 +99,8 @@ impl TemplateMetadata {
     /// attempts to add a SIMP to the output meta.
     ///
     /// Returns [`SIMPError::AlreadyDefined`] if one was previously set.
-    pub fn add_simp<S: SIMP>(mut self, s: S) -> Result<Self, SIMPError> {
-        let old = self
-            .simp
-            .insert(S::get_protocol_number(), serde_json::to_value(&s)?);
+    pub fn add_simp<S: SIMPAttachableAt<TemplateLT>>(mut self, s: S) -> Result<Self, SIMPError> {
+        let old = self.simp.insert(s.get_protocol_number(), s.to_json()?);
         if let Some(old) = old {
             Err(SIMPError::AlreadyDefined(old))
         } else {
@@ -146,6 +149,9 @@ pub struct Template {
     /// sapio specific information about all the outputs in the `tx`.
     #[serde(rename = "outputs_info")]
     pub outputs: Vec<Output>,
+    /// sapio specific information about all the inputs in the `tx`.
+    #[serde(rename = "inputs_info")]
+    pub inputs: Vec<InputMetadata>,
 }
 
 impl Template {

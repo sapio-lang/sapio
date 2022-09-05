@@ -12,6 +12,8 @@ use crate::contract::actions::ConditionallyCompileIfList;
 use crate::contract::actions::GuardList;
 use crate::template::Template;
 use sapio_base::effects::EffectDBError;
+use sapio_base::simp::ContinuationPointLT;
+use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::Clause;
 
 use core::marker::PhantomData;
@@ -22,6 +24,16 @@ use std::sync::Arc;
 /// A function which by default finishes, but may receive some context object which can induce the
 /// generation of additional transactions (as a suggestion)
 pub struct FinishOrFunc<'a, ContractSelf, StatefulArguments, SpecificArgs, WebAPIStatus> {
+    /// An (optional) function which returns a Vec of SIMPs to attach to the FinishOrFunc associated
+    /// with this continuation point.
+    pub simp_gen: Option<
+        fn(
+            &ContractSelf,
+            Context,
+            // TODO: Should this be able to observe all/any effects?
+        )
+            -> Result<Vec<Box<dyn SIMPAttachableAt<ContinuationPointLT>>>, CompilationError>,
+    >,
     /// StatefulArgs is needed to capture a general API for all calls, but SpecificArgs is required
     /// for a given function.
     pub coerce_args: fn(StatefulArguments) -> Result<SpecificArgs, CompilationError>,
@@ -60,6 +72,13 @@ pub struct FinishOrFunc<'a, ContractSelf, StatefulArguments, SpecificArgs, WebAP
 pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     /// Calls the internal function, should convert `StatefulArguments` to `SpecificArgs`.
     fn call(&self, cself: &ContractSelf, ctx: Context, o: StatefulArguments) -> TxTmplIt;
+
+    /// generate any SIMPs to attach here
+    fn gen_simps(
+        &self,
+        cself: &ContractSelf,
+        ctx: Context,
+    ) -> Result<Vec<Box<dyn SIMPAttachableAt<ContinuationPointLT>>>, CompilationError>;
     /// Calls the internal function, should convert `StatefulArguments` to `SpecificArgs`.
     fn call_json(&self, _cself: &ContractSelf, _ctx: Context, _o: serde_json::Value) -> TxTmplIt {
         Err(CompilationError::WebAPIDisabled)
@@ -122,6 +141,14 @@ impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, 
     fn rename(&mut self, a: Arc<String>) {
         self.name = a;
     }
+
+    fn gen_simps(
+        &self,
+        cself: &ContractSelf,
+        ctx: Context,
+    ) -> Result<Vec<Box<dyn SIMPAttachableAt<ContinuationPointLT>>>, CompilationError> {
+        self.simp_gen.map(|f| (f)(cself, ctx)).unwrap_or(Ok(vec![]))
+    }
 }
 
 impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, StatefulArguments>
@@ -166,6 +193,14 @@ where
 
     fn rename(&mut self, a: Arc<String>) {
         self.name = a;
+    }
+
+    fn gen_simps(
+        &self,
+        cself: &ContractSelf,
+        ctx: Context,
+    ) -> Result<Vec<Box<dyn SIMPAttachableAt<ContinuationPointLT>>>, CompilationError> {
+        self.simp_gen.map(|f| (f)(cself, ctx)).unwrap_or(Ok(vec![]))
     }
 }
 

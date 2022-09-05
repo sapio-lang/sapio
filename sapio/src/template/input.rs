@@ -1,4 +1,4 @@
-// Copyright Judica, Inc 2021
+// Copyright Judica, Inc 2022
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,11 +6,11 @@
 
 //! Template Output container
 use super::*;
-use sapio_base::simp::{SIMPError, TemplateOutputLT, SIMP};
+use sapio_base::simp::SIMPError;
 use serde::{Deserialize, Serialize};
 /// Metadata for outputs, arbitrary KV set.
 #[derive(Serialize, Deserialize, Clone, JsonSchema, Debug, PartialEq, Eq)]
-pub struct OutputMeta {
+pub struct InputMetadata {
     /// Additional non-standard fields for future upgrades
     #[serde(flatten)]
     pub extra: BTreeMap<String, serde_json::Value>,
@@ -18,16 +18,30 @@ pub struct OutputMeta {
     pub simp: BTreeMap<i64, serde_json::Value>,
 }
 
-impl OutputMeta {
+impl InputMetadata {
     /// Is there any metadata in this field?
     pub fn is_empty(&self) -> bool {
         *self == Default::default()
     }
 
-    /// attempts to add a SIMP to the output meta.
+    /// attempts to add a SIMP to the input metadata.
     ///
     /// Returns [`SIMPError::AlreadyDefined`] if one was previously set.
-    pub fn add_simp<S: SIMPAttachableAt<TemplateOutputLT>>(
+    pub fn add_simp_inplace<S: SIMPAttachableAt<TemplateInputLT>>(
+        &mut self,
+        s: S,
+    ) -> Result<(), SIMPError> {
+        let old = self.simp.insert(s.get_protocol_number(), s.to_json()?);
+        if let Some(old) = old {
+            Err(SIMPError::AlreadyDefined(old))
+        } else {
+            Ok(())
+        }
+    }
+    /// attempts to add a SIMP to the input metadata.
+    ///
+    /// Returns [`SIMPError::AlreadyDefined`] if one was previously set.
+    pub fn add_simp<S: SIMPAttachableAt<TemplateInputLT>>(
         mut self,
         s: S,
     ) -> Result<Self, SIMPError> {
@@ -39,43 +53,22 @@ impl OutputMeta {
         }
     }
 }
-impl Default for OutputMeta {
+impl Default for InputMetadata {
     fn default() -> Self {
-        OutputMeta {
+        InputMetadata {
             extra: Default::default(),
             simp: Default::default(),
         }
     }
 }
 
-impl<const N: usize> From<[(&str, serde_json::Value); N]> for OutputMeta {
-    fn from(v: [(&str, serde_json::Value); N]) -> OutputMeta {
-        OutputMeta {
+impl<const N: usize> From<[(&str, serde_json::Value); N]> for InputMetadata {
+    fn from(v: [(&str, serde_json::Value); N]) -> InputMetadata {
+        InputMetadata {
             extra: IntoIterator::into_iter(v)
                 .map(|(a, b)| (a.into(), b))
                 .collect(),
             simp: Default::default(),
         }
     }
-}
-
-/// An Output is not a literal Bitcoin Output, but contains data needed to construct one, and
-/// metadata for linking & ABI building
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
-pub struct Output {
-    /// the amount of sats being sent to this contract
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
-    #[schemars(with = "i64")]
-    #[serde(rename = "sending_amount_sats")]
-    pub amount: Amount,
-    /// the compiled contract this output creates
-    #[serde(rename = "receiving_contract")]
-    pub contract: crate::contract::Compiled,
-    /// any metadata relevant to this contract
-    #[serde(
-        rename = "metadata_map_s2s",
-        skip_serializing_if = "OutputMeta::is_empty",
-        default
-    )]
-    pub added_metadata: OutputMeta,
 }

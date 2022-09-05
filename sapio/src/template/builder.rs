@@ -5,14 +5,17 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Interactive Transaction Template Builder
+use super::input::InputMetadata;
 pub use super::{Output, OutputMeta};
 use super::{Template, TemplateMetadata};
 use crate::contract::{CompilationError, Context};
 use bitcoin::util::amount::Amount;
 use bitcoin::VarInt;
 use bitcoin::Witness;
-use miniscript::DescriptorTrait;
 use sapio_base::effects::PathFragment;
+use sapio_base::simp::SIMPAttachableAt;
+use sapio_base::simp::TemplateInputLT;
+use sapio_base::simp::TemplateLT;
 use sapio_base::timelocks::*;
 use sapio_base::CTVHash;
 use sapio_base::Clause;
@@ -23,8 +26,10 @@ use std::convert::TryInto;
 /// finalizing into a Template.
 pub struct Builder {
     guards: Vec<Clause>,
+    // TODO: Should be Comitted/Uncomitted if not CTV
     sequences: Vec<Option<AnyRelTimeLock>>,
     outputs: Vec<Output>,
+    inputs: Vec<InputMetadata>,
     version: i32,
     lock_time: Option<AnyAbsTimeLock>,
     ctx: Context,
@@ -40,6 +45,7 @@ impl Builder {
         Builder {
             guards: Vec::new(),
             sequences: vec![None],
+            inputs: vec![InputMetadata::default()],
             outputs: vec![],
             version: 2,
             lock_time: None,
@@ -100,6 +106,7 @@ impl Builder {
     /// set_sequence(-1, ...) to fill in the back.
     pub fn add_sequence(mut self) -> Self {
         self.sequences.push(None);
+        self.inputs.push(Default::default());
         self
     }
     /// set_sequence adds a height or time based relative lock time to the
@@ -130,6 +137,28 @@ impl Builder {
             None => return Err(CompilationError::NoSuchSequence),
         };
         Ok(self)
+    }
+
+    /// attempts to add a SIMP to the output meta.
+    ///
+    /// Returns [`SIMPError::AlreadyDefined`] if one was previously set.
+    pub fn add_simp_for_input<S: SIMPAttachableAt<TemplateInputLT>>(
+        mut self,
+        ii: isize,
+        s: S,
+    ) -> Result<Self, CompilationError> {
+        let i = if ii >= 0 {
+            ii
+        } else {
+            self.sequences.len() as isize + ii
+        } as usize;
+        match self.inputs.get_mut(i) {
+            Some(r) => {
+                r.add_simp_inplace(s)?;
+                Ok(self)
+            }
+            None => Err(CompilationError::NoSuchSequence),
+        }
     }
     /// set_lock_time adds a height or time based absolute lock time to the
     /// template. If a lock time is already set, it will check if it is of the
@@ -166,12 +195,23 @@ impl Builder {
         self
     }
     /// set an extra metadata value
-    pub fn set_meta<I, J>(mut self, i: I, j: J) -> Result<Self, CompilationError>
+    pub fn set_extra_meta<I, J>(mut self, i: I, j: J) -> Result<Self, CompilationError>
     where
         I: Into<String>,
         J: Into<serde_json::Value>,
     {
-        self.metadata = self.metadata.set(i, j)?;
+        self.metadata = self.metadata.set_extra(i, j)?;
+        Ok(self)
+    }
+
+    /// attempts to add a SIMP to the output meta.
+    ///
+    /// Returns [`SIMPError::AlreadyDefined`] if one was previously set.
+    pub fn add_simp<S: SIMPAttachableAt<TemplateLT>>(
+        mut self,
+        s: S,
+    ) -> Result<Self, CompilationError> {
+        self.metadata = self.metadata.add_simp(s)?;
         Ok(self)
     }
 
@@ -278,6 +318,7 @@ impl From<Builder> for Template {
         Template {
             guards: t.guards,
             outputs: t.outputs,
+            inputs: t.inputs,
             ctv: tx.get_ctv_hash(0),
             ctv_index: 0,
             max: tx.total_amount() + t.fees,

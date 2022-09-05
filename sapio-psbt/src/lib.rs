@@ -18,7 +18,7 @@ use bitcoin::{
 };
 use bitcoin::{KeyPair, TxOut};
 use bitcoin::{Network, SchnorrSig};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::Display;
 pub mod external_api;

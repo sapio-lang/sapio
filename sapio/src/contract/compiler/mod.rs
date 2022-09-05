@@ -181,10 +181,7 @@ where
         // we need a unique context for each.
         let mut action_ctx = ctx.derive(PathFragment::Action)?;
         let mut renamer = Renamer::new();
-        let (continue_apis, clause_accumulator): (
-            ContinueAPIs,
-            Vec<Vec<Miniscript<XOnlyPublicKey, Tap>>>,
-        ) = self
+        let all_values = self
             .then_fns()
             .iter()
             .filter_map(|func| func())
@@ -227,8 +224,10 @@ where
             .map(|r| {
                 let (mut f_ctx, func, nullability) = r?;
                 let gctx = f_ctx.derive(PathFragment::Guard)?;
+                let simp_ctx = f_ctx.derive(PathFragment::Metadata)?;
                 // TODO: Suggested path frag?
-                let guards = create_guards(self_ref, gctx, func.get_guard(), &mut guard_clauses);
+                let (guards, guard_metadata) =
+                    create_guards(self_ref, gctx, func.get_guard(), &mut guard_clauses)?;
                 let effect_ctx = f_ctx.derive(if func.get_returned_txtmpls_modify_guards() {
                     PathFragment::Next
                 } else {
@@ -264,34 +263,62 @@ where
                     .collect::<Result<Vec<Clause>, CompilationError>>()?;
 
                 // N.B. the order of the matches below is significant
-                if func.get_returned_txtmpls_modify_guards() {
-                    Ok((None, combine_txtmpls(nullability, txtmpl_clauses, guards)?))
+                Ok(if func.get_returned_txtmpls_modify_guards() {
+                    (
+                        None,
+                        combine_txtmpls(nullability, txtmpl_clauses, guards)?,
+                        guard_metadata,
+                    )
                 } else {
-                    Ok((
-                        Some((
-                            SArc(effect_path.clone()),
-                            ContinuationPoint::at(func.get_schema().clone(), effect_path),
-                        )),
+                    let mut cp =
+                        ContinuationPoint::at(func.get_schema().clone(), effect_path.clone());
+                    for simp in func.gen_simps(self_ref, simp_ctx)? {
+                        cp = cp.add_simp(simp.as_ref())?;
+                    }
+                    (
+                        Some((SArc(effect_path.clone()), cp)),
                         vec![guards.compile().map_err(Into::<CompilationError>::into)?],
-                    ))
-                }
+                        guard_metadata,
+                    )
+                })
             })
-            .collect::<Result<Vec<(_, Vec<Miniscript<XOnlyPublicKey, Tap>>)>, CompilationError>>()?
-            .into_iter()
-            .unzip();
+            .collect::<Result<Vec<(_, Vec<Miniscript<XOnlyPublicKey, Tap>>, _)>, CompilationError>>(
+            )?;
+
+        let mut continue_apis = ContinueAPIs::default();
+        let mut clause_accumulator = vec![];
+        let mut all_guard_simps: BTreeMap<Clause, GuardSimps> = Default::default();
+        for (v, b, c) in all_values {
+            continue_apis.extend(std::iter::once(v));
+            clause_accumulator.push(b);
+            for (pol, mut simps) in c {
+                all_guard_simps.entry(pol).or_default().append(&mut simps)
+            }
+        }
+        for guard_simps in all_guard_simps.values_mut() {
+            guard_simps.sort_by_key(|k| Arc::as_ptr(k));
+            guard_simps.dedup_by(|a, b| Arc::ptr_eq(a, b));
+        }
 
         let branches: Vec<Miniscript<XOnlyPublicKey, Tap>> = {
             let mut finish_fns_ctx = ctx.derive(PathFragment::FinishFn)?;
             // Compute all finish_functions at this level, caching if requested.
-            self.finish_fns()
+            let guards = self
+                .finish_fns()
                 .iter()
                 // note that this zip with would loop forever if there were to be a bug here
-                .zip(
-                    (0..)
-                        .filter_map(|i| finish_fns_ctx.derive(PathFragment::Branch(i as u64)).ok()),
-                )
-                .filter_map(|(func, c)| guard_clauses.get(self_ref, *func, c))
-                .map(|policy| policy.compile().map_err(Into::<CompilationError>::into))
+                .zip((0..).filter_map(|i| {
+                    let mut new = finish_fns_ctx.derive(PathFragment::Branch(i as u64)).ok()?;
+                    let simp = new.derive(PathFragment::Metadata).ok()?;
+                    Some((new, simp))
+                }))
+                .filter_map(|(func, (c, simp_c))| {
+                    guard_clauses.get(self_ref, *func, c, simp_c).transpose()
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            guards
+                .iter()
+                .map(|(policy, _m)| policy.compile().map_err(Into::<CompilationError>::into))
                 .chain(clause_accumulator.into_iter().flatten().map(Ok))
                 .collect::<Result<Vec<_>, _>>()?
         };
@@ -325,7 +352,9 @@ where
                 address,
                 descriptor,
                 amount_range,
-                metadata: self.metadata(metadata_ctx)?,
+                metadata: self
+                    .metadata(metadata_ctx)?
+                    .add_guard_simps(all_guard_simps)?,
             })
         }
     }

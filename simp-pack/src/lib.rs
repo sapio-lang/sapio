@@ -4,6 +4,8 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use sapio_base::simp::CompiledObjectLT;
+use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::simp::SIMP;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -65,10 +67,23 @@ impl IpfsNFT {
     }
 }
 impl SIMP for IpfsNFT {
-    fn get_protocol_number() -> i64 {
+    fn get_protocol_number(&self) -> i64 {
         -12345
     }
+
+    fn to_json(&self) -> Result<serde_json::Value, serde_json::Error> {
+        serde_json::to_value(self)
+    }
+
+    fn from_json(value: serde_json::Value) -> Result<Self, serde_json::Error>
+    where
+        Self: Sized,
+    {
+        serde_json::from_value(value)
+    }
 }
+
+impl SIMPAttachableAt<CompiledObjectLT> for IpfsNFT {}
 
 #[cfg(test)]
 mod tests {
