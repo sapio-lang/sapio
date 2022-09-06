@@ -108,6 +108,8 @@ pub enum CompilationError {
     WebAPIDisabled,
     /// Unknown Error type -- either from a user or from some unhandled dependency
     Custom(Box<dyn std::error::Error>),
+    /// Error in continuation argument coercion
+    ContinuationCoercion(String),
 }
 
 impl From<SIMPError> for CompilationError {
