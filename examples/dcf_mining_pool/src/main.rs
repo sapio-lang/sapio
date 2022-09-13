@@ -151,7 +151,7 @@ impl Coordinator {
         }
         let mut tip = mp.tip.write().unwrap();
         tip.participated = Some(result);
-        return Ok(result);
+        Ok(result)
     }
 }
 

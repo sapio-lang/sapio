@@ -76,7 +76,7 @@ impl TryFrom<HodlChickenChecks> for HodlChickenInner {
         let outputs = inner.winner_gets.checked_add(inner.chicken_gets);
         if deposits != outputs {
             Err("Outputs not Equal Deposits")
-        } else if deposits == None {
+        } else if deposits.is_none() {
             Err("Amounts Overflow")
         } else if inner.alice_deposit != inner.bob_deposit {
             Err("Amounts differ")

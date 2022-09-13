@@ -63,7 +63,7 @@ impl Compilable for bitcoin::XOnlyPublicKey {
     // TODO: Taproot; make infallible API
     fn compile(&self, ctx: Context) -> Result<Compiled, CompilationError> {
         let addr = bitcoin::Address::p2tr_tweaked(
-            TweakedPublicKey::dangerous_assume_tweaked(self.clone()),
+            TweakedPublicKey::dangerous_assume_tweaked(*self),
             ctx.network,
         );
         let mut amt = AmountRange::new();
@@ -78,8 +78,7 @@ enum Nullable {
     No,
 }
 
-const UNIQUE_DERIVE_PANIC_MSG: &'static str =
-    "Must be a valid derivation or internal invariant not held";
+const UNIQUE_DERIVE_PANIC_MSG: &str = "Must be a valid derivation or internal invariant not held";
 fn compute_all_effects<C, A: Default>(
     mut top_effect_ctx: Context,
     self_ref: &C,
@@ -142,7 +141,7 @@ impl Extend<ContinueAPIEntry> for ContinueAPIs {
     where
         T: IntoIterator<Item = ContinueAPIEntry>,
     {
-        self.inner.extend(iter.into_iter().filter_map(|v| v))
+        self.inner.extend(iter.into_iter().flatten())
     }
 }
 
@@ -255,7 +254,7 @@ where
                         .entry(h)
                         .or_insert(txtmpl);
                         let extractor = func.get_extract_clause_from_txtmpl();
-                        (extractor)(&txtmpl, &ctx)
+                        (extractor)(txtmpl, &ctx)
                     })
                     // Drop None values
                     .filter_map(|s| s.transpose())
@@ -276,7 +275,7 @@ where
                         cp = cp.add_simp(simp.as_ref())?;
                     }
                     (
-                        Some((SArc(effect_path.clone()), cp)),
+                        Some((SArc(effect_path), cp)),
                         vec![guards.compile().map_err(Into::<CompilationError>::into)?],
                         guard_metadata,
                     )
@@ -296,8 +295,8 @@ where
             }
         }
         for guard_simps in all_guard_simps.values_mut() {
-            guard_simps.sort_by_key(|k| Arc::as_ptr(k));
-            guard_simps.dedup_by(|a, b| Arc::ptr_eq(a, b));
+            guard_simps.sort_by_key(|k| k as *const _ as usize);
+            guard_simps.dedup_by(|a, b| a as *const _ as usize == b as *const _ as usize)
         }
 
         let branches: Vec<Miniscript<XOnlyPublicKey, Tap>> = {

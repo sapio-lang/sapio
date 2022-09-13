@@ -42,7 +42,7 @@ impl EmulatorConfig {
     pub fn get_emulator(&self) -> Result<Arc<dyn CTVEmulator>, Box<dyn std::error::Error>> {
         if self.emulators.len() < self.threshold as usize {
             Err(String::from("Too High Thresh"))?;
-        } else if self.emulators.len() == 0 {
+        } else if self.emulators.is_empty() {
             Err(String::from("Too High Thresh"))?;
         }
         let _n_emulators = self.emulators.len();
@@ -149,7 +149,7 @@ pub struct NetworkConfig {
 
 impl From<WasmerCacheHash> for [u8; 32] {
     fn from(x: WasmerCacheHash) -> Self {
-        x.0.into()
+        x.0
     }
 }
 
@@ -349,7 +349,7 @@ impl ConfigVerifier {
             println!("API Node URL (e.g., http://127.0.0.1:18443): ");
             if let Some(line) = lines.next_line().await? {
                 url = line.trim().into();
-                if url.len() == 0 {
+                if url.is_empty() {
                     println!("Must enter a username");
                 } else {
                     break;
@@ -360,7 +360,7 @@ impl ConfigVerifier {
         loop {
             println!("Auth Type (for cookie file, \"cookie\", for username/password \"basic\"): ");
             if let Some(line) = lines.next_line().await? {
-                using_cookie = match line.trim().into() {
+                using_cookie = match line.trim() {
                     "cookie" => true,
                     "basic" => false,
                     l => {
@@ -377,7 +377,7 @@ impl ConfigVerifier {
                 println!("Cookie file location (e.g., {}): ", b.display());
                 if let Some(line) = lines.next_line().await? {
                     cookie = line.trim().into();
-                    if cookie.len() == 0 {
+                    if cookie.is_empty() {
                         println!("Must give a cookie file location.");
                         continue;
                     }
@@ -391,7 +391,7 @@ impl ConfigVerifier {
                 println!("Username: ");
                 if let Some(line) = lines.next_line().await? {
                     username = line.trim().into();
-                    if username.len() == 0 {
+                    if username.is_empty() {
                         println!("Must enter a username");
                     } else {
                         break;
@@ -403,7 +403,7 @@ impl ConfigVerifier {
                 println!("Password: ");
                 if let Some(line) = lines.next_line().await? {
                     password = line.trim().into();
-                    if password.len() == 0 {
+                    if password.is_empty() {
                         println!("Must enter a username");
                     } else {
                         break;
@@ -463,7 +463,7 @@ impl std::default::Default for ConfigVerifier {
         b.push(".cookie");
         let regtest = NetworkConfig {
             active: true,
-            api_node: Node{url: "http://127.0.0.1:18443".into(), auth: rpc::Auth::CookieFile(b.into())},
+            api_node: Node{url: "http://127.0.0.1:18443".into(), auth: rpc::Auth::CookieFile(b)},
             emulator_nodes: Some(EmulatorConfig{
                 enabled: true,
                 threshold: 1u8,

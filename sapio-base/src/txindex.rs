@@ -52,7 +52,7 @@ impl TxIndex for TxIndexLogger {
             .unwrap()
             .get(b)
             .cloned()
-            .ok_or_else(|| TxIndexError::UnknownTxid(*b))
+            .ok_or(TxIndexError::UnknownTxid(*b))
     }
     fn add_tx(&self, tx: Arc<bitcoin::Transaction>) -> Result<Txid> {
         let txid = tx.txid();
@@ -75,7 +75,7 @@ where
         if let Ok(ent) = self.cache.lookup_tx(b) {
             Ok(ent)
         } else {
-            let ent = self.primary.lookup_tx(&b)?;
+            let ent = self.primary.lookup_tx(b)?;
             self.cache.add_tx(ent.clone())?;
             Ok(ent)
         }

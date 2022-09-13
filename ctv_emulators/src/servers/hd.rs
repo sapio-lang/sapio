@@ -112,7 +112,7 @@ impl HDOracleEmulator {
             .map(|(script, ver)| TapLeafHash::from_script(script, *ver))
         {
             let sig = get_sig(Some((tlh, 0xffffffff)), &untweaked);
-            input_zero.tap_script_sigs.insert((pk.0.clone(), tlh), sig);
+            input_zero.tap_script_sigs.insert((pk.0, tlh), sig);
         }
         Ok(b)
     }

@@ -18,8 +18,7 @@ pub fn get_all_keys_from_fs<I: Into<PathBuf>>(
             match entry.map(|x| {
                 x.path()
                     .file_stem()
-                    .map(|f| f.to_str().map(String::from))
-                    .flatten()
+                    .and_then(|f| f.to_str().map(String::from))
                     .ok_or(String::from("Nothing").into())
             }) {
                 Ok(x) => x,

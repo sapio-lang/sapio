@@ -137,9 +137,9 @@ impl<Output> WasmPluginHandle<Output> {
         let mut this = [0; 32];
         this.clone_from_slice(&hex::decode(key.to_string())?);
         let mut wasm_ctv_emulator = Arc::new(Mutex::new(HostEnvironmentInner {
-            path: path.into().clone(),
+            path: path.into(),
             this,
-            module_map: plugin_map.unwrap_or_else(BTreeMap::new).into(),
+            module_map: plugin_map.unwrap_or_default(),
             store: Arc::new(Mutex::new(store.clone())),
             net,
             emulator: emulator.clone(),
@@ -190,14 +190,13 @@ impl<Output> WasmPluginHandle<Output> {
 
     /// forget an allocated pointer
     pub fn forget(&self, p: i32) -> Result<(), CompilationError> {
-        Ok(self
-            .env
+        self.env
             .lock()
             .unwrap()
             .forget_ref()
             .ok_or_else(|| CompilationError::ModuleCouldNotFindFunction("forget".into()))?
             .call(p)
-            .map_err(|e| CompilationError::ModuleCouldNotDeallocate(p, e.into()))?)
+            .map_err(|e| CompilationError::ModuleCouldNotDeallocate(p, e.into()))
     }
 
     /// create an allocation
@@ -292,7 +291,7 @@ where
             .map_err(|e| CompilationError::ModuleCouldNotGetAPI(e.into()))?;
         let v = self.read_to_vec(p)?;
         self.forget(p)?;
-        Ok(serde_json::from_slice(&v).map_err(CompilationError::DeserializationError)?)
+        serde_json::from_slice(&v).map_err(CompilationError::DeserializationError)
     }
     fn get_name(&self) -> Result<String, CompilationError> {
         let p = self

@@ -50,7 +50,7 @@ trait PayThisThing: CoopKeys {
 struct JustAKey(PublicKey, Box<dyn Compilable>);
 impl CoopKeys for JustAKey {
     fn get_keys(&self) -> Vec<PublicKey> {
-        vec![self.0.clone()]
+        vec![self.0]
     }
 }
 impl JustAKey {
@@ -122,7 +122,7 @@ impl MiningPayout {
         let v: Vec<_> = self
             .participants
             .iter()
-            .map(|x| Clause::Key(x.key.clone()))
+            .map(|x| Clause::Key(x.key))
             .collect();
         Clause::Threshold(v.len(), v)
     }
@@ -132,7 +132,7 @@ impl MiningPayout {
         let mut counter: u64 = 0;
         let mut get_ctx = || {
             counter += 1;
-            return ctx.derive_num(counter);
+            ctx.derive_num(counter)
         };
         let mut queue: VecDeque<(Amount, Box<dyn PayThisThing>)> = self
             .participants
@@ -147,7 +147,7 @@ impl MiningPayout {
             let v: Vec<_> = queue
                 .drain(0..std::cmp::min(self.radix, queue.len()))
                 .collect();
-            if queue.len() == 0 {
+            if queue.is_empty() {
                 let mut builder = get_ctx()?.template();
                 for pay in v.iter() {
                     builder = builder.add_output(pay.0, pay.1.as_compilable(), None)?;

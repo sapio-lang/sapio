@@ -168,7 +168,7 @@ fn web_api(args: &Vec<NestedMeta>) -> proc_macro2::TokenStream {
             _ => continue,
         }
     }
-    return quote! { sapio::contract::actions::WebAPIDisabled};
+    quote! { sapio::contract::actions::WebAPIDisabled}
 }
 fn coerce_args(args: &Vec<NestedMeta>) -> proc_macro2::TokenStream {
     for arg in args {
@@ -284,7 +284,7 @@ pub fn continuation(args: TokenStream, input: TokenStream) -> TokenStream {
     let web_api_type = web_api(&args);
     let continue_schema_for_name =
         format_ident!("CONTINUE_SCHEMA_FOR_{}", name.to_string().to_uppercase());
-    let web_api_schema_s = web_api_schema(&args, &continue_schema_for_name, &arg_type);
+    let web_api_schema_s = web_api_schema(&args, &continue_schema_for_name, arg_type);
     let coerce_args_f = coerce_args(&args);
     let simp_gen_f = simp_at(&args).unwrap_or(TokenStream::from_str("None").unwrap().into());
     proc_macro::TokenStream::from(quote! {

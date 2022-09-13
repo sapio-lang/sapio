@@ -98,7 +98,7 @@ impl DLCContract {
                 self.oracles.0,
                 oracles
                     .iter()
-                    .map(|(_, oracle_k)| Ok(Clause::Key(XOnlyPublicKey::from(oracle_k.clone()))))
+                    .map(|(_, oracle_k)| Ok(Clause::Key(XOnlyPublicKey::from(*oracle_k))))
                     .collect::<Result<Vec<_>, CompilationError>>()?,
             );
             let mut tmpl = new_ctx.derive_num(i)?.template().add_guard(guard);

@@ -200,9 +200,7 @@ mod exports {
                     *dst = src;
                 }
                 let create_args = serde_json::from_str(
-                    &String::from_utf8_lossy(&v[..json_len as usize])
-                        .to_owned()
-                        .to_string(),
+                    &String::from_utf8_lossy(&v[..json_len as usize]).to_owned(),
                 )
                 .map_err(CompilationError::DeserializationError);
 
@@ -215,9 +213,7 @@ mod exports {
                     *dst = src;
                 }
                 let effectpath: Result<EffectPath, _> = serde_json::from_str(
-                    &String::from_utf8_lossy(&v[..path_len as usize])
-                        .to_owned()
-                        .to_string(),
+                    &String::from_utf8_lossy(&v[..path_len as usize]).to_owned(),
                 )
                 .map_err(CompilationError::DeserializationError);
 
@@ -258,9 +254,9 @@ mod exports {
                             })
                         }
                     };
-                    Ok(value??)
+                    value?
                 })();
-                return (move || -> Result<i32, CompilationError> {
+                (move || -> Result<i32, CompilationError> {
                     // serialize the reuslt, not just the output.
                     let comp_s = serde_json::to_string(&comp_s.map_err(|s| s.to_string()))
                         .map_err(CompilationError::SerializationError)?;
@@ -286,7 +282,7 @@ mod exports {
                     }
                     Ok(bytes)
                 })()
-                .unwrap_or(0);
+                .unwrap_or(0)
             }
             _ => 0,
         }

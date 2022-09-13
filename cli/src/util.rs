@@ -33,7 +33,7 @@ pub fn decode_psbt_file(
     b: &str,
 ) -> Result<PartiallySignedTransaction, Box<dyn std::error::Error>> {
     let bytes = std::fs::read_to_string(a.value_of_os(b).unwrap())?;
-    let bytes = base64::decode(&bytes.trim()[..])?;
+    let bytes = base64::decode(bytes.trim())?;
     let psbt: PartiallySignedTransaction = deserialize(&bytes[..])?;
     Ok(psbt)
 }

@@ -8,7 +8,6 @@ use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::bip32::*;
 use emulator_connect::servers::hd::*;
 
-use tokio;
 use tokio::io::AsyncReadExt;
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {

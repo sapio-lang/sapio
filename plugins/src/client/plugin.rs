@@ -80,9 +80,9 @@ where
                     "Host Error: Should always be able to identify module's own ID".into(),
                 )
             })?;
-        let cstring_to_string = path.to_str().map_err(|e| {
-            CompilationError::InternalModuleError(format!("Path Invalid: {}", e.to_string()))
-        })?;
+        let cstring_to_string = path
+            .to_str()
+            .map_err(|e| CompilationError::InternalModuleError(format!("Path Invalid: {}", e)))?;
 
         let parsed_rpath = serde_json::from_str(cstring_to_string)
             .map_err(CompilationError::DeserializationError)?;
@@ -91,7 +91,7 @@ where
                 Some(Arc::new(parsed_rpath)),
                 PathFragment::Root,
             )),
-            PathFragment::Named(SArc(Arc::new(caller.into()))),
+            PathFragment::Named(SArc(Arc::new(caller))),
         );
 
         let ctx = Context::new(
@@ -121,7 +121,7 @@ fn encode_json<S: Serialize>(s: &S) -> *mut c_char {
     if let Ok(Ok(c)) = serde_json::to_string(s).map(CString::new) {
         c.into_raw()
     } else {
-        0 as *mut c_char
+        std::ptr::null_mut::<c_char>()
     }
 }
 

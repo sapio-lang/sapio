@@ -61,9 +61,9 @@ impl<'de> Visitor<'de> for SafePSBT {
             v.push(seq.next_element()?.ok_or_else(length_error)?);
         }
 
-        return PartiallySignedTransaction::consensus_decode(&v[..])
+        PartiallySignedTransaction::consensus_decode(&v[..])
             .map_err(de::Error::custom)
-            .map(PSBT);
+            .map(PSBT)
     }
 }
 

@@ -42,7 +42,7 @@ impl Vault {
                     from_contract: (self.cold_storage)(self.amount_step, cold_storage_ctx)?,
                     to_contract: Compiled::from_address(self.hot_storage.clone(), None),
                     timeout: self.mature,
-                    amount: self.amount_step.into(),
+                    amount: self.amount_step,
                 },
                 None,
             )?
