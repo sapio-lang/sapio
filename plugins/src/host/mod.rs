@@ -312,9 +312,9 @@ mod exports {
         let mut w = std::io::BufWriter::new(lock);
         let mem = env.memory_ref().unwrap().view::<u8>();
         for byte in mem[a as usize..(a + len) as usize].iter().map(Cell::get) {
-            w.write(&[byte]).unwrap();
+            w.write_all(&[byte]).unwrap();
         }
-        w.write("\n".as_bytes()).unwrap();
+        w.write_all("\n".as_bytes()).unwrap();
     }
 
     /// for the provided hash value, get the clause the oracle will satisfy
