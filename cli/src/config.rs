@@ -46,7 +46,7 @@ impl EmulatorConfig {
         if self.emulators.len() < self.threshold as usize {
             Err(String::from("Too High Thresh"))?;
         } else if self.emulators.is_empty() {
-            Err(String::from("Too High Thresh"))?;
+            Err(String::from("No Emulators Provided"))?;
         }
         let _n_emulators = self.emulators.len();
         let rt = Handle::try_current()
