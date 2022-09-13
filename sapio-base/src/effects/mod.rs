@@ -54,8 +54,14 @@ pub struct MapEffectDB {
     empty: BTreeMap<SArc<String>, serde_json::Value>,
 }
 
+/// # Editable Effects
+/// A to/from container mirroring [`MapEffectsDB`], except the inner fields are
+/// public. This allows us to edit [`MapEffectsDB`] in certain contexts where we
+/// can fully replace it, without the concern of mutability for contract authors.
 pub struct EditableMapEffectDB {
+    /// All Effects currently in the set of effects
     pub effects: BTreeMap<SArc<EffectPath>, BTreeMap<SArc<String>, serde_json::Value>>,
+    /// Catch-all for extra data for future extension
     pub empty: BTreeMap<SArc<String>, serde_json::Value>,
 }
 
