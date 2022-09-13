@@ -52,6 +52,23 @@ pub struct MapEffectDB {
     #[serde(skip, default)]
     empty: BTreeMap<SArc<String>, serde_json::Value>,
 }
+
+pub struct EditableMapEffectDB {
+    pub effects: BTreeMap<SArc<EffectPath>, BTreeMap<SArc<String>, serde_json::Value>>,
+    pub empty: BTreeMap<SArc<String>, serde_json::Value>,
+}
+
+impl From<MapEffectDB> for EditableMapEffectDB {
+    fn from(MapEffectDB { effects, empty }: MapEffectDB) -> Self {
+        Self { effects, empty }
+    }
+}
+impl From<EditableMapEffectDB> for MapEffectDB {
+    fn from(EditableMapEffectDB { effects, empty }: EditableMapEffectDB) -> Self {
+        Self { effects, empty }
+    }
+}
+
 impl MapEffectDB {
     pub fn skip_serializing(&self) -> bool {
         self.effects.is_empty()
