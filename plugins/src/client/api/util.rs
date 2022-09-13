@@ -4,7 +4,7 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-///! Various utils for working with modules
+//! Various utils for working with modules
 use super::*;
 
 use sapio::contract::CompilationError;
@@ -50,6 +50,7 @@ where
     }
 }
 
+/// Get the logo for a module
 pub fn get_logo(key: &[u8; 32]) -> Result<String, CompilationError> {
     let p = key.as_ptr() as i32;
     let logo: Result<String, String> = {
@@ -65,6 +66,7 @@ pub fn get_logo(key: &[u8; 32]) -> Result<String, CompilationError> {
     logo.map_err(CompilationError::InternalModuleError)
 }
 
+/// Get the name for a module
 pub fn get_name(key: &[u8; 32]) -> Result<String, CompilationError> {
     let p = key.as_ptr() as i32;
     let name: Result<String, String> = {
@@ -80,6 +82,7 @@ pub fn get_name(key: &[u8; 32]) -> Result<String, CompilationError> {
     name.map_err(CompilationError::InternalModuleError)
 }
 
+/// Get the API for a module
 pub fn get_api<T, R>(key: &[u8; 32]) -> Result<API<T, R>, CompilationError> {
     let p = key.as_ptr() as i32;
     let api: Result<API<T, R>, String> = {
@@ -95,6 +98,7 @@ pub fn get_api<T, R>(key: &[u8; 32]) -> Result<API<T, R>, CompilationError> {
     api.map_err(CompilationError::InternalModuleError)
 }
 
+/// Call a module to produce a result
 pub fn call<S: Serialize, T>(
     ctx: Context,
     key: &[u8; 32],

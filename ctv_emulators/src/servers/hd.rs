@@ -4,6 +4,7 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+//! definitions for oracle servers
 use super::*;
 use bitcoin::util::sighash::Prevouts;
 use bitcoin::util::taproot::TapLeafHash;
@@ -12,6 +13,8 @@ use bitcoin::SchnorrSig;
 use bitcoin::Script;
 use bitcoin::TxOut;
 use bitcoin::XOnlyPublicKey;
+
+/// hierarchical deterministic oracle emulator
 #[derive(Clone)]
 pub struct HDOracleEmulator {
     root: ExtendedPrivKey,

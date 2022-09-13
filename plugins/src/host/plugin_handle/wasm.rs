@@ -20,11 +20,17 @@ use std::error::Error;
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use wasmer::Memory;
+
+/// Helper to resolve modules
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub enum ModuleLocator {
+    /// A Hex Encoded Hash
     Key(String),
+    /// A File Name of an uncompiled WASM Module
     FileName(String),
+    /// The Raw Uncompiled Bytes of a Module
     Bytes(Vec<u8>),
+    /// Not Known
     Unknown,
 }
 
@@ -41,10 +47,16 @@ impl ModuleLocator {
         }
     }
 }
+/// After a module has been located, we can only be either new bytes read from
+/// somewhere or a hash already in our cache.
 pub enum SyncModuleLocator {
+    /// Module is in Cache
     Key(wasmer_cache::Hash),
+    /// Module is here
     Bytes(Vec<u8>),
 }
+
+/// A handle that holds a WASM Module instance
 pub struct WasmPluginHandle<Output> {
     store: Store,
     env: HostEnvironment,
@@ -82,6 +94,7 @@ impl<Output> WasmPluginHandle<Output> {
         Ok(r)
     }
 
+    /// Create a new module using async module resolution
     pub async fn new_async<I: Into<PathBuf> + Clone>(
         path: I,
         emulator: &Arc<dyn CTVEmulator>,

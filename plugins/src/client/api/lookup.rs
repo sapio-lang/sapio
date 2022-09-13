@@ -4,7 +4,7 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-///! Utility struct for looking up and decoding modules
+//! Utility struct for looking up and decoding modules
 use super::*;
 
 #[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Eq)]
@@ -20,6 +20,7 @@ pub enum LookupFrom {
     This,
 }
 impl LookupFrom {
+    /// Extract the key hash by either decoding the hex, or resolving the module name using host apis
     pub fn to_key(&self) -> Option<[u8; 32]> {
         match self {
             LookupFrom::HashKey(hash) => {

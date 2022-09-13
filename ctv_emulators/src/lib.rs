@@ -3,8 +3,10 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#![deny(missing_docs)]
 
-#[deny(missing_docs)]
+//! concrete emulators for CTV
+
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::util::bip32::*;
@@ -29,6 +31,7 @@ mod msgs;
 pub mod servers;
 
 thread_local! {
+    /// global SECP instance anyone can use
     pub static SECP: Secp256k1<All> = Secp256k1::new();
 }
 

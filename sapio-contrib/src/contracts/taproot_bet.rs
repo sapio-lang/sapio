@@ -4,7 +4,7 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-#[deny(missing_docs)]
+#![deny(missing_docs)]
 use bitcoin::Amount;
 use bitcoin::Script;
 use sapio::contract::*;

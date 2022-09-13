@@ -4,7 +4,9 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-#[deny(missing_docs)]
+//! architecture for a server which can compile sapio contracts
+
+#![deny(missing_docs)]
 pub mod session;
 #[cfg(test)]
 mod tests {

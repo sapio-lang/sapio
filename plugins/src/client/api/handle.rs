@@ -4,8 +4,8 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+//! Handle for Sapio Plugins
 use super::util::{get_api, get_logo, get_name};
-///! Handle for Sapio Plugins
 use super::*;
 use crate::plugin_handle::PluginHandle;
 use core::convert::TryFrom;
@@ -15,17 +15,23 @@ use sapio_base::Clause;
 use sapio_trait::SapioJSONTrait;
 use std::marker::PhantomData;
 
+/// A Type which represents a validated module the host can resolve and execute
+/// with a given API
 #[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Eq)]
 #[serde(try_from = "SapioHostAPIVerifier<T, R>")]
 pub struct SapioHostAPI<T: SapioJSONTrait + Clone, R: for<'a> Deserialize<'a> + JsonSchema> {
+    /// The module's locator
     pub which_plugin: LookupFrom,
+    /// when resolved, the hash of the module
     #[serde(skip, default)]
     pub key: [u8; 32],
     #[serde(default, skip)]
     _pd: PhantomData<(T, R)>,
 }
 
+/// Convenience Label for [`SapioHostAPI<T, Compiled>`]
 pub type ContractModule<T> = SapioHostAPI<T, Compiled>;
+/// Convenience Label for [`SapioHostAPI<T, Clause>`]
 pub type ClauseModule<T> = SapioHostAPI<T, Clause>;
 
 impl<T: SapioJSONTrait + Clone, R> PluginHandle for SapioHostAPI<T, R>
@@ -52,6 +58,8 @@ impl<T: SapioJSONTrait + Clone, R> SapioHostAPI<T, R>
 where
     R: for<'a> Deserialize<'a> + JsonSchema,
 {
+    /// Ensures a [`SapioHostAPI`]'s [`LookupFrom`] field is
+    /// [`LookupFrom::HashKey`] form.
     pub fn canonicalize(&self) -> Self {
         use bitcoin::hashes::hex::ToHex;
         SapioHostAPI {

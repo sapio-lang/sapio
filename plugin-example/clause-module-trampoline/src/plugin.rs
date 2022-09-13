@@ -4,7 +4,7 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-#[deny(missing_docs)]
+#![deny(missing_docs)]
 use sapio_wasm_plugin::plugin_handle::PluginHandle;
 use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;

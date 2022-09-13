@@ -39,16 +39,20 @@ pub trait SIMP {
     /// Get a protocol number, which should be one that is assigned through the
     /// SIMP repo. Proprietary SIMPs can safely use negative numbers.
     fn get_protocol_number(&self) -> i64;
+    /// Conver a SIMP to a JSON. Concretely typed so that SIMP can be a trait object.
     fn to_json(&self) -> Result<Value, serde_json::Error>;
+    /// Conver a SIMP from a JSON. Sized bound so that SIMP can be a trait object.
     fn from_json(value: Value) -> Result<Self, serde_json::Error>
     where
         Self: Sized;
 }
 
+/// Tag for where a SIMP may be validly injected
 pub trait LocationTag {}
 
 macro_rules! gen_location {
     ($x:ident) => {
+        /// Type Tag for a SIMP Location
         pub struct $x;
         impl LocationTag for $x {}
     };
@@ -61,6 +65,8 @@ gen_location!(TemplateOutputLT);
 gen_location!(GuardLT);
 gen_location!(TemplateInputLT);
 
+/// a trait a SIMP can implement to indicate where it should be able to be
+/// placed
 pub trait SIMPAttachableAt<T: LocationTag>
 where
     Self: SIMP,

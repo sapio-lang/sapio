@@ -5,7 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use batching_trait::{BatchingTraitVersion0_1_1, Payment};
-#[deny(missing_docs)]
+#![deny(missing_docs)]
 use sapio::contract::*;
 use sapio::util::amountrange::*;
 use sapio::*;

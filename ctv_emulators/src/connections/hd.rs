@@ -4,6 +4,8 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+//! Hierarchical Deterministic Emulator Connection
+
 use super::*;
 /// HDOracleEmulatorConnection wraps a tokio runtime and a TCPStream
 /// with a key to be able to talk to an Oracle server.
@@ -14,11 +16,17 @@ use super::*;
 /// This seems to be a limitation with tokio / rust around using async inside non-async
 /// traits.
 pub struct HDOracleEmulatorConnection {
+    /// the Oracle's runtime, if not executing in a runtime already
     pub runtime: Option<Arc<tokio::runtime::Runtime>>,
+    /// handle to either current_runtime or the runtime owned above
     pub handle: tokio::runtime::Handle,
+    /// connection to the reconnect SocketAddr
     pub connection: Mutex<Option<TcpStream>>,
+    /// resolved address to the oracle
     pub reconnect: SocketAddr,
+    /// the root key signatures will come from
     pub root: ExtendedPubKey,
+    /// a secp context
     pub secp: Arc<bitcoin::secp256k1::Secp256k1<bitcoin::secp256k1::All>>,
 }
 

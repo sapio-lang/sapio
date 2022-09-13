@@ -12,7 +12,7 @@ use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
 use std::convert::TryFrom;
-#[deny(missing_docs)]
+#![deny(missing_docs)]
 // Copyright Judica, Inc 2021
 //
 // This Source Code Form is subject to the terms of the Mozilla Public

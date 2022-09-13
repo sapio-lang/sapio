@@ -4,6 +4,8 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+//! configuration file format / parsing for sapio command line interface
+
 use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoincore_rpc_async as rpc;
 
@@ -29,6 +31,7 @@ pub struct EmulatorConfig {
     /// if the emulator should be used or not. We tag explicitly for convenience
     /// in the config file format.
     pub enabled: bool,
+    /// list of emulators to use & how to contact them
     #[schemars(with = "Vec<(String, String)>")]
     pub emulators: Vec<(ExtendedPubKey, String)>,
     /// threshold could be larger than u8, but that seems very unlikely/an error.
@@ -43,7 +46,7 @@ impl EmulatorConfig {
         if self.emulators.len() < self.threshold as usize {
             Err(String::from("Too High Thresh"))?;
         } else if self.emulators.is_empty() {
-            Err(String::from("Too High Thresh"))?;
+            Err(String::from("No Emulators Provided"))?;
         }
         let _n_emulators = self.emulators.len();
         let rt = Handle::try_current()
@@ -118,8 +121,11 @@ mod pathbuf_serde {
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
 #[serde(remote = "rpc::Auth")]
 pub enum Auth {
+    /// No Auth Used
     None,
+    /// Username and Passowrd
     UserPass(String, String),
+    /// Cookie File
     CookieFile(
         #[serde(with = "pathbuf_serde")]
         #[schemars(with = "String")]
@@ -130,7 +136,9 @@ pub enum Auth {
 /// Which Bitcoin Node should Sapio use
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Node {
+    /// the url to connect to
     pub url: String,
+    /// the auth to use
     #[serde(with = "Auth")]
     pub auth: rpc::Auth,
 }
@@ -141,8 +149,11 @@ pub struct Node {
 pub struct NetworkConfig {
     /// if this is the active config
     pub active: bool,
+    /// the node to connect to
     pub api_node: Node,
+    /// the emulator to use, if any
     pub emulator_nodes: Option<EmulatorConfig>,
+    /// mapping of name:module hash for translation during compilation
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub plugin_map: Option<BTreeMap<String, WasmerCacheHash>>,
 }
@@ -178,7 +189,9 @@ impl TryFrom<String> for WasmerCacheHash {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(try_from = "ConfigVerifier")]
 pub struct Config {
+    /// the currently active configuration
     pub active: NetworkConfig,
+    /// which network the configuration is for
     pub network: bitcoin::network::constants::Network,
 }
 
@@ -314,6 +327,7 @@ impl ConfigVerifier {
         }
     }
 
+    /// a setup wizard to generate a new config file
     pub async fn wizard() -> Result<Self, Box<dyn std::error::Error>> {
         use tokio::io::AsyncBufReadExt;
 
@@ -438,9 +452,12 @@ impl ConfigVerifier {
     }
 }
 
+/// Errors that can arise when validating a configuration file
 #[derive(Debug)]
 pub enum ConfigError {
+    /// Only one network can be active at a time
     TooManyActiveNetworks,
+    /// One network must be active
     NoActiveConfig,
 }
 use std::fmt;

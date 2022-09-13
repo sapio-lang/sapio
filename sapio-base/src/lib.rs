@@ -4,7 +4,8 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-#[deny(missing_docs)]
+//! base sapio library functionality and definitions, not particular to sapio compiler
+#![deny(missing_docs)]
 /// Extra functionality for working with Bitcoin types
 pub mod util;
 use bitcoin::XOnlyPublicKey;

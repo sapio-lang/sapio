@@ -14,24 +14,38 @@ use std::convert::TryFrom;
 use std::str::FromStr;
 use std::sync::Arc;
 
+/// The derivation path fragments allowed, including user-generated
 #[derive(
     Serialize, Deserialize, Debug, Hash, Eq, PartialEq, JsonSchema, Clone, PartialOrd, Ord,
 )]
 #[serde(into = "String")]
 #[serde(try_from = "&str")]
 pub enum PathFragment {
+    /// The start of a compilation process
     Root,
+    /// A Clone of some executing context
     Cloned,
+    /// An Action Branch
     Action,
+    /// A Finish Function
     FinishFn,
+    /// A Conditional Compilation Guard
     CondCompIf,
+    /// A (Clause Generating) Guard
     Guard,
+    /// A Next Clause
     Next,
+    /// Suggested Transaction
     Suggested,
+    /// The Default Effect passed into a Continuation
     DefaultEffect,
+    /// All the Effects for a Coninuation
     Effects,
+    /// Metadata Creation
     Metadata,
+    /// A numbered branch at this level
     Branch(u64),
+    /// a named branch at this level
     Named(SArc<String>),
 }
 
@@ -60,10 +74,14 @@ impl From<&PathFragment> for String {
     }
 }
 
+/// Error for parsing a fragment
 #[derive(Serialize, Deserialize, Debug, Hash, Eq, PartialEq, JsonSchema, Clone)]
 pub enum ValidFragmentError {
+    /// branch could not be parsed (must be alphanumeric for user generated)
     BranchParseError,
+    /// name was using some reserved characters
     BadName(SArc<String>),
+    /// Other error
     InvalidReversePath(&'static str),
 }
 

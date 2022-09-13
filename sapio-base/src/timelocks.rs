@@ -13,30 +13,43 @@ use std::default::Default;
 use std::fmt;
 use std::marker::PhantomData;
 use std::time::Duration;
+/// Error in Creating a LockTime
 #[derive(Debug)]
 pub enum LockTimeError {
+    /// Duration escapes bound of valid timestamps
     DurationTooLong(Duration),
+    /// Time was too far in the past, would be interpreted as non-timestamp
     TimeTooFarInPast(Duration),
+    /// height is too high (beyond 500_000_000), interpreted as timestamp
     HeightTooHigh(u32),
+    /// sequence type is unknown
     UnknownSeqType(u32),
 }
 
 /// Type Tags used for creating lock time variants. The module lets us keep them
 /// public while not polluting the name space.
 pub mod type_tags {
+    /// If the type is absolute or relative
     pub trait Absolutivity {
+        /// true if type is absolute
         const IS_ABSOLUTE: bool;
     }
+    ///if the type is height or time
     pub trait TimeType {
+        /// true if type is height
         const IS_HEIGHT: bool;
     }
     use super::*;
+    /// Type Tag for Realtive
     #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
     pub struct Rel;
+    /// Type Tag for Absolute
     #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
     pub struct Abs;
+    /// Type Tag for Height
     #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
     pub struct Height;
+    /// Type Tag for Median Time Passed
     #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
     pub struct MTP;
 }
@@ -86,11 +99,17 @@ pub enum AnyTimeLock {
 /// Helpful Aliases for specific concrete lock times
 mod alias {
     use super::*;
+    /// LockTime for Relative Height
     pub type RelHeight = LockTime<Rel, Height>;
+    /// LockTime for Relative MTP
     pub type RelTime = LockTime<Rel, MTP>;
+    /// LockTime for Absolute Height
     pub type AbsHeight = LockTime<Abs, Height>;
+    /// LockTime for Absolute MTP
     pub type AbsTime = LockTime<Abs, MTP>;
+    /// Maximum Date
     pub const BIG_PAST_DATE: AbsTime = LockTime(1_600_000_000u32, PhantomData);
+    /// Minimum Date
     pub const START_OF_TIME: AbsTime = LockTime(500_000_000, PhantomData);
 }
 pub use alias::*;
@@ -115,11 +134,13 @@ mod trait_impls {
         A: Absolutivity,
         TT: TimeType,
     {
+        /// get inner representation
         pub fn get(&self) -> u32 {
             self.0
         }
     }
     impl AnyRelTimeLock {
+        /// get inner representation
         pub fn get(&self) -> u32 {
             match self {
                 AnyRelTimeLock::RH(u) => u.get(),
@@ -129,6 +150,7 @@ mod trait_impls {
     }
 
     impl AnyAbsTimeLock {
+        /// get inner representation
         pub fn get(&self) -> u32 {
             match self {
                 AnyAbsTimeLock::AH(u) => u.get(),
@@ -138,6 +160,7 @@ mod trait_impls {
     }
 
     impl AnyTimeLock {
+        /// get inner representation
         pub fn get(&self) -> u32 {
             match self {
                 AnyTimeLock::A(u) => u.get(),

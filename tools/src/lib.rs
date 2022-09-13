@@ -4,7 +4,9 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-#[deny(missing_docs)]
+//! tools is a workspace-global set of util functions that require heavy dependencies
+
+#![deny(missing_docs)]
 use bitcoin::hash_types::*;
 use bitcoincore_rpc_async as rpc;
 use rpc::RpcApi;

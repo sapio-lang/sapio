@@ -1,6 +1,15 @@
+// Copyright Judica, Inc 2022
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+//  License, v. 2.0. If a copy of the MPL was not distributed with this
+//  file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+//! arguments for passing into a sapio module
 use crate::effects::MapEffectDB;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+
+/// a remote derivation for the network definitions
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(remote = "bitcoin::Network")]
 pub enum NetworkDef {

@@ -18,6 +18,7 @@ pub use path_fragment::*;
 pub mod reverse_path;
 pub use reverse_path::*;
 
+/// Convenience type name for an EffectPath
 pub type EffectPath = ReversePath<PathFragment>;
 
 /// Error types for EffectDB Accesses
@@ -70,6 +71,7 @@ impl From<EditableMapEffectDB> for MapEffectDB {
 }
 
 impl MapEffectDB {
+    /// helper function for when effectdb should not be serialized
     pub fn skip_serializing(&self) -> bool {
         self.effects.is_empty()
     }

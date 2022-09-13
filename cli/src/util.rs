@@ -58,8 +58,7 @@ pub async fn get_psbt_from(
 pub(crate) fn get_data_dir(typ: &str, org: &str, proj: &str) -> PathBuf {
     let proj =
         directories::ProjectDirs::from(typ, org, proj).expect("Failed to find config directory");
-    let path: PathBuf = proj.data_dir().clone().into();
-    path
+    proj.data_dir().into()
 }
 
 pub(crate) fn create_mock_output() -> bitcoin::OutPoint {

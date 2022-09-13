@@ -1,6 +1,6 @@
 use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoin::Amount;
-#[deny(missing_docs)]
+#![deny(missing_docs)]
 // Copyright Judica, Inc 2021
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
