@@ -10,7 +10,9 @@ use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 use std::sync::Arc;
 /// Used to Build a Shared Path for all children of a given context.
-#[derive(Serialize, Deserialize, JsonSchema, Debug, Clone, Hash)]
+#[derive(
+    Serialize, Deserialize, JsonSchema, Debug, Clone, Hash, PartialEq, PartialOrd, Ord, Eq,
+)]
 #[serde(try_from = "Y")]
 #[serde(into = "Y")]
 #[serde(
@@ -21,35 +23,6 @@ pub struct ReversePath<T, Y = String> {
     this: T,
     _pd: PhantomData<Y>,
 }
-
-impl<T, Y> PartialEq for ReversePath<T, Y>
-where
-    T: PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.iter().eq(other.iter())
-    }
-}
-
-impl<T, Y> PartialOrd<Self> for ReversePath<T, Y>
-where
-    T: PartialOrd,
-{
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.iter().partial_cmp(other.iter())
-    }
-}
-
-impl<T, Y> Ord for ReversePath<T, Y>
-where
-    T: Ord,
-{
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.iter().cmp(other.iter())
-    }
-}
-
-impl<T, Y> Eq for ReversePath<T, Y> where T: Eq {}
 
 /// RPI = ReversePathIterator
 /// This simplifies iterating over a reversepath.
