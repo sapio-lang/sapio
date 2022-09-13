@@ -27,7 +27,7 @@ pub struct SigningKey(pub Vec<ExtendedPrivKey>);
 
 impl SigningKey {
     pub fn read_key_from_buf(buf: &[u8]) -> Result<Self, bitcoin::util::bip32::Error> {
-        ExtendedPrivKey::decode(&buf).map(|k| SigningKey(vec![k]))
+        ExtendedPrivKey::decode(buf).map(|k| SigningKey(vec![k]))
     }
     pub fn new_key(network: Network) -> Result<Self, bitcoin::util::bip32::Error> {
         let seed: [u8; 32] = rand::thread_rng().gen();
@@ -41,7 +41,7 @@ impl SigningKey {
     pub fn pubkey<C: Signing>(&self, secp: &Secp256k1<C>) -> Vec<ExtendedPubKey> {
         self.0
             .iter()
-            .map(|s| ExtendedPubKey::from_priv(secp, &s))
+            .map(|s| ExtendedPubKey::from_priv(secp, s))
             .collect()
     }
     pub fn sign(
@@ -108,7 +108,7 @@ impl SigningKey {
                 }
             })
             .collect::<Result<Vec<TxOut>, usize>>()
-            .map_err(|u| PSBTSigningError::NoUTXOAtIndex(u))?;
+            .map_err(PSBTSigningError::NoUTXOAtIndex)?;
         let mut sighash = bitcoin::util::sighash::SighashCache::new(&tx);
         let input = &mut psbt
             .inputs

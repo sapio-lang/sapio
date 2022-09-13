@@ -65,7 +65,7 @@ impl<T, Y> TryFrom<Vec<T>> for ReversePath<T, Y> {
 }
 impl<T: Clone, Y> From<ReversePath<T, Y>> for Vec<T> {
     fn from(r: ReversePath<T, Y>) -> Self {
-        let mut v: Vec<T> = r.iter().map(|s: &T| s.clone()).collect();
+        let mut v: Vec<T> = r.iter().cloned().collect();
         v.reverse();
         v
     }

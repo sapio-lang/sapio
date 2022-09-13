@@ -89,7 +89,7 @@ impl TryFrom<Arc<String>> for PathFragment {
 impl TryFrom<&str> for PathFragment {
     type Error = ValidFragmentError;
     fn try_from(s: &str) -> Result<Self, Self::Error> {
-        Ok(match s.as_ref() {
+        Ok(match s {
             "@root" => PathFragment::Root,
             "@cloned" => PathFragment::Cloned,
             "@action" => PathFragment::Action,

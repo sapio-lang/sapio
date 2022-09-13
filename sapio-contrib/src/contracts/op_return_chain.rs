@@ -33,7 +33,7 @@ impl ChainReturn {
     /// everyone has signed off on the transaction
     #[guard]
     fn approved(self, _ctx: Context) {
-        Clause::Key(self.pk.clone())
+        Clause::Key(self.pk)
     }
     /// move the coins to the next state -- payouts may recursively contain pools itself
     #[continuation(
@@ -47,7 +47,7 @@ impl ChainReturn {
             tmpl = tmpl.spend_amount(fees.into())?;
             tmpl = tmpl.add_output(
                 Amount::from_sat(0),
-                &Compiled::from_op_return(&data.as_str().as_bytes())?,
+                &Compiled::from_op_return(data.as_str().as_bytes())?,
                 None,
             )?;
             let funds = tmpl.ctx().funds();

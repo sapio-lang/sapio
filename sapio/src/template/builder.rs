@@ -88,9 +88,9 @@ impl Builder {
             .with_amount(amount)?;
         let mut ret = self.spend_amount(amount)?;
         ret.outputs.push(Output {
-            amount: amount,
+            amount,
             contract: contract.compile(subctx)?,
-            added_metadata: metadata.unwrap_or_else(Default::default),
+            added_metadata: metadata.unwrap_or_default(),
         });
         Ok(ret)
     }
@@ -273,8 +273,8 @@ impl Builder {
         let scale_factor = 1u64;
         for _seq in &self.sequences {
             input_weight += scale_factor
-                * (32 + 4 + 4 + // outpoint (32+4) + nSequence
-                VarInt(0u64).len() as u64 + 0);
+                * 32 + 4 + 4 + // outpoint (32+4) + nSequence
+                VarInt(0u64).len() as u64;
             //if !input.witness.is_empty() {
             //    inputs_with_witnesses += 1;
             //    input_weight += VarInt(input.witness.len() as u64).len();

@@ -33,9 +33,9 @@ pub struct Hanukkiah {
 
 fn candles_left(s: u8) -> u8 {
     if s == 8 {
-        return 0;
+        0
     } else {
-        return s + candles_left(s + 1);
+        s + candles_left(s + 1)
     }
 }
 impl Hanukkiah {
@@ -61,7 +61,7 @@ impl Hanukkiah {
         let size = txn.estimate_tx_size();
         txn = txn.add_amount(self.feerate_per_byte * size);
         let candle_time =
-            AbsTime::try_from(self.night_time.get() + 24 * 60 * 60 * (night as u32 - 1 as u32))?
+            AbsTime::try_from(self.night_time.get() + 24 * 60 * 60 * (night as u32 - 1_u32))?
                 .into();
         txn.set_lock_time(candle_time)?.into()
     }

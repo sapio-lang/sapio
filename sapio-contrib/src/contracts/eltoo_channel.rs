@@ -78,11 +78,11 @@ impl OpenChannel {
 
             let f = ctx.funds();
             ctx.template()
-                .set_lock_time(AnyAbsTimeLock::from(update.sequence.clone()))?
+                .set_lock_time(AnyAbsTimeLock::from(update.sequence))?
                 .add_output(
                     f,
                     &OpenChannel {
-                        pending_update: Some(update.clone()),
+                        pending_update: Some(update),
                         ..self.clone()
                     },
                     None,

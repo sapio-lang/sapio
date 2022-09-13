@@ -46,10 +46,7 @@ impl IpfsNFT {
     pub fn commitment(&self) -> sha256 {
         let h1 = sha256::hash(self.cid.as_bytes()).into_inner();
         let artist = self.artist.map(|b| b.serialize()).unwrap_or([0u8; 32]);
-        let blessing = self
-            .blessing
-            .map(|b| b.as_ref().clone())
-            .unwrap_or([0u8; 64]);
+        let blessing = self.blessing.map(|b| *b.as_ref()).unwrap_or([0u8; 64]);
         let softlink = self
             .softlink
             .as_ref()

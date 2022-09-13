@@ -63,12 +63,12 @@ where
     fn explodes(self, ctx: sapio::Context) {
         ctx.template()
             .add_output(
-                self.party_one.into(),
+                self.party_one,
                 &Compiled::from_address(self.key_p1.clone(), None),
                 None,
             )?
             .add_output(
-                self.party_two.into(),
+                self.party_two,
                 &Compiled::from_address(self.key_p2.clone(), None),
                 None,
             )?
@@ -80,7 +80,7 @@ where
     fn strikes(self, ctx: sapio::Context) {
         ctx.template()
             .add_output(
-                (self.party_one + self.party_two).into(),
+                self.party_one + self.party_two,
                 &GenericBet::try_from(self.opt.clone())?,
                 None,
             )?
@@ -107,7 +107,7 @@ where
     fn explodes(self, ctx: sapio::Context) {
         ctx.template()
             .add_output(
-                self.party_one.into(),
+                self.party_one,
                 &Compiled::from_address(self.key_p1.clone(), None),
                 None,
             )?
@@ -121,7 +121,7 @@ where
             .add_amount(self.party_two)
             .add_sequence()
             .add_output(
-                (self.party_one + self.party_two).into(),
+                self.party_one + self.party_two,
                 &GenericBet::try_from(self.opt.clone())?,
                 None,
             )?

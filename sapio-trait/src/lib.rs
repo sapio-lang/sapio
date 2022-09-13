@@ -35,7 +35,7 @@ pub trait SapioJSONTrait: JsonSchema + Serialize + for<'a> Deserialize<'a> {
             .map_err(|e| {
                 let mut s = String::from("Validation Errors:");
                 for error in e {
-                    s += &format!("\n    - {}", error.to_string());
+                    s += &format!("\n    - {}", error);
                 }
                 s
             })?;

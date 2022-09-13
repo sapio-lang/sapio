@@ -81,12 +81,12 @@ impl GenericBet {
         ctx: sapio::contract::Context,
     ) -> Result<Option<Template>, CompilationError> {
         match &self.outcomes[range] {
-            [] => return Ok(None),
+            [] => Ok(None),
             [(_, a)] => Ok(Some(a.clone())),
             sl => Ok(Some(
                 ctx.template()
                     .add_output(
-                        self.amount.into(),
+                        self.amount,
                         &GenericBet {
                             amount: self.amount,
                             outcomes: sl.into(),

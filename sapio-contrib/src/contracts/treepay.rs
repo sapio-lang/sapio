@@ -41,7 +41,7 @@ impl TreePay {
             {
                 let mut amt = bitcoin::util::amount::Amount::from_sat(0);
                 for Payment { amount, .. } in c {
-                    amt += amount.clone().try_into()?;
+                    amt += (*amount).try_into()?;
                 }
                 builder = builder.add_output(
                     amt,

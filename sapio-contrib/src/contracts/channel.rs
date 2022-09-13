@@ -63,7 +63,7 @@ mod tests {
             bob: public_keys[1],
             amount: Amount::from_sat(1).into(),
             resolution,
-            db: db.clone(),
+            db,
         };
         println!(
             "{}",

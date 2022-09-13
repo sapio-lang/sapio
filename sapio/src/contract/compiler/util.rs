@@ -22,13 +22,12 @@ pub fn pick_key_from_miniscripts<'a, I: Iterator<Item = &'a Miniscript<XOnlyPubl
         .filter_map(|f| {
             if let Terminal::Check(check) = &f.node {
                 if let Terminal::PkK(k) = &check.node {
-                    return Some(k.clone());
+                    return Some(*k);
                 }
             }
             None
         })
         .next()
-        .map(|x| bitcoin::util::schnorr::UntweakedPublicKey::from(x))
         .unwrap_or(
             XOnlyPublicKey::from_slice(&Sha256::hash(&[1u8; 32]).into_inner()).expect("constant"),
         )

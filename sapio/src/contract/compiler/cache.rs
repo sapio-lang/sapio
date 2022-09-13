@@ -65,15 +65,13 @@ impl<T> GuardCache<T> {
                     ctx.internal_clone(InternalCompilerTag { _secret: () }),
                     simp_ctx.internal_clone(InternalCompilerTag { _secret: () }),
                 )?;
-                let r = v.insert(ent);
-                r
+
+                v.insert(ent)
             }
             std::collections::btree_map::Entry::Occupied(ref mut o) => o.get_mut(),
         };
         match r {
-            Some(CacheEntry::Cached(s, v)) => {
-                Ok(Some((s.clone(), v.iter().map(|e| e.clone()).collect())))
-            }
+            Some(CacheEntry::Cached(s, v)) => Ok(Some((s.clone(), v.to_vec()))),
             Some(CacheEntry::Fresh(f, s)) => Ok(Some((
                 f(t, ctx),
                 match s {
@@ -105,9 +103,9 @@ pub(crate) fn create_guards<T>(
         .iter()
         .map(|x| &x.0)
         .filter(|x| **x != Clause::Trivial)
-        .map(|x| x.clone())
+        .cloned()
         .collect(); // no point in using any Trivials
-    if clauses.len() == 0 {
+    if clauses.is_empty() {
         Ok((Clause::Trivial, v))
     } else if clauses.len() == 1 {
         Ok((clauses.pop().unwrap(), v))

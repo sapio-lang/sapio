@@ -106,9 +106,9 @@ impl TicTacToe {
                 for i in 0..3 {
                     let mut i_ctx = ctx.derive_num(i as u64)?;
                     for j in 0..3 {
-                        if let None = self.board.0[i][j] {
+                        if self.board.0[i][j].is_none() {
                             let j_ctx = i_ctx.derive_num(j as u64)?;
-                            let mut bcopy = self.board.clone();
+                            let mut bcopy = self.board;
                             bcopy.0[i][j] = Some(self.whose_turn);
                             let tmpl = j_ctx
                                 .template()

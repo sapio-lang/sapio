@@ -44,7 +44,7 @@ impl Contract for ExampleA {
 
 trait BState: JsonSchema {
     fn get_n(_n: u8, max: u8) -> u8 {
-        return max;
+        max
     }
 }
 #[derive(JsonSchema, Serialize, Deserialize)]
@@ -54,7 +54,7 @@ impl BState for Start {}
 struct Finish;
 impl BState for Finish {
     fn get_n(n: u8, _max: u8) -> u8 {
-        return n;
+        n
     }
 }
 
@@ -145,12 +145,10 @@ impl ExampleCompileIf {
     fn should_escrow(self, _ctx: Context) {
         if self.escrow_disable {
             ConditionalCompileType::Never
+        } else if self.escrow_required_no_conflict_disabled {
+            ConditionalCompileType::Required
         } else {
-            if self.escrow_required_no_conflict_disabled {
-                ConditionalCompileType::Required
-            } else {
-                ConditionalCompileType::Skippable
-            }
+            ConditionalCompileType::Skippable
         }
     }
     /// `must_escrow` requires that any depending branch be taken.

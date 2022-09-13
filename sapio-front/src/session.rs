@@ -62,8 +62,8 @@ where
     T: for<'a> Deserialize<'a> + Compilable,
 {
     let t: T = serde_json::from_value(s).map_err(SessionError::Json)?;
-    let c = ctx.compile(t).map_err(SessionError::Compiler);
-    c
+
+    ctx.compile(t).map_err(SessionError::Compiler)
 }
 
 /// Create a compiled object of type `T` from a JSON which we first pass through
@@ -78,10 +78,9 @@ where
     SessionError: From<E>,
 {
     let t: C = serde_json::from_value(s).map_err(SessionError::Json)?;
-    let c = ctx
-        .compile(T::try_from(t).map_err(SessionError::from)?)
-        .map_err(SessionError::Compiler);
-    c
+
+    ctx.compile(T::try_from(t).map_err(SessionError::from)?)
+        .map_err(SessionError::Compiler)
 }
 
 /// An action requested by the client
@@ -229,9 +228,7 @@ impl MenuBuilder {
     fn gen_menu(&self) -> Value {
         json!({
             "$schema": "http://json-schema.org/draft-07/schema#",
-            "oneOf": self.menu.iter().cloned().map(|x| {
-            x
-        }).collect::<Vec<RootSchema>>(),
+            "oneOf": self.menu.to_vec(),
 
         })
     }
@@ -323,8 +320,8 @@ impl Session {
     /// and react to it.
     pub fn handle(&mut self, m: Msg<'_>) -> Result<Option<Reaction>, serde_json::Error> {
         let action: Action = match m {
-            Msg::Text(m) => serde_json::from_str(&m),
-            Msg::Bytes(m) => serde_json::from_slice(&m),
+            Msg::Text(m) => serde_json::from_str(m),
+            Msg::Bytes(m) => serde_json::from_slice(m),
         }?;
         Ok(action.react(self))
     }

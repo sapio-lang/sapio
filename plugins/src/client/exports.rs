@@ -63,7 +63,7 @@ extern "C" fn sapio_v1_wasm_plugin_client_allocate_bytes(len: u32) -> *mut c_cha
     CString::new(vec![1; len as usize]).unwrap().into_raw()
 }
 
-pub(crate) static mut SAPIO_PLUGIN_NAME: &'static str = "Unnamed";
+pub(crate) static mut SAPIO_PLUGIN_NAME: &str = "Unnamed";
 
 /// Gets a name for the plugin.
 /// host must drop the returned pointer.
@@ -74,7 +74,7 @@ unsafe extern "C" fn sapio_v1_wasm_plugin_client_get_name() -> *mut c_char {
         .into_raw()
 }
 
-pub(crate) static mut SAPIO_PLUGIN_LOGO: &'static [u8] = include_bytes!("logo.png");
+pub(crate) static mut SAPIO_PLUGIN_LOGO: &[u8] = include_bytes!("logo.png");
 /// Gets a name for the plugin.
 /// host must drop the returned pointer.
 #[no_mangle]

@@ -149,7 +149,7 @@ impl Request {
     async fn get_emulator(&self) -> ResultT<Arc<dyn CTVEmulator>> {
         let emulator: Arc<dyn CTVEmulator> = if let Some(emcfg) = &self.context.emulator {
             if emcfg.enabled {
-                emcfg.get_emulator()?.into()
+                emcfg.get_emulator()?
             } else {
                 Arc::new(CTVAvailable)
             }
@@ -229,7 +229,7 @@ impl Request {
             Command::Logo(_logo) => {
                 let sph = default_sph()?.await?;
                 Ok(CommandReturn::Logo(LogoReturn {
-                    logo: sph.get_logo()?.into(),
+                    logo: sph.get_logo()?,
                 }))
             }
             Command::Info(_info) => {

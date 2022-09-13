@@ -67,7 +67,7 @@ impl Object {
                 root_path.clone(),
                 SapioStudioObject {
                     metadata: metadata.clone(),
-                    out: out,
+                    out,
                     continue_apis: continue_apis.clone(),
                     txs: ctv_to_tx
                         .iter()
@@ -117,11 +117,11 @@ impl Object {
                                             builder = builder.add_leaf(depth, script)?;
                                         }
                                         let info = if added {
-                                            builder.finalize(&secp, t.internal_key().clone())?
+                                            builder.finalize(&secp, *t.internal_key())?
                                         } else {
                                             TaprootSpendInfo::new_key_spend(
                                                 &secp,
-                                                t.internal_key().clone(),
+                                                *t.internal_key(),
                                                 None,
                                             )
                                         };

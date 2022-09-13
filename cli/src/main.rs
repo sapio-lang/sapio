@@ -289,7 +289,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let emulator: Arc<dyn CTVEmulator> = if let Some(emcfg) = &config.active.emulator_nodes
             {
                 if emcfg.enabled {
-                    emcfg.get_emulator()?.into()
+                    emcfg.get_emulator()?
                 } else {
                     Arc::new(CTVAvailable)
                 }
@@ -301,7 +301,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut emulator = emulator.clone();
                 // Drop Emulator from own thread...
                 std::thread::spawn(move || loop {
-                    if let Some(_) = Arc::get_mut(&mut emulator) {
+                    if Arc::get_mut(&mut emulator).is_some() {
                         break;
                     }
                 });
@@ -384,7 +384,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let emulator_args = config.active.emulator_nodes;
             let plugin_map = config.active.plugin_map.map(|x| {
                 x.into_iter()
-                    .map(|(x, y)| (x.into_bytes().into(), y.into()))
+                    .map(|(x, y)| (x.into_bytes(), y.into()))
                     .collect()
             });
             let context = |args: &clap::ArgMatches| -> Result<Common, &'static str> {
@@ -412,12 +412,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let client_url = config.active.api_node.url.clone();
                     let client_auth = config.active.api_node.auth.clone();
                     Request {
-                        context: context(&args)?,
-                        command: bind_command(&args, client_url, client_auth).await?,
+                        context: context(args)?,
+                        command: bind_command(args, client_url, client_auth).await?,
                     }
                 }
                 Some(("list", args)) => Request {
-                    context: context(&args)?,
+                    context: context(args)?,
                     command: Command::List(List),
                 },
                 Some(("create", args)) => {
@@ -430,24 +430,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         serde_json::from_str(&s)?
                     };
                     Request {
-                        context: context(&args)?,
+                        context: context(args)?,
                         command: Command::Call(Call { params }),
                     }
                 }
                 Some(("api", args)) => Request {
-                    context: context(&args)?,
+                    context: context(args)?,
                     command: Command::Api(Api),
                 },
                 Some(("logo", args)) => Request {
-                    context: context(&args)?,
+                    context: context(args)?,
                     command: Command::Logo(Logo),
                 },
                 Some(("info", args)) => Request {
-                    context: context(&args)?,
+                    context: context(args)?,
                     command: Command::Info(Info),
                 },
                 Some(("load", args)) => Request {
-                    context: context(&args)?,
+                    context: context(args)?,
                     command: Command::Load(Load),
                 },
                 _ => unreachable!(),

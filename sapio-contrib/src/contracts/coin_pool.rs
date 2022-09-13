@@ -146,14 +146,14 @@ impl TryFrom<UpdateTypes> for Option<CoinPoolUpdate> {
                 external_amount,
                 payouts,
             } => Ok(Some(CoinPoolUpdate {
-                add_inputs: add_inputs.unwrap_or(vec![]),
-                external_amount: external_amount.into(),
+                add_inputs: add_inputs.unwrap_or_default(),
+                external_amount,
                 payouts: payouts
-                    .unwrap_or(vec![])
+                    .unwrap_or_default()
                     .iter()
                     .map(|(a, b)| {
-                        let k: Arc<Mutex<dyn Compilable>> = Arc::new(Mutex::new(a.clone()));
-                        (k, (*b).into())
+                        let k: Arc<Mutex<dyn Compilable>> = Arc::new(Mutex::new(*a));
+                        (k, (*b))
                     })
                     .collect(),
             })),
