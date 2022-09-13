@@ -295,8 +295,8 @@ where
             }
         }
         for guard_simps in all_guard_simps.values_mut() {
-            guard_simps.sort_by_key(|k| Arc::as_ptr(k));
-            guard_simps.dedup_by(|a, b| Arc::ptr_eq(a, b));
+            guard_simps.sort_by_key(|k| k as *const _ as usize);
+            guard_simps.dedup_by(|a, b| a as *const _ as usize == b as *const _ as usize)
         }
 
         let branches: Vec<Miniscript<XOnlyPublicKey, Tap>> = {
