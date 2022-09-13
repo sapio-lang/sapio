@@ -4,6 +4,8 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+//! join together CTVEmulators as a multisig
+
 use super::*;
 /// Creates a multi-condition emulator with a certain threshold.
 /// It implements CTVEmulator so that it itself can be used as a trait object.
@@ -13,6 +15,7 @@ pub struct FederatedEmulatorConnection {
 }
 
 impl FederatedEmulatorConnection {
+    /// create a new federated emulator connection from a list + threshold of emulators
     pub fn new(emulators: Vec<Arc<dyn CTVEmulator>>, threshold: u8) -> Self {
         FederatedEmulatorConnection {
             emulators,

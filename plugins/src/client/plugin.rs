@@ -13,8 +13,11 @@ use sapio_base::serialization_helpers::SArc;
 
 use std::convert::TryFrom;
 
+/// Represents any type which can be treated as a module
 pub trait Callable {
+    /// The result type to be produced
     type Output;
+    /// Call the function
     fn call(&self, ctx: Context) -> Result<Self::Output, CompilationError>;
 }
 impl<T> Callable for T
@@ -43,7 +46,7 @@ where
     // We must be able to serialize/describe the outputs
     Self::Output: Serialize + JsonSchema,
 {
-    // A type which wraps Self, but can be converted into Self.
+    /// A type which wraps Self, but can be converted into Self.
     type InputWrapper;
     /// gets the jsonschema for the plugin type, which is the API for calling create.
     fn get_api_inner() -> *mut c_char {
@@ -56,6 +59,7 @@ where
         encode_json(&res)
     }
 
+    /// creates an instance of the plugin from a json pointer and outputs a typed result
     unsafe fn create_result(
         p: *mut c_char,
         c: *mut c_char,
@@ -172,6 +176,7 @@ macro_rules! REGISTER {
     };
 }
 
+/// If a logo file is specified, use it.
 #[macro_export]
 macro_rules! optional_logo {
     () => {

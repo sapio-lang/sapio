@@ -4,7 +4,7 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-///! Host based Emulator
+//! Host based Emulator
 use crate::client::ext::*;
 use bitcoin::hashes::Hash;
 use sapio_ctv_emulator_trait::CTVEmulator;

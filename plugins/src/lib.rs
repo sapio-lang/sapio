@@ -4,34 +4,23 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-#[deny(missing_docs)]
+#![deny(missing_docs)]
+//! module interfaces for sapio clients and hosts
 use sapio::contract::{Compilable, Context};
+pub use sapio_base::plugin_args::*;
 use schemars::schema::RootSchema;
 use schemars::JsonSchema;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use std::ffi::CString;
 use std::marker::PhantomData;
 use std::os::raw::c_char;
 use std::sync::Arc;
 
-fn json_wrapped_string<'de, D, T>(d: D) -> Result<T, D::Error>
-where
-    D: Deserializer<'de>,
-    T: for<'t> Deserialize<'t>,
-{
-    let s = String::deserialize(d)?;
-    serde_json::from_str(&s).map_err(serde::de::Error::custom)
-}
-
-#[cfg(feature = "host")]
-pub mod host;
-
 #[cfg(feature = "client")]
 pub mod client;
-
+#[cfg(feature = "host")]
+pub mod host;
 pub mod plugin_handle;
-
-pub use sapio_base::plugin_args::*;
 
 /// A bundle of input/output types
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -48,6 +37,7 @@ where
     Input: JsonSchema,
     Output: JsonSchema,
 {
+    /// Create a new API for this type with freshly generated schemas
     pub fn new() -> Self {
         API {
             arguments: schemars::schema_for!(Input),
@@ -55,9 +45,11 @@ where
             _pd: Default::default(),
         }
     }
+    /// get the input schema for this type as a reference
     pub fn input(&self) -> &RootSchema {
         &self.arguments
     }
+    /// get the output schema for this type as a reference
     pub fn output(&self) -> &RootSchema {
         &self.returns
     }

@@ -4,7 +4,10 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-#[deny(missing_docs)]
+#![deny(missing_docs)]
+
+//! command line interface for manipulating sapio contracts and other related tasks
+
 use crate::contracts::server::Server;
 use crate::contracts::Api;
 use crate::contracts::Bind;

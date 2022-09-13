@@ -4,6 +4,8 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+//! host interface for modules
+
 pub use crate::plugin_handle::PluginHandle;
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::Hash;
@@ -26,26 +28,40 @@ pub mod wasm_cache;
 /// Also handles the imports of plugin-side functions
 #[derive(WasmerEnv, Clone)]
 pub struct HostEnvironmentInner {
+    /// the module file path
     pub path: PathBuf,
+    /// the currently running module's hash
     pub this: [u8; 32],
+    /// a mapping of identifiers to module hashes
     pub module_map: BTreeMap<Vec<u8>, [u8; 32]>,
+    /// the  global store of this runtime
     pub store: Arc<Mutex<Store>>,
+    /// which network the contract is being built for
     pub net: bitcoin::Network,
+    /// an emulator plugin for CTV functionality
     pub emulator: Arc<dyn CTVEmulator>,
+    /// reference to the environment's memory space
     #[wasmer(export)]
     pub memory: LazyInit<Memory>,
+    /// reference to allocation creation function
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_allocate_bytes"))]
     pub allocate_wasm_bytes: LazyInit<NativeFunc<i32, i32>>,
+    /// reference to get_api function
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_get_create_arguments"))]
     pub get_api: LazyInit<NativeFunc<(), i32>>,
+    /// reference to get_name function
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_get_name"))]
     pub get_name: LazyInit<NativeFunc<(), i32>>,
+    /// reference to get_logo function
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_get_logo"))]
     pub get_logo: LazyInit<NativeFunc<(), i32>>,
+    /// reference to allocation drop function
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_drop_allocation"))]
     pub forget: LazyInit<NativeFunc<i32, ()>>,
+    /// reference to create function
     #[wasmer(export(name = "sapio_v1_wasm_plugin_client_create"))]
     pub create: LazyInit<NativeFunc<(i32, i32), i32>>,
+    /// reference to entry point function
     #[wasmer(export(name = "sapio_v1_wasm_plugin_entry_point"))]
     pub init: LazyInit<NativeFunc<(), ()>>,
 }
