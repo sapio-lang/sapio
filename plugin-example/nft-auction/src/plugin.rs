@@ -1,3 +1,12 @@
+// Copyright Judica, Inc 2021
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+//  License, v. 2.0. If a copy of the MPL was not distributed with this
+//  file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#![deny(missing_docs)]
+
+//! NFT Auction
+
 use bitcoin::util::amount::Amount;
 use sapio::contract::CompilationError;
 use sapio::contract::Contract;
@@ -12,12 +21,8 @@ use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
 use std::convert::TryFrom;
-#![deny(missing_docs)]
-// Copyright Judica, Inc 2021
-//
-// This Source Code Form is subject to the terms of the Mozilla Public
-//  License, v. 2.0. If a copy of the MPL was not distributed with this
-//  file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+
 use std::sync::Arc;
 
 /// # Dutch Auction Data
@@ -68,6 +73,7 @@ impl DutchAuctionData {
     }
 }
 
+/// NFT Dutch Auction Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct NFTDutchAuction {
     /// This data can be specified directly, or default derived from main

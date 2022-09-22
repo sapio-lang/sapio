@@ -4,6 +4,9 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #![deny(missing_docs)]
+
+//! Op Return Chain
+
 use sapio::*;
 use sapio_contrib::contracts::op_return_chain::ChainReturn;
 use sapio_wasm_plugin::client::*;

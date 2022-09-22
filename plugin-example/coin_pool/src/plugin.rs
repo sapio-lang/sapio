@@ -3,9 +3,11 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+//! Coin Pool
+
 #![deny(missing_docs)]
 use crate::sapio_base::Clause;
-
 use sapio::contract::*;
 use sapio::util::amountrange::AmountF64;
 use sapio::*;

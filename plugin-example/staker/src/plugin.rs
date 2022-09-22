@@ -5,6 +5,9 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 #![deny(missing_docs)]
+
+//! Staker Contract
+
 use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
 use schemars::*;

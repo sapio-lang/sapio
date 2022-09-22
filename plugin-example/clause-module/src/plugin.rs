@@ -4,6 +4,9 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+//! Clause Module for showing non-sapio compiled object types
+
+
 #![deny(missing_docs)]
 use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
@@ -17,6 +20,7 @@ use serde::Deserialize;
 use std::convert::{TryFrom, TryInto};
 use sapio_wasm_plugin::client::plugin::Callable;
 
+/// Get a Clause for two parties to OR together
 #[derive(JsonSchema, Deserialize)]
 pub struct GetClause {
     // TODO: Taproot Fix Encoding
