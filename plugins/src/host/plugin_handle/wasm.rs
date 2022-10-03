@@ -67,6 +67,34 @@ pub struct WasmPluginHandle<Output> {
     net: bitcoin::Network,
     _pd: PhantomData<Output>,
 }
+
+impl<T> WasmPluginHandle<T> {
+    /// Clone with a new memory space/instance
+    pub fn fresh_clone(&self) -> Result<Self, Box<dyn Error + Send + Sync>> {
+        let instance = Instance::new(&self.module, &self.import_object)?;
+        use wasmer::WasmerEnv;
+        let mut new_env = self.env.clone();
+        new_env.init_with_instance(&instance)?;
+
+        new_env
+            .lock()
+            .unwrap()
+            .init_ref()
+            .ok_or("No Init Function Specified")?
+            .call()?;
+
+        Ok(WasmPluginHandle {
+            store: self.store.clone(),
+            env: new_env,
+            net: self.net,
+            import_object: self.import_object.clone(),
+            module: self.module.clone(),
+            instance,
+            key: self.key,
+            _pd: Default::default(),
+        })
+    }
+}
 impl<Output> WasmPluginHandle<Output> {
     /// the cache ID for this plugin
     pub fn id(&self) -> WASMCacheID {
