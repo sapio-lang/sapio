@@ -3,9 +3,11 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#![deny(missing_docs)]
+
+//! TreePay is a basic congestion controlled payment
 
 use batching_trait::{BatchingTraitVersion0_1_1, Payment};
-#![deny(missing_docs)]
 use sapio::contract::*;
 use sapio::util::amountrange::*;
 use sapio::*;

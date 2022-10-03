@@ -4,6 +4,9 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+
+//! Hello World Contract
+
 #![deny(missing_docs)]
 use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::*;
@@ -17,6 +20,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use std::convert::{TryFrom, TryInto};
 
+/// Trustless Escrow Contract
 #[derive(JsonSchema, Deserialize)]
 pub struct TrustlessEscrow {
     // TODO: Taproot Fix Encoding

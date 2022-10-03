@@ -5,6 +5,9 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 //! Payment Pool Contract for Sapio Studio Advent Calendar Entry
 #![deny(missing_docs)]
+
+//! Payment Pool Contract
+
 use crate::sapio_base::Clause;
 
 use bitcoin::hashes::sha256;

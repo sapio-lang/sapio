@@ -5,6 +5,9 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 #![deny(missing_docs)]
+
+//! Trampoline Payment (basic congestion control)
+
 use batching_trait::{BatchingModule, BatchingTraitVersion0_1_1};
 
 use sapio::contract::*;

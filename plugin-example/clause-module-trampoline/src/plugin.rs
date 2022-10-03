@@ -3,6 +3,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
+//
+//! Clause Module Example
 
 #![deny(missing_docs)]
 use sapio_wasm_plugin::plugin_handle::PluginHandle;
@@ -23,6 +25,7 @@ use serde::Serialize;
 use bitcoin::XOnlyPublicKey;
 use std::str::FromStr;
 
+/// Same Inner type as the wrapped module
 #[derive(JsonSchema, Deserialize, Serialize, Clone)]
 pub struct GetClause {
     // TODO: Taproot Fix Encoding
@@ -32,6 +35,8 @@ pub struct GetClause {
     #[schemars(with = "bitcoin::hashes::sha256::Hash")]
     bob: bitcoin::XOnlyPublicKey,
 }
+
+/// Wrapper to find the ClauseModule remotely
 #[derive(JsonSchema, Deserialize)]
 pub struct Wrapper {
     g: GetClause,
