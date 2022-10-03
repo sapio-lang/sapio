@@ -274,11 +274,8 @@ where
                     for simp in func.gen_simps(self_ref, simp_ctx)? {
                         cp = cp.add_simp(simp.as_ref())?;
                     }
-                    (
-                        Some((SArc(effect_path), cp)),
-                        vec![guards.compile().map_err(Into::<CompilationError>::into)?],
-                        guard_metadata,
-                    )
+                    let v = optimizer_flatten_and_compile(guards)?;
+                    (Some((SArc(effect_path), cp)), v, guard_metadata)
                 })
             })
             .collect::<Result<Vec<(_, Vec<Miniscript<XOnlyPublicKey, Tap>>, _)>, CompilationError>>(
@@ -315,11 +312,16 @@ where
                     guard_clauses.get(self_ref, *func, c, simp_c).transpose()
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            guards
-                .iter()
-                .map(|(policy, _m)| policy.compile().map_err(Into::<CompilationError>::into))
-                .chain(clause_accumulator.into_iter().flatten().map(Ok))
-                .collect::<Result<Vec<_>, _>>()?
+            let all_g = guards
+                .into_iter()
+                .map(|(policy, _m)| optimizer_flatten_and_compile(policy))
+                .collect::<Result<Vec<_>, _>>()?;
+
+            all_g
+                .into_iter()
+                .chain(clause_accumulator.into_iter())
+                .flatten()
+                .collect()
         };
         // TODO: Pick a better branch that is guaranteed to work!
         let some_key = pick_key_from_miniscripts(branches.iter());
@@ -357,6 +359,16 @@ where
             })
         }
     }
+}
+
+fn optimizer_flatten_and_compile(
+    guards: policy::Concrete<XOnlyPublicKey>,
+) -> Result<Vec<Miniscript<XOnlyPublicKey, Tap>>, CompilationError> {
+    let v = optimizer_flatten_policy(guards)
+        .into_iter()
+        .map(|g| g.compile())
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(v)
 }
 
 fn combine_txtmpls(
@@ -397,5 +409,18 @@ fn combine_txtmpls(
                     .map_err(Into::<CompilationError>::into)
             })
             .collect::<Result<Vec<_>, _>>()?),
+    }
+}
+
+fn optimizer_flatten_policy(p: Clause) -> Vec<Clause> {
+    match p {
+        policy::Concrete::Or(v) => v
+            .into_iter()
+            .flat_map(|(_, b)| optimizer_flatten_policy(b))
+            .collect(),
+        policy::Concrete::Threshold(1, v) => {
+            v.into_iter().flat_map(optimizer_flatten_policy).collect()
+        }
+        p => vec![p],
     }
 }
