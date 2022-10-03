@@ -296,7 +296,7 @@ where
         }
         for guard_simps in all_guard_simps.values_mut() {
             guard_simps.sort_by_key(|k| k as *const _ as usize);
-            guard_simps.dedup_by(|a, b| a as *const _ as usize == b as *const _ as usize)
+            guard_simps.dedup_by(|a, b| std::ptr::eq(a, b))
         }
 
         let branches: Vec<Miniscript<XOnlyPublicKey, Tap>> = {
