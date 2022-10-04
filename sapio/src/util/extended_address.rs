@@ -9,7 +9,7 @@
 //! stuff.
 
 use crate::contract::object::ObjectError;
-use bitcoin::{Script, XOnlyPublicKey, Address};
+use bitcoin::{Address, Script, XOnlyPublicKey};
 use miniscript::{Descriptor, DescriptorTrait};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

@@ -9,7 +9,7 @@
 use std::{
     collections::BTreeMap,
     marker::PhantomData,
-    ops::{Index, Shl, ShlAssign, Shr},
+    ops::{ShlAssign, Shr},
 };
 
 use serde_json::Value;
@@ -161,14 +161,14 @@ impl ShlAssign<Box<dyn SIMP>> for BTreeMap<i64, Box<dyn SIMP>> {
 
 impl<'a, T: SIMP, V> Shr<BySIMP<T>> for &'a BTreeMap<i64, V> {
     type Output = Option<&'a V>;
-    fn shr(self, rhs: BySIMP<T>) -> Self::Output {
+    fn shr(self, _rhs: BySIMP<T>) -> Self::Output {
         self.get(&T::static_get_protocol_number())
     }
 }
 
 impl<'a, T: SIMP, V> Shr<BySIMP<T>> for &'a mut BTreeMap<i64, V> {
     type Output = Option<&'a mut V>;
-    fn shr(self, rhs: BySIMP<T>) -> Self::Output {
+    fn shr(self, _rhs: BySIMP<T>) -> Self::Output {
         self.get_mut(&T::static_get_protocol_number())
     }
 }

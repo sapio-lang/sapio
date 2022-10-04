@@ -18,7 +18,7 @@ use sapio_base::Clause;
 use serde_json::Value;
 
 use core::marker::PhantomData;
-use schemars::schema::RootSchema;
+
 use serde::Deserialize;
 use std::sync::Arc;
 
