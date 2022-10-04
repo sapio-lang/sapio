@@ -9,7 +9,8 @@
 //! stuff.
 
 use crate::contract::object::ObjectError;
-use bitcoin::{Address, Script};
+use bitcoin::{Script, XOnlyPublicKey, Address};
+use miniscript::{Descriptor, DescriptorTrait};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -20,7 +21,9 @@ use std::convert::TryFrom;
 #[serde(untagged)]
 pub enum ExtendedAddress {
     /// A regular standard address type
-    Address(bitcoin::Address),
+    Address(Address),
+    /// When we know the descriptor
+    Descriptor(Descriptor<XOnlyPublicKey>),
     /// An OP_RETURN
     OpReturn(OpReturn),
     /// Unknown
@@ -69,6 +72,11 @@ impl From<Address> for ExtendedAddress {
         ExtendedAddress::Address(a)
     }
 }
+impl From<Descriptor<XOnlyPublicKey>> for ExtendedAddress {
+    fn from(a: Descriptor<XOnlyPublicKey>) -> Self {
+        ExtendedAddress::Descriptor(a)
+    }
+}
 
 impl From<ExtendedAddress> for Script {
     fn from(s: ExtendedAddress) -> Self {
@@ -76,6 +84,7 @@ impl From<ExtendedAddress> for Script {
             ExtendedAddress::Address(a) => a.script_pubkey(),
             ExtendedAddress::OpReturn(OpReturn(s)) => s,
             ExtendedAddress::Unknown(s) => s,
+            ExtendedAddress::Descriptor(d) => d.script_pubkey(),
         }
     }
 }
