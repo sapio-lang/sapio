@@ -9,13 +9,13 @@
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::simp::{SIMPAttachableAt, SIMPError, SIMP};
 use sapio_base::{effects::EffectPath, simp::ContinuationPointLT};
-use schemars::schema::RootSchema;
+
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::BTreeMap, sync::Arc};
 /// Instructions for how to resume a contract compilation at a given point
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 pub struct ContinuationPoint {
     /// The arguments required at this point
     /// TODO: De-Duplicate repeated types?

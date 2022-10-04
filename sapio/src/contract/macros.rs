@@ -8,7 +8,7 @@
 
 use core::any::TypeId;
 pub use paste::paste;
-use schemars::schema::RootSchema;
+
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::sync::Arc;
