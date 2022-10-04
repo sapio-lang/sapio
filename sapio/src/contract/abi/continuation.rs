@@ -60,7 +60,9 @@ mod test {
     #[test]
     fn test_continuation_point_ser() -> Result<(), Box<dyn std::error::Error>> {
         let a: ContinuationPoint = ContinuationPoint::at(
-            Some(Arc::new(serde_json::to_value(&schemars::schema_for!(ContinuationPoint)).unwrap())),
+            Some(Arc::new(
+                serde_json::to_value(&schemars::schema_for!(ContinuationPoint)).unwrap(),
+            )),
             EffectPath::push(None, PathFragment::Named(SArc(Arc::new("one".into())))),
         );
         let b: ContinuationPoint = serde_json::from_str(&format!(
