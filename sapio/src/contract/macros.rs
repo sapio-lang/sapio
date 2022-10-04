@@ -9,6 +9,7 @@
 use core::any::TypeId;
 pub use paste::paste;
 use schemars::schema::RootSchema;
+use serde_json::Value;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -101,19 +102,19 @@ macro_rules! decl_then {
 }
 
 lazy_static::lazy_static! {
-static ref SCHEMA_MAP: Mutex<BTreeMap<TypeId, Arc<RootSchema>>> =
+static ref SCHEMA_MAP: Mutex<BTreeMap<TypeId, Arc<Value>>> =
 Mutex::new(BTreeMap::new());
 }
 /// `get_schema_for` returns a cached RootSchema for a given type.  this is
 /// useful because we might expect to generate the same RootSchema many times,
 /// and they can use a decent amount of memory.
 pub fn get_schema_for<T: schemars::JsonSchema + 'static + Sized>(
-) -> Arc<schemars::schema::RootSchema> {
+) -> Arc<Value> {
     SCHEMA_MAP
         .lock()
         .unwrap()
         .entry(TypeId::of::<T>())
-        .or_insert_with(|| Arc::new(schemars::schema_for!(T)))
+        .or_insert_with(|| Arc::new(serde_json::to_value(schemars::schema_for!(T)).expect("Schema must be able to convert to JSON")))
         .clone()
 }
 
