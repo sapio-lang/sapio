@@ -329,7 +329,9 @@ where
         let tree = branches_to_tree(branches);
         let descriptor = Descriptor::Tr(descriptor::Tr::new(some_key, tree)?);
         let estimated_max_size = descriptor.max_satisfaction_weight()?;
-        let address = descriptor.address(ctx.network)?.into();
+        // TODO: Convert into an address instead of keeping descriptor,
+        // hot-fix workaround
+        let address = descriptor.clone().into();
         let descriptor = Some(descriptor.into());
         let root_path = SArc(ctx.path().clone());
 
