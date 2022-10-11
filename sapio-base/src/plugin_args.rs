@@ -40,8 +40,8 @@ pub struct ContextualArguments {
     #[serde(with = "NetworkDef")]
     /// # The Network the contract should be created for.
     pub network: bitcoin::Network,
-    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
-    #[schemars(with = "f64")]
+    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    #[schemars(with = "u64")]
     /// # The Amount of Funds Available to the Contract as Bitcoin.
     pub amount: bitcoin::util::amount::Amount,
 
