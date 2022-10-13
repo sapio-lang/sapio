@@ -85,25 +85,24 @@ fn compute_all_effects<C, A: Default>(
     func: &dyn CallableAsFoF<C, A>,
 ) -> TxTmplIt {
     let default_applied_effect_ctx = top_effect_ctx.derive(PathFragment::DefaultEffect)?;
-    let def = func.call(self_ref, default_applied_effect_ctx, Default::default());
-    if func.web_api() {
-        def
-    } else {
-        let mut applied_effects_ctx = top_effect_ctx.derive(PathFragment::Effects)?;
-        top_effect_ctx
-            .get_effects(InternalCompilerTag { _secret: () })
-            .get_value(top_effect_ctx.path())
-            // always gets the default expansion, but will also attempt
-            // operating with the effects passed in through the Context Object.
-            .fold(def, |a: TxTmplIt, (k, arg)| -> TxTmplIt {
-                let v = a?;
-                let c = applied_effects_ctx
-                    .derive(PathFragment::Named(SArc(k.clone())))
-                    .expect(UNIQUE_DERIVE_PANIC_MSG);
-                let w = func.call_json(self_ref, c, arg.clone())?;
-                Ok(Box::new(v.chain(w)))
-            })
+    let def = func.call(self_ref, default_applied_effect_ctx, Default::default())?;
+    if !func.web_api() {
+        return Ok(def);
     }
+    let mut applied_effects_ctx = top_effect_ctx.derive(PathFragment::Effects)?;
+    top_effect_ctx
+        .get_effects(InternalCompilerTag { _secret: () })
+        .get_value(top_effect_ctx.path())
+        // always gets the default expansion, but will also attempt
+        // operating with the effects passed in through the Context Object.
+        .fold(Ok(def), |a: TxTmplIt, (k, arg)| -> TxTmplIt {
+            let v = a?;
+            let c = applied_effects_ctx
+                .derive(PathFragment::Named(SArc(k.clone())))
+                .expect(UNIQUE_DERIVE_PANIC_MSG);
+            let w = func.call_json(self_ref, c, arg.clone())?;
+            Ok(Box::new(v.chain(w)))
+        })
 }
 
 struct Renamer {
