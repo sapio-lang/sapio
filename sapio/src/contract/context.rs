@@ -28,8 +28,7 @@ pub struct Context {
     emulator: Arc<dyn CTVEmulator>,
     /// which network is the contract building for?
     pub network: Network,
-    /// TODO: reversed linked list of ARCs to better de-duplicate memory.
-    path: Arc<EffectPath>,
+    path: EffectPath,
     already_derived: HashSet<PathFragment>,
     effects: Arc<MapEffectDB>,
 }
@@ -49,7 +48,7 @@ impl Context {
             emulator,
             network,
             // TODO: Should return Option Self if path is not length > 0
-            path: Arc::new(path),
+            path,
             already_derived: Default::default(),
             effects,
         }
@@ -63,7 +62,7 @@ impl Context {
         &self.effects
     }
     /// Gets this Context's Path, but does not clone (left to caller)
-    pub fn path(&self) -> &Arc<EffectPath> {
+    pub fn path(&self) -> &EffectPath {
         &self.path
     }
 
@@ -86,7 +85,7 @@ impl Context {
             Err(CompilationError::ContexPathAlreadyDerived)
         } else {
             self.already_derived.insert(path.clone());
-            let new_path = EffectPath::push(Some(self.path.clone()), path);
+            let new_path = self.path.push(path);
             Ok(Context {
                 available_funds: self.available_funds,
                 emulator: self.emulator.clone(),

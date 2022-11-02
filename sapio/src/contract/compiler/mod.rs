@@ -130,10 +130,10 @@ impl Renamer {
 
 #[derive(Default)]
 struct ContinueAPIs {
-    inner: BTreeMap<SArc<EffectPath>, ContinuationPoint>,
+    inner: BTreeMap<EffectPath, ContinuationPoint>,
 }
 
-type ContinueAPIEntry = Option<(SArc<EffectPath>, ContinuationPoint)>;
+type ContinueAPIEntry = Option<(EffectPath, ContinuationPoint)>;
 
 impl Extend<ContinueAPIEntry> for ContinueAPIs {
     fn extend<T>(&mut self, iter: T)
@@ -274,7 +274,7 @@ where
                         cp = cp.add_simp(simp.as_ref())?;
                     }
                     let v = optimizer_flatten_and_compile(guards)?;
-                    (Some((SArc(effect_path), cp)), v, guard_metadata)
+                    (Some((effect_path, cp)), v, guard_metadata)
                 })
             })
             .collect::<Result<Vec<(_, Vec<Miniscript<XOnlyPublicKey, Tap>>, _)>, CompilationError>>(
@@ -332,7 +332,7 @@ where
         // hot-fix workaround
         let address = descriptor.clone().into();
         let descriptor = Some(descriptor.into());
-        let root_path = SArc(ctx.path().clone());
+        let root_path = ctx.path().clone();
 
         let failed_estimate = comitted_txns.values().any(|a| {
             // witness space not scaled

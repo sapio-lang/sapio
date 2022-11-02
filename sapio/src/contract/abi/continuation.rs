@@ -21,15 +21,13 @@ pub struct ContinuationPoint {
     /// TODO: De-Duplicate repeated types?
     pub schema: Option<SArc<Value>>,
     /// The path at which this was compiled
-    #[serde(serialize_with = "sapio_base::serialization_helpers::serializer")]
-    #[serde(deserialize_with = "sapio_base::serialization_helpers::deserializer")]
-    pub path: Arc<EffectPath>,
+    pub path: EffectPath,
     /// Metadata for this particular Continuation Point
     pub simp: BTreeMap<i64, Value>,
 }
 impl ContinuationPoint {
     /// Creates a new continuation
-    pub fn at(schema: Option<Arc<Value>>, path: Arc<EffectPath>) -> Self {
+    pub fn at(schema: Option<Arc<Value>>, path: EffectPath) -> Self {
         ContinuationPoint {
             schema: schema.map(SArc),
             path,
@@ -63,7 +61,7 @@ mod test {
             Some(Arc::new(
                 serde_json::to_value(&schemars::schema_for!(ContinuationPoint)).unwrap(),
             )),
-            EffectPath::push(None, PathFragment::Named(SArc(Arc::new("one".into())))),
+            EffectPath::new().push(PathFragment::Named(SArc(Arc::new("one".into())))),
         );
         let b: ContinuationPoint = serde_json::from_str(&format!(
             "{{\"schema\":{},\"path\":\"one\",\"simp\":{{}}}}",

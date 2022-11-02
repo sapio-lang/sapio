@@ -5,7 +5,6 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Path  Fragments
-use crate::reverse_path::ReversePath;
 use crate::serialization_helpers::SArc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -81,8 +80,6 @@ pub enum ValidFragmentError {
     BranchParseError,
     /// name was using some reserved characters
     BadName(SArc<String>),
-    /// Other error
-    InvalidReversePath(&'static str),
 }
 
 impl std::error::Error for ValidFragmentError {}
@@ -125,31 +122,5 @@ impl TryFrom<&str> for PathFragment {
             }
             _ => return Err(ValidFragmentError::BadName(SArc(Arc::new(s.into())))),
         })
-    }
-}
-
-impl From<ReversePath<PathFragment>> for String {
-    fn from(r: ReversePath<PathFragment>) -> String {
-        let mut v: Vec<String> = r.iter().cloned().map(String::from).collect();
-        v.reverse();
-        v.join("/")
-    }
-}
-
-impl TryFrom<&str> for ReversePath<PathFragment> {
-    type Error = ValidFragmentError;
-    fn try_from(r: &str) -> Result<ReversePath<PathFragment>, Self::Error> {
-        let frags = r
-            .split('/')
-            .map(PathFragment::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
-        ReversePath::try_from(frags).map_err(ValidFragmentError::InvalidReversePath)
-    }
-}
-
-impl TryFrom<String> for ReversePath<PathFragment> {
-    type Error = ValidFragmentError;
-    fn try_from(r: String) -> Result<ReversePath<PathFragment>, Self::Error> {
-        Self::try_from(r.as_ref())
     }
 }

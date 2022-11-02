@@ -346,7 +346,7 @@ impl Bind {
             let out = tx.input[0].previous_output;
             let psbt = PartiallySignedTransaction::from_unsigned_tx(tx)?;
             bound.program.insert(
-                SArc(Arc::new("funding".try_into()?)),
+                "funding".try_into()?,
                 SapioStudioObject {
                     metadata: Default::default(),
                     out,

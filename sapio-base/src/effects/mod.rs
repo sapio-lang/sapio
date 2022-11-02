@@ -6,20 +6,18 @@
 
 //! general non-parameter compilation state required by all contracts
 
-use crate::reverse_path::ReversePath;
 use crate::serialization_helpers::SArc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use std::sync::Arc;
+pub mod effect_path;
+pub use effect_path::*;
 pub mod path_fragment;
 pub use path_fragment::*;
 pub mod reverse_path;
 pub use reverse_path::*;
-
-/// Convenience type name for an EffectPath
-pub type EffectPath = ReversePath<PathFragment>;
 
 /// Error types for EffectDB Accesses
 #[derive(Debug)]
@@ -38,7 +36,7 @@ pub trait EffectDB {
     /// internal implementation to retrieve a JSON for the path
     fn get_value<'a>(
         &'a self,
-        at: &Arc<EffectPath>,
+        at: &EffectPath,
     ) -> Box<dyn Iterator<Item = (&'a Arc<String>, &'a serde_json::Value)> + 'a>;
 }
 /// #  Effects
@@ -49,7 +47,7 @@ pub struct MapEffectDB {
     /// # The set of all effects
     /// List of effects to include while compiling.
     #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
-    effects: BTreeMap<SArc<EffectPath>, BTreeMap<SArc<String>, serde_json::Value>>,
+    effects: BTreeMap<EffectPath, BTreeMap<SArc<String>, serde_json::Value>>,
     #[serde(skip, default)]
     empty: BTreeMap<SArc<String>, serde_json::Value>,
 }
@@ -60,7 +58,7 @@ pub struct MapEffectDB {
 /// can fully replace it, without the concern of mutability for contract authors.
 pub struct EditableMapEffectDB {
     /// All Effects currently in the set of effects
-    pub effects: BTreeMap<SArc<EffectPath>, BTreeMap<SArc<String>, serde_json::Value>>,
+    pub effects: BTreeMap<EffectPath, BTreeMap<SArc<String>, serde_json::Value>>,
     /// Catch-all for extra data for future extension
     pub empty: BTreeMap<SArc<String>, serde_json::Value>,
 }
@@ -86,9 +84,9 @@ impl MapEffectDB {
 impl EffectDB for MapEffectDB {
     fn get_value<'a>(
         &'a self,
-        at: &Arc<EffectPath>,
+        at: &EffectPath,
     ) -> Box<dyn Iterator<Item = (&'a Arc<String>, &'a serde_json::Value)> + 'a> {
-        let r: &BTreeMap<_, _> = self.effects.get(&SArc(at.clone())).unwrap_or(&self.empty);
+        let r: &BTreeMap<_, _> = self.effects.get(at).unwrap_or(&self.empty);
         Box::new(r.iter().map(|(a, b)| (&a.0, b)))
     }
 }

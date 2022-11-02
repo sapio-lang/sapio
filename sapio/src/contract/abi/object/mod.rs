@@ -133,9 +133,9 @@ pub struct Object {
         skip_serializing_if = "BTreeMap::is_empty",
         default
     )]
-    pub continue_apis: BTreeMap<SArc<EffectPath>, ContinuationPoint>,
+    pub continue_apis: BTreeMap<EffectPath, ContinuationPoint>,
     /// The base location for the set of continue_apis.
-    pub root_path: SArc<EffectPath>,
+    pub root_path: EffectPath,
     /// The Object's address, or a Script if no address is possible
     pub address: ExtendedAddress,
     /// The Object's descriptor -- if there is one known/available
@@ -159,10 +159,8 @@ impl Object {
             ctv_to_tx: BTreeMap::new(),
             suggested_txs: BTreeMap::new(),
             continue_apis: Default::default(),
-            root_path: SArc(EffectPath::push(
-                None,
-                PathFragment::Named(SArc(Arc::new("".into()))),
-            )),
+            // TODO: Is this right? Do we actually want there to be an empty PathFragment here?
+            root_path: EffectPath::new().push(PathFragment::Named(SArc(Arc::new("".into())))),
             address: address.into(),
             descriptor: None,
             amount_range: a.unwrap_or_else(|| {
@@ -195,10 +193,7 @@ impl Object {
             ctv_to_tx: BTreeMap::new(),
             suggested_txs: BTreeMap::new(),
             continue_apis: Default::default(),
-            root_path: SArc(EffectPath::push(
-                None,
-                PathFragment::Named(SArc(Arc::new("".into()))),
-            )),
+            root_path: EffectPath::new().push(PathFragment::Named(SArc(Arc::new("".into())))),
             address: ExtendedAddress::make_op_return(data)?,
             descriptor: None,
             amount_range: AmountRange::new(),
@@ -217,10 +212,7 @@ impl Object {
             ctv_to_tx: BTreeMap::new(),
             suggested_txs: BTreeMap::new(),
             continue_apis: Default::default(),
-            root_path: SArc(EffectPath::push(
-                None,
-                PathFragment::Named(SArc(Arc::new("".into()))),
-            )),
+            root_path: EffectPath::new().push(PathFragment::Named(SArc(Arc::new("".into())))),
             address: d.address(bitcoin::Network::Bitcoin).unwrap().into(),
             descriptor: Some(d.into()),
             amount_range: a.unwrap_or_else(|| {

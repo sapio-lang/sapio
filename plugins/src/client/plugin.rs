@@ -88,15 +88,11 @@ where
             .to_str()
             .map_err(|e| CompilationError::InternalModuleError(format!("Path Invalid: {}", e)))?;
 
-        let parsed_rpath = serde_json::from_str(cstring_to_string)
+        let parsed_rpath: EffectPath = serde_json::from_str(cstring_to_string)
             .map_err(CompilationError::DeserializationError)?;
-        let path: EffectPath = EffectPath::push_owned(
-            Some(EffectPath::push(
-                Some(Arc::new(parsed_rpath)),
-                PathFragment::Root,
-            )),
-            PathFragment::Named(SArc(Arc::new(caller))),
-        );
+        let path = parsed_rpath
+            .push(PathFragment::Root)
+            .push(PathFragment::Named(SArc(Arc::new(caller))));
 
         let ctx = Context::new(
             network,
