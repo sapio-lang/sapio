@@ -160,7 +160,7 @@ impl Object {
             suggested_txs: BTreeMap::new(),
             continue_apis: Default::default(),
             // TODO: Is this right? Do we actually want there to be an empty PathFragment here?
-            root_path: EffectPath::new().push(PathFragment::Named(SArc(Arc::new("".into())))),
+            root_path: EffectPath::new().push(PathFragment::named("")),
             address: address.into(),
             descriptor: None,
             amount_range: a.unwrap_or_else(|| {
@@ -212,7 +212,7 @@ impl Object {
             ctv_to_tx: BTreeMap::new(),
             suggested_txs: BTreeMap::new(),
             continue_apis: Default::default(),
-            root_path: EffectPath::new().push(PathFragment::Named(SArc(Arc::new("".into())))),
+            root_path: EffectPath::new().push(PathFragment::named("")),
             address: d.address(bitcoin::Network::Bitcoin).unwrap().into(),
             descriptor: Some(d.into()),
             amount_range: a.unwrap_or_else(|| {

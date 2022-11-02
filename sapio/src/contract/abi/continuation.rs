@@ -61,7 +61,7 @@ mod test {
             Some(Arc::new(
                 serde_json::to_value(&schemars::schema_for!(ContinuationPoint)).unwrap(),
             )),
-            EffectPath::new().push(PathFragment::Named(SArc(Arc::new("one".into())))),
+            EffectPath::new().push(PathFragment::named("one")),
         );
         let b: ContinuationPoint = serde_json::from_str(&format!(
             "{{\"schema\":{},\"path\":\"one\",\"simp\":{{}}}}",

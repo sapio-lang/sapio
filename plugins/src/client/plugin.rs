@@ -92,7 +92,7 @@ where
             .map_err(CompilationError::DeserializationError)?;
         let path = parsed_rpath
             .push(PathFragment::Root)
-            .push(PathFragment::Named(SArc(Arc::new(caller))));
+            .push(PathFragment::named(caller));
 
         let ctx = Context::new(
             network,

@@ -47,6 +47,12 @@ pub enum PathFragment {
     /// a named branch at this level
     Named(SArc<String>),
 }
+impl PathFragment {
+    /// Convenience method for constructing a named PathFragment
+    pub fn named<T: Into<String>>(name: T) -> Self {
+        PathFragment::Named(SArc(Arc::new(name.into())))
+    }
+}
 
 impl From<PathFragment> for String {
     fn from(a: PathFragment) -> Self {
