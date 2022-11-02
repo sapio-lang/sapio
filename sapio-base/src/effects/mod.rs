@@ -16,8 +16,6 @@ pub mod effect_path;
 pub use effect_path::*;
 pub mod path_fragment;
 pub use path_fragment::*;
-pub mod reverse_path;
-pub use reverse_path::*;
 
 /// Error types for EffectDB Accesses
 #[derive(Debug)]
