@@ -56,10 +56,6 @@ version = "0.2.0"
 path = "../ctv_emulators"
 version = "0.2.0"
 
-[dependencies.sapio-front]
-path = "../sapio-front"
-version = "0.2.0"
-
 [dependencies.sapio-contrib]
 path = "../sapio-contrib"
 version = "0.2.0"
