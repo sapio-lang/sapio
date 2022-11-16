@@ -1,17 +1,16 @@
-use schemars::*;
+use sapio_data_repr::{SapioModuleBoundaryRepr, SapioModuleSchema};
 use serde::*;
-use serde_json::Value;
 
 pub trait SapioAPIHandle {
-    fn get_api(&self) -> serde_json::Value;
+    fn get_api(&self) -> SapioModuleSchema;
 }
-impl SapioAPIHandle for serde_json::Value {
+impl SapioAPIHandle for SapioModuleSchema {
     fn get_api(&self) -> Self {
         self.clone()
     }
 }
-pub trait SapioJSONTrait: JsonSchema + Serialize + for<'a> Deserialize<'a> {
-    fn get_example_for_api_checking() -> Value;
+pub trait SapioSchemaValidatable: Serialize + for<'a> Deserialize<'a> {
+    fn get_example_for_api_checking() -> SapioModuleBoundaryRepr;
     fn check_trait_implemented_inner(api: &dyn SapioAPIHandle) -> Result<(), String> {
         let tag = Self::get_example_for_api_checking();
         let japi = api.get_api();

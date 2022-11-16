@@ -11,7 +11,9 @@ description = "A programming framework for bitcoin smart contracts."
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-schemars = "0.8.0"
-serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
+
+[dependencies.sapio-data-repr]
+package = "sapio-data-repr"
+path = "../sapio-data-repr"
