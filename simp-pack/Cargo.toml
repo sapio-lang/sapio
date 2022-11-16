@@ -9,13 +9,15 @@ description = "Starter Pack of Sapio Interactive Metadata Protocols; currently n
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-schemars = "0.8.0"
-serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
+
 [dependencies.sapio-base]
 path = "../sapio-base"
 version = "0.2.0"
+
+[dependencies.sapio-data-repr]
+path = "../sapio-data-repr"
 
 [dependencies.bitcoin]
 package = "sapio-bitcoin"

@@ -7,16 +7,15 @@
 use sapio_base::simp::CompiledObjectLT;
 use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::simp::SIMP;
-use schemars::JsonSchema;
+use sapio_data_repr::SapioModuleBoundaryRepr;
 use serde::{Deserialize, Serialize};
 /// A URL to a project for convenience
-#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct URL {
-    #[schemars(url)]
     pub url: String,
 }
 /// An IPFS Based NFT Spec
-#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct IpfsNFT {
     /// The Content ID to be retrieved through IPFS
     pub cid: String,
@@ -28,11 +27,9 @@ pub struct IpfsNFT {
     pub of_edition_count: u64,
     /// The Artist's Public Key
     // TODO: fixup representation with patches to add more Schemars to bitcoin
-    #[schemars(with = "Option::<String>")]
     pub artist: Option<bitcoin::secp256k1::XOnlyPublicKey>,
     /// The signature of artist
     // TODO: fixup representation with patches to add more Schemars to bitcoin
-    #[schemars(with = "Option::<String>")]
     pub blessing: Option<bitcoin::secp256k1::schnorr::Signature>,
     /// If the NFT has a webpage (legacy web)
     pub softlink: Option<URL>,
@@ -68,15 +65,17 @@ impl SIMP for IpfsNFT {
         Self::static_get_protocol_number()
     }
 
-    fn to_json(&self) -> Result<serde_json::Value, serde_json::Error> {
-        serde_json::to_value(self)
+    fn to_sapio_data_repr(
+        &self,
+    ) -> Result<sapio_data_repr::SapioModuleBoundaryRepr, sapio_data_repr::Error> {
+        sapio_data_repr::to_sapio_data_repr(self)
     }
 
-    fn from_json(value: serde_json::Value) -> Result<Self, serde_json::Error>
+    fn from_sapio_data_repr(value: SapioModuleBoundaryRepr) -> Result<Self, sapio_data_repr::Error>
     where
         Self: Sized,
     {
-        serde_json::from_value(value)
+        sapio_data_repr::from_sapio_data_repr(value)
     }
 
     fn static_get_protocol_number() -> i64 {
