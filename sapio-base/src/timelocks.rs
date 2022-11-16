@@ -5,7 +5,6 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use super::Clause;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::convert::TryInto;
@@ -41,29 +40,29 @@ pub mod type_tags {
     }
     use super::*;
     /// Type Tag for Realtive
-    #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
+    #[derive(Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
     pub struct Rel;
     /// Type Tag for Absolute
-    #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
+    #[derive(Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
     pub struct Abs;
     /// Type Tag for Height
-    #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
+    #[derive(Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
     pub struct Height;
     /// Type Tag for Median Time Passed
-    #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
+    #[derive(Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
     pub struct MTP;
 }
 use type_tags::*;
 
 /// LockTime represents either a nLockTime or a Sequence field.
 /// They are represented generically in the same type
-#[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
 #[serde(transparent)]
 pub struct LockTime<RelOrAbs: Absolutivity, HeightOrTime: TimeType>(
     u32,
     #[serde(skip)] PhantomData<(RelOrAbs, HeightOrTime)>,
 );
-#[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
 /// # Any Relative Time Lock
 /// Represents a type which can be either type of relative lock
 pub enum AnyRelTimeLock {
@@ -75,7 +74,7 @@ pub enum AnyRelTimeLock {
     RT(RelTime),
 }
 
-#[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
 /// # Any Absolute Time Lock
 /// Represents a type which can be either type of absolute lock
 pub enum AnyAbsTimeLock {
@@ -86,7 +85,7 @@ pub enum AnyAbsTimeLock {
     /// in unix time stamp since epoch
     AT(AbsTime),
 }
-#[derive(JsonSchema, Serialize, Deserialize, Copy, Clone)]
+#[derive(Serialize, Deserialize, Copy, Clone)]
 /// # Any Time Lock (Relative, Absolute) x (Height, Time)
 /// Represents a type which can be any type of lock
 pub enum AnyTimeLock {

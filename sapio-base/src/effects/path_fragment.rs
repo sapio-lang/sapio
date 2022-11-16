@@ -7,7 +7,6 @@
 //! Path  Fragments
 use crate::reverse_path::ReversePath;
 use crate::serialization_helpers::SArc;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use std::convert::TryFrom;
@@ -15,9 +14,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 /// The derivation path fragments allowed, including user-generated
-#[derive(
-    Serialize, Deserialize, Debug, Hash, Eq, PartialEq, JsonSchema, Clone, PartialOrd, Ord,
-)]
+#[derive(Serialize, Deserialize, Debug, Hash, Eq, PartialEq, Clone, PartialOrd, Ord)]
 #[serde(into = "String")]
 #[serde(try_from = "&str")]
 pub enum PathFragment {
@@ -75,7 +72,7 @@ impl From<&PathFragment> for String {
 }
 
 /// Error for parsing a fragment
-#[derive(Serialize, Deserialize, Debug, Hash, Eq, PartialEq, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, Debug, Hash, Eq, PartialEq, Clone)]
 pub enum ValidFragmentError {
     /// branch could not be parsed (must be alphanumeric for user generated)
     BranchParseError,

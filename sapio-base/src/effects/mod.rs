@@ -8,7 +8,6 @@
 
 use crate::reverse_path::ReversePath;
 use crate::serialization_helpers::SArc;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -25,33 +24,43 @@ pub type EffectPath = ReversePath<PathFragment>;
 #[derive(Debug)]
 pub enum EffectDBError {
     /// Error was from Deserialization
-    SerializationError(serde_json::Error),
+    SerializationError(sapio_data_repr::Error),
 }
 
-impl From<serde_json::Error> for EffectDBError {
-    fn from(e: serde_json::Error) -> Self {
+impl From<sapio_data_repr::Error> for EffectDBError {
+    fn from(e: sapio_data_repr::Error) -> Self {
         EffectDBError::SerializationError(e)
     }
 }
 /// A Generic Trait for EffectDB Functionality
 pub trait EffectDB {
-    /// internal implementation to retrieve a JSON for the path
-    fn get_value<'a>(
+    /// internal implementation to retrieve sapio data for the path
+    fn get_data_repr<'a>(
         &'a self,
         at: &Arc<EffectPath>,
-    ) -> Box<dyn Iterator<Item = (&'a Arc<String>, &'a serde_json::Value)> + 'a>;
+    ) -> Box<
+        dyn Iterator<
+                Item = (
+                    &'a Arc<String>,
+                    &'a sapio_data_repr::SapioModuleBoundaryRepr,
+                ),
+            > + 'a,
+    >;
 }
 /// #  Effects
 /// Map of all effects to process during compilation.  Each Key represents a
 /// path, each sub-key represents the sub-path name and value.
-#[derive(Clone, Default, Serialize, Deserialize, JsonSchema, Debug)]
+#[derive(Clone, Default, Serialize, Deserialize, Debug)]
 pub struct MapEffectDB {
     /// # The set of all effects
     /// List of effects to include while compiling.
     #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
-    effects: BTreeMap<SArc<EffectPath>, BTreeMap<SArc<String>, serde_json::Value>>,
+    effects: BTreeMap<
+        SArc<EffectPath>,
+        BTreeMap<SArc<String>, sapio_data_repr::SapioModuleBoundaryRepr>,
+    >,
     #[serde(skip, default)]
-    empty: BTreeMap<SArc<String>, serde_json::Value>,
+    empty: BTreeMap<SArc<String>, sapio_data_repr::SapioModuleBoundaryRepr>,
 }
 
 /// # Editable Effects
@@ -60,9 +69,12 @@ pub struct MapEffectDB {
 /// can fully replace it, without the concern of mutability for contract authors.
 pub struct EditableMapEffectDB {
     /// All Effects currently in the set of effects
-    pub effects: BTreeMap<SArc<EffectPath>, BTreeMap<SArc<String>, serde_json::Value>>,
+    pub effects: BTreeMap<
+        SArc<EffectPath>,
+        BTreeMap<SArc<String>, sapio_data_repr::SapioModuleBoundaryRepr>,
+    >,
     /// Catch-all for extra data for future extension
-    pub empty: BTreeMap<SArc<String>, serde_json::Value>,
+    pub empty: BTreeMap<SArc<String>, sapio_data_repr::SapioModuleBoundaryRepr>,
 }
 
 impl From<MapEffectDB> for EditableMapEffectDB {
@@ -84,10 +96,17 @@ impl MapEffectDB {
 }
 
 impl EffectDB for MapEffectDB {
-    fn get_value<'a>(
+    fn get_data_repr<'a>(
         &'a self,
         at: &Arc<EffectPath>,
-    ) -> Box<dyn Iterator<Item = (&'a Arc<String>, &'a serde_json::Value)> + 'a> {
+    ) -> Box<
+        dyn Iterator<
+                Item = (
+                    &'a Arc<String>,
+                    &'a sapio_data_repr::SapioModuleBoundaryRepr,
+                ),
+            > + 'a,
+    > {
         let r: &BTreeMap<_, _> = self.effects.get(&SArc(at.clone())).unwrap_or(&self.empty);
         Box::new(r.iter().map(|(a, b)| (&a.0, b)))
     }
@@ -117,12 +136,12 @@ mod test {
         ];
         let r = EffectPath::try_from(v).unwrap();
         assert_eq!(
-            serde_json::to_string(&r).unwrap(),
+            sapio_data_repr::to_string(&r).unwrap(),
             "\"hello/#100/@finish_fn\""
         );
         assert_eq!(
             Ok(r),
-            serde_json::from_str("\"hello/#100/@finish_fn\"").map_err(|_| ())
+            sapio_data_repr::from_str("\"hello/#100/@finish_fn\"").map_err(|_| ())
         );
     }
 }

@@ -6,11 +6,10 @@
 
 //! arguments for passing into a sapio module
 use crate::effects::MapEffectDB;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// a remote derivation for the network definitions
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize)]
 #[serde(remote = "bitcoin::Network")]
 pub enum NetworkDef {
     /// Classic Bitcoin
@@ -25,7 +24,7 @@ pub enum NetworkDef {
 
 /// # Arguments For Creating this Contract
 /// Provide this information to create an instance of a contract
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CreateArgs<S> {
     /// # The Main Contract Arguments
     pub arguments: S,
@@ -35,13 +34,12 @@ pub struct CreateArgs<S> {
 }
 
 /// # Contextual Arguments For Creating this Contract
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ContextualArguments {
     #[serde(with = "NetworkDef")]
     /// # The Network the contract should be created for.
     pub network: bitcoin::Network,
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
-    #[schemars(with = "u64")]
     /// # The Amount of Funds Available to the Contract as Bitcoin.
     pub amount: bitcoin::util::amount::Amount,
 

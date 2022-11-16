@@ -5,18 +5,15 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! general non-parameter compilation state required by all contracts
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 use std::sync::Arc;
 /// Used to Build a Shared Path for all children of a given context.
-#[derive(
-    Serialize, Deserialize, JsonSchema, Debug, Clone, Hash, PartialEq, PartialOrd, Ord, Eq,
-)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, PartialOrd, Ord, Eq)]
 #[serde(try_from = "Y")]
 #[serde(into = "Y")]
 #[serde(
-    bound = "T: Clone, Y: Serialize + for<'d> Deserialize<'d> + JsonSchema + std::fmt::Debug + Clone, Y: Serialize + From<Self>, Self: TryFrom<Y>, <Self as TryFrom<Y>>::Error : std::fmt::Display"
+    bound = "T: Clone, Y: Serialize + for<'d> Deserialize<'d> + std::fmt::Debug + Clone, Y: Serialize + From<Self>, Self: TryFrom<Y>, <Self as TryFrom<Y>>::Error : std::fmt::Display"
 )]
 pub struct ReversePath<T, Y = String> {
     past: Option<Arc<ReversePath<T, Y>>>,
@@ -147,7 +144,7 @@ mod test {
     #[test]
     fn test_reverse_path_into_serde() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(
-            serde_json::to_string(
+            sapio_data_repr::to_string(
                 ReversePath::<i64, Vec<i64>>::push(Some(ReversePath::push(None, 1i64)), 5,)
                     .as_ref()
             )?,
@@ -157,7 +154,7 @@ mod test {
     }
     #[test]
     fn test_reverse_path_from_serde() -> Result<(), Box<dyn std::error::Error>> {
-        let v: ReversePath<i64, Vec<i64>> = serde_json::from_str("[1,5]")?;
+        let v: ReversePath<i64, Vec<i64>> = sapio_data_repr::from_str("[1,5]")?;
         assert_eq!(
             ReversePath::push(Some(ReversePath::push(None, 1i64)), 5,).as_ref(),
             &v

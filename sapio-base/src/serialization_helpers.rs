@@ -5,16 +5,13 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Helpers for serializing Arcs
-use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Borrow;
 use std::sync::Arc;
 
 /// Serializable Arc Type
-#[derive(
-    Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, PartialOrd, Eq, Hash, Ord,
-)]
-#[serde(bound = "T: Serialize + for<'d> Deserialize<'d> + JsonSchema + std::fmt::Debug + Clone ")]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, PartialOrd, Eq, Hash, Ord)]
+#[serde(bound = "T: Serialize + for<'d> Deserialize<'d> + std::fmt::Debug + Clone ")]
 #[serde(transparent)]
 pub struct SArc<T>(
     #[serde(serialize_with = "serializer")]
@@ -44,7 +41,7 @@ mod test {
     use super::*;
     #[test]
     fn test_sarc_ser() -> Result<(), Box<dyn std::error::Error>> {
-        assert_eq!(serde_json::to_string(&SArc(Arc::new(1)))?, "1");
+        assert_eq!(sapio_data_repr::to_string(&SArc(Arc::new(1)))?, "1");
         Ok(())
     }
 }

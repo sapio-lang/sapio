@@ -12,8 +12,6 @@ description = "Sapio Base functionalities and trait definitions."
 
 
 [dependencies]
-schemars = "0.8.0"
-serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
 
@@ -26,3 +24,7 @@ features = ['compiler', 'use-serde', 'use-schemars', 'serde']
 package = "sapio-bitcoin"
 version = "0.28.0"
 features = ['use-serde']
+
+[dependencies.sapio-data-repr]
+package = "sapio-data-repr"
+path = "../sapio-data-repr"
