@@ -68,14 +68,14 @@ impl SIMP for IpfsNFT {
     fn to_sapio_data_repr(
         &self,
     ) -> Result<sapio_data_repr::SapioModuleBoundaryRepr, sapio_data_repr::Error> {
-        sapio_data_repr::to_sapio_data_repr(self)
+        sapio_data_repr::to_boundary_repr(self)
     }
 
     fn from_sapio_data_repr(value: SapioModuleBoundaryRepr) -> Result<Self, sapio_data_repr::Error>
     where
         Self: Sized,
     {
-        sapio_data_repr::from_sapio_data_repr(value)
+        sapio_data_repr::from_boundary_repr(value)
     }
 
     fn static_get_protocol_number() -> i64 {
