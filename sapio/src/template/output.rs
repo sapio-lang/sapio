@@ -9,13 +9,13 @@ use super::*;
 use sapio_base::simp::{SIMPError, TemplateOutputLT, SIMP};
 use serde::{Deserialize, Serialize};
 /// Metadata for outputs, arbitrary KV set.
-#[derive(Serialize, Deserialize, Clone, JsonSchema, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct OutputMeta {
     /// Additional non-standard fields for future upgrades
     #[serde(flatten)]
-    pub extra: BTreeMap<String, serde_json::Value>,
+    pub extra: BTreeMap<String, SapioModuleBoundaryRepr>,
     /// SIMP: Sapio Interactive Metadata Protocol
-    pub simp: BTreeMap<i64, serde_json::Value>,
+    pub simp: BTreeMap<i64, SapioModuleBoundaryRepr>,
 }
 
 impl OutputMeta {
@@ -31,7 +31,9 @@ impl OutputMeta {
         mut self,
         s: S,
     ) -> Result<Self, SIMPError> {
-        let old = self.simp.insert(s.get_protocol_number(), s.to_json()?);
+        let old = self
+            .simp
+            .insert(s.get_protocol_number(), s.to_sapio_data_repr()?);
         if let Some(old) = old {
             Err(SIMPError::AlreadyDefined(old))
         } else {
@@ -48,8 +50,8 @@ impl Default for OutputMeta {
     }
 }
 
-impl<const N: usize> From<[(&str, serde_json::Value); N]> for OutputMeta {
-    fn from(v: [(&str, serde_json::Value); N]) -> OutputMeta {
+impl<const N: usize> From<[(&str, sapio_data_repr::SapioModuleBoundaryRepr); N]> for OutputMeta {
+    fn from(v: [(&str, sapio_data_repr::SapioModuleBoundaryRepr); N]) -> OutputMeta {
         OutputMeta {
             extra: IntoIterator::into_iter(v)
                 .map(|(a, b)| (a.into(), b))
@@ -61,11 +63,11 @@ impl<const N: usize> From<[(&str, serde_json::Value); N]> for OutputMeta {
 
 /// An Output is not a literal Bitcoin Output, but contains data needed to construct one, and
 /// metadata for linking & ABI building
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Output {
     /// the amount of sats being sent to this contract
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
-    #[schemars(with = "i64")]
+    // #[schemars(with = "i64")]
     #[serde(rename = "sending_amount_sats")]
     pub amount: Amount,
     /// the compiled contract this output creates

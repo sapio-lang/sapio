@@ -7,17 +7,14 @@
 //! Functionality for working with ranges of amounts
 use bitcoin::util::amount::Amount;
 
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// A wrapper around `bitcoin::Amount` to force it to serialize with f64.
-#[derive(
-    Serialize, Deserialize, JsonSchema, Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq,
-)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct AmountF64(
     /// # Amount (BTC)
-    #[schemars(with = "f64")]
+    // #[schemars(with = "f64")]
     #[serde(with = "bitcoin::util::amount::serde::as_btc")]
     Amount,
 );
@@ -33,13 +30,11 @@ impl From<AmountF64> for Amount {
     }
 }
 /// A wrapper around `bitcoin::Amount` to force it to serialize with u64.
-#[derive(
-    Serialize, Deserialize, JsonSchema, Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq,
-)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct AmountU64(
     /// # Amount (Sats)
-    #[schemars(with = "u64")]
+    // #[schemars(with = "u64")]
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
     Amount,
 );
@@ -66,7 +61,7 @@ impl From<AmountU64> for u64 {
 }
 /// `AmountRange` makes it simple to track and update the range of allowed values
 /// for a contract to receive.
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct AmountRange {
     #[serde(rename = "min_btc", skip_serializing_if = "Option::is_none", default)]
     min: Option<AmountF64>,

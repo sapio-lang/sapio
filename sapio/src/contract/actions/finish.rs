@@ -15,7 +15,7 @@ use sapio_base::effects::EffectDBError;
 use sapio_base::simp::ContinuationPointLT;
 use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::Clause;
-use serde_json::Value;
+use sapio_data_repr::SapioModuleSchema;
 
 use core::marker::PhantomData;
 
@@ -51,7 +51,7 @@ pub struct FinishOrFunc<'a, ContractSelf, StatefulArguments, SpecificArgs, WebAP
     /// to be filled in if SpecificArgs has a schema, which it might not.
     /// because negative trait bounds do not exists, that is up to the
     /// implementation to decide if the trait exists.
-    pub schema: Option<Arc<Value>>,
+    pub schema: Option<Arc<SapioModuleSchema>>,
     /// name derived from Function Name.
     /// N.B. must be renamable by changing this field!
     pub name: Arc<String>,
@@ -81,7 +81,12 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
         ctx: Context,
     ) -> Result<Vec<Box<dyn SIMPAttachableAt<ContinuationPointLT>>>, CompilationError>;
     /// Calls the internal function, should convert `StatefulArguments` to `SpecificArgs`.
-    fn call_json(&self, _cself: &ContractSelf, _ctx: Context, _o: serde_json::Value) -> TxTmplIt {
+    fn call_data_repr(
+        &self,
+        _cself: &ContractSelf,
+        _ctx: Context,
+        _o: sapio_data_repr::SapioModuleBoundaryRepr,
+    ) -> TxTmplIt {
         Err(CompilationError::WebAPIDisabled)
     }
     /// to be set to true if call_json may return a non-error type.
@@ -95,7 +100,7 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     /// Get the name for this function
     fn get_name(&self) -> &Arc<String>;
     /// Get the RootSchema for calling this with an update
-    fn get_schema(&self) -> &Option<Arc<Value>>;
+    fn get_schema(&self) -> &Option<Arc<SapioModuleSchema>>;
     /// get if txtmpls returned by the func should modify guards.
     fn get_returned_txtmpls_modify_guards(&self) -> bool;
     /// extract a clause from the txtmpl
@@ -127,7 +132,7 @@ impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, 
     fn get_name(&self) -> &Arc<String> {
         &self.name
     }
-    fn get_schema(&self) -> &Option<Arc<Value>> {
+    fn get_schema(&self) -> &Option<Arc<SapioModuleSchema>> {
         &self.schema
     }
     fn get_returned_txtmpls_modify_guards(&self) -> bool {
@@ -161,8 +166,13 @@ where
         let args = (self.coerce_args)(o)?;
         (self.func)(cself, ctx, args)
     }
-    fn call_json(&self, cself: &ContractSelf, ctx: Context, o: serde_json::Value) -> TxTmplIt {
-        serde_json::from_value(o)
+    fn call_data_repr(
+        &self,
+        cself: &ContractSelf,
+        ctx: Context,
+        o: sapio_data_repr::SapioModuleBoundaryRepr,
+    ) -> TxTmplIt {
+        sapio_data_repr::from_boundary_repr(o)
             .map_err(EffectDBError::SerializationError)
             .map_err(CompilationError::EffectDBError)
             .and_then(|args| (self.func)(cself, ctx, args))
@@ -179,7 +189,7 @@ where
     fn get_name(&self) -> &Arc<String> {
         &self.name
     }
-    fn get_schema(&self) -> &Option<Arc<Value>> {
+    fn get_schema(&self) -> &Option<Arc<SapioModuleSchema>> {
         &self.schema
     }
     fn get_returned_txtmpls_modify_guards(&self) -> bool {

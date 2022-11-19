@@ -11,13 +11,12 @@
 use crate::contract::object::ObjectError;
 use bitcoin::{Address, Script, XOnlyPublicKey};
 use miniscript::{Descriptor, DescriptorTrait};
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 
 /// A type that handles (gracefully) the fact that certain widely used
 /// output types do not have an address
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(untagged)]
 pub enum ExtendedAddress {
     /// A regular standard address type
@@ -46,7 +45,7 @@ impl ExtendedAddress {
 }
 
 /// Internal type for processing OpReturn through serde
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(try_from = "Script")]
 #[serde(into = "Script")]
 pub struct OpReturn(Script);

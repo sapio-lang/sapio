@@ -14,6 +14,7 @@ use sapio_base::effects::ValidFragmentError;
 use sapio_base::plugin_args::CreateArgs;
 use sapio_base::simp::SIMPError;
 use sapio_ctv_emulator_trait::EmulatorError;
+use sapio_data_repr::SapioModuleBoundaryRepr;
 use std::collections::LinkedList;
 use std::error::Error;
 use std::fmt;
@@ -86,7 +87,7 @@ pub enum CompilationError {
     /// Module Failed to Deallocate
     ModuleCouldNotDeallocate(i32, ErrT),
     /// Module failed to create
-    ModuleCouldNotCreateContract(EffectPath, CreateArgs<serde_json::Value>, ErrT),
+    ModuleCouldNotCreateContract(EffectPath, CreateArgs<SapioModuleBoundaryRepr>, ErrT),
     /// Module failed to get_api
     ModuleCouldNotGetAPI(ErrT),
     /// Module failed to get_logo
@@ -101,9 +102,9 @@ pub enum CompilationError {
     /// CompError
     ModuleCompilationErrorUnsendable(String),
     /// Error while serializing
-    SerializationError(serde_json::Error),
+    SerializationError(sapio_data_repr::Error),
     /// Error while deserializing
-    DeserializationError(serde_json::Error),
+    DeserializationError(sapio_data_repr::Error),
     /// No Web API enabled, but call_json was called
     WebAPIDisabled,
     /// Unknown Error type -- either from a user or from some unhandled dependency

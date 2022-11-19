@@ -13,7 +13,7 @@ use sapio_base::simp::SIMPError;
 use sapio_base::simp::TemplateInputLT;
 use sapio_base::simp::TemplateLT;
 use sapio_base::Clause;
-use schemars::JsonSchema;
+use sapio_data_repr::SapioModuleBoundaryRepr;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 pub mod input;
@@ -25,16 +25,16 @@ pub use builder::Builder;
 use self::input::InputMetadata;
 /// Metadata Struct which has some standard defined fields
 /// and can be extended via a hashmap
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TemplateMetadata {
     /// A Label for this transaction
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub label: Option<String>,
     /// catch all map for future metadata....
     #[serde(flatten)]
-    pub extra: BTreeMap<String, serde_json::Value>,
+    pub extra: BTreeMap<String, SapioModuleBoundaryRepr>,
     /// SIMP: Sapio Interactive Metadata Protocol
-    pub simp: BTreeMap<i64, serde_json::Value>,
+    pub simp: BTreeMap<i64, SapioModuleBoundaryRepr>,
     /// A Color to render this node.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub color: Option<String>,
@@ -58,7 +58,7 @@ impl TemplateMetadata {
     pub fn set_extra<I, J>(mut self, i: I, j: J) -> Result<Self, CompilationError>
     where
         I: Into<String>,
-        J: Into<serde_json::Value>,
+        J: Into<sapio_data_repr::SapioModuleBoundaryRepr>,
     {
         let s: String = i.into();
         match s.as_str() {
@@ -100,7 +100,9 @@ impl TemplateMetadata {
     ///
     /// Returns [`SIMPError::AlreadyDefined`] if one was previously set.
     pub fn add_simp<S: SIMPAttachableAt<TemplateLT>>(mut self, s: S) -> Result<Self, SIMPError> {
-        let old = self.simp.insert(s.get_protocol_number(), s.to_json()?);
+        let old = self
+            .simp
+            .insert(s.get_protocol_number(), s.to_sapio_data_repr()?);
         if let Some(old) = old {
             Err(SIMPError::AlreadyDefined(old))
         } else {
@@ -111,7 +113,7 @@ impl TemplateMetadata {
 
 /// Template holds the data needed to construct a Transaction for CTV Purposes, along with relevant
 /// metadata
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Template {
     /// additional restrictions placed on this template
     #[serde(rename = "additional_preconditions")]
@@ -128,14 +130,14 @@ pub struct Template {
         rename = "max_amount_sats",
         with = "bitcoin::util::amount::serde::as_sat"
     )]
-    #[schemars(with = "i64")]
+    // #[schemars(with = "i64")]
     pub max: Amount,
     /// the amount being sent to this Template (TODO: currently computed via tx.total_amount())
     #[serde(
         rename = "min_feerate_sats_vbyte",
         with = "bitcoin::util::amount::serde::as_sat::opt"
     )]
-    #[schemars(with = "Option<i64>")]
+    // #[schemars(with = "Option<i64>")]
     pub min_feerate_sats_vbyte: Option<Amount>,
     /// any metadata fields attached to this template
     #[serde(

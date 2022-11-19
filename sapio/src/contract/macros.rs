@@ -9,7 +9,8 @@
 use core::any::TypeId;
 pub use paste::paste;
 
-use serde_json::Value;
+use sapio_data_repr::HasSapioModuleSchema;
+use sapio_data_repr::SapioModuleSchema;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -102,21 +103,21 @@ macro_rules! decl_then {
 }
 
 lazy_static::lazy_static! {
-static ref SCHEMA_MAP: Mutex<BTreeMap<TypeId, Arc<Value>>> =
+static ref SCHEMA_MAP: Mutex<BTreeMap<TypeId, Arc<SapioModuleSchema>>> =
 Mutex::new(BTreeMap::new());
 }
 /// `get_schema_for` returns a cached RootSchema for a given type.  this is
 /// useful because we might expect to generate the same RootSchema many times,
 /// and they can use a decent amount of memory.
-pub fn get_schema_for<T: schemars::JsonSchema + 'static + Sized>() -> Arc<Value> {
+pub fn get_schema_for<T: HasSapioModuleSchema + 'static + Sized>() -> Arc<SapioModuleSchema> {
     SCHEMA_MAP
         .lock()
         .unwrap()
         .entry(TypeId::of::<T>())
         .or_insert_with(|| {
             Arc::new(
-                serde_json::to_value(schemars::schema_for!(T))
-                    .expect("Schema must be able to convert to JSON"),
+                todo!(), // serde_json::to_value(schemars::schema_for!(T))
+                         //     .expect("Schema must be able to convert to JSON"),
             )
         })
         .clone()

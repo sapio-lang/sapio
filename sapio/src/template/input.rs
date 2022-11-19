@@ -7,15 +7,16 @@
 //! Template Output container
 use super::*;
 use sapio_base::simp::SIMPError;
+use sapio_data_repr::SapioModuleBoundaryRepr;
 use serde::{Deserialize, Serialize};
 /// Metadata for outputs, arbitrary KV set.
-#[derive(Serialize, Deserialize, Clone, JsonSchema, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct InputMetadata {
     /// Additional non-standard fields for future upgrades
     #[serde(flatten)]
-    pub extra: BTreeMap<String, serde_json::Value>,
+    pub extra: BTreeMap<String, SapioModuleBoundaryRepr>,
     /// SIMP: Sapio Interactive Metadata Protocol
-    pub simp: BTreeMap<i64, serde_json::Value>,
+    pub simp: BTreeMap<i64, SapioModuleBoundaryRepr>,
 }
 
 impl InputMetadata {
@@ -31,7 +32,9 @@ impl InputMetadata {
         &mut self,
         s: S,
     ) -> Result<(), SIMPError> {
-        let old = self.simp.insert(s.get_protocol_number(), s.to_json()?);
+        let old = self
+            .simp
+            .insert(s.get_protocol_number(), s.to_sapio_data_repr()?);
         if let Some(old) = old {
             Err(SIMPError::AlreadyDefined(old))
         } else {
@@ -45,7 +48,9 @@ impl InputMetadata {
         mut self,
         s: S,
     ) -> Result<Self, SIMPError> {
-        let old = self.simp.insert(s.get_protocol_number(), s.to_json()?);
+        let old = self
+            .simp
+            .insert(s.get_protocol_number(), s.to_sapio_data_repr()?);
         if let Some(old) = old {
             Err(SIMPError::AlreadyDefined(old))
         } else {
@@ -62,8 +67,8 @@ impl Default for InputMetadata {
     }
 }
 
-impl<const N: usize> From<[(&str, serde_json::Value); N]> for InputMetadata {
-    fn from(v: [(&str, serde_json::Value); N]) -> InputMetadata {
+impl<const N: usize> From<[(&str, sapio_data_repr::SapioModuleBoundaryRepr); N]> for InputMetadata {
+    fn from(v: [(&str, sapio_data_repr::SapioModuleBoundaryRepr); N]) -> InputMetadata {
         InputMetadata {
             extra: IntoIterator::into_iter(v)
                 .map(|(a, b)| (a.into(), b))

@@ -34,7 +34,7 @@ pub struct LinkedPSBT {
 }
 
 /// Format for a Linked PSBT in Sapio Studio
-#[derive(Serialize, Deserialize, JsonSchema, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum SapioStudioFormat {
     /// Used for PSBT Return Values
     #[serde(rename = "linked_psbt")]
@@ -82,14 +82,14 @@ impl From<LinkedPSBT> for SapioStudioFormat {
 ///     }
 /// }
 /// ```
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Program {
     /// program contains the list of SapioStudio PSBTs
     pub program: BTreeMap<SArc<EffectPath>, SapioStudioObject>,
 }
 
 /// A `SapioStudioObject` is a json-friendly format for a `Object` for use in Sapio Studio
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SapioStudioObject {
     /// The object's metadata
     pub metadata: ObjectMetadata,

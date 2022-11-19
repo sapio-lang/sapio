@@ -10,26 +10,25 @@ use sapio_base::serialization_helpers::SArc;
 use sapio_base::simp::{SIMPAttachableAt, SIMPError, SIMP};
 use sapio_base::{effects::EffectPath, simp::ContinuationPointLT};
 
-use schemars::JsonSchema;
+use sapio_data_repr::{SapioModuleBoundaryRepr, SapioModuleSchema};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::{collections::BTreeMap, sync::Arc};
 /// Instructions for how to resume a contract compilation at a given point
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ContinuationPoint {
     /// The arguments required at this point
     /// TODO: De-Duplicate repeated types?
-    pub schema: Option<SArc<Value>>,
+    pub schema: Option<SArc<SapioModuleSchema>>,
     /// The path at which this was compiled
     #[serde(serialize_with = "sapio_base::serialization_helpers::serializer")]
     #[serde(deserialize_with = "sapio_base::serialization_helpers::deserializer")]
     pub path: Arc<EffectPath>,
     /// Metadata for this particular Continuation Point
-    pub simp: BTreeMap<i64, Value>,
+    pub simp: BTreeMap<i64, SapioModuleBoundaryRepr>,
 }
 impl ContinuationPoint {
     /// Creates a new continuation
-    pub fn at(schema: Option<Arc<Value>>, path: Arc<EffectPath>) -> Self {
+    pub fn at(schema: Option<Arc<SapioModuleSchema>>, path: Arc<EffectPath>) -> Self {
         ContinuationPoint {
             schema: schema.map(SArc),
             path,
@@ -44,7 +43,9 @@ impl ContinuationPoint {
         mut self,
         s: &dyn SIMPAttachableAt<ContinuationPointLT>,
     ) -> Result<Self, SIMPError> {
-        let old = self.simp.insert(s.get_protocol_number(), s.to_json()?);
+        let old = self
+            .simp
+            .insert(s.get_protocol_number(), s.to_sapio_data_repr()?);
         if let Some(old) = old {
             Err(SIMPError::AlreadyDefined(old))
         } else {
@@ -61,13 +62,15 @@ mod test {
     fn test_continuation_point_ser() -> Result<(), Box<dyn std::error::Error>> {
         let a: ContinuationPoint = ContinuationPoint::at(
             Some(Arc::new(
-                serde_json::to_value(&schemars::schema_for!(ContinuationPoint)).unwrap(),
+                // serde_json::to_value(&schemars::schema_for!(ContinuationPoint)).unwrap(),
+                todo!(),
             )),
             EffectPath::push(None, PathFragment::Named(SArc(Arc::new("one".into())))),
         );
         let b: ContinuationPoint = serde_json::from_str(&format!(
             "{{\"schema\":{},\"path\":\"one\",\"simp\":{{}}}}",
-            serde_json::to_string(&schemars::schema_for!(ContinuationPoint))?
+            // serde_json::to_string(&schemars::schema_for!(ContinuationPoint))?
+            todo!()
         ))?;
         assert_eq!(a, b);
         Ok(())

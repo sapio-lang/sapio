@@ -14,7 +14,7 @@ pub use descriptors::*;
 use sapio_base::simp::CompiledObjectLT;
 use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::Clause;
-use serde_json::Value;
+use sapio_data_repr::SapioModuleBoundaryRepr;
 
 use crate::contract::abi::continuation::ContinuationPoint;
 pub use crate::contract::abi::studio::*;
@@ -38,15 +38,15 @@ use std::collections::BTreeMap;
 
 use std::sync::Arc;
 /// Metadata for Object, arbitrary KV set.
-#[derive(Serialize, Deserialize, Clone, JsonSchema, Debug, PartialEq, Eq, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct ObjectMetadata {
     /// Additional non-standard fields for future upgrades
     #[serde(flatten)]
-    pub extra: BTreeMap<String, serde_json::Value>,
+    pub extra: BTreeMap<String, SapioModuleBoundaryRepr>,
     /// SIMP: Sapio Interactive Metadata Protocol
-    pub simp: BTreeMap<i64, serde_json::Value>,
+    pub simp: BTreeMap<i64, SapioModuleBoundaryRepr>,
     /// SIMPs for guards
-    pub simps_for_guards: BTreeMap<Clause, BTreeMap<i64, Vec<serde_json::Value>>>,
+    pub simps_for_guards: BTreeMap<Clause, BTreeMap<i64, Vec<SapioModuleBoundaryRepr>>>,
 }
 impl ObjectMetadata {
     /// Is there any metadata in this field?
@@ -61,7 +61,9 @@ impl ObjectMetadata {
         mut self,
         s: S,
     ) -> Result<Self, SIMPError> {
-        let old = self.simp.insert(s.get_protocol_number(), s.to_json()?);
+        let old = self
+            .simp
+            .insert(s.get_protocol_number(), s.to_sapio_data_repr()?);
         if let Some(old) = old {
             Err(SIMPError::AlreadyDefined(old))
         } else {
@@ -84,10 +86,15 @@ impl ObjectMetadata {
                         k,
                         v.into_iter().fold(
                             Ok(Default::default()),
-                            |ra: Result<BTreeMap<_, Vec<Value>>, CompilationError>, b| {
+                            |ra: Result<
+                                BTreeMap<_, Vec<SapioModuleBoundaryRepr>>,
+                                CompilationError,
+                            >,
+                             b| {
                                 let mut a = ra?;
                                 a.entry(b.get_protocol_number()).or_default().push(
-                                    b.to_json().map_err(CompilationError::SerializationError)?,
+                                    b.to_sapio_data_repr()
+                                        .map_err(CompilationError::SerializationError)?,
                                 );
                                 Ok(a)
                             },
@@ -107,43 +114,43 @@ impl ObjectMetadata {
 /// Object holds a contract's complete context required post-compilation
 /// There is no guarantee that Object is properly constructed presently.
 //TODO: Make type immutable and correct by construction...
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Object {
     /// a map of template hashes to the corresponding template, that in the
     /// policy are CTV protected
-    #[serde(
-        rename = "template_hash_to_template_map",
-        skip_serializing_if = "BTreeMap::is_empty",
-        default
-    )]
+    // #[serde(
+    //     rename = "template_hash_to_template_map",
+    //     skip_serializing_if = "BTreeMap::is_empty",
+    //     default
+    // )]
     pub ctv_to_tx: BTreeMap<sha256::Hash, Template>,
     /// a map of template hashes to the corresponding template, that in the
     /// policy are not necessarily CTV protected but we might want to know about
     /// anyways.
-    #[serde(
-        rename = "suggested_template_hash_to_template_map",
-        skip_serializing_if = "BTreeMap::is_empty",
-        default
-    )]
+    // #[serde(
+    //     rename = "suggested_template_hash_to_template_map",
+    //     skip_serializing_if = "BTreeMap::is_empty",
+    //     default
+    // )]
     pub suggested_txs: BTreeMap<sha256::Hash, Template>,
     /// A Map of arguments to continue execution and generate an update at this
     /// point via a passed message
-    #[serde(
-        rename = "continuation_points",
-        skip_serializing_if = "BTreeMap::is_empty",
-        default
-    )]
+    // #[serde(
+    //     rename = "continuation_points",
+    //     skip_serializing_if = "BTreeMap::is_empty",
+    //     default
+    // )]
     pub continue_apis: BTreeMap<SArc<EffectPath>, ContinuationPoint>,
     /// The base location for the set of continue_apis.
     pub root_path: SArc<EffectPath>,
     /// The Object's address, or a Script if no address is possible
     pub address: ExtendedAddress,
     /// The Object's descriptor -- if there is one known/available
-    #[serde(
-        rename = "known_descriptor",
-        skip_serializing_if = "Option::is_none",
-        default
-    )]
+    // #[serde(
+    //     rename = "known_descriptor",
+    //     skip_serializing_if = "Option::is_none",
+    //     default
+    // )]
     pub descriptor: Option<SupportedDescriptors>,
     /// The amount_range safe to send this object
     pub amount_range: AmountRange,
