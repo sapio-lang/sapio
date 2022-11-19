@@ -26,7 +26,8 @@ impl CTVEmulator for WasmHostEmulator {
             sapio_v1_wasm_plugin_ctv_emulator_signer_for(&mut inner[0] as *mut u8 as i32)
         };
         let signer = unsafe { CString::from_raw(signer as *mut c_char) };
-        Ok(serde_json::from_slice(signer.to_bytes()).unwrap())
+        todo!(); // ensure that we are actually getting boundary reprs out
+        Ok(sapio_data_repr::from_slice(signer.to_bytes()).unwrap())
     }
     fn sign(
         &self,
@@ -35,7 +36,7 @@ impl CTVEmulator for WasmHostEmulator {
         bitcoin::util::psbt::PartiallySignedTransaction,
         sapio_ctv_emulator_trait::EmulatorError,
     > {
-        let s = serde_json::to_string_pretty(&psbt).unwrap();
+        let s = sapio_data_repr::to_string(&psbt).unwrap();
         let len = s.len();
         let ret = unsafe {
             CString::from_raw(
@@ -43,7 +44,8 @@ impl CTVEmulator for WasmHostEmulator {
                     as *mut c_char,
             )
         };
-        let j = serde_json::from_slice(ret.as_bytes()).unwrap();
+        todo!(); // ensure that we are actually getting boundary reprs out
+        let j = sapio_data_repr::from_slice(ret.as_bytes()).unwrap();
         Ok(j)
     }
 }

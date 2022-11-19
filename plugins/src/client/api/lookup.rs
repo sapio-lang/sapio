@@ -7,7 +7,7 @@
 //! Utility struct for looking up and decoding modules
 use super::*;
 
-#[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 /// # Lookup Parameters
 /// - either using a hash key (exact); or
 /// - name (user configured)

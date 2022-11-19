@@ -16,8 +16,6 @@ host = ["wasmer", "wasmer-cache", "tokio"]
 client = ["miniscript"]
 
 [dependencies]
-schemars = "0.8.0"
-serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
 base64 = "0.13.0"
@@ -52,12 +50,15 @@ version = "0.2.0"
 path = "../sapio-base"
 version = "0.2.0"
 
+[dependencies.sapio-data-repr]
+path = "../sapio-data-repr"
+
 [lib]
 path = "src/lib.rs"
 
 
 [dependencies.sapio-ctv-emulator-trait]
-path="../emulator-trait"
+path = "../emulator-trait"
 version = "0.2.0"
 
 [dependencies.miniscript]

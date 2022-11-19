@@ -14,7 +14,7 @@ use crate::API;
 use sapio::contract::CompilationError;
 use sapio_base::effects::EffectPath;
 use sapio_ctv_emulator_trait::CTVEmulator;
-use schemars::JsonSchema;
+use sapio_data_repr::SapioModuleBoundaryRepr;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::marker::PhantomData;
@@ -22,7 +22,7 @@ use std::path::PathBuf;
 use wasmer::Memory;
 
 /// Helper to resolve modules
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize)]
 pub enum ModuleLocator {
     /// A Hex Encoded Hash
     Key(String),
@@ -297,12 +297,14 @@ impl<GOutput> PluginHandle for WasmPluginHandle<GOutput>
 where
     GOutput: for<'a> Deserialize<'a>,
 {
-    type Input = CreateArgs<serde_json::Value>;
+    type Input = CreateArgs<SapioModuleBoundaryRepr>;
     type Output = GOutput;
     fn call(&self, path: &EffectPath, c: &Self::Input) -> Result<Self::Output, CompilationError> {
-        let arg_str = serde_json::to_string(c).map_err(CompilationError::SerializationError)?;
+        let arg_str =
+            sapio_data_repr::to_string(c).map_err(CompilationError::SerializationError)?;
         let args_ptr = self.pass_string(&arg_str)?;
-        let path_str = serde_json::to_string(path).map_err(CompilationError::SerializationError)?;
+        let path_str =
+            sapio_data_repr::to_string(path).map_err(CompilationError::SerializationError)?;
         let path_ptr = self.pass_string(&path_str)?;
         let create_func = {
             let env = self.env.lock().unwrap();
@@ -315,10 +317,10 @@ where
             .map_err(|e| {
                 CompilationError::ModuleCouldNotCreateContract(path.clone(), c.clone(), e.into())
             })?;
-        let buf = self.read_to_vec(result_ptr)?;
+        let buf = String::from_utf8(self.read_to_vec(result_ptr)?).unwrap(); // TODO: is unwrap OK here?
         self.forget(result_ptr)?;
         let v: Result<Self::Output, String> =
-            serde_json::from_slice(&buf).map_err(CompilationError::DeserializationError)?;
+            sapio_data_repr::from_str(&buf).map_err(CompilationError::DeserializationError)?;
         v.map_err(CompilationError::ModuleCompilationErrorUnsendable)
     }
     fn get_api(&self) -> Result<API<Self::Input, Self::Output>, CompilationError> {
@@ -330,9 +332,9 @@ where
             .ok_or_else(|| CompilationError::ModuleCouldNotFindFunction("get_api".into()))?
             .call()
             .map_err(|e| CompilationError::ModuleCouldNotGetAPI(e.into()))?;
-        let v = self.read_to_vec(p)?;
+        let v = String::from_utf8(self.read_to_vec(p)?).unwrap(); // TODO is unwrap OK here?
         self.forget(p)?;
-        serde_json::from_slice(&v).map_err(CompilationError::DeserializationError)
+        sapio_data_repr::from_str(&v).map_err(CompilationError::DeserializationError)
     }
     fn get_name(&self) -> Result<String, CompilationError> {
         let p = self

@@ -24,12 +24,10 @@ pub fn call_path<S: Serialize, T>(
     args: CreateArgs<S>,
 ) -> Result<T, CompilationError>
 where
-    T: for<'a> Deserialize<'a> + JsonSchema,
+    T: for<'a> Deserialize<'a>,
 {
-    let path = serde_json::to_string(path).map_err(CompilationError::SerializationError)?;
-    let s = serde_json::to_value(args)
-        .map_err(CompilationError::SerializationError)?
-        .to_string();
+    let path = sapio_data_repr::to_string(path).map_err(CompilationError::SerializationError)?;
+    let s = sapio_data_repr::to_string(&args).map_err(CompilationError::SerializationError)?;
     let l = s.len();
     let p = unsafe {
         sapio_v1_wasm_plugin_create_contract(
@@ -42,7 +40,7 @@ where
     };
     if p != 0 {
         let cs = unsafe { CString::from_raw(p as *mut c_char) };
-        let res: Result<T, String> = serde_json::from_slice(cs.as_bytes())
+        let res: Result<T, String> = sapio_data_repr::from_slice(cs.as_bytes())
             .map_err(CompilationError::DeserializationError)?;
         res.map_err(CompilationError::ModuleCompilationErrorUnsendable)
     } else {
@@ -61,7 +59,9 @@ pub fn get_logo(key: &[u8; 32]) -> Result<String, CompilationError> {
             ));
         }
         let cs = unsafe { CString::from_raw(buf as *mut c_char) };
-        serde_json::from_slice(cs.as_bytes()).map_err(CompilationError::DeserializationError)?
+        todo!("figure out how to handle CStrings");
+        sapio_data_repr::from_slice(cs.as_bytes())
+            .map_err(CompilationError::DeserializationError)?
     };
     logo.map_err(CompilationError::InternalModuleError)
 }
@@ -77,7 +77,9 @@ pub fn get_name(key: &[u8; 32]) -> Result<String, CompilationError> {
             ));
         }
         let cs = unsafe { CString::from_raw(buf as *mut c_char) };
-        serde_json::from_slice(cs.as_bytes()).map_err(CompilationError::DeserializationError)?
+        todo!("figure out how to handle CStrings");
+        sapio_data_repr::from_slice(cs.as_bytes())
+            .map_err(CompilationError::DeserializationError)?
     };
     name.map_err(CompilationError::InternalModuleError)
 }
@@ -93,7 +95,9 @@ pub fn get_api<T, R>(key: &[u8; 32]) -> Result<API<T, R>, CompilationError> {
             ));
         }
         let cs = unsafe { CString::from_raw(api_buf as *mut c_char) };
-        serde_json::from_slice(cs.as_bytes()).map_err(CompilationError::DeserializationError)?
+        todo!("figure out how to handle CStrings");
+        sapio_data_repr::from_slice(cs.as_bytes())
+            .map_err(CompilationError::DeserializationError)?
     };
     api.map_err(CompilationError::InternalModuleError)
 }
@@ -105,7 +109,7 @@ pub fn call<S: Serialize, T>(
     args: CreateArgs<S>,
 ) -> Result<T, CompilationError>
 where
-    T: for<'a> Deserialize<'a> + JsonSchema,
+    T: for<'a> Deserialize<'a>,
 {
     call_path(ctx.path(), key, args)
 }

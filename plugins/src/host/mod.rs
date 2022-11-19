@@ -81,6 +81,7 @@ mod exports {
 
     use super::*;
     use sapio_base::effects::EffectPath;
+    use sapio_data_repr::SapioModuleBoundaryRepr;
     /// lookup a plugin key from a human reable name.
     /// if ok == 1, result is valid.
     /// out is written and must be 32 bytes of writable memory.
@@ -192,7 +193,7 @@ mod exports {
             GetAPI,
             GetName,
             GetLogo,
-            Create(CreateArgs<serde_json::Value>, EffectPath),
+            Create(CreateArgs<SapioModuleBoundaryRepr>, EffectPath),
         }
         let action_to_take = match action {
             Action::GetAPI => Ok(InternalAction::GetAPI),
@@ -215,10 +216,8 @@ mod exports {
                 {
                     *dst = src;
                 }
-                let create_args = serde_json::from_str(
-                    &String::from_utf8_lossy(&v[..json_len as usize]).to_owned(),
-                )
-                .map_err(CompilationError::DeserializationError);
+                let create_args = sapio_data_repr::from_slice(&v[..json_len as usize])
+                    .map_err(CompilationError::DeserializationError);
 
                 for (src, dst) in env.memory_ref().unwrap().view()
                     [path as usize..(path + path_len) as usize]
@@ -228,10 +227,9 @@ mod exports {
                 {
                     *dst = src;
                 }
-                let effectpath: Result<EffectPath, _> = serde_json::from_str(
-                    &String::from_utf8_lossy(&v[..path_len as usize]).to_owned(),
-                )
-                .map_err(CompilationError::DeserializationError);
+                let effectpath: Result<EffectPath, _> =
+                    sapio_data_repr::from_slice(&v[..path_len as usize])
+                        .map_err(CompilationError::DeserializationError);
 
                 create_args.and_then(|c| effectpath.map(|e| InternalAction::Create(c, e)))
             }
@@ -243,7 +241,7 @@ mod exports {
         let key = wasmer_cache::Hash::from_str(&h).map(SyncModuleLocator::Key);
         // Use serde_json::Value for the WasmPluginHandle Output type
         match key.map(|module_locator| {
-            WasmPluginHandle::<serde_json::Value>::new(
+            WasmPluginHandle::<sapio_data_repr::SapioModuleBoundaryRepr>::new(
                 path,
                 &emulator,
                 module_locator,
@@ -252,29 +250,24 @@ mod exports {
             )
         }) {
             Ok(Ok(sph)) => {
-                let comp_s = (move || -> Result<serde_json::Value, CompilationError> {
-                    let value = match action_to_take? {
-                        InternalAction::GetName => Ok(sph.get_name().and_then(|m| {
-                            serde_json::to_value(m).map_err(CompilationError::DeserializationError)
-                        })),
-                        InternalAction::GetLogo => Ok(sph.get_logo().and_then(|m| {
-                            serde_json::to_value(m).map_err(CompilationError::DeserializationError)
-                        })),
-                        InternalAction::GetAPI => Ok(sph.get_api().and_then(|m| {
-                            serde_json::to_value(m).map_err(CompilationError::DeserializationError)
-                        })),
-                        InternalAction::Create(create_args, path) => {
-                            sph.call(&path, &create_args).map(|comp| {
-                                serde_json::to_value(comp)
-                                    .map_err(CompilationError::DeserializationError)
-                            })
-                        }
-                    };
-                    value?
-                })();
+                let comp_s = action_to_take.and_then(|action| match action {
+                    InternalAction::GetName => sph.get_name().and_then(|m| {
+                        sapio_data_repr::to_boundary_repr(&m)
+                            .map_err(CompilationError::DeserializationError)
+                    }),
+                    InternalAction::GetLogo => sph.get_logo().and_then(|m| {
+                        sapio_data_repr::to_boundary_repr(&m)
+                            .map_err(CompilationError::DeserializationError)
+                    }),
+                    InternalAction::GetAPI => sph.get_api().and_then(|m| {
+                        sapio_data_repr::to_boundary_repr(&m)
+                            .map_err(CompilationError::DeserializationError)
+                    }),
+                    InternalAction::Create(create_args, path) => sph.call(&path, &create_args),
+                });
                 (move || -> Result<i32, CompilationError> {
                     // serialize the reuslt, not just the output.
-                    let comp_s = serde_json::to_string(&comp_s.map_err(|s| s.to_string()))
+                    let comp_s = sapio_data_repr::to_string(&comp_s.map_err(|s| s.to_string()))
                         .map_err(CompilationError::SerializationError)?;
                     let bytes: i32 = env
                         .allocate_wasm_bytes_ref()
@@ -333,19 +326,19 @@ mod exports {
             buf
         });
         let clause = env.emulator.get_signer_for(h).unwrap();
-        let s = serde_json::to_string_pretty(&clause).unwrap();
-        let bytes = env
+        let repr = sapio_data_repr::to_string(&clause).unwrap();
+        let outbuf = env
             .allocate_wasm_bytes_ref()
             .unwrap()
-            .call(s.len() as i32)
+            .call(repr.len() as i32)
             .unwrap();
-        for (byte, c) in env.memory_ref().unwrap().view::<u8>()[bytes as usize..]
+        for (byte, c) in env.memory_ref().unwrap().view::<u8>()[outbuf as usize..]
             .iter()
-            .zip(s.as_bytes())
+            .zip(repr.as_bytes())
         {
             byte.set(*c);
         }
-        bytes
+        outbuf
     }
 
     /// get the oracle to sign the psbt passed in
@@ -364,21 +357,21 @@ mod exports {
         {
             *dst = src;
         }
-        let psbt: PartiallySignedTransaction = serde_json::from_slice(&buf[..]).unwrap();
+        let psbt: PartiallySignedTransaction = sapio_data_repr::from_slice(&buf[..]).unwrap();
         let psbt = env.emulator.sign(psbt).unwrap();
         buf.clear();
-        let s = serde_json::to_string_pretty(&psbt).unwrap();
-        let bytes = env
+        let repr = sapio_data_repr::to_string(&psbt).unwrap();
+        let outbuf = env
             .allocate_wasm_bytes_ref()
             .unwrap()
-            .call(s.len() as i32)
+            .call(repr.len() as i32)
             .unwrap();
-        for (byte, c) in env.memory_ref().unwrap().view::<u8>()[bytes as usize..]
+        for (byte, c) in env.memory_ref().unwrap().view::<u8>()[outbuf as usize..]
             .iter()
-            .zip(s.as_bytes())
+            .zip(repr.as_bytes())
         {
             byte.set(*c);
         }
-        bytes
+        outbuf
     }
 }

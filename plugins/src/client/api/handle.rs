@@ -12,14 +12,17 @@ use core::convert::TryFrom;
 use sapio::contract::CompilationError;
 use sapio_base::effects::EffectPath;
 use sapio_base::Clause;
-use sapio_trait::SapioJSONTrait;
+use sapio_trait::SapioSchemaValidatable;
 use std::marker::PhantomData;
 
 /// A Type which represents a validated module the host can resolve and execute
 /// with a given API
-#[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(try_from = "SapioHostAPIVerifier<T, R>")]
-pub struct SapioHostAPI<T: SapioJSONTrait + Clone, R: for<'a> Deserialize<'a> + JsonSchema> {
+pub struct SapioHostAPI<
+    T: SapioSchemaValidatable + Clone,
+    R: HasSapioModuleSchema + for<'a> Deserialize<'a>,
+> {
     /// The module's locator
     pub which_plugin: LookupFrom,
     /// when resolved, the hash of the module
@@ -34,9 +37,9 @@ pub type ContractModule<T> = SapioHostAPI<T, Compiled>;
 /// Convenience Label for [`SapioHostAPI<T, Clause>`]
 pub type ClauseModule<T> = SapioHostAPI<T, Clause>;
 
-impl<T: SapioJSONTrait + Clone, R> PluginHandle for SapioHostAPI<T, R>
+impl<T: SapioSchemaValidatable + Clone, R> PluginHandle for SapioHostAPI<T, R>
 where
-    R: for<'a> Deserialize<'a> + JsonSchema,
+    R: HasSapioModuleSchema + for<'a> Deserialize<'a>,
 {
     type Input = CreateArgs<T>;
     type Output = R;
@@ -54,9 +57,9 @@ where
     }
 }
 
-impl<T: SapioJSONTrait + Clone, R> SapioHostAPI<T, R>
+impl<T: SapioSchemaValidatable + Clone, R> SapioHostAPI<T, R>
 where
-    R: for<'a> Deserialize<'a> + JsonSchema,
+    R: HasSapioModuleSchema + for<'a> Deserialize<'a>,
 {
     /// Ensures a [`SapioHostAPI`]'s [`LookupFrom`] field is
     /// [`LookupFrom::HashKey`] form.
@@ -70,9 +73,9 @@ where
     }
 }
 
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize)]
 /// # Helper for Serialization...
-struct SapioHostAPIVerifier<T: SapioJSONTrait + Clone, R: for<'a> Deserialize<'a>> {
+struct SapioHostAPIVerifier<T: SapioSchemaValidatable + Clone, R: for<'a> Deserialize<'a>> {
     which_plugin: LookupFrom,
     #[serde(default, skip)]
     _pd: PhantomData<(T, R)>,
@@ -80,8 +83,8 @@ struct SapioHostAPIVerifier<T: SapioJSONTrait + Clone, R: for<'a> Deserialize<'a
 
 impl<T, R> TryFrom<LookupFrom> for SapioHostAPI<T, R>
 where
-    R: JsonSchema + for<'a> Deserialize<'a>,
-    T: SapioJSONTrait + Clone,
+    R: HasSapioModuleSchema + for<'a> Deserialize<'a>,
+    T: SapioSchemaValidatable + Clone,
 {
     type Error = CompilationError;
     fn try_from(which_plugin: LookupFrom) -> Result<SapioHostAPI<T, R>, CompilationError> {
@@ -93,8 +96,8 @@ where
 }
 impl<T, R> TryFrom<SapioHostAPIVerifier<T, R>> for SapioHostAPI<T, R>
 where
-    R: schemars::JsonSchema + for<'a> Deserialize<'a>,
-    T: SapioJSONTrait + Clone,
+    R: HasSapioModuleSchema + for<'a> Deserialize<'a>,
+    T: SapioSchemaValidatable + Clone,
 {
     type Error = CompilationError;
     fn try_from(shapv: SapioHostAPIVerifier<T, R>) -> Result<SapioHostAPI<T, R>, CompilationError> {
@@ -112,10 +115,8 @@ where
             _pd,
         };
         let api = res.get_api()?;
-        T::check_trait_implemented_inner(
-            &serde_json::to_value(api.input()).map_err(CompilationError::SerializationError)?,
-        )
-        .map_err(CompilationError::ModuleFailedAPICheck)?;
+        T::check_trait_implemented_inner(api.input())
+            .map_err(CompilationError::ModuleFailedAPICheck)?;
         Ok(res)
     }
 }

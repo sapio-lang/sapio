@@ -38,25 +38,25 @@ where
     // to get one from Self::InputWrapper, potentially falliably
     Self: Callable + TryFrom<Self::InputWrapper>,
     // InputWrapper must be deserializable and describable
-    Self::InputWrapper: JsonSchema + Sized + for<'a> Deserialize<'a>,
+    Self::InputWrapper: Sized + for<'a> Deserialize<'a> + HasSapioModuleSchema,
     // read as: The return type of CallableType::try_from(self) is
     // Result<CallableType, X>, where X must be able to x.into() a
     // CompilationError.
     CompilationError: From<<Self as TryFrom<Self::InputWrapper>>::Error>,
     // We must be able to serialize/describe the outputs
-    Self::Output: Serialize + JsonSchema,
+    Self::Output: Serialize + HasSapioModuleSchema,
 {
     /// A type which wraps Self, but can be converted into Self.
     type InputWrapper;
     /// gets the jsonschema for the plugin type, which is the API for calling create.
     fn get_api_inner() -> *mut c_char {
-        encode_json(&API::<CreateArgs<Self::InputWrapper>, Self::Output>::new())
+        encode_boundary_repr(&API::<CreateArgs<Self::InputWrapper>, Self::Output>::get_schema())
     }
 
     /// creates an instance of the plugin from a json pointer and outputs a result pointer
     unsafe fn create(p: *mut c_char, c: *mut c_char) -> *mut c_char {
         let res = Self::create_result(p, c).map_err(|e| e.to_string());
-        encode_json(&res)
+        encode_boundary_repr(&res)
     }
 
     /// creates an instance of the plugin from a json pointer and outputs a typed result
@@ -64,7 +64,9 @@ where
         p: *mut c_char,
         c: *mut c_char,
     ) -> Result<Self::Output, CompilationError> {
+        todo!("figure out how to deal with c strings");
         let s = CString::from_raw(c);
+        todo!("figure out how to deal with c strings");
         let path = CString::from_raw(p);
         let CreateArgs::<Self::InputWrapper> {
             arguments,
@@ -74,7 +76,8 @@ where
                     amount,
                     effects,
                 },
-        } = serde_json::from_slice(s.to_bytes()).map_err(CompilationError::DeserializationError)?;
+        } = sapio_data_repr::from_slice(s.to_bytes())
+            .map_err(CompilationError::DeserializationError)?;
         // TODO: In theory, these trampoline bounds are robust/serialization safe...
         // But the API needs stiching to the parent in a sane way...
         let caller = lookup_this_module_name()
@@ -84,11 +87,11 @@ where
                     "Host Error: Should always be able to identify module's own ID".into(),
                 )
             })?;
-        let cstring_to_string = path
-            .to_str()
-            .map_err(|e| CompilationError::InternalModuleError(format!("Path Invalid: {}", e)))?;
+        // let cstring_to_string = path
+        //     .to_str()
+        //     .map_err(|e| CompilationError::InternalModuleError(format!("Path Invalid: {}", e)))?;
 
-        let parsed_rpath = serde_json::from_str(cstring_to_string)
+        let parsed_rpath = sapio_data_repr::from_slice(path.to_bytes())
             .map_err(CompilationError::DeserializationError)?;
         let path: EffectPath = EffectPath::push_owned(
             Some(EffectPath::push(
@@ -121,8 +124,8 @@ where
 }
 
 /// Helper function for encoding a JSON into WASM linear memory
-fn encode_json<S: Serialize>(s: &S) -> *mut c_char {
-    if let Ok(Ok(c)) = serde_json::to_string(s).map(CString::new) {
+fn encode_boundary_repr<S: Serialize>(s: &S) -> *mut c_char {
+    if let Ok(Ok(c)) = sapio_data_repr::to_string(s).map(CString::new) {
         c.into_raw()
     } else {
         std::ptr::null_mut::<c_char>()
