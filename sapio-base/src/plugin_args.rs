@@ -6,6 +6,7 @@
 
 //! arguments for passing into a sapio module
 use crate::effects::MapEffectDB;
+use sapio_data_repr::HasSapioModuleSchema;
 use serde::{Deserialize, Serialize};
 
 /// a remote derivation for the network definitions
@@ -32,6 +33,11 @@ pub struct CreateArgs<S> {
     /// Others arguments set by general system settings
     pub context: ContextualArguments,
 }
+impl<S: HasSapioModuleSchema> HasSapioModuleSchema for CreateArgs<S> {
+    fn get_schema() -> sapio_data_repr::SapioModuleSchema {
+        todo!()
+    }
+}
 
 /// # Contextual Arguments For Creating this Contract
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -46,4 +52,9 @@ pub struct ContextualArguments {
     /// # Effects to augment compilations with
     #[serde(skip_serializing_if = "MapEffectDB::skip_serializing", default)]
     pub effects: MapEffectDB,
+}
+impl HasSapioModuleSchema for ContextualArguments {
+    fn get_schema() -> sapio_data_repr::SapioModuleSchema {
+        todo!()
+    }
 }
