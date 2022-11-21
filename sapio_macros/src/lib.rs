@@ -212,7 +212,7 @@ fn web_api_schema(
             match arg {
                 NestedMeta::Meta(Meta::Path(v)) if v.is_ident("web_api") => {
                     return quote! {
-                    const #name : Option<&'static dyn Fn() -> std::sync::Arc<serde_json::Value>> =
+                    const #name : Option<&'static dyn Fn() -> std::sync::Arc<sapio_data_repr::SapioModuleSchema>> =
                         Some(&|| sapio::contract::macros::get_schema_for::<#ty>());
                     };
                 }
@@ -223,7 +223,7 @@ fn web_api_schema(
         panic!("Wrong type: {:?}", typ);
     }
     quote! {
-        const #name : Option<&'static dyn Fn() -> std::sync::Arc<serde_json::Value>> = None;
+        const #name : Option<&'static dyn Fn() -> std::sync::Arc<sapio_data_repr::SapioModuleSchema>> = None;
     }
 }
 ///
