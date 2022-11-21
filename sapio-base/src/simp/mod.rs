@@ -10,12 +10,9 @@ use std::{
     collections::BTreeMap,
     marker::PhantomData,
     ops::{ShlAssign, Shr},
-    sync::Arc,
 };
 
-use bitcoin::psbt::serialize::Serialize;
 use sapio_data_repr::SapioModuleBoundaryRepr;
-use serde::Deserialize;
 use std::fmt::Debug;
 
 /// Errors that may come up when working with SIMPs

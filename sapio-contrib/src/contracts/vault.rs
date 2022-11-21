@@ -11,7 +11,6 @@ use sapio::contract::*;
 use sapio::*;
 use sapio_base::timelocks::AnyRelTimeLock;
 
-use schemars::*;
 use serde::*;
 use std::convert::{TryFrom, TryInto};
 use std::rc::Rc;

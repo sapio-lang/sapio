@@ -29,7 +29,7 @@ use sapio_wasm_plugin::{
 use schemars::JsonSchema;
 use serde::*;
 use serde_json::Value;
-use std::fmt::{Display, Formatter, Write};
+use std::fmt::{Display, Formatter};
 use std::{
     collections::{BTreeMap, HashMap},
     convert::TryInto,

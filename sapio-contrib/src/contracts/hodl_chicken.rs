@@ -30,7 +30,6 @@ use sapio::contract::*;
 use sapio::*;
 use sapio_base::Clause;
 use sapio_macros::guard;
-use schemars::*;
 use serde::*;
 use std::convert::TryFrom;
 

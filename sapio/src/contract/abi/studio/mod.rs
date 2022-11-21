@@ -15,7 +15,6 @@ use bitcoin::util::psbt::PartiallySignedTransaction;
 use bitcoin::OutPoint;
 use sapio_base::effects::EffectPath;
 use sapio_base::serialization_helpers::SArc;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

@@ -35,7 +35,6 @@ use sapio::contract::Compiled;
 use sapio_base::util::CTVHash;
 use sapio_data_repr::HasSapioModuleSchema;
 use sapio_wasm_plugin::host::plugin_handle::ModuleLocator;
-use schemars::schema_for;
 use serde_json::Deserializer;
 use std::error::Error;
 use std::str::FromStr;

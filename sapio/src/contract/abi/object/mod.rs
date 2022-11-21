@@ -32,7 +32,6 @@ use sapio_base::effects::PathFragment;
 use sapio_base::serialization_helpers::SArc;
 
 use sapio_base::simp::SIMPError;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 

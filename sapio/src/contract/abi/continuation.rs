@@ -7,7 +7,7 @@
 //! ABI for contract resumption
 
 use sapio_base::serialization_helpers::SArc;
-use sapio_base::simp::{SIMPAttachableAt, SIMPError, SIMP};
+use sapio_base::simp::{SIMPAttachableAt, SIMPError};
 use sapio_base::{effects::EffectPath, simp::ContinuationPointLT};
 
 use sapio_data_repr::{SapioModuleBoundaryRepr, SapioModuleSchema};

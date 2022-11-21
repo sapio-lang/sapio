@@ -6,7 +6,7 @@
 
 //! Template Output container
 use super::*;
-use sapio_base::simp::{SIMPError, TemplateOutputLT, SIMP};
+use sapio_base::simp::{SIMPError, TemplateOutputLT};
 use serde::{Deserialize, Serialize};
 /// Metadata for outputs, arbitrary KV set.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
