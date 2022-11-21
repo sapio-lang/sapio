@@ -21,6 +21,7 @@ use sapio_base::{
     serialization_helpers::SArc,
     txindex::{TxIndex, TxIndexLogger},
 };
+use sapio_data_repr::{HasSapioModuleSchema, SapioModuleBoundaryRepr};
 use sapio_wasm_plugin::{
     host::{plugin_handle::ModuleLocator, PluginHandle, WasmPluginHandle},
     CreateArgs, API,
@@ -40,12 +41,12 @@ use std::{
 
 use crate::{config::EmulatorConfig, util::create_mock_output};
 
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize)]
 pub struct Common {
     pub path: PathBuf,
     pub emulator: Option<EmulatorConfig>,
     pub module_locator: Option<ModuleLocator>,
-    #[schemars(with = "String")]
+    // #[schemars(with = "String")]
     pub net: bitcoin::Network,
     pub plugin_map: Option<BTreeMap<Vec<u8>, [u8; 32]>>,
 }
@@ -55,15 +56,15 @@ pub struct List;
 pub struct ListReturn {
     items: BTreeMap<String, String>,
 }
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize)]
 pub struct Call {
-    pub params: serde_json::Value,
+    pub params: sapio_data_repr::SapioModuleBoundaryRepr,
 }
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize)]
 pub struct CallReturn {
-    result: Value,
+    result: sapio_data_repr::SapioModuleBoundaryRepr,
 }
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize)]
 pub struct Bind {
     pub client_url: String,
     #[serde(with = "crate::config::Auth")]
@@ -77,9 +78,9 @@ pub struct Bind {
 pub type BindReturn = Program;
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct Api;
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize)]
 pub struct ApiReturn {
-    api: API<CreateArgs<Value>, Value>,
+    api: API<CreateArgs<SapioModuleBoundaryRepr>, SapioModuleBoundaryRepr>,
 }
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct Logo;
@@ -101,7 +102,7 @@ pub struct LoadReturn {
     key: String,
 }
 
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize)]
 pub enum Command {
     List(List),
     Call(Call),
@@ -111,7 +112,7 @@ pub enum Command {
     Info(Info),
     Load(Load),
 }
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize)]
 pub enum CommandReturn {
     List(ListReturn),
     Call(CallReturn),
@@ -122,15 +123,25 @@ pub enum CommandReturn {
     Load(LoadReturn),
 }
 
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize)]
 pub struct Request {
     pub context: Common,
     pub command: Command,
 }
+impl HasSapioModuleSchema for Request {
+    fn get_schema() -> sapio_data_repr::SapioModuleSchema {
+        todo!()
+    }
+}
 
-#[derive(Serialize, Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize)]
 pub struct Response {
     pub result: Result<CommandReturn, RequestError>,
+}
+impl HasSapioModuleSchema for Response {
+    fn get_schema() -> sapio_data_repr::SapioModuleSchema {
+        todo!()
+    }
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
@@ -179,13 +190,15 @@ impl Request {
             ..
         } = context;
         let default_sph = || -> Result<_, &'static str> {
-            Ok(WasmPluginHandle::<Value>::new_async(
-                &path,
-                &emulator,
-                module_locator.ok_or("Expected to have exactly one of key or file")?,
-                net,
-                plugin_map.clone(),
-            ))
+            Ok(
+                WasmPluginHandle::<sapio_data_repr::SapioModuleBoundaryRepr>::new_async(
+                    &path,
+                    &emulator,
+                    module_locator.ok_or("Expected to have exactly one of key or file")?,
+                    net,
+                    plugin_map.clone(),
+                ),
+            )
         };
         match command {
             Command::List(_list) => {
@@ -206,16 +219,13 @@ impl Request {
                 let sph = default_sph()?.await?;
 
                 let api = sph.get_api()?;
-                let schema = serde_json::to_value(api.input())?;
-                let validator = jsonschema_valid::Config::from_schema(
-                    &schema,
-                    Some(jsonschema_valid::schemas::Draft::Draft6),
-                )?;
-                if let Err(it) = validator.validate(&params) {
+                let schema = api.input();
+                if let Err(it) = sapio_data_repr::validate(&schema, &params) {
                     let v: Vec<_> = it.map(|e| e.to_string()).collect();
                     Err(RequestError(v.into()))?;
                 }
-                let create_args: CreateArgs<serde_json::Value> = serde_json::from_value(params)?;
+                let create_args: CreateArgs<sapio_data_repr::SapioModuleBoundaryRepr> =
+                    sapio_data_repr::from_boundary_repr(params)?;
                 let v = sph.call(&PathFragment::Root.into(), &create_args)?;
                 Ok(CommandReturn::Call(CallReturn { result: v }))
             }
@@ -237,14 +247,7 @@ impl Request {
                 let api = sph.get_api()?;
                 Ok(CommandReturn::Info(InfoReturn {
                     name: sph.get_name()?,
-                    description: api
-                        .input()
-                        .schema
-                        .metadata
-                        .as_ref()
-                        .and_then(|m| m.description.as_ref())
-                        .unwrap()
-                        .clone(),
+                    description: api.input().description().unwrap(),
                 }))
             }
             Command::Load(_load) => {

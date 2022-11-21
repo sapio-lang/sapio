@@ -33,6 +33,7 @@ use emulator_connect::CTVAvailable;
 use emulator_connect::CTVEmulator;
 use sapio::contract::Compiled;
 use sapio_base::util::CTVHash;
+use sapio_data_repr::HasSapioModuleSchema;
 use sapio_wasm_plugin::host::plugin_handle::ModuleLocator;
 use schemars::schema_for;
 use serde_json::Deserializer;
@@ -366,10 +367,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             Some(("schemas", _args)) => {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&schema_for!((Request, Response)))?,
-                );
+                println!("{}", Request::get_schema());
+                println!("{}", Response::get_schema());
             }
             _ => unreachable!(),
         },

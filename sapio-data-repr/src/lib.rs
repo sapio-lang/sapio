@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use serde::{self, Deserialize, Serialize};
 use serde_json::{Serializer, Value};
 
@@ -24,8 +26,23 @@ impl SapioModuleBoundaryRepr {
         todo!()
     }
 }
+impl HasSapioModuleSchema for SapioModuleBoundaryRepr {
+    fn get_schema() -> SapioModuleSchema {
+        todo!()
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SapioModuleSchema(Value);
+impl SapioModuleSchema {
+    pub fn description(&self) -> Option<String> {
+        todo!()
+    }
+}
+impl Display for SapioModuleSchema {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
+}
 
 pub trait HasSapioModuleSchema {
     fn get_schema() -> SapioModuleSchema;
@@ -53,5 +70,12 @@ pub fn to_bytes<T: Serialize>(v: &T) -> Result<Vec<u8>, Error> {
 }
 
 pub fn from_slice<'de, T: Deserialize<'de>>(b: &[u8]) -> Result<T, Error> {
+    todo!()
+}
+
+pub fn validate(
+    schema: &SapioModuleSchema,
+    data: &SapioModuleBoundaryRepr,
+) -> Result<(), Box<dyn Iterator<Item = Error>>> {
     todo!()
 }

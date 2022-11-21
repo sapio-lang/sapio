@@ -21,7 +21,7 @@ lazy_static = "1.4.0"
 bitcoincore-rpc-async = "4.0.1-alpha.1"
 tokio = { version = "1", features = ["full"] }
 directories = "3.0.1"
-rand="^0.6"
+rand = "^0.6"
 jsonschema-valid = "0.4.0"
 
 [dependencies.sapio-psbt]
@@ -51,6 +51,9 @@ version = "0.2.0"
 [dependencies.sapio-base]
 path = "../sapio-base"
 version = "0.2.0"
+
+[dependencies.sapio-data-repr]
+path = "../sapio-data-repr"
 
 [dependencies.ctv_emulators]
 path = "../ctv_emulators"
