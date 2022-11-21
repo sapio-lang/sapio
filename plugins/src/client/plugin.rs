@@ -64,10 +64,8 @@ where
         p: *mut c_char,
         c: *mut c_char,
     ) -> Result<Self::Output, CompilationError> {
-        todo!("figure out how to deal with c strings");
-        let s = CString::from_raw(c);
-        todo!("figure out how to deal with c strings");
-        let path = CString::from_raw(p);
+        let s = CString::from_raw(c).into_string().unwrap(); // TODO: handle this properly?
+        let path = CString::from_raw(p).into_string().unwrap(); // TODO: handle this properly?
         let CreateArgs::<Self::InputWrapper> {
             arguments,
             context:
@@ -76,8 +74,7 @@ where
                     amount,
                     effects,
                 },
-        } = sapio_data_repr::from_slice(s.to_bytes())
-            .map_err(CompilationError::DeserializationError)?;
+        } = sapio_data_repr::from_str(&s).map_err(CompilationError::DeserializationError)?;
         // TODO: In theory, these trampoline bounds are robust/serialization safe...
         // But the API needs stiching to the parent in a sane way...
         let caller = lookup_this_module_name()
@@ -87,12 +84,8 @@ where
                     "Host Error: Should always be able to identify module's own ID".into(),
                 )
             })?;
-        // let cstring_to_string = path
-        //     .to_str()
-        //     .map_err(|e| CompilationError::InternalModuleError(format!("Path Invalid: {}", e)))?;
-
-        let parsed_rpath = sapio_data_repr::from_slice(path.to_bytes())
-            .map_err(CompilationError::DeserializationError)?;
+        let parsed_rpath =
+            sapio_data_repr::from_str(&path).map_err(CompilationError::DeserializationError)?;
         let path: EffectPath = EffectPath::push_owned(
             Some(EffectPath::push(
                 Some(Arc::new(parsed_rpath)),

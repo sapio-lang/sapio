@@ -26,8 +26,7 @@ impl CTVEmulator for WasmHostEmulator {
             sapio_v1_wasm_plugin_ctv_emulator_signer_for(&mut inner[0] as *mut u8 as i32)
         };
         let signer = unsafe { CString::from_raw(signer as *mut c_char) };
-        todo!(); // ensure that we are actually getting boundary reprs out
-        Ok(sapio_data_repr::from_slice(signer.to_bytes()).unwrap())
+        Ok(sapio_data_repr::from_str(&signer.into_string().unwrap()).unwrap()) // TODO handle this properly?
     }
     fn sign(
         &self,
@@ -44,8 +43,7 @@ impl CTVEmulator for WasmHostEmulator {
                     as *mut c_char,
             )
         };
-        todo!(); // ensure that we are actually getting boundary reprs out
-        let j = sapio_data_repr::from_slice(ret.as_bytes()).unwrap();
+        let j = sapio_data_repr::from_str(&ret.into_string().unwrap()).unwrap(); // TODO handle this properly?
         Ok(j)
     }
 }

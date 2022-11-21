@@ -59,9 +59,8 @@ pub fn get_logo(key: &[u8; 32]) -> Result<String, CompilationError> {
             ));
         }
         let cs = unsafe { CString::from_raw(buf as *mut c_char) };
-        todo!("figure out how to handle CStrings");
-        sapio_data_repr::from_slice(cs.as_bytes())
-            .map_err(CompilationError::DeserializationError)?
+        let s = cs.into_string().unwrap(); // TODO handle this properly?
+        sapio_data_repr::from_str(&s).map_err(CompilationError::DeserializationError)?
     };
     logo.map_err(CompilationError::InternalModuleError)
 }
@@ -77,9 +76,8 @@ pub fn get_name(key: &[u8; 32]) -> Result<String, CompilationError> {
             ));
         }
         let cs = unsafe { CString::from_raw(buf as *mut c_char) };
-        todo!("figure out how to handle CStrings");
-        sapio_data_repr::from_slice(cs.as_bytes())
-            .map_err(CompilationError::DeserializationError)?
+        let s = cs.into_string().unwrap(); // TODO handle this properly?
+        sapio_data_repr::from_str(&s).map_err(CompilationError::DeserializationError)?
     };
     name.map_err(CompilationError::InternalModuleError)
 }
@@ -95,9 +93,8 @@ pub fn get_api<T, R>(key: &[u8; 32]) -> Result<API<T, R>, CompilationError> {
             ));
         }
         let cs = unsafe { CString::from_raw(api_buf as *mut c_char) };
-        todo!("figure out how to handle CStrings");
-        sapio_data_repr::from_slice(cs.as_bytes())
-            .map_err(CompilationError::DeserializationError)?
+        let s = cs.into_string().unwrap(); // TODO handle this properly?
+        sapio_data_repr::from_str(&s).map_err(CompilationError::DeserializationError)?
     };
     api.map_err(CompilationError::InternalModuleError)
 }
