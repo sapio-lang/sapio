@@ -37,7 +37,7 @@ impl StakingState for Closing {}
 ///
 /// Burning is important v.s. miner fee because otherwise the staker
 /// can bribe (or be a miner themselves) to cheat.
-#[derive(JsonSchema, Deserialize)]
+#[derive(Deserialize)]
 pub struct Staker<T: StakingState> {
     /// # Timeout
     /// How long to wait for evidence after closing
@@ -45,12 +45,12 @@ pub struct Staker<T: StakingState> {
     /// # Signing Key
     /// The key that if leaked can burn funds
     // TODO: Taproot fix encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    // #[schemars(with = "bitcoin::hashes::sha256::Hash")]
     signing_key: XOnlyPublicKey,
     /// # Redemption Key
     /// The key that will be used to control & return the redeemed funds
     // TODO: Taproot fix encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    // #[schemars(with = "bitcoin::hashes::sha256::Hash")]
     redeeming_key: XOnlyPublicKey,
     /// current contract state.
     #[serde(skip, default)]

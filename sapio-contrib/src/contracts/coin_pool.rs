@@ -12,6 +12,7 @@ use sapio::*;
 use sapio_base::timelocks::AnyRelTimeLock;
 use sapio_base::Clause;
 
+use sapio_data_repr::HasSapioModuleSchema;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::convert::{TryFrom, TryInto};
@@ -110,14 +111,14 @@ pub struct CoinPoolUpdate {
 }
 
 /// `CoinPoolUpdate` allows updating a `CoinPool` to a new state.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize)]
 pub enum UpdateTypes {
     /// # Normal Update
     Basic {
         /// the contracts to pay into
         #[serde(skip_serializing_if = "Option::is_none", default)]
         // TODO: Taproot fix encoding
-        #[schemars(with = "Option<Vec<(bitcoin::hashes::sha256::Hash, AmountF64)>>")]
+        // #[schemars(with = "Option<Vec<(bitcoin::hashes::sha256::Hash, AmountF64)>>")]
         payouts: Option<Vec<(bitcoin::XOnlyPublicKey, AmountF64)>>,
         /// If the external inputs are contributing funds -- this allows two
         /// coinpools to merge.
@@ -130,6 +131,11 @@ pub enum UpdateTypes {
     },
     /// # Update without Args
     NoUpdate,
+}
+impl HasSapioModuleSchema for UpdateTypes {
+    fn get_schema() -> sapio_data_repr::SapioModuleSchema {
+        todo!()
+    }
 }
 impl Default for UpdateTypes {
     fn default() -> Self {

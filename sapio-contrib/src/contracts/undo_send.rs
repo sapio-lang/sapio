@@ -18,7 +18,7 @@ use std::convert::TryInto;
 /// # Undoable Sending Contract
 /// UndoSendInternal allows funds to be sent to the to_contract only after a
 /// relative timeout. Otherwise, they can move back to the from_contract.
-#[derive(JsonSchema, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct UndoSendInternal {
     /// The contract to return funds to before timeout
     pub from_contract: Compiled,

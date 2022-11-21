@@ -14,13 +14,13 @@ use std::collections::LinkedList;
 use std::convert::TryFrom;
 use std::marker::PhantomData;
 
-#[derive(JsonSchema, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct ExampleA {
     // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    // #[schemars(with = "bitcoin::hashes::sha256::Hash")]
     alice: bitcoin::XOnlyPublicKey,
     // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    // #[schemars(with = "bitcoin::hashes::sha256::Hash")]
     bob: bitcoin::XOnlyPublicKey,
     amount: CoinAmount,
     resolution: Compiled,

@@ -10,6 +10,7 @@ use sapio::contract::*;
 use sapio::util::amountrange::AmountF64;
 use sapio::*;
 use sapio_base::Clause;
+use sapio_data_repr::HasSapioModuleSchema;
 use sapio_macros::guard;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -63,7 +64,7 @@ impl ChainReturn {
 }
 
 /// Updates to a ChainReturn
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize)]
 pub enum UpdateTypes {
     /// # Add This Data
     AddData {
@@ -81,6 +82,11 @@ impl Default for UpdateTypes {
     }
 }
 impl StatefulArgumentsTrait for UpdateTypes {}
+impl HasSapioModuleSchema for UpdateTypes {
+    fn get_schema() -> sapio_data_repr::SapioModuleSchema {
+        todo!()
+    }
+}
 
 impl Contract for ChainReturn {
     declare! {updatable<UpdateTypes>, Self::next_chain}

@@ -11,6 +11,7 @@ use contract::*;
 
 use sapio::*;
 use sapio_base::Clause;
+use sapio_data_repr;
 use sapio_macros::guard;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -65,10 +66,10 @@ mod tests {
             resolution,
             db,
         };
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&schemars::schema_for!(Channel<Stop, Args>)).unwrap()
-        );
+        // println!(
+        //     "{}",
+        //     serde_json::to_string_pretty(&schemars::schema_for!(Channel<Stop, Args>)).unwrap()
+        // );
         println!("{}", serde_json::to_string_pretty(&y).unwrap());
         let mut ctx = sapio::contract::Context::new(
             bitcoin::Network::Regtest,
@@ -196,19 +197,19 @@ struct Stop();
 impl State for Start {}
 impl State for Stop {}
 
-#[derive(JsonSchema, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 struct Channel<T: State, ArgsT: TryInto<Update>> {
     pd: PhantomData<(T, ArgsT)>,
     // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    // #[schemars(with = "bitcoin::hashes::sha256::Hash")]
     alice: bitcoin::XOnlyPublicKey,
     // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    // #[schemars(with = "bitcoin::hashes::sha256::Hash")]
     bob: bitcoin::XOnlyPublicKey,
     amount: CoinAmount,
     resolution: Compiled,
     /// We instruct the JSONSchema to use strings
-    #[schemars(with = "DBHandle")]
+    // #[schemars(with = "DBHandle")]
     #[serde(with = "db_serde")]
     db: Arc<Mutex<dyn DB>>,
 }

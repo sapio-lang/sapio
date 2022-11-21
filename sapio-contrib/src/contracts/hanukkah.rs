@@ -15,7 +15,7 @@ use serde::*;
 use std::convert::TryFrom;
 
 /// Implements a Hanukkiah for @TheBitcoinRabbi
-#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Hanukkiah {
     /// Who receives the funds in the candles
     recipient: bitcoin::Address,
@@ -23,7 +23,7 @@ pub struct Hanukkiah {
     amount_per_candle: AmountF64,
     /// feerate
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
-    #[schemars(with = "u64")]
+    // #[schemars(with = "u64")]
     feerate_per_byte: Amount,
     /// What time should the Hanukkiah be able to be lit the first night, subsequent nights will be 24 hours later.
     night_time: AbsTime,
@@ -73,7 +73,7 @@ impl Contract for Hanukkiah {
 
 /// Implements a Hanukkiah for @TheBitcoinRabbi
 /// Fat Version
-#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Hanukkiah2 {
     /// Who receives the funds in the candles
     recipient: Recipients,
@@ -81,7 +81,7 @@ pub struct Hanukkiah2 {
     amount_per_candle: AmountF64,
     /// feerate
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
-    #[schemars(with = "u64")]
+    // #[schemars(with = "u64")]
     feerate_per_byte: Amount,
     /// What time should the Hanukkiah be able to be lit the first night, subsequent nights will be 24 hours later.
     night_time: AbsTime,
@@ -118,7 +118,7 @@ impl Into<String> for Recipients {
     }
 }
 
-#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 struct Hanukkiah2Night {
     /// Who receives the funds in the candles
     recipients: Vec<bitcoin::Address>,
@@ -126,7 +126,7 @@ struct Hanukkiah2Night {
     amount_per_candle: AmountF64,
     /// feerate
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
-    #[schemars(with = "u64")]
+    // #[schemars(with = "u64")]
     feerate_per_byte: Amount,
     /// What time should the Hanukkiah be able to be lit the first night, subsequent nights will be 24 hours later.
     night_time: AbsTime,

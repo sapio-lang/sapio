@@ -90,7 +90,7 @@ impl Contract for Vault {
     declare! {non updatable}
 }
 
-#[derive(JsonSchema, Deserialize)]
+#[derive(Deserialize)]
 /// A specialization of `Vault` where cold storage is a regular `bitcoin::Address`
 pub struct VaultAddress {
     /// # Address for Cold Storage
@@ -123,7 +123,7 @@ impl From<VaultAddress> for Vault {
     }
 }
 
-#[derive(JsonSchema, Deserialize)]
+#[derive(Deserialize)]
 /// # Value Split Tree Payment Vault
 /// A specialization of `Vault` where cold storage is a tree payment to a `bitcoin::Address`
 /// split up based on a max amount per address
@@ -193,7 +193,7 @@ mod test {
     use sapio_base::effects::EffectPath;
     use sapio_base::plugin_args::CreateArgs;
     use sapio_ctv_emulator_trait::CTVAvailable;
-    #[derive(JsonSchema, Deserialize)]
+    #[derive(Deserialize)]
     enum Versions {
         ForAddress(VaultAddress),
         ForTree(VaultTree),

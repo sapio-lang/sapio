@@ -36,7 +36,7 @@ use std::convert::TryFrom;
 
 /// Payout can be into any Compiled object
 pub type Payout = Compiled;
-#[derive(JsonSchema, Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 struct Payouts {
     /// Winner
     winner: Payout,
@@ -45,16 +45,16 @@ struct Payouts {
 }
 /// The `HodlChickenInner` has been structurally verified
 /// during conversion from `HodlChickenChecks`
-#[derive(JsonSchema, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(try_from = "HodlChickenChecks")]
 pub struct HodlChickenInner {
     alice_contract: Payouts,
     bob_contract: Payouts,
     // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    // #[schemars(with = "bitcoin::hashes::sha256::Hash")]
     alice_key: bitcoin::XOnlyPublicKey,
     // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    // #[schemars(with = "bitcoin::hashes::sha256::Hash")]
     bob_key: bitcoin::XOnlyPublicKey,
     alice_deposit: u64,
     bob_deposit: u64,
@@ -64,7 +64,7 @@ pub struct HodlChickenInner {
 
 /// A wrapper around HodlChickenInner that ensures
 /// invariants on values are kept.
-#[derive(JsonSchema, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct HodlChickenChecks(HodlChickenInner);
 
