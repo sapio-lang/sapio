@@ -34,7 +34,7 @@ pub struct CreateArgs<S> {
     pub context: ContextualArguments,
 }
 impl<S: ReprSpecifiable> ReprSpecifiable for CreateArgs<S> {
-    fn get_schema() -> sapio_data_repr::ReprSpec {
+    fn get_repr_spec() -> sapio_data_repr::ReprSpec {
         todo!()
     }
 }
@@ -54,7 +54,7 @@ pub struct ContextualArguments {
     pub effects: MapEffectDB,
 }
 impl ReprSpecifiable for ContextualArguments {
-    fn get_schema() -> sapio_data_repr::ReprSpec {
+    fn get_repr_spec() -> sapio_data_repr::ReprSpec {
         todo!()
     }
 }

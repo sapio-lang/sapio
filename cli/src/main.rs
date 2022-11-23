@@ -366,8 +366,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             Some(("schemas", _args)) => {
-                println!("{}", Request::get_schema());
-                println!("{}", Response::get_schema());
+                println!("{}", Request::get_repr_spec());
+                println!("{}", Response::get_repr_spec());
             }
             _ => unreachable!(),
         },

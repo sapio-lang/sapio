@@ -32,7 +32,7 @@ pub struct API<Input, Output> {
     _pd: PhantomData<(Input, Output)>,
 }
 impl<Input: ReprSpecifiable, Output: ReprSpecifiable> ReprSpecifiable for API<Input, Output> {
-    fn get_schema() -> ReprSpec {
+    fn get_repr_spec() -> ReprSpec {
         todo!()
     }
 }
@@ -45,8 +45,8 @@ where
     /// Create a new API for this type with freshly generated schemas
     pub fn new() -> Self {
         API {
-            arguments: Input::get_schema(),
-            returns: Output::get_schema(),
+            arguments: Input::get_repr_spec(),
+            returns: Output::get_repr_spec(),
             _pd: Default::default(),
         }
     }

@@ -129,7 +129,7 @@ pub struct Request {
     pub command: Command,
 }
 impl ReprSpecifiable for Request {
-    fn get_schema() -> sapio_data_repr::ReprSpec {
+    fn get_repr_spec() -> sapio_data_repr::ReprSpec {
         todo!()
     }
 }
@@ -139,7 +139,7 @@ pub struct Response {
     pub result: Result<CommandReturn, RequestError>,
 }
 impl ReprSpecifiable for Response {
-    fn get_schema() -> sapio_data_repr::ReprSpec {
+    fn get_repr_spec() -> sapio_data_repr::ReprSpec {
         todo!()
     }
 }

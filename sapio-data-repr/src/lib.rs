@@ -16,7 +16,7 @@ impl std::error::Error for Error {}
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Repr(Value);
 impl ReprSpecifiable for Repr {
-    fn get_schema() -> ReprSpec {
+    fn get_repr_spec() -> ReprSpec {
         todo!()
     }
 }
@@ -37,7 +37,7 @@ impl Display for ReprSpec {
 }
 
 pub trait ReprSpecifiable {
-    fn get_schema() -> ReprSpec;
+    fn get_repr_spec() -> ReprSpec;
 }
 
 pub fn to_string<T: Serialize>(v: &T) -> Result<String, Error> {

@@ -50,7 +50,7 @@ where
     type InputWrapper;
     /// gets the jsonschema for the plugin type, which is the API for calling create.
     fn get_api_inner() -> *mut c_char {
-        encode_boundary_repr(&API::<CreateArgs<Self::InputWrapper>, Self::Output>::get_schema())
+        encode_boundary_repr(&API::<CreateArgs<Self::InputWrapper>, Self::Output>::get_repr_spec())
     }
 
     /// creates an instance of the plugin from a json pointer and outputs a result pointer

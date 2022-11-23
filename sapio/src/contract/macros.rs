@@ -114,7 +114,7 @@ pub fn get_schema_for<T: ReprSpecifiable + 'static + Sized>() -> Arc<ReprSpec> {
         .lock()
         .unwrap()
         .entry(TypeId::of::<T>())
-        .or_insert_with(|| Arc::new(T::get_schema()))
+        .or_insert_with(|| Arc::new(T::get_repr_spec()))
         .clone()
 }
 

@@ -132,7 +132,7 @@ pub enum UpdateTypes {
     NoUpdate,
 }
 impl ReprSpecifiable for UpdateTypes {
-    fn get_schema() -> sapio_data_repr::ReprSpec {
+    fn get_repr_spec() -> sapio_data_repr::ReprSpec {
         todo!()
     }
 }

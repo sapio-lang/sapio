@@ -54,7 +54,7 @@ impl ContinuationPoint {
     }
 }
 impl ReprSpecifiable for ContinuationPoint {
-    fn get_schema() -> ReprSpec {
+    fn get_repr_spec() -> ReprSpec {
         todo!()
     }
 }
@@ -66,13 +66,13 @@ mod test {
     #[test]
     fn test_continuation_point_ser() -> Result<(), Box<dyn std::error::Error>> {
         let a: ContinuationPoint = ContinuationPoint::at(
-            Some(Arc::new(ContinuationPoint::get_schema())),
+            Some(Arc::new(ContinuationPoint::get_repr_spec())),
             EffectPath::push(None, PathFragment::Named(SArc(Arc::new("one".into())))),
         );
         // TODO: fix this test to not leak the implementation details
         let b: ContinuationPoint = serde_json::from_str(&format!(
             "{{\"schema\":{},\"path\":\"one\",\"simp\":{{}}}}",
-            ContinuationPoint::get_schema()
+            ContinuationPoint::get_repr_spec()
         ))?;
         assert_eq!(a, b);
         Ok(())
