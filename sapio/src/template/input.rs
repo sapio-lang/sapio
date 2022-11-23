@@ -7,16 +7,16 @@
 //! Template Output container
 use super::*;
 use sapio_base::simp::SIMPError;
-use sapio_data_repr::SapioModuleBoundaryRepr;
+use sapio_data_repr::Repr;
 use serde::{Deserialize, Serialize};
 /// Metadata for outputs, arbitrary KV set.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct InputMetadata {
     /// Additional non-standard fields for future upgrades
     #[serde(flatten)]
-    pub extra: BTreeMap<String, SapioModuleBoundaryRepr>,
+    pub extra: BTreeMap<String, Repr>,
     /// SIMP: Sapio Interactive Metadata Protocol
-    pub simp: BTreeMap<i64, SapioModuleBoundaryRepr>,
+    pub simp: BTreeMap<i64, Repr>,
 }
 
 impl InputMetadata {
@@ -67,8 +67,8 @@ impl Default for InputMetadata {
     }
 }
 
-impl<const N: usize> From<[(&str, sapio_data_repr::SapioModuleBoundaryRepr); N]> for InputMetadata {
-    fn from(v: [(&str, sapio_data_repr::SapioModuleBoundaryRepr); N]) -> InputMetadata {
+impl<const N: usize> From<[(&str, sapio_data_repr::Repr); N]> for InputMetadata {
+    fn from(v: [(&str, sapio_data_repr::Repr); N]) -> InputMetadata {
         InputMetadata {
             extra: IntoIterator::into_iter(v)
                 .map(|(a, b)| (a.into(), b))

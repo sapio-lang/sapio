@@ -14,7 +14,7 @@ pub use descriptors::*;
 use sapio_base::simp::CompiledObjectLT;
 use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::Clause;
-use sapio_data_repr::SapioModuleBoundaryRepr;
+use sapio_data_repr::Repr;
 
 use crate::contract::abi::continuation::ContinuationPoint;
 pub use crate::contract::abi::studio::*;
@@ -41,11 +41,11 @@ use std::sync::Arc;
 pub struct ObjectMetadata {
     /// Additional non-standard fields for future upgrades
     #[serde(flatten)]
-    pub extra: BTreeMap<String, SapioModuleBoundaryRepr>,
+    pub extra: BTreeMap<String, Repr>,
     /// SIMP: Sapio Interactive Metadata Protocol
-    pub simp: BTreeMap<i64, SapioModuleBoundaryRepr>,
+    pub simp: BTreeMap<i64, Repr>,
     /// SIMPs for guards
-    pub simps_for_guards: BTreeMap<Clause, BTreeMap<i64, Vec<SapioModuleBoundaryRepr>>>,
+    pub simps_for_guards: BTreeMap<Clause, BTreeMap<i64, Vec<Repr>>>,
 }
 impl ObjectMetadata {
     /// Is there any metadata in this field?
@@ -85,11 +85,7 @@ impl ObjectMetadata {
                         k,
                         v.into_iter().fold(
                             Ok(Default::default()),
-                            |ra: Result<
-                                BTreeMap<_, Vec<SapioModuleBoundaryRepr>>,
-                                CompilationError,
-                            >,
-                             b| {
+                            |ra: Result<BTreeMap<_, Vec<Repr>>, CompilationError>, b| {
                                 let mut a = ra?;
                                 a.entry(b.get_protocol_number()).or_default().push(
                                     b.to_sapio_data_repr()

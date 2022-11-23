@@ -12,7 +12,7 @@ use std::{
     ops::{ShlAssign, Shr},
 };
 
-use sapio_data_repr::SapioModuleBoundaryRepr;
+use sapio_data_repr::Repr;
 use std::fmt::Debug;
 
 /// Errors that may come up when working with SIMPs
@@ -22,7 +22,7 @@ pub enum SIMPError {
     /// Implementors may wish to handle or ignore this error if it is not an
     /// issue, but usually it is a bug.
     /// todo: Mergeable SIMPs may merge one another
-    AlreadyDefined(SapioModuleBoundaryRepr),
+    AlreadyDefined(Repr),
     /// If the error was because a SIMP could not be serialized.
     ///
     /// If this error ever happens, your SIMP is poorly designed most likely!
@@ -56,9 +56,9 @@ pub trait SIMP {
     /// express that
     fn get_protocol_number(&self) -> i64;
     /// Conver a SIMP to a JSON. Concretely typed so that SIMP can be a trait object.
-    fn to_sapio_data_repr(&self) -> Result<SapioModuleBoundaryRepr, sapio_data_repr::Error>;
+    fn to_sapio_data_repr(&self) -> Result<Repr, sapio_data_repr::Error>;
     /// Conver a SIMP from a JSON. Sized bound so that SIMP can be a trait object.
-    fn from_sapio_data_repr(value: SapioModuleBoundaryRepr) -> Result<Self, sapio_data_repr::Error>
+    fn from_sapio_data_repr(value: Repr) -> Result<Self, sapio_data_repr::Error>
     where
         Self: Sized;
 }
@@ -146,7 +146,7 @@ pub fn simp_value<T: SIMP>(v: T) -> SimpValue<T> {
     SimpValue(v)
 }
 
-impl<T: SIMP> ShlAssign<SimpValue<T>> for BTreeMap<i64, SapioModuleBoundaryRepr> {
+impl<T: SIMP> ShlAssign<SimpValue<T>> for BTreeMap<i64, Repr> {
     fn shl_assign(&mut self, rhs: SimpValue<T>) {
         if let Ok(js) = rhs.0.to_sapio_data_repr() {
             self.insert(T::static_get_protocol_number(), js);

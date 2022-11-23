@@ -21,7 +21,7 @@ use std::marker::PhantomData;
 #[serde(try_from = "SapioHostAPIVerifier<T, R>")]
 pub struct SapioHostAPI<
     T: SapioSchemaValidatable + Clone,
-    R: HasSapioModuleSchema + for<'a> Deserialize<'a>,
+    R: ReprSpecifiable + for<'a> Deserialize<'a>,
 > {
     /// The module's locator
     pub which_plugin: LookupFrom,
@@ -39,7 +39,7 @@ pub type ClauseModule<T> = SapioHostAPI<T, Clause>;
 
 impl<T: SapioSchemaValidatable + Clone, R> PluginHandle for SapioHostAPI<T, R>
 where
-    R: HasSapioModuleSchema + for<'a> Deserialize<'a>,
+    R: ReprSpecifiable + for<'a> Deserialize<'a>,
 {
     type Input = CreateArgs<T>;
     type Output = R;
@@ -59,7 +59,7 @@ where
 
 impl<T: SapioSchemaValidatable + Clone, R> SapioHostAPI<T, R>
 where
-    R: HasSapioModuleSchema + for<'a> Deserialize<'a>,
+    R: ReprSpecifiable + for<'a> Deserialize<'a>,
 {
     /// Ensures a [`SapioHostAPI`]'s [`LookupFrom`] field is
     /// [`LookupFrom::HashKey`] form.
@@ -83,7 +83,7 @@ struct SapioHostAPIVerifier<T: SapioSchemaValidatable + Clone, R: for<'a> Deseri
 
 impl<T, R> TryFrom<LookupFrom> for SapioHostAPI<T, R>
 where
-    R: HasSapioModuleSchema + for<'a> Deserialize<'a>,
+    R: ReprSpecifiable + for<'a> Deserialize<'a>,
     T: SapioSchemaValidatable + Clone,
 {
     type Error = CompilationError;
@@ -96,7 +96,7 @@ where
 }
 impl<T, R> TryFrom<SapioHostAPIVerifier<T, R>> for SapioHostAPI<T, R>
 where
-    R: HasSapioModuleSchema + for<'a> Deserialize<'a>,
+    R: ReprSpecifiable + for<'a> Deserialize<'a>,
     T: SapioSchemaValidatable + Clone,
 {
     type Error = CompilationError;

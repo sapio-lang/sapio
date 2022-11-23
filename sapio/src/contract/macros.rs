@@ -9,8 +9,8 @@
 use core::any::TypeId;
 pub use paste::paste;
 
-use sapio_data_repr::HasSapioModuleSchema;
-use sapio_data_repr::SapioModuleSchema;
+use sapio_data_repr::ReprSpec;
+use sapio_data_repr::ReprSpecifiable;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -103,13 +103,13 @@ macro_rules! decl_then {
 }
 
 lazy_static::lazy_static! {
-static ref SCHEMA_MAP: Mutex<BTreeMap<TypeId, Arc<SapioModuleSchema>>> =
+static ref SCHEMA_MAP: Mutex<BTreeMap<TypeId, Arc<ReprSpec>>> =
 Mutex::new(BTreeMap::new());
 }
 /// `get_schema_for` returns a cached RootSchema for a given type.  this is
 /// useful because we might expect to generate the same RootSchema many times,
 /// and they can use a decent amount of memory.
-pub fn get_schema_for<T: HasSapioModuleSchema + 'static + Sized>() -> Arc<SapioModuleSchema> {
+pub fn get_schema_for<T: ReprSpecifiable + 'static + Sized>() -> Arc<ReprSpec> {
     SCHEMA_MAP
         .lock()
         .unwrap()

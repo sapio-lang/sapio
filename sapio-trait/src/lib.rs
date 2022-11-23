@@ -1,18 +1,16 @@
-use sapio_data_repr::{HasSapioModuleSchema, SapioModuleBoundaryRepr, SapioModuleSchema};
+use sapio_data_repr::{Repr, ReprSpec, ReprSpecifiable};
 use serde::*;
 
 pub trait SapioAPIHandle {
-    fn get_api(&self) -> SapioModuleSchema;
+    fn get_api(&self) -> ReprSpec;
 }
-impl SapioAPIHandle for SapioModuleSchema {
+impl SapioAPIHandle for ReprSpec {
     fn get_api(&self) -> Self {
         self.clone()
     }
 }
-pub trait SapioSchemaValidatable:
-    HasSapioModuleSchema + Serialize + for<'a> Deserialize<'a>
-{
-    fn get_example_for_api_checking() -> SapioModuleBoundaryRepr;
+pub trait SapioSchemaValidatable: ReprSpecifiable + Serialize + for<'a> Deserialize<'a> {
+    fn get_example_for_api_checking() -> Repr;
     fn check_trait_implemented_inner(api: &dyn SapioAPIHandle) -> Result<(), String> {
         let tag = Self::get_example_for_api_checking();
         let japi = api.get_api();

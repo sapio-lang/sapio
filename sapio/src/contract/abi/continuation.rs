@@ -10,7 +10,7 @@ use sapio_base::serialization_helpers::SArc;
 use sapio_base::simp::{SIMPAttachableAt, SIMPError};
 use sapio_base::{effects::EffectPath, simp::ContinuationPointLT};
 
-use sapio_data_repr::{HasSapioModuleSchema, SapioModuleBoundaryRepr, SapioModuleSchema};
+use sapio_data_repr::{Repr, ReprSpec, ReprSpecifiable};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc};
 /// Instructions for how to resume a contract compilation at a given point
@@ -18,17 +18,17 @@ use std::{collections::BTreeMap, sync::Arc};
 pub struct ContinuationPoint {
     /// The arguments required at this point
     /// TODO: De-Duplicate repeated types?
-    pub schema: Option<SArc<SapioModuleSchema>>,
+    pub schema: Option<SArc<ReprSpec>>,
     /// The path at which this was compiled
     #[serde(serialize_with = "sapio_base::serialization_helpers::serializer")]
     #[serde(deserialize_with = "sapio_base::serialization_helpers::deserializer")]
     pub path: Arc<EffectPath>,
     /// Metadata for this particular Continuation Point
-    pub simp: BTreeMap<i64, SapioModuleBoundaryRepr>,
+    pub simp: BTreeMap<i64, Repr>,
 }
 impl ContinuationPoint {
     /// Creates a new continuation
-    pub fn at(schema: Option<Arc<SapioModuleSchema>>, path: Arc<EffectPath>) -> Self {
+    pub fn at(schema: Option<Arc<ReprSpec>>, path: Arc<EffectPath>) -> Self {
         ContinuationPoint {
             schema: schema.map(SArc),
             path,
@@ -53,8 +53,8 @@ impl ContinuationPoint {
         }
     }
 }
-impl HasSapioModuleSchema for ContinuationPoint {
-    fn get_schema() -> SapioModuleSchema {
+impl ReprSpecifiable for ContinuationPoint {
+    fn get_schema() -> ReprSpec {
         todo!()
     }
 }

@@ -198,7 +198,7 @@ impl Builder {
     pub fn set_extra_meta<I, J>(mut self, i: I, j: J) -> Result<Self, CompilationError>
     where
         I: Into<String>,
-        J: Into<sapio_data_repr::SapioModuleBoundaryRepr>,
+        J: Into<sapio_data_repr::Repr>,
     {
         self.metadata = self.metadata.set_extra(i, j)?;
         Ok(self)

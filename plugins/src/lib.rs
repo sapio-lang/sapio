@@ -8,7 +8,7 @@
 //! module interfaces for sapio clients and hosts
 use sapio::contract::{Compilable, Context};
 pub use sapio_base::plugin_args::*;
-use sapio_data_repr::{HasSapioModuleSchema, SapioModuleSchema};
+use sapio_data_repr::{ReprSpec, ReprSpecifiable};
 use serde::{Deserialize, Serialize};
 use std::ffi::CString;
 use std::marker::PhantomData;
@@ -25,24 +25,22 @@ pub mod plugin_handle;
 #[derive(Serialize, Deserialize)]
 pub struct API<Input, Output> {
     /// What is expected to be passed to the module
-    arguments: SapioModuleSchema,
+    arguments: ReprSpec,
     /// What is expected to be returned from the module
-    returns: SapioModuleSchema,
+    returns: ReprSpec,
     #[serde(skip, default)]
     _pd: PhantomData<(Input, Output)>,
 }
-impl<Input: HasSapioModuleSchema, Output: HasSapioModuleSchema> HasSapioModuleSchema
-    for API<Input, Output>
-{
-    fn get_schema() -> SapioModuleSchema {
+impl<Input: ReprSpecifiable, Output: ReprSpecifiable> ReprSpecifiable for API<Input, Output> {
+    fn get_schema() -> ReprSpec {
         todo!()
     }
 }
 
 impl<Input, Output> API<Input, Output>
 where
-    Input: HasSapioModuleSchema,
-    Output: HasSapioModuleSchema,
+    Input: ReprSpecifiable,
+    Output: ReprSpecifiable,
 {
     /// Create a new API for this type with freshly generated schemas
     pub fn new() -> Self {
@@ -53,11 +51,11 @@ where
         }
     }
     /// get the input schema for this type as a reference
-    pub fn input(&self) -> &SapioModuleSchema {
+    pub fn input(&self) -> &ReprSpec {
         &self.arguments
     }
     /// get the output schema for this type as a reference
-    pub fn output(&self) -> &SapioModuleSchema {
+    pub fn output(&self) -> &ReprSpec {
         &self.returns
     }
 }

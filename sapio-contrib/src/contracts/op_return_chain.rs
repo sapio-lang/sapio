@@ -10,7 +10,7 @@ use sapio::contract::*;
 use sapio::util::amountrange::AmountF64;
 use sapio::*;
 use sapio_base::Clause;
-use sapio_data_repr::HasSapioModuleSchema;
+use sapio_data_repr::ReprSpecifiable;
 use sapio_macros::guard;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -82,8 +82,8 @@ impl Default for UpdateTypes {
     }
 }
 impl StatefulArgumentsTrait for UpdateTypes {}
-impl HasSapioModuleSchema for UpdateTypes {
-    fn get_schema() -> sapio_data_repr::SapioModuleSchema {
+impl ReprSpecifiable for UpdateTypes {
+    fn get_schema() -> sapio_data_repr::ReprSpec {
         todo!()
     }
 }

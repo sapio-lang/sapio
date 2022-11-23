@@ -14,7 +14,7 @@ use crate::API;
 use sapio::contract::CompilationError;
 use sapio_base::effects::EffectPath;
 use sapio_ctv_emulator_trait::CTVEmulator;
-use sapio_data_repr::SapioModuleBoundaryRepr;
+use sapio_data_repr::Repr;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::marker::PhantomData;
@@ -297,7 +297,7 @@ impl<GOutput> PluginHandle for WasmPluginHandle<GOutput>
 where
     GOutput: for<'a> Deserialize<'a>,
 {
-    type Input = CreateArgs<SapioModuleBoundaryRepr>;
+    type Input = CreateArgs<Repr>;
     type Output = GOutput;
     fn call(&self, path: &EffectPath, c: &Self::Input) -> Result<Self::Output, CompilationError> {
         let arg_str =

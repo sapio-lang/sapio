@@ -81,7 +81,7 @@ mod exports {
 
     use super::*;
     use sapio_base::effects::EffectPath;
-    use sapio_data_repr::SapioModuleBoundaryRepr;
+    use sapio_data_repr::Repr;
     /// lookup a plugin key from a human reable name.
     /// if ok == 1, result is valid.
     /// out is written and must be 32 bytes of writable memory.
@@ -193,7 +193,7 @@ mod exports {
             GetAPI,
             GetName,
             GetLogo,
-            Create(CreateArgs<SapioModuleBoundaryRepr>, EffectPath),
+            Create(CreateArgs<Repr>, EffectPath),
         }
         let action_to_take = match action {
             Action::GetAPI => Ok(InternalAction::GetAPI),
@@ -241,7 +241,7 @@ mod exports {
         let key = wasmer_cache::Hash::from_str(&h).map(SyncModuleLocator::Key);
         // Use serde_json::Value for the WasmPluginHandle Output type
         match key.map(|module_locator| {
-            WasmPluginHandle::<sapio_data_repr::SapioModuleBoundaryRepr>::new(
+            WasmPluginHandle::<sapio_data_repr::Repr>::new(
                 path,
                 &emulator,
                 module_locator,
@@ -252,16 +252,13 @@ mod exports {
             Ok(Ok(sph)) => {
                 let comp_s = action_to_take.and_then(|action| match action {
                     InternalAction::GetName => sph.get_name().and_then(|m| {
-                        sapio_data_repr::to_boundary_repr(&m)
-                            .map_err(CompilationError::DeserializationError)
+                        sapio_data_repr::to_repr(&m).map_err(CompilationError::DeserializationError)
                     }),
                     InternalAction::GetLogo => sph.get_logo().and_then(|m| {
-                        sapio_data_repr::to_boundary_repr(&m)
-                            .map_err(CompilationError::DeserializationError)
+                        sapio_data_repr::to_repr(&m).map_err(CompilationError::DeserializationError)
                     }),
                     InternalAction::GetAPI => sph.get_api().and_then(|m| {
-                        sapio_data_repr::to_boundary_repr(&m)
-                            .map_err(CompilationError::DeserializationError)
+                        sapio_data_repr::to_repr(&m).map_err(CompilationError::DeserializationError)
                     }),
                     InternalAction::Create(create_args, path) => sph.call(&path, &create_args),
                 });

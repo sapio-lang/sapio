@@ -38,14 +38,7 @@ pub trait EffectDB {
     fn get_data_repr<'a>(
         &'a self,
         at: &Arc<EffectPath>,
-    ) -> Box<
-        dyn Iterator<
-                Item = (
-                    &'a Arc<String>,
-                    &'a sapio_data_repr::SapioModuleBoundaryRepr,
-                ),
-            > + 'a,
-    >;
+    ) -> Box<dyn Iterator<Item = (&'a Arc<String>, &'a sapio_data_repr::Repr)> + 'a>;
 }
 /// #  Effects
 /// Map of all effects to process during compilation.  Each Key represents a
@@ -55,12 +48,9 @@ pub struct MapEffectDB {
     /// # The set of all effects
     /// List of effects to include while compiling.
     #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
-    effects: BTreeMap<
-        SArc<EffectPath>,
-        BTreeMap<SArc<String>, sapio_data_repr::SapioModuleBoundaryRepr>,
-    >,
+    effects: BTreeMap<SArc<EffectPath>, BTreeMap<SArc<String>, sapio_data_repr::Repr>>,
     #[serde(skip, default)]
-    empty: BTreeMap<SArc<String>, sapio_data_repr::SapioModuleBoundaryRepr>,
+    empty: BTreeMap<SArc<String>, sapio_data_repr::Repr>,
 }
 
 /// # Editable Effects
@@ -69,12 +59,9 @@ pub struct MapEffectDB {
 /// can fully replace it, without the concern of mutability for contract authors.
 pub struct EditableMapEffectDB {
     /// All Effects currently in the set of effects
-    pub effects: BTreeMap<
-        SArc<EffectPath>,
-        BTreeMap<SArc<String>, sapio_data_repr::SapioModuleBoundaryRepr>,
-    >,
+    pub effects: BTreeMap<SArc<EffectPath>, BTreeMap<SArc<String>, sapio_data_repr::Repr>>,
     /// Catch-all for extra data for future extension
-    pub empty: BTreeMap<SArc<String>, sapio_data_repr::SapioModuleBoundaryRepr>,
+    pub empty: BTreeMap<SArc<String>, sapio_data_repr::Repr>,
 }
 
 impl From<MapEffectDB> for EditableMapEffectDB {
@@ -99,14 +86,7 @@ impl EffectDB for MapEffectDB {
     fn get_data_repr<'a>(
         &'a self,
         at: &Arc<EffectPath>,
-    ) -> Box<
-        dyn Iterator<
-                Item = (
-                    &'a Arc<String>,
-                    &'a sapio_data_repr::SapioModuleBoundaryRepr,
-                ),
-            > + 'a,
-    > {
+    ) -> Box<dyn Iterator<Item = (&'a Arc<String>, &'a sapio_data_repr::Repr)> + 'a> {
         let r: &BTreeMap<_, _> = self.effects.get(&SArc(at.clone())).unwrap_or(&self.empty);
         Box::new(r.iter().map(|(a, b)| (&a.0, b)))
     }

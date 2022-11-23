@@ -7,7 +7,7 @@
 use sapio_base::simp::CompiledObjectLT;
 use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::simp::SIMP;
-use sapio_data_repr::SapioModuleBoundaryRepr;
+use sapio_data_repr::Repr;
 use serde::{Deserialize, Serialize};
 /// A URL to a project for convenience
 #[derive(Serialize, Deserialize, Clone)]
@@ -65,17 +65,15 @@ impl SIMP for IpfsNFT {
         Self::static_get_protocol_number()
     }
 
-    fn to_sapio_data_repr(
-        &self,
-    ) -> Result<sapio_data_repr::SapioModuleBoundaryRepr, sapio_data_repr::Error> {
-        sapio_data_repr::to_boundary_repr(self)
+    fn to_sapio_data_repr(&self) -> Result<sapio_data_repr::Repr, sapio_data_repr::Error> {
+        sapio_data_repr::to_repr(self)
     }
 
-    fn from_sapio_data_repr(value: SapioModuleBoundaryRepr) -> Result<Self, sapio_data_repr::Error>
+    fn from_sapio_data_repr(value: Repr) -> Result<Self, sapio_data_repr::Error>
     where
         Self: Sized,
     {
-        sapio_data_repr::from_boundary_repr(value)
+        sapio_data_repr::from_repr(value)
     }
 
     fn static_get_protocol_number() -> i64 {

@@ -15,7 +15,7 @@ use sapio_base::effects::EffectDBError;
 use sapio_base::simp::ContinuationPointLT;
 use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::Clause;
-use sapio_data_repr::SapioModuleSchema;
+use sapio_data_repr::ReprSpec;
 
 use core::marker::PhantomData;
 
@@ -51,7 +51,7 @@ pub struct FinishOrFunc<'a, ContractSelf, StatefulArguments, SpecificArgs, WebAP
     /// to be filled in if SpecificArgs has a schema, which it might not.
     /// because negative trait bounds do not exists, that is up to the
     /// implementation to decide if the trait exists.
-    pub schema: Option<Arc<SapioModuleSchema>>,
+    pub schema: Option<Arc<ReprSpec>>,
     /// name derived from Function Name.
     /// N.B. must be renamable by changing this field!
     pub name: Arc<String>,
@@ -85,7 +85,7 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
         &self,
         _cself: &ContractSelf,
         _ctx: Context,
-        _o: sapio_data_repr::SapioModuleBoundaryRepr,
+        _o: sapio_data_repr::Repr,
     ) -> TxTmplIt {
         Err(CompilationError::WebAPIDisabled)
     }
@@ -100,7 +100,7 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     /// Get the name for this function
     fn get_name(&self) -> &Arc<String>;
     /// Get the RootSchema for calling this with an update
-    fn get_schema(&self) -> &Option<Arc<SapioModuleSchema>>;
+    fn get_schema(&self) -> &Option<Arc<ReprSpec>>;
     /// get if txtmpls returned by the func should modify guards.
     fn get_returned_txtmpls_modify_guards(&self) -> bool;
     /// extract a clause from the txtmpl
@@ -132,7 +132,7 @@ impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, 
     fn get_name(&self) -> &Arc<String> {
         &self.name
     }
-    fn get_schema(&self) -> &Option<Arc<SapioModuleSchema>> {
+    fn get_schema(&self) -> &Option<Arc<ReprSpec>> {
         &self.schema
     }
     fn get_returned_txtmpls_modify_guards(&self) -> bool {
@@ -170,9 +170,9 @@ where
         &self,
         cself: &ContractSelf,
         ctx: Context,
-        o: sapio_data_repr::SapioModuleBoundaryRepr,
+        o: sapio_data_repr::Repr,
     ) -> TxTmplIt {
-        sapio_data_repr::from_boundary_repr(o)
+        sapio_data_repr::from_repr(o)
             .map_err(EffectDBError::SerializationError)
             .map_err(CompilationError::EffectDBError)
             .and_then(|args| (self.func)(cself, ctx, args))
@@ -189,7 +189,7 @@ where
     fn get_name(&self) -> &Arc<String> {
         &self.name
     }
-    fn get_schema(&self) -> &Option<Arc<SapioModuleSchema>> {
+    fn get_schema(&self) -> &Option<Arc<ReprSpec>> {
         &self.schema
     }
     fn get_returned_txtmpls_modify_guards(&self) -> bool {

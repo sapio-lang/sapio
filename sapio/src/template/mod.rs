@@ -13,7 +13,7 @@ use sapio_base::simp::SIMPError;
 use sapio_base::simp::TemplateInputLT;
 use sapio_base::simp::TemplateLT;
 use sapio_base::Clause;
-use sapio_data_repr::SapioModuleBoundaryRepr;
+use sapio_data_repr::Repr;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 pub mod input;
@@ -32,9 +32,9 @@ pub struct TemplateMetadata {
     pub label: Option<String>,
     /// catch all map for future metadata....
     #[serde(flatten)]
-    pub extra: BTreeMap<String, SapioModuleBoundaryRepr>,
+    pub extra: BTreeMap<String, Repr>,
     /// SIMP: Sapio Interactive Metadata Protocol
-    pub simp: BTreeMap<i64, SapioModuleBoundaryRepr>,
+    pub simp: BTreeMap<i64, Repr>,
     /// A Color to render this node.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub color: Option<String>,
@@ -58,7 +58,7 @@ impl TemplateMetadata {
     pub fn set_extra<I, J>(mut self, i: I, j: J) -> Result<Self, CompilationError>
     where
         I: Into<String>,
-        J: Into<sapio_data_repr::SapioModuleBoundaryRepr>,
+        J: Into<sapio_data_repr::Repr>,
     {
         let s: String = i.into();
         match s.as_str() {

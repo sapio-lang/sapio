@@ -13,9 +13,9 @@ use serde::{Deserialize, Serialize};
 pub struct OutputMeta {
     /// Additional non-standard fields for future upgrades
     #[serde(flatten)]
-    pub extra: BTreeMap<String, SapioModuleBoundaryRepr>,
+    pub extra: BTreeMap<String, Repr>,
     /// SIMP: Sapio Interactive Metadata Protocol
-    pub simp: BTreeMap<i64, SapioModuleBoundaryRepr>,
+    pub simp: BTreeMap<i64, Repr>,
 }
 
 impl OutputMeta {
@@ -50,8 +50,8 @@ impl Default for OutputMeta {
     }
 }
 
-impl<const N: usize> From<[(&str, sapio_data_repr::SapioModuleBoundaryRepr); N]> for OutputMeta {
-    fn from(v: [(&str, sapio_data_repr::SapioModuleBoundaryRepr); N]) -> OutputMeta {
+impl<const N: usize> From<[(&str, sapio_data_repr::Repr); N]> for OutputMeta {
+    fn from(v: [(&str, sapio_data_repr::Repr); N]) -> OutputMeta {
         OutputMeta {
             extra: IntoIterator::into_iter(v)
                 .map(|(a, b)| (a.into(), b))

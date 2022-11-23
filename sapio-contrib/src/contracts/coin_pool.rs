@@ -12,7 +12,7 @@ use sapio::*;
 use sapio_base::timelocks::AnyRelTimeLock;
 use sapio_base::Clause;
 
-use sapio_data_repr::HasSapioModuleSchema;
+use sapio_data_repr::ReprSpecifiable;
 use serde::Deserialize;
 use std::convert::{TryFrom, TryInto};
 use std::sync::{Arc, Mutex};
@@ -131,8 +131,8 @@ pub enum UpdateTypes {
     /// # Update without Args
     NoUpdate,
 }
-impl HasSapioModuleSchema for UpdateTypes {
-    fn get_schema() -> sapio_data_repr::SapioModuleSchema {
+impl ReprSpecifiable for UpdateTypes {
+    fn get_schema() -> sapio_data_repr::ReprSpec {
         todo!()
     }
 }

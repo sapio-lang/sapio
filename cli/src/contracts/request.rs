@@ -21,7 +21,7 @@ use sapio_base::{
     serialization_helpers::SArc,
     txindex::{TxIndex, TxIndexLogger},
 };
-use sapio_data_repr::{HasSapioModuleSchema, SapioModuleBoundaryRepr};
+use sapio_data_repr::{Repr, ReprSpecifiable};
 use sapio_wasm_plugin::{
     host::{plugin_handle::ModuleLocator, PluginHandle, WasmPluginHandle},
     CreateArgs, API,
@@ -58,11 +58,11 @@ pub struct ListReturn {
 }
 #[derive(Serialize, Deserialize)]
 pub struct Call {
-    pub params: sapio_data_repr::SapioModuleBoundaryRepr,
+    pub params: sapio_data_repr::Repr,
 }
 #[derive(Serialize, Deserialize)]
 pub struct CallReturn {
-    result: sapio_data_repr::SapioModuleBoundaryRepr,
+    result: sapio_data_repr::Repr,
 }
 #[derive(Serialize, Deserialize)]
 pub struct Bind {
@@ -80,7 +80,7 @@ pub type BindReturn = Program;
 pub struct Api;
 #[derive(Serialize, Deserialize)]
 pub struct ApiReturn {
-    api: API<CreateArgs<SapioModuleBoundaryRepr>, SapioModuleBoundaryRepr>,
+    api: API<CreateArgs<Repr>, Repr>,
 }
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct Logo;
@@ -128,8 +128,8 @@ pub struct Request {
     pub context: Common,
     pub command: Command,
 }
-impl HasSapioModuleSchema for Request {
-    fn get_schema() -> sapio_data_repr::SapioModuleSchema {
+impl ReprSpecifiable for Request {
+    fn get_schema() -> sapio_data_repr::ReprSpec {
         todo!()
     }
 }
@@ -138,8 +138,8 @@ impl HasSapioModuleSchema for Request {
 pub struct Response {
     pub result: Result<CommandReturn, RequestError>,
 }
-impl HasSapioModuleSchema for Response {
-    fn get_schema() -> sapio_data_repr::SapioModuleSchema {
+impl ReprSpecifiable for Response {
+    fn get_schema() -> sapio_data_repr::ReprSpec {
         todo!()
     }
 }
@@ -190,15 +190,13 @@ impl Request {
             ..
         } = context;
         let default_sph = || -> Result<_, &'static str> {
-            Ok(
-                WasmPluginHandle::<sapio_data_repr::SapioModuleBoundaryRepr>::new_async(
-                    &path,
-                    &emulator,
-                    module_locator.ok_or("Expected to have exactly one of key or file")?,
-                    net,
-                    plugin_map.clone(),
-                ),
-            )
+            Ok(WasmPluginHandle::<sapio_data_repr::Repr>::new_async(
+                &path,
+                &emulator,
+                module_locator.ok_or("Expected to have exactly one of key or file")?,
+                net,
+                plugin_map.clone(),
+            ))
         };
         match command {
             Command::List(_list) => {
@@ -224,8 +222,8 @@ impl Request {
                     let v: Vec<_> = it.map(|e| e.to_string()).collect();
                     Err(RequestError(v.into()))?;
                 }
-                let create_args: CreateArgs<sapio_data_repr::SapioModuleBoundaryRepr> =
-                    sapio_data_repr::from_boundary_repr(params)?;
+                let create_args: CreateArgs<sapio_data_repr::Repr> =
+                    sapio_data_repr::from_repr(params)?;
                 let v = sph.call(&PathFragment::Root.into(), &create_args)?;
                 Ok(CommandReturn::Call(CallReturn { result: v }))
             }

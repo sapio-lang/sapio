@@ -38,13 +38,13 @@ where
     // to get one from Self::InputWrapper, potentially falliably
     Self: Callable + TryFrom<Self::InputWrapper>,
     // InputWrapper must be deserializable and describable
-    Self::InputWrapper: Sized + for<'a> Deserialize<'a> + HasSapioModuleSchema,
+    Self::InputWrapper: Sized + for<'a> Deserialize<'a> + ReprSpecifiable,
     // read as: The return type of CallableType::try_from(self) is
     // Result<CallableType, X>, where X must be able to x.into() a
     // CompilationError.
     CompilationError: From<<Self as TryFrom<Self::InputWrapper>>::Error>,
     // We must be able to serialize/describe the outputs
-    Self::Output: Serialize + HasSapioModuleSchema,
+    Self::Output: Serialize + ReprSpecifiable,
 {
     /// A type which wraps Self, but can be converted into Self.
     type InputWrapper;

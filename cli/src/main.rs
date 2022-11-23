@@ -33,7 +33,7 @@ use emulator_connect::CTVAvailable;
 use emulator_connect::CTVEmulator;
 use sapio::contract::Compiled;
 use sapio_base::util::CTVHash;
-use sapio_data_repr::HasSapioModuleSchema;
+use sapio_data_repr::ReprSpecifiable;
 use sapio_wasm_plugin::host::plugin_handle::ModuleLocator;
 use serde_json::Deserializer;
 use std::error::Error;

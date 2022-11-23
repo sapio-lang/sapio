@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use schemars::schema::RootSchema;
 use serde::{self, Deserialize, Serialize};
-use serde_json::{Serializer, Value};
+use serde_json::Value;
 
 #[derive(Debug)]
 pub struct Error(serde_json::Error);
@@ -13,20 +13,16 @@ impl std::fmt::Display for Error {
 }
 impl std::error::Error for Error {}
 
-struct SapioModuleBoundarySerializer<W> {
-    inner: Serializer<W>,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SapioModuleBoundaryRepr(Value);
-impl HasSapioModuleSchema for SapioModuleBoundaryRepr {
-    fn get_schema() -> SapioModuleSchema {
+pub struct Repr(Value);
+impl ReprSpecifiable for Repr {
+    fn get_schema() -> ReprSpec {
         todo!()
     }
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct SapioModuleSchema(Value);
-impl SapioModuleSchema {
+pub struct ReprSpec(Value);
+impl ReprSpec {
     pub fn description(&self) -> Option<String> {
         match serde_json::from_value::<RootSchema>(self.0.clone()) {
             Err(_) => None,
@@ -34,14 +30,14 @@ impl SapioModuleSchema {
         }
     }
 }
-impl Display for SapioModuleSchema {
+impl Display for ReprSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
     }
 }
 
-pub trait HasSapioModuleSchema {
-    fn get_schema() -> SapioModuleSchema;
+pub trait ReprSpecifiable {
+    fn get_schema() -> ReprSpec;
 }
 
 pub fn to_string<T: Serialize>(v: &T) -> Result<String, Error> {
@@ -52,14 +48,10 @@ pub fn from_str<'de, T: Deserialize<'de>>(s: &'de str) -> Result<T, Error> {
     serde_json::from_str(s).map_err(Error)
 }
 
-pub fn to_boundary_repr<T: Serialize>(v: &T) -> Result<SapioModuleBoundaryRepr, Error> {
-    serde_json::to_value(v)
-        .map(SapioModuleBoundaryRepr)
-        .map_err(Error)
+pub fn to_repr<T: Serialize>(v: &T) -> Result<Repr, Error> {
+    serde_json::to_value(v).map(Repr).map_err(Error)
 }
-pub fn from_boundary_repr<'de, T: for<'a> Deserialize<'a>>(
-    v: SapioModuleBoundaryRepr,
-) -> Result<T, Error> {
+pub fn from_repr<'de, T: for<'a> Deserialize<'a>>(v: Repr) -> Result<T, Error> {
     serde_json::from_value(v.0).map_err(Error)
 }
 
@@ -79,8 +71,8 @@ impl Display for ValidationError {
 }
 
 pub fn validate(
-    schema: &SapioModuleSchema,
-    data: &SapioModuleBoundaryRepr,
+    schema: &ReprSpec,
+    data: &Repr,
 ) -> Result<(), Box<dyn Iterator<Item = ValidationError>>> {
     let cfg = jsonschema_valid::Config::from_schema(
         &schema.0,
