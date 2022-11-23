@@ -114,12 +114,7 @@ pub fn get_schema_for<T: HasSapioModuleSchema + 'static + Sized>() -> Arc<SapioM
         .lock()
         .unwrap()
         .entry(TypeId::of::<T>())
-        .or_insert_with(|| {
-            Arc::new(
-                todo!(), // serde_json::to_value(schemars::schema_for!(T))
-                         //     .expect("Schema must be able to convert to JSON"),
-            )
-        })
+        .or_insert_with(|| Arc::new(T::get_schema()))
         .clone()
 }
 

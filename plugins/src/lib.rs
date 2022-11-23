@@ -47,8 +47,8 @@ where
     /// Create a new API for this type with freshly generated schemas
     pub fn new() -> Self {
         API {
-            arguments: todo!(),
-            returns: todo!(),
+            arguments: Input::get_schema(),
+            returns: Output::get_schema(),
             _pd: Default::default(),
         }
     }

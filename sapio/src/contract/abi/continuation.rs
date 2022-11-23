@@ -10,7 +10,7 @@ use sapio_base::serialization_helpers::SArc;
 use sapio_base::simp::{SIMPAttachableAt, SIMPError};
 use sapio_base::{effects::EffectPath, simp::ContinuationPointLT};
 
-use sapio_data_repr::{SapioModuleBoundaryRepr, SapioModuleSchema};
+use sapio_data_repr::{HasSapioModuleSchema, SapioModuleBoundaryRepr, SapioModuleSchema};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc};
 /// Instructions for how to resume a contract compilation at a given point
@@ -53,6 +53,11 @@ impl ContinuationPoint {
         }
     }
 }
+impl HasSapioModuleSchema for ContinuationPoint {
+    fn get_schema() -> SapioModuleSchema {
+        todo!()
+    }
+}
 
 #[cfg(test)]
 mod test {
@@ -61,16 +66,13 @@ mod test {
     #[test]
     fn test_continuation_point_ser() -> Result<(), Box<dyn std::error::Error>> {
         let a: ContinuationPoint = ContinuationPoint::at(
-            Some(Arc::new(
-                // serde_json::to_value(&schemars::schema_for!(ContinuationPoint)).unwrap(),
-                todo!(),
-            )),
+            Some(Arc::new(ContinuationPoint::get_schema())),
             EffectPath::push(None, PathFragment::Named(SArc(Arc::new("one".into())))),
         );
+        // TODO: fix this test to not leak the implementation details
         let b: ContinuationPoint = serde_json::from_str(&format!(
             "{{\"schema\":{},\"path\":\"one\",\"simp\":{{}}}}",
-            // serde_json::to_string(&schemars::schema_for!(ContinuationPoint))?
-            todo!()
+            ContinuationPoint::get_schema()
         ))?;
         assert_eq!(a, b);
         Ok(())
