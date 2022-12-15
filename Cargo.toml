@@ -4,6 +4,7 @@ members = [
     "sapio-front",
     "sapio-contrib",
     "sapio-data-repr",
+    "sapio-data-repr-derive",
     "ctv_emulators",
     "sapio-base",
     "cli",
