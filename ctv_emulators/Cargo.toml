@@ -3,7 +3,7 @@ name = "ctv_emulators"
 version = "0.2.0"
 license = "MPL-2.0"
 authors = ["Jeremy Rubin <j@rubin.io>"]
-edition = "2018"
+edition = "2021"
 repository = "https://github.com/sapio-lang/sapio"
 homepage = "https://sapio-lang.org"
 description = "Implementation of the CTV Emulator Trait"
@@ -19,7 +19,7 @@ rand = "0.8.1"
 
 
 [dependencies.sapio-ctv-emulator-trait]
-path="../emulator-trait"
+path = "../emulator-trait"
 version = "0.2.0"
 
 [dependencies.bitcoin]
@@ -33,10 +33,8 @@ version = "^7.0.0"
 features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 
 [dependencies.sapio-base]
-path="../sapio-base"
+path = "../sapio-base"
 version = "0.2.0"
-
-
 
 
 [lib]
