@@ -13,3 +13,4 @@ members = ["sapio"
           , 'sapio-psbt'
           , 'simp-pack']
 exclude = ["plugin-example", "integration_tests"]
+resolver = "2"
