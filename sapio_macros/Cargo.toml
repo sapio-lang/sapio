@@ -8,8 +8,6 @@ repository = "https://github.com/sapio-lang/sapio"
 homepage = "https://sapio-lang.org"
 description = "A programming framework for bitcoin smart contracts."
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
 proc-macro = true
 

@@ -1,20 +1,12 @@
 [package]
 name = "sapio"
-version = "0.2.0"
-license = "MPL-2.0"
-authors = ["Jeremy Rubin <j@rubin.io>"]
-edition = "2021"
-repository = "https://github.com/sapio-lang/sapio"
-homepage = "https://sapio-lang.org"
-description = "A programming framework for bitcoin smart contracts."
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-
-[dependencies.miniscript]
-package = "sapio-miniscript"
-version = "^7.0.0"
-features = ['compiler', 'use-serde', 'use-schemars', 'serde']
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description.workspace = true
 
 [features]
 # used to enable some niceties if compiling on a nightly compiler
@@ -27,6 +19,9 @@ paste = "1.0"
 base64 = "0.13.0"
 lazy_static = "1.4.0"
 
+sapio-base.workspace = true
+sapio-ctv-emulator-trait.workspace = true
+sapio_macros.workspace = true
 
 [dependencies.serde]
 version = "1.0"
@@ -40,15 +35,7 @@ package = "sapio-bitcoin"
 version = "0.28.0"
 features = ['use-serde']
 
-
-[dependencies.sapio-base]
-path = "../sapio-base"
-version = "0.2.0"
-
-[dependencies.sapio-ctv-emulator-trait]
-path = "../emulator-trait"
-version = "0.2.0"
-
-[dependencies.sapio_macros]
-path = "../sapio_macros"
-version = "0.2.0"
+[dependencies.miniscript]
+package = "sapio-miniscript"
+version = "^7.0.0"
+features = ['compiler', 'use-serde', 'use-schemars', 'serde']

@@ -15,6 +15,7 @@ serde = "1.0"
 serde_derive = "1.0"
 tokio = { version = "1", features = ["full"] }
 bitcoincore-rpc-async = "4.0.1-alpha.1"
+sapio-base.workspace = true
 
 [dependencies.miniscript]
 package = "sapio-miniscript"
@@ -25,7 +26,3 @@ features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 package = "sapio-bitcoin"
 version = "0.28.0"
 features = ['use-serde', 'rand']
-
-[dependencies.sapio-base]
-path = "../sapio-base"
-version = "0.2.0"
