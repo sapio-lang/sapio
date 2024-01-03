@@ -7,7 +7,7 @@ members = ["sapio"
           , "tools"
           , "plugins"
           , 'emulator-trait'
-          , 'examples/dcf_mining_pool'
+          , 'examples/*'
           , 'sapio-trait'
           , 'sapio_macros'
           , 'sapio-psbt'
