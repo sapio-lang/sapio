@@ -3,7 +3,7 @@ name = "sapio-cli"
 version = "0.2.0"
 license = "MPL-2.0"
 authors = ["Jeremy Rubin <j@rubin.io>"]
-edition = "2018"
+edition = "2021"
 repository = "https://github.com/sapio-lang/sapio"
 homepage = "https://sapio-lang.org"
 description = "A Command Line Interface for interacting with Sapio Contracts"
@@ -21,7 +21,7 @@ lazy_static = "1.4.0"
 bitcoincore-rpc-async = "4.0.1-alpha.1"
 tokio = { version = "1", features = ["full"] }
 directories = "3.0.1"
-rand="^0.6"
+rand = "^0.6"
 jsonschema-valid = "0.4.0"
 
 [dependencies.sapio-psbt]

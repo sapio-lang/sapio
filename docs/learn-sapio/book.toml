@@ -6,7 +6,7 @@ src = "src"
 title = "Designing Bitcoin Contracts with Sapio"
 
 [rust]
-edition=2018
+edition = "2021"
 
 [output.html]
 mathjax-support = true

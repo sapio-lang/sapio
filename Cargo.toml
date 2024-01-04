@@ -7,9 +7,10 @@ members = ["sapio"
           , "tools"
           , "plugins"
           , 'emulator-trait'
-          , 'examples/dcf_mining_pool'
+          , 'examples/*'
           , 'sapio-trait'
           , 'sapio_macros'
           , 'sapio-psbt'
           , 'simp-pack']
 exclude = ["plugin-example", "integration_tests"]
+resolver = "2"

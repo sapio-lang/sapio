@@ -2,7 +2,8 @@
 name = "dcf_mining_pool"
 version = "0.2.0"
 authors = ["Jeremy Rubin <j@rubin.io>"]
-edition = "2018"
+edition = "2021"
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -29,9 +30,8 @@ path = "../../sapio-base"
 version = "0.2.0"
 
 
-
 [dependencies.sapio-ctv-emulator-trait]
-path="../../emulator-trait"
+path = "../../emulator-trait"
 version = "0.2.0"
 
 [dependencies.miniscript]
@@ -39,4 +39,3 @@ package = "sapio-miniscript"
 version = "^7.0.0"
 features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 optional = true
-

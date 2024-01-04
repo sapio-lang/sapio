@@ -3,14 +3,12 @@ name = "sapio-wasm-vault"
 version = "0.1.0"
 license = "MPL-2.0"
 authors = ["Jeremy Rubin <j@rubin.io>"]
-edition = "2018"
+edition = "2021"
 repository = "https://github.com/sapio-lang/sapio"
 homepage = "https://sapio-lang.org"
 description = "An Example Sapio Application"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-
 
 
 [dependencies]
@@ -44,9 +42,8 @@ crate-type = ["cdylib", "rlib"]
 path = "src/plugin.rs"
 
 
-
 [dependencies.sapio-ctv-emulator-trait]
-path="../../emulator-trait"
+path = "../../emulator-trait"
 version = "0.2.0"
 
 
@@ -63,4 +60,3 @@ wasm-opt = false
 path = "../../plugins"
 version = "0.2.0"
 features = ["client"]
-

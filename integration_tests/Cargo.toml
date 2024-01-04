@@ -2,7 +2,7 @@
 name = "sapio_integration_tests"
 version = "0.2.0"
 authors = ["Jeremy Rubin <j@rubin.io>"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -25,7 +25,7 @@ path = "../sapio"
 path = "../ctv_emulators"
 
 [dependencies.sapio-ctv-emulator-trait]
-path="../emulator-trait"
+path = "../emulator-trait"
 version = "0.2.0"
 
 [dependencies.bitcoin]
@@ -39,6 +39,5 @@ version = "^7.0.0"
 features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
 
 [dependencies.sapio-base]
-path="../sapio-base"
+path = "../sapio-base"
 version = "0.2.0"
-

@@ -3,7 +3,7 @@ name = "sapio-wasm-nft-sale"
 version = "0.1.0"
 license = "MPL-2.0"
 authors = ["Jeremy Rubin <j@rubin.io>"]
-edition = "2018"
+edition = "2021"
 repository = "https://github.com/sapio-lang/sapio"
 homepage = "https://sapio-lang.org"
 description = "An Example Sapio Application"
@@ -47,9 +47,8 @@ path = "../../sapio-contrib"
 version = "0.2.0"
 
 
-
 [dependencies.sapio-ctv-emulator-trait]
-path="../../emulator-trait"
+path = "../../emulator-trait"
 version = "0.2.0"
 
 [dependencies.miniscript]
