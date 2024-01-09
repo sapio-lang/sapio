@@ -1,19 +1,23 @@
 [package]
 name = "sapio-wasm-plugin"
 version = "0.2.0"
-license = "MPL-2.0"
-authors = ["Jeremy Rubin <j@rubin.io>"]
-edition = "2021"
-repository = "https://github.com/sapio-lang/sapio"
-homepage = "https://sapio-lang.org"
 description = "Libarary for building client/host sapio plugin bindings"
+license.workspace = true
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
 
 [features]
 default = ["client"]
 host = ["wasmer", "wasmer-cache", "tokio"]
 client = ["miniscript"]
+
+[lib]
+path = "src/lib.rs"
 
 [dependencies]
 schemars = "0.8.0"
@@ -23,9 +27,10 @@ serde_derive = "1.0"
 base64 = "0.13.0"
 hex = "0.4.3"
 
-[dependencies.sapio-trait]
-version = "0.2.0"
-path = "../sapio-trait"
+sapio-trait.workspace = true
+sapio.workspace = true
+sapio-base.workspace = true
+sapio-ctv-emulator-trait.workspace = true
 
 [dependencies.wasmer]
 version = "4.2.5"
@@ -44,27 +49,9 @@ features = ["full"]
 package = "sapio-bitcoin"
 version = "0.28.0"
 features = ['use-serde']
-[dependencies.sapio]
-path = "../sapio"
-version = "0.2.0"
-
-[dependencies.sapio-base]
-path = "../sapio-base"
-version = "0.2.0"
-
-[lib]
-path = "src/lib.rs"
-
-
-[dependencies.sapio-ctv-emulator-trait]
-path = "../emulator-trait"
-version = "0.2.0"
 
 [dependencies.miniscript]
 package = "sapio-miniscript"
 version = "^7.0.0"
 features = ['compiler', 'use-serde', 'use-schemars', 'serde']
 optional = true
-
-[package.metadata.wasm-pack.profile.release]
-wasm-opt = false

@@ -8,14 +8,13 @@ repository = "https://github.com/sapio-lang/sapio"
 homepage = "https://sapio-lang.org"
 description = "Emulator Trait for mocking out CTV with other logic, trait separate to avoid pulling in tokio to compiler"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 schemars = "0.8.0"
 serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
 
+sapio-base.workspace = true
 
 [dependencies.bitcoin]
 package = "sapio-bitcoin"
@@ -26,7 +25,3 @@ features = ['use-serde']
 package = "sapio-miniscript"
 version = "^7.0.0"
 features = ['compiler', 'use-serde', 'use-schemars', 'serde']
-
-[dependencies.sapio-base]
-path = "../sapio-base"
-version = "0.2.0"

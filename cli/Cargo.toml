@@ -8,8 +8,6 @@ repository = "https://github.com/sapio-lang/sapio"
 homepage = "https://sapio-lang.org"
 description = "A Command Line Interface for interacting with Sapio Contracts"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 schemars = "0.8.0"
 serde_json = "1.0"
@@ -24,9 +22,13 @@ directories = "3.0.1"
 rand = "^0.6"
 jsonschema-valid = "0.4.0"
 
-[dependencies.sapio-psbt]
-path = "../sapio-psbt"
-version = "0.1.0"
+sapio-psbt.workspace = true
+sapio.workspace = true
+sapio-base.workspace = true
+ctv_emulators.workspace = true
+sapio-contrib.workspace = true
+sapio-wasm-plugin.workspace = true
+sapio-wasm-plugin.features = ["host"]
 
 [dependencies.wasmer]
 version = "4.2.5"
@@ -43,25 +45,3 @@ features = ['use-serde', 'rand', 'base64']
 package = "sapio-miniscript"
 version = "^7.0.0"
 features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
-
-[dependencies.sapio]
-path = "../sapio"
-version = "0.2.0"
-
-[dependencies.sapio-base]
-path = "../sapio-base"
-version = "0.2.0"
-
-[dependencies.ctv_emulators]
-path = "../ctv_emulators"
-version = "0.2.0"
-
-[dependencies.sapio-contrib]
-path = "../sapio-contrib"
-version = "0.2.0"
-
-[dependencies.sapio-wasm-plugin]
-path = "../plugins"
-version = "0.2.0"
-
-features = ["host"]

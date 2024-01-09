@@ -1,16 +1,46 @@
 [workspace]
-members = ["sapio"
-          , "sapio-contrib"
-          , "ctv_emulators"
-          , "sapio-base"
-          , "cli"
-          , "tools"
-          , "plugins"
-          , 'emulator-trait'
-          , 'examples/*'
-          , 'sapio-trait'
-          , 'sapio_macros'
-          , 'sapio-psbt'
-          , 'simp-pack']
-exclude = ["plugin-example", "integration_tests"]
+members = [
+    "sapio",
+    "sapio-contrib",
+    "ctv_emulators",
+    "sapio-base",
+    "cli",
+    "tools",
+    "plugins",
+    "emulator-trait",
+    "examples/*",
+    "sapio-trait",
+    "sapio_macros",
+    "sapio-psbt",
+    "simp-pack",
+    "batching-trait",
+    "nft-trait",
+    "plugin-example/*",
+]
+exclude = ["integration_tests"]
 resolver = "2"
+
+[workspace.package]
+description = "A programming framework for bitcoin smart contracts."
+version = "0.2.0"
+license = "MPL-2.0"
+authors = ["Jeremy Rubin <j@rubin.io>"]
+edition = "2021"
+repository = "https://github.com/sapio-lang/sapio"
+homepage = "https://sapio-lang.org"
+
+[workspace.dependencies]
+sapio = { version = "*", path = "sapio" }
+sapio-contrib = { version = "*", path = "sapio-contrib" }
+ctv_emulators = { version = "*", path = "ctv_emulators" }
+sapio-base = { version = "*", path = "sapio-base" }
+cli = { version = "*", path = "cli" }
+tools = { version = "*", path = "tools" }
+sapio-wasm-plugin = { version = "*", path = "plugins" }
+sapio-ctv-emulator-trait = { version = "*", path = "emulator-trait" }
+sapio-trait = { version = "*", path = "sapio-trait" }
+sapio_macros = { version = "*", path = "sapio_macros" }
+sapio-psbt = { version = "*", path = "sapio-psbt" }
+simp-pack = { version = "*", path = "simp-pack" }
+batching-trait = { version = "*", path = "batching-trait" }
+sapio-wasm-nft-trait = { version = "*", path = "nft-trait" }

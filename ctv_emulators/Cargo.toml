@@ -8,7 +8,6 @@ repository = "https://github.com/sapio-lang/sapio"
 homepage = "https://sapio-lang.org"
 description = "Implementation of the CTV Emulator Trait"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 schemars = "0.8.0"
@@ -17,10 +16,8 @@ serde = "1.0"
 serde_derive = "1.0"
 rand = "0.8.1"
 
-
-[dependencies.sapio-ctv-emulator-trait]
-path = "../emulator-trait"
-version = "0.2.0"
+sapio-ctv-emulator-trait.workspace = true
+sapio-base.workspace = true
 
 [dependencies.bitcoin]
 package = "sapio-bitcoin"
@@ -31,11 +28,6 @@ features = ['use-serde', 'rand']
 package = "sapio-miniscript"
 version = "^7.0.0"
 features = ['compiler', 'use-serde', 'rand', 'use-schemars', 'serde']
-
-[dependencies.sapio-base]
-path = "../sapio-base"
-version = "0.2.0"
-
 
 [lib]
 name = "emulator_connect"

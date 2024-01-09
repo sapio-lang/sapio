@@ -1,24 +1,26 @@
 [package]
-name = "sapio-contrib"
-version = "0.2.0"
-license = "MPL-2.0"
-authors = ["Jeremy Rubin <j@rubin.io>"]
+name = "sapio-wasm-nft-trait"
+version = "0.1.0"
 edition = "2021"
-repository = "https://github.com/sapio-lang/sapio"
-homepage = "https://sapio-lang.org"
-description = "User submitted staging ground for contracts and utilities made for Sapio."
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
 
 [dependencies]
-schemars = "0.8.0"
 serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
-lazy_static = "1.4.0"
 
-sapio_macros.workspace = true
+simp-pack.workspace = true
 sapio.workspace = true
 sapio-base.workspace = true
+sapio-wasm-plugin.workspace = true
+sapio-trait.workspace = true
 sapio-ctv-emulator-trait.workspace = true
+
+[dependencies.schemars]
+version = "0.8.0"
+features = ['impl_json_schema']
 
 [dependencies.bitcoin]
 package = "sapio-bitcoin"
@@ -29,6 +31,4 @@ features = ['use-serde']
 package = "sapio-miniscript"
 version = "^7.0.0"
 features = ['compiler', 'use-serde', 'use-schemars', 'serde']
-
-[dev-dependencies]
-rand = "^0.6"
+optional = true
