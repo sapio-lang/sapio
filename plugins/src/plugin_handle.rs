@@ -19,7 +19,11 @@ pub trait PluginHandle {
     /// The object type a module outputs
     type Output;
     /// Call the module's main function
-    fn call(&mut self, path: &EffectPath, c: &Self::Input) -> Result<Self::Output, CompilationError>;
+    fn call(
+        &mut self,
+        path: &EffectPath,
+        c: &Self::Input,
+    ) -> Result<Self::Output, CompilationError>;
     /// get api metadata
     fn get_api(&mut self) -> Result<API<Self::Input, Self::Output>, CompilationError>;
     /// get name metadata

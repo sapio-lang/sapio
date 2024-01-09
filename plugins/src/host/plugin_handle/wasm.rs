@@ -7,8 +7,8 @@
 //!  a plugin handle for a wasm plugin.
 use super::*;
 use crate::host::wasm_cache::get_all_keys_from_fs;
+use crate::host::HostEnvironmentInner;
 use crate::host::{exports::*, HostEnvironmentT};
-use crate::host::{HostEnvironmentInner};
 use crate::plugin_handle::PluginHandle;
 use crate::API;
 use sapio::contract::CompilationError;

@@ -12,7 +12,7 @@ use sapio_ctv_emulator_trait::NullEmulator;
 
 use std::collections::BTreeMap;
 use std::str::FromStr;
-use std::sync::{Arc};
+use std::sync::Arc;
 pub use wasm::*;
 use wasmer::{imports, Function, Instance, Module, Store};
 pub use wasmer_cache::Hash as WASMCacheID;

@@ -40,7 +40,11 @@ where
 {
     type Input = CreateArgs<T>;
     type Output = R;
-    fn call(&mut self, path: &EffectPath, c: &Self::Input) -> Result<Self::Output, CompilationError> {
+    fn call(
+        &mut self,
+        path: &EffectPath,
+        c: &Self::Input,
+    ) -> Result<Self::Output, CompilationError> {
         call_path(path, &self.key, c.clone())
     }
     fn get_api(&mut self) -> Result<API<Self::Input, Self::Output>, CompilationError> {
