@@ -9,12 +9,12 @@
 use super::wasm_cache;
 use crate::CreateArgs;
 use sapio_ctv_emulator_trait::NullEmulator;
-use std::cell::Cell;
+
 use std::collections::BTreeMap;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 pub use wasm::*;
-use wasmer::{imports, Function, ImportObject, Instance, LazyInit, MemoryView, Module, Store};
+use wasmer::{imports, Function, Instance, Module, Store};
 pub use wasmer_cache::Hash as WASMCacheID;
 
 mod wasm;

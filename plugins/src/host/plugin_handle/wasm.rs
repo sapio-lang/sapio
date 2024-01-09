@@ -6,9 +6,9 @@
 
 //!  a plugin handle for a wasm plugin.
 use super::*;
-use crate::host::exports::*;
 use crate::host::wasm_cache::get_all_keys_from_fs;
-use crate::host::{HostEnvironment, HostEnvironmentInner};
+use crate::host::HostEnvironmentInner;
+use crate::host::{exports::*, HostEnvironmentT};
 use crate::plugin_handle::PluginHandle;
 use crate::API;
 use sapio::contract::CompilationError;
@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::marker::PhantomData;
 use std::path::PathBuf;
-use wasmer::Memory;
+use wasmer::{FunctionEnv, Memory, TypedFunction};
 
 /// Helper to resolve modules
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -59,40 +59,42 @@ pub enum SyncModuleLocator {
 /// A handle that holds a WASM Module instance
 pub struct WasmPluginHandle<Output> {
     store: Store,
-    env: HostEnvironment,
-    import_object: ImportObject,
+    env: HostEnvironmentT,
     module: Module,
     instance: Instance,
     key: wasmer_cache::Hash,
     net: bitcoin::Network,
     _pd: PhantomData<Output>,
+    /// reference to allocation creation function
+    pub sapio_v1_wasm_plugin_client_allocate_bytes: TypedFunction<i32, i32>,
+    /// reference to get_api function
+    pub sapio_v1_wasm_plugin_client_get_create_arguments: TypedFunction<(), i32>,
+    /// reference to get_name function
+    pub sapio_v1_wasm_plugin_client_get_name: TypedFunction<(), i32>,
+    /// reference to get_logo function
+    pub sapio_v1_wasm_plugin_client_get_logo: TypedFunction<(), i32>,
+    /// reference to allocation drop function
+    pub sapio_v1_wasm_plugin_client_drop_allocation: TypedFunction<i32, ()>,
+    /// reference to create function
+    pub sapio_v1_wasm_plugin_client_create: TypedFunction<(i32, i32), i32>,
+    /// reference to entry point function
+    pub sapio_v1_wasm_plugin_entry_point: TypedFunction<(), ()>,
 }
 
 impl<T> WasmPluginHandle<T> {
     /// Clone with a new memory space/instance
-    pub fn fresh_clone(&self) -> Result<Self, Box<dyn Error + Send + Sync>> {
-        let instance = Instance::new(&self.module, &self.import_object)?;
-        use wasmer::WasmerEnv;
-        let mut new_env = self.env.clone();
-        new_env.init_with_instance(&instance)?;
-
-        new_env
-            .lock()
-            .unwrap()
-            .init_ref()
-            .ok_or("No Init Function Specified")?
-            .call()?;
-
-        Ok(WasmPluginHandle {
-            store: self.store.clone(),
-            env: new_env,
-            net: self.net,
-            import_object: self.import_object.clone(),
-            module: self.module.clone(),
-            instance,
-            key: self.key,
-            _pd: Default::default(),
-        })
+    pub fn fresh_clone(&self) -> Result<Self, Box<dyn Error>> {
+        let env = self.env.as_ref(&self.store);
+        Ok(Self::setup_plugin_inner(
+            Store::default(),
+            env.path.clone(),
+            env.this,
+            Some(env.module_map.clone()),
+            self.net,
+            &env.emulator,
+            self.module.clone(),
+            self.key,
+        )?)
     }
 }
 impl<Output> WasmPluginHandle<Output> {
@@ -150,111 +152,29 @@ impl<Output> WasmPluginHandle<Output> {
     ) -> Result<Self, Box<dyn Error>> {
         let store = Store::default();
 
-        let (module, key) = match module_locator {
-            SyncModuleLocator::Bytes(wasm_bytes) => {
-                match wasm_cache::load_module(path.clone(), &store, &wasm_bytes[..]) {
-                    Ok(module) => module,
-                    Err(_) => {
-                        let store = Store::default();
-                        let module = Module::new(&store, &wasm_bytes)?;
-                        let key = wasm_cache::store_module(path.clone(), &module, &wasm_bytes)?;
-                        (module, key)
-                    }
-                }
-            }
-            SyncModuleLocator::Key(key) => wasm_cache::load_module_key(path.clone(), &store, key)?,
-        };
+        let (module, key) = load_module_from_cache(module_locator, &path, &store)?;
 
-        macro_rules! create_imports {
-            ($store:ident, $env:ident $(,$names:ident)*) =>
-            {
-                imports! {
-                    "env" =>  {
-                        $( std::stringify!($names) => Function::new_native_with_env( &$store, $env.clone(), $names) ,)*
-                    }
-                }
-            };
-        }
         let mut this = [0; 32];
         this.clone_from_slice(&hex::decode(key.to_string())?);
-        let mut wasm_ctv_emulator = Arc::new(Mutex::new(HostEnvironmentInner {
-            path: path.into(),
-            this,
-            module_map: plugin_map.unwrap_or_default(),
-            store: Arc::new(Mutex::new(store.clone())),
-            net,
-            emulator: emulator.clone(),
-            memory: LazyInit::new(),
-            get_api: LazyInit::new(),
-            get_name: LazyInit::new(),
-            get_logo: LazyInit::new(),
-            forget: LazyInit::new(),
-            create: LazyInit::new(),
-            init: LazyInit::new(),
-            allocate_wasm_bytes: LazyInit::new(),
-        }));
-        let import_object = create_imports!(
-            store,
-            wasm_ctv_emulator,
-            sapio_v1_wasm_plugin_ctv_emulator_signer_for,
-            sapio_v1_wasm_plugin_ctv_emulator_sign,
-            sapio_v1_wasm_plugin_debug_log_string,
-            sapio_v1_wasm_plugin_create_contract,
-            sapio_v1_wasm_plugin_get_api,
-            sapio_v1_wasm_plugin_get_name,
-            sapio_v1_wasm_plugin_get_logo,
-            sapio_v1_wasm_plugin_lookup_module_name
-        );
-
-        let instance = Instance::new(&module, &import_object)?;
-        use wasmer::WasmerEnv;
-        wasm_ctv_emulator.init_with_instance(&instance)?;
-
-        wasm_ctv_emulator
-            .lock()
-            .unwrap()
-            .init_ref()
-            .ok_or("No Init Function Specified")?
-            .call()?;
-
-        Ok(WasmPluginHandle {
-            store,
-            env: wasm_ctv_emulator,
-            net,
-            import_object,
-            module,
-            instance,
-            key,
-            _pd: Default::default(),
-        })
+        Self::setup_plugin_inner(store, path, this, plugin_map, net, emulator, module, key)
     }
 
     /// forget an allocated pointer
-    pub fn forget(&self, p: i32) -> Result<(), CompilationError> {
-        self.env
-            .lock()
-            .unwrap()
-            .forget_ref()
-            .ok_or_else(|| CompilationError::ModuleCouldNotFindFunction("forget".into()))?
-            .call(p)
+    pub fn forget(&mut self, p: i32) -> Result<(), CompilationError> {
+        self.sapio_v1_wasm_plugin_client_drop_allocation
+            .call(&mut self.store, p)
             .map_err(|e| CompilationError::ModuleCouldNotDeallocate(p, e.into()))
     }
 
     /// create an allocation
-    pub fn allocate(&self, len: i32) -> Result<i32, CompilationError> {
-        self.env
-            .lock()
-            .unwrap()
-            .allocate_wasm_bytes_ref()
-            .ok_or_else(|| {
-                CompilationError::ModuleCouldNotFindFunction("allocate_wasm_bytes".into())
-            })?
-            .call(len)
+    pub fn allocate(&mut self, len: i32) -> Result<i32, CompilationError> {
+        self.sapio_v1_wasm_plugin_client_allocate_bytes
+            .call(&mut self.store, len)
             .map_err(|e| CompilationError::ModuleCouldNotAllocateError(len, e.into()))
     }
 
     /// pass a string to the WASM plugin
-    pub fn pass_string(&self, s: &str) -> Result<i32, CompilationError> {
+    pub fn pass_string(&mut self, s: &str) -> Result<i32, CompilationError> {
         let offset = self.allocate(s.len() as i32)?;
         match self.pass_string_inner(s, offset) {
             Ok(_) => Ok(offset),
@@ -267,11 +187,14 @@ impl<Output> WasmPluginHandle<Output> {
 
     /// helper for string passing
     fn pass_string_inner(&self, s: &str, offset: i32) -> Result<(), CompilationError> {
-        let memory = self.get_memory()?;
-        let mem: MemoryView<'_, u8> = memory.view();
-        for (idx, byte) in s.as_bytes().iter().enumerate() {
-            mem[idx + offset as usize].set(*byte);
-        }
+        let env = self.env.as_ref(&self.store);
+        env.memory
+            .as_ref()
+            .ok_or(CompilationError::ModuleFailedToGetMemory(
+                "Memory Missing".into(),
+            ))?
+            .view(&self.store)
+            .write(offset as u64, &s.as_bytes()[..]);
         Ok(())
     }
 
@@ -283,14 +206,160 @@ impl<Output> WasmPluginHandle<Output> {
     }
     /// read something from wasm memory, null terminated
     fn read_to_vec(&self, p: i32) -> Result<Vec<u8>, CompilationError> {
-        let memory = self.get_memory()?;
-        let mem: MemoryView<'_, u8> = memory.view();
-        Ok(mem[p as usize..]
-            .iter()
-            .map(Cell::get)
-            .take_while(|i| *i != 0)
-            .collect())
+        let env = self.env.as_ref(&self.store);
+        let mem = env
+            .memory
+            .as_ref()
+            .ok_or(CompilationError::ModuleFailedToGetMemory(
+                "Memory Missing".into(),
+            ))?
+            .view(&self.store);
+        let p = p as u64;
+        let mut e = p;
+        while mem.read_u8(e).ok() != Some(0) {
+            e += 1;
+        }
+        let mut v = vec![0; (e - p) as usize];
+        mem.read(p, &mut v[..]);
+        Ok(v)
     }
+
+    fn setup_plugin_inner<I: Into<PathBuf> + Clone>(
+        mut store: Store,
+        path: I,
+        this: [u8; 32],
+        plugin_map: Option<BTreeMap<Vec<u8>, [u8; 32]>>,
+        net: bitcoin::Network,
+        emulator: &Arc<dyn CTVEmulator>,
+        module: Module,
+        key: WASMCacheID,
+    ) -> Result<Self, Box<dyn Error>> {
+        let host_env = FunctionEnv::new(
+            &mut store,
+            HostEnvironmentInner {
+                path: path.into(),
+                this,
+                module_map: plugin_map.unwrap_or_default(),
+                net,
+                emulator: emulator.clone(),
+                memory: None,
+                sapio_v1_wasm_plugin_client_get_create_arguments: None,
+                sapio_v1_wasm_plugin_client_get_name: None,
+                sapio_v1_wasm_plugin_client_get_logo: None,
+                sapio_v1_wasm_plugin_client_drop_allocation: None,
+                sapio_v1_wasm_plugin_client_create: None,
+                sapio_v1_wasm_plugin_entry_point: None,
+                sapio_v1_wasm_plugin_client_allocate_bytes: None,
+            },
+        );
+        macro_rules! create_imports {
+        ($store:ident, $env:ident $(,$names:ident)*) =>
+        {
+            imports! {
+                "env" =>  {
+                    $( std::stringify!($names) => Function::new_typed_with_env( &mut $store, &$env, $names) ,)*
+                }
+            }
+        };
+    }
+        // grab data and a new store_mut
+        let import_object = create_imports!(
+            store,
+            host_env,
+            sapio_v1_wasm_plugin_ctv_emulator_signer_for,
+            sapio_v1_wasm_plugin_ctv_emulator_sign,
+            sapio_v1_wasm_plugin_debug_log_string,
+            sapio_v1_wasm_plugin_create_contract,
+            sapio_v1_wasm_plugin_get_api,
+            sapio_v1_wasm_plugin_get_name,
+            sapio_v1_wasm_plugin_get_logo,
+            sapio_v1_wasm_plugin_lookup_module_name
+        );
+        let instance = Instance::new(&mut store, &module, &import_object)?;
+        let mut env_mut = host_env.into_mut(&mut store);
+        // change to a FunctionEnvMut
+        let (data_mut, mut store_mut) = env_mut.data_and_store_mut();
+
+        data_mut.memory = Some(instance.exports.get_memory("memory")?.clone());
+        macro_rules! create_exports {
+        ($store:ident, $env:ident, $instance:ident $(,$names:ident)*) =>
+        {
+            $($env.$names = Some($instance.exports.get_typed_function(&mut $store, std::stringify!($names))?);)*
+        };
+    }
+        create_exports!(
+            store_mut,
+            data_mut,
+            instance,
+            sapio_v1_wasm_plugin_client_allocate_bytes,
+            sapio_v1_wasm_plugin_client_get_create_arguments,
+            sapio_v1_wasm_plugin_client_get_name,
+            sapio_v1_wasm_plugin_client_get_logo,
+            sapio_v1_wasm_plugin_client_drop_allocation,
+            sapio_v1_wasm_plugin_client_create,
+            sapio_v1_wasm_plugin_entry_point
+        );
+
+        data_mut
+            .sapio_v1_wasm_plugin_entry_point
+            .as_ref()
+            .ok_or("No Init Function Specified")?
+            .call(&mut store_mut)?;
+
+        macro_rules! create_handle_exports {
+        ($store:ident,  $instance:ident $(,$names:ident)*) =>
+        {
+            $(let $names = $instance.exports.get_typed_function(&mut $store, std::stringify!($names))?;)*
+        }
+    }
+        create_handle_exports!(
+            store_mut,
+            instance,
+            sapio_v1_wasm_plugin_client_allocate_bytes,
+            sapio_v1_wasm_plugin_client_get_create_arguments,
+            sapio_v1_wasm_plugin_client_get_name,
+            sapio_v1_wasm_plugin_client_get_logo,
+            sapio_v1_wasm_plugin_client_drop_allocation,
+            sapio_v1_wasm_plugin_client_create,
+            sapio_v1_wasm_plugin_entry_point
+        );
+        Ok(WasmPluginHandle {
+            sapio_v1_wasm_plugin_client_allocate_bytes,
+            sapio_v1_wasm_plugin_client_get_create_arguments,
+            sapio_v1_wasm_plugin_client_get_name,
+            sapio_v1_wasm_plugin_client_get_logo,
+            sapio_v1_wasm_plugin_client_drop_allocation,
+            sapio_v1_wasm_plugin_client_create,
+            sapio_v1_wasm_plugin_entry_point,
+            env: env_mut.as_ref(),
+            store,
+            net,
+            module,
+            instance,
+            key,
+            _pd: Default::default(),
+        })
+    }
+}
+fn load_module_from_cache<I: Into<PathBuf> + Clone>(
+    module_locator: SyncModuleLocator,
+    path: &I,
+    store: &Store,
+) -> Result<(Module, WASMCacheID), Box<dyn Error>> {
+    let (module, key) = match module_locator {
+        SyncModuleLocator::Bytes(wasm_bytes) => {
+            match wasm_cache::load_module(path.clone(), store, &wasm_bytes[..]) {
+                Ok(module) => module,
+                Err(_) => {
+                    let module = Module::new(&store, &wasm_bytes)?;
+                    let key = wasm_cache::store_module(path.clone(), &module, &wasm_bytes)?;
+                    (module, key)
+                }
+            }
+        }
+        SyncModuleLocator::Key(key) => wasm_cache::load_module_key(path.clone(), store, key)?,
+    };
+    Ok((module, key))
 }
 
 impl<GOutput> PluginHandle for WasmPluginHandle<GOutput>
@@ -299,19 +368,19 @@ where
 {
     type Input = CreateArgs<serde_json::Value>;
     type Output = GOutput;
-    fn call(&self, path: &EffectPath, c: &Self::Input) -> Result<Self::Output, CompilationError> {
+    fn call(
+        &mut self,
+        path: &EffectPath,
+        c: &Self::Input,
+    ) -> Result<Self::Output, CompilationError> {
         let arg_str = serde_json::to_string(c).map_err(CompilationError::SerializationError)?;
         let args_ptr = self.pass_string(&arg_str)?;
         let path_str = serde_json::to_string(path).map_err(CompilationError::SerializationError)?;
         let path_ptr = self.pass_string(&path_str)?;
-        let create_func = {
-            let env = self.env.lock().unwrap();
-            env.create.clone()
-        };
+        let _env = self.env.as_mut(&mut self.store);
+        let create_func = { &self.sapio_v1_wasm_plugin_client_create };
         let result_ptr = create_func
-            .get_ref()
-            .ok_or_else(|| CompilationError::ModuleCouldNotFindFunction("create".into()))?
-            .call(path_ptr, args_ptr)
+            .call(&mut self.store, path_ptr, args_ptr)
             .map_err(|e| {
                 CompilationError::ModuleCouldNotCreateContract(path.clone(), c.clone(), e.into())
             })?;
@@ -321,41 +390,32 @@ where
             serde_json::from_slice(&buf).map_err(CompilationError::DeserializationError)?;
         v.map_err(CompilationError::ModuleCompilationErrorUnsendable)
     }
-    fn get_api(&self) -> Result<API<Self::Input, Self::Output>, CompilationError> {
+    fn get_api(&mut self) -> Result<API<Self::Input, Self::Output>, CompilationError> {
+        let _env = self.env.as_mut(&mut self.store);
         let p = self
-            .env
-            .lock()
-            .unwrap()
-            .get_api_ref()
-            .ok_or_else(|| CompilationError::ModuleCouldNotFindFunction("get_api".into()))?
-            .call()
+            .sapio_v1_wasm_plugin_client_get_create_arguments
+            .call(&mut self.store)
             .map_err(|e| CompilationError::ModuleCouldNotGetAPI(e.into()))?;
         let v = self.read_to_vec(p)?;
         self.forget(p)?;
         serde_json::from_slice(&v).map_err(CompilationError::DeserializationError)
     }
-    fn get_name(&self) -> Result<String, CompilationError> {
+    fn get_name(&mut self) -> Result<String, CompilationError> {
+        let _env = self.env.as_mut(&mut self.store);
         let p = self
-            .env
-            .lock()
-            .unwrap()
-            .get_name_ref()
-            .ok_or_else(|| CompilationError::ModuleCouldNotFindFunction("get_name".into()))?
-            .call()
+            .sapio_v1_wasm_plugin_client_get_name
+            .call(&mut self.store)
             .map_err(|e| CompilationError::ModuleCouldNotGetName(e.into()))?;
         let v = self.read_to_vec(p)?;
         self.forget(p)?;
         Ok(String::from_utf8_lossy(&v).to_string())
     }
 
-    fn get_logo(&self) -> Result<String, CompilationError> {
+    fn get_logo(&mut self) -> Result<String, CompilationError> {
+        let _env = self.env.as_mut(&mut self.store);
         let p = self
-            .env
-            .lock()
-            .unwrap()
-            .get_logo_ref()
-            .ok_or_else(|| CompilationError::ModuleCouldNotFindFunction("get_logo".into()))?
-            .call()
+            .sapio_v1_wasm_plugin_client_get_logo
+            .call(&mut self.store)
             .map_err(|e| CompilationError::ModuleCouldNotGetLogo(e.into()))?;
         let v = self.read_to_vec(p)?;
         self.forget(p)?;
