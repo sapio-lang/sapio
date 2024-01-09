@@ -13,8 +13,8 @@ impl SapioAPIHandle for serde_json::Value {
 pub trait SapioJSONTrait: JsonSchema + Serialize + for<'a> Deserialize<'a> {
     fn get_example_for_api_checking() -> Value;
     fn check_trait_implemented_inner(api: &dyn SapioAPIHandle) -> Result<(), String> {
-        let tag = Self::get_example_for_api_checking();
-        let japi = api.get_api();
+        let _tag = Self::get_example_for_api_checking();
+        let _japi = api.get_api();
         // let compiled = JSONSchema::compile(&japi).map_err(|_| "Error Compiling Schema")?;
         // compiled
         //     .validate(

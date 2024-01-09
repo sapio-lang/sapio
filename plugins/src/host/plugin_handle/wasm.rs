@@ -8,7 +8,7 @@
 use super::*;
 use crate::host::wasm_cache::get_all_keys_from_fs;
 use crate::host::{exports::*, HostEnvironmentT};
-use crate::host::{HostEnvironment, HostEnvironmentInner};
+use crate::host::{HostEnvironmentInner};
 use crate::plugin_handle::PluginHandle;
 use crate::API;
 use sapio::contract::CompilationError;
@@ -150,7 +150,7 @@ impl<Output> WasmPluginHandle<Output> {
         net: bitcoin::Network,
         plugin_map: Option<BTreeMap<Vec<u8>, [u8; 32]>>,
     ) -> Result<Self, Box<dyn Error>> {
-        let mut store = Store::default();
+        let store = Store::default();
 
         let (module, key) = load_module_from_cache(module_locator, &path, &store)?;
 
@@ -187,7 +187,7 @@ impl<Output> WasmPluginHandle<Output> {
 
     /// helper for string passing
     fn pass_string_inner(&self, s: &str, offset: i32) -> Result<(), CompilationError> {
-        let (env) = self.env.as_ref(&self.store);
+        let env = self.env.as_ref(&self.store);
         env.memory
             .as_ref()
             .ok_or(CompilationError::ModuleFailedToGetMemory(
@@ -206,7 +206,7 @@ impl<Output> WasmPluginHandle<Output> {
     }
     /// read something from wasm memory, null terminated
     fn read_to_vec(&self, p: i32) -> Result<Vec<u8>, CompilationError> {
-        let (env) = self.env.as_ref(&self.store);
+        let env = self.env.as_ref(&self.store);
         let mem = env
             .memory
             .as_ref()
@@ -234,7 +234,7 @@ impl<Output> WasmPluginHandle<Output> {
         module: Module,
         key: WASMCacheID,
     ) -> Result<Self, Box<dyn Error>> {
-        let mut host_env = FunctionEnv::new(
+        let host_env = FunctionEnv::new(
             &mut store,
             HostEnvironmentInner {
                 path: path.into(),
@@ -278,7 +278,7 @@ impl<Output> WasmPluginHandle<Output> {
         let instance = Instance::new(&mut store, &module, &import_object)?;
         let mut env_mut = host_env.into_mut(&mut store);
         // change to a FunctionEnvMut
-        let (mut data_mut, mut store_mut) = env_mut.data_and_store_mut();
+        let (data_mut, mut store_mut) = env_mut.data_and_store_mut();
 
         data_mut.memory = Some(instance.exports.get_memory("memory")?.clone());
         macro_rules! create_exports {
@@ -377,7 +377,7 @@ where
         let args_ptr = self.pass_string(&arg_str)?;
         let path_str = serde_json::to_string(path).map_err(CompilationError::SerializationError)?;
         let path_ptr = self.pass_string(&path_str)?;
-        let (env) = self.env.as_mut(&mut self.store);
+        let _env = self.env.as_mut(&mut self.store);
         let create_func = { &self.sapio_v1_wasm_plugin_client_create };
         let result_ptr = create_func
             .call(&mut self.store, path_ptr, args_ptr)
@@ -391,7 +391,7 @@ where
         v.map_err(CompilationError::ModuleCompilationErrorUnsendable)
     }
     fn get_api(&mut self) -> Result<API<Self::Input, Self::Output>, CompilationError> {
-        let env = self.env.as_mut(&mut self.store);
+        let _env = self.env.as_mut(&mut self.store);
         let p = self
             .sapio_v1_wasm_plugin_client_get_create_arguments
             .call(&mut self.store)
@@ -401,7 +401,7 @@ where
         serde_json::from_slice(&v).map_err(CompilationError::DeserializationError)
     }
     fn get_name(&mut self) -> Result<String, CompilationError> {
-        let env = self.env.as_mut(&mut self.store);
+        let _env = self.env.as_mut(&mut self.store);
         let p = self
             .sapio_v1_wasm_plugin_client_get_name
             .call(&mut self.store)
@@ -412,7 +412,7 @@ where
     }
 
     fn get_logo(&mut self) -> Result<String, CompilationError> {
-        let env = self.env.as_mut(&mut self.store);
+        let _env = self.env.as_mut(&mut self.store);
         let p = self
             .sapio_v1_wasm_plugin_client_get_logo
             .call(&mut self.store)

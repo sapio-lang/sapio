@@ -116,23 +116,23 @@ mod exports {
 
     /// Create an instance of a contract by "trampolining" through the host to use another
     /// plugin identified by key.
-    pub fn sapio_v1_wasm_plugin_get_api(mut env: HostEnvironment, key: i32) -> i32 {
+    pub fn sapio_v1_wasm_plugin_get_api(env: HostEnvironment, key: i32) -> i32 {
         wasm_plugin_action(env, key, Action::GetAPI)
     }
     /// Create an instance of a contract by "trampolining" through the host to use another
     /// plugin identified by key.
-    pub fn sapio_v1_wasm_plugin_get_name(mut env: HostEnvironment, key: i32) -> i32 {
+    pub fn sapio_v1_wasm_plugin_get_name(env: HostEnvironment, key: i32) -> i32 {
         wasm_plugin_action(env, key, Action::GetName)
     }
     /// Create an instance of a contract by "trampolining" through the host to use another
     /// plugin identified by key.
-    pub fn sapio_v1_wasm_plugin_get_logo(mut env: HostEnvironment, key: i32) -> i32 {
+    pub fn sapio_v1_wasm_plugin_get_logo(env: HostEnvironment, key: i32) -> i32 {
         wasm_plugin_action(env, key, Action::GetLogo)
     }
     /// Create an instance of a contract by "trampolining" through the host to use another
     /// plugin identified by key.
     pub fn sapio_v1_wasm_plugin_create_contract(
-        mut env: HostEnvironment,
+        env: HostEnvironment,
         path: i32,
         path_len: i32,
         key: i32,

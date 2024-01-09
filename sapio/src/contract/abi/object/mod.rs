@@ -17,7 +17,7 @@ use sapio_base::Clause;
 use serde_json::Value;
 
 use crate::contract::abi::continuation::ContinuationPoint;
-pub use crate::contract::abi::studio::*;
+
 use crate::contract::CompilationError;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
