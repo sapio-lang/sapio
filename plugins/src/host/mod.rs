@@ -14,11 +14,10 @@ pub use plugin_handle::WasmPluginHandle;
 use sapio::contract::CompilationError;
 use sapio_base::plugin_args::CreateArgs;
 use sapio_ctv_emulator_trait::CTVEmulator;
-use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use wasmer::*;
 
 pub mod plugin_handle;
@@ -26,7 +25,7 @@ pub mod wasm_cache;
 
 /// The state that host-side functions need to be able to use
 /// Also handles the imports of plugin-side functions
-#[derive(WasmerEnv, Clone)]
+#[derive(Clone)]
 pub struct HostEnvironmentInner {
     /// the module file path
     pub path: PathBuf,
@@ -34,43 +33,35 @@ pub struct HostEnvironmentInner {
     pub this: [u8; 32],
     /// a mapping of identifiers to module hashes
     pub module_map: BTreeMap<Vec<u8>, [u8; 32]>,
-    /// the  global store of this runtime
-    pub store: Arc<Mutex<Store>>,
     /// which network the contract is being built for
     pub net: bitcoin::Network,
     /// an emulator plugin for CTV functionality
     pub emulator: Arc<dyn CTVEmulator>,
     /// reference to the environment's memory space
-    #[wasmer(export)]
-    pub memory: LazyInit<Memory>,
+    pub memory: Option<Memory>,
     /// reference to allocation creation function
-    #[wasmer(export(name = "sapio_v1_wasm_plugin_client_allocate_bytes"))]
-    pub allocate_wasm_bytes: LazyInit<NativeFunc<i32, i32>>,
+    pub sapio_v1_wasm_plugin_client_allocate_bytes: Option<TypedFunction<i32, i32>>,
     /// reference to get_api function
-    #[wasmer(export(name = "sapio_v1_wasm_plugin_client_get_create_arguments"))]
-    pub get_api: LazyInit<NativeFunc<(), i32>>,
+    pub sapio_v1_wasm_plugin_client_get_create_arguments: Option<TypedFunction<(), i32>>,
     /// reference to get_name function
-    #[wasmer(export(name = "sapio_v1_wasm_plugin_client_get_name"))]
-    pub get_name: LazyInit<NativeFunc<(), i32>>,
+    pub sapio_v1_wasm_plugin_client_get_name: Option<TypedFunction<(), i32>>,
     /// reference to get_logo function
-    #[wasmer(export(name = "sapio_v1_wasm_plugin_client_get_logo"))]
-    pub get_logo: LazyInit<NativeFunc<(), i32>>,
+    pub sapio_v1_wasm_plugin_client_get_logo: Option<TypedFunction<(), i32>>,
     /// reference to allocation drop function
-    #[wasmer(export(name = "sapio_v1_wasm_plugin_client_drop_allocation"))]
-    pub forget: LazyInit<NativeFunc<i32, ()>>,
+    pub sapio_v1_wasm_plugin_client_drop_allocation: Option<TypedFunction<i32, ()>>,
     /// reference to create function
-    #[wasmer(export(name = "sapio_v1_wasm_plugin_client_create"))]
-    pub create: LazyInit<NativeFunc<(i32, i32), i32>>,
+    pub sapio_v1_wasm_plugin_client_create: Option<TypedFunction<(i32, i32), i32>>,
     /// reference to entry point function
-    #[wasmer(export(name = "sapio_v1_wasm_plugin_entry_point"))]
-    pub init: LazyInit<NativeFunc<(), ()>>,
+    pub sapio_v1_wasm_plugin_entry_point: Option<TypedFunction<(), ()>>,
 }
 
 /// Wrapped Plugin Env so that we don't duplicate state for each function.
 /// We must be careful to ensure we don't see deadlocks.
 ///
 /// TODO: Figure out how to *just* make this Arc and not Mutex.
-pub type HostEnvironment = Arc<Mutex<HostEnvironmentInner>>;
+pub type HostEnvironment<'a> = FunctionEnvMut<'a, HostEnvironmentInner>;
+/// Bare HostEnvironment Type
+pub type HostEnvironmentT = FunctionEnv<HostEnvironmentInner>;
 
 mod exports {
     //! the exports that the client will be able to use.
@@ -86,63 +77,62 @@ mod exports {
     /// out is written and must be 32 bytes of writable memory.
     /// if name == 0 and name_len == 0, then return the current module
     pub fn sapio_v1_wasm_plugin_lookup_module_name(
-        env: &HostEnvironment,
+        mut env: HostEnvironment,
         key: i32,
         len: i32,
         out: i32,
         ok: i32,
     ) {
-        let env = env.lock().unwrap();
+        let (env, store) = env.data_and_store_mut();
         let m_hash = {
             if key == 0 && len == 0 {
                 Some(&env.this)
             } else {
                 let mut buf = vec![0u8; len as usize];
-                for (src, dst) in env.memory_ref().unwrap().view()
-                    [key as usize..(key + len) as usize]
-                    .iter()
-                    .map(Cell::get)
-                    .zip(buf.iter_mut())
-                {
-                    *dst = src;
-                }
+                env.memory
+                    .as_ref()
+                    .unwrap()
+                    .view(&store)
+                    .read(key as u64, &mut buf[..]);
                 env.module_map.get(&buf)
             }
         };
         let is_ok = if let Some(b) = m_hash {
-            let out = out as usize;
-            for (src, dst) in b
-                .iter()
-                .zip(env.memory_ref().unwrap().view::<u8>()[out..out + 32].iter())
-            {
-                dst.set(*src);
-            }
+            env.memory
+                .as_ref()
+                .unwrap()
+                .view(&store)
+                .write(out as u64, b);
             1
         } else {
             0
         };
-        env.memory_ref().unwrap().view::<u8>()[ok as usize].set(is_ok);
+        env.memory
+            .as_ref()
+            .unwrap()
+            .view(&store)
+            .write_u8(ok as u64, is_ok);
     }
 
     /// Create an instance of a contract by "trampolining" through the host to use another
     /// plugin identified by key.
-    pub fn sapio_v1_wasm_plugin_get_api(env: &HostEnvironment, key: i32) -> i32 {
+    pub fn sapio_v1_wasm_plugin_get_api(mut env: HostEnvironment, key: i32) -> i32 {
         wasm_plugin_action(env, key, Action::GetAPI)
     }
     /// Create an instance of a contract by "trampolining" through the host to use another
     /// plugin identified by key.
-    pub fn sapio_v1_wasm_plugin_get_name(env: &HostEnvironment, key: i32) -> i32 {
+    pub fn sapio_v1_wasm_plugin_get_name(mut env: HostEnvironment, key: i32) -> i32 {
         wasm_plugin_action(env, key, Action::GetName)
     }
     /// Create an instance of a contract by "trampolining" through the host to use another
     /// plugin identified by key.
-    pub fn sapio_v1_wasm_plugin_get_logo(env: &HostEnvironment, key: i32) -> i32 {
+    pub fn sapio_v1_wasm_plugin_get_logo(mut env: HostEnvironment, key: i32) -> i32 {
         wasm_plugin_action(env, key, Action::GetLogo)
     }
     /// Create an instance of a contract by "trampolining" through the host to use another
     /// plugin identified by key.
     pub fn sapio_v1_wasm_plugin_create_contract(
-        env: &HostEnvironment,
+        mut env: HostEnvironment,
         path: i32,
         path_len: i32,
         key: i32,
@@ -172,19 +162,17 @@ mod exports {
         GetLogo,
     }
 
-    fn wasm_plugin_action(env: &HostEnvironment, key: i32, action: Action) -> i32 {
-        let env = env.lock().unwrap();
-        const KEY_LEN: usize = 32;
-        let key = key as usize;
+    fn wasm_plugin_action(mut env: HostEnvironment, key: i32, action: Action) -> i32 {
+        let (env, mut store) = env.data_and_store_mut();
+        const KEY_LEN: u64 = 32;
+        let key = key as u64;
         let h = wasmer_cache::Hash::new({
-            let mut buf = [0u8; KEY_LEN];
-            for (src, dst) in env.memory_ref().unwrap().view()[key..key + KEY_LEN]
-                .iter()
-                .map(Cell::get)
-                .zip(buf.iter_mut())
-            {
-                *dst = src;
-            }
+            let mut buf = [0u8; KEY_LEN as usize];
+            env.memory
+                .as_ref()
+                .unwrap()
+                .view(&store)
+                .read(key, &mut buf[..]);
             buf
         })
         .to_string();
@@ -207,27 +195,21 @@ mod exports {
             } => {
                 // use this buffer twice, so make it the max size
                 let mut v = vec![0u8; std::cmp::max(json_len, path_len) as usize];
-                for (src, dst) in env.memory_ref().unwrap().view()
-                    [json as usize..(json + json_len) as usize]
-                    .iter()
-                    .map(Cell::get)
-                    .zip(v.iter_mut())
-                {
-                    *dst = src;
-                }
+                env.memory
+                    .as_ref()
+                    .unwrap()
+                    .view(&store)
+                    .read(json as u64, &mut v[..json_len as usize]);
                 let create_args = serde_json::from_str(
                     &String::from_utf8_lossy(&v[..json_len as usize]).to_owned(),
                 )
                 .map_err(CompilationError::DeserializationError);
 
-                for (src, dst) in env.memory_ref().unwrap().view()
-                    [path as usize..(path + path_len) as usize]
-                    .iter()
-                    .map(Cell::get)
-                    .zip(v.iter_mut())
-                {
-                    *dst = src;
-                }
+                env.memory
+                    .as_ref()
+                    .unwrap()
+                    .view(&store)
+                    .read(path as u64, &mut v[..path_len as usize]);
                 let effectpath: Result<EffectPath, _> = serde_json::from_str(
                     &String::from_utf8_lossy(&v[..path_len as usize]).to_owned(),
                 )
@@ -251,7 +233,7 @@ mod exports {
                 Some(mmap),
             )
         }) {
-            Ok(Ok(sph)) => {
+            Ok(Ok(mut sph)) => {
                 let comp_s = (move || -> Result<serde_json::Value, CompilationError> {
                     let value = match action_to_take? {
                         InternalAction::GetName => Ok(sph.get_name().and_then(|m| {
@@ -277,25 +259,25 @@ mod exports {
                     let comp_s = serde_json::to_string(&comp_s.map_err(|s| s.to_string()))
                         .map_err(CompilationError::SerializationError)?;
                     let bytes: i32 = env
-                        .allocate_wasm_bytes_ref()
+                        .sapio_v1_wasm_plugin_client_allocate_bytes
+                        .as_ref()
                         .ok_or_else(|| {
                             CompilationError::ModuleCouldNotFindFunction(
                                 "allocate_wasm_bytes".into(),
                             )
                         })?
-                        .call(comp_s.len() as i32)
+                        .call(&mut store, comp_s.len() as i32)
                         .map_err(|e| {
                             CompilationError::ModuleCouldNotAllocateError(
                                 comp_s.len() as i32,
                                 e.into(),
                             )
                         })?;
-                    for (byte, c) in env.memory_ref().unwrap().view::<u8>()[bytes as usize..]
-                        .iter()
-                        .zip(comp_s.as_bytes())
-                    {
-                        byte.set(*c);
-                    }
+                    env.memory
+                        .as_ref()
+                        .unwrap()
+                        .view(&store)
+                        .write(bytes as u64, comp_s.as_bytes());
                     Ok(bytes)
                 })()
                 .unwrap_or(0)
@@ -305,80 +287,79 @@ mod exports {
     }
 
     /// use the hosts stdout to log a string. The host may make this a no-op.
-    pub fn sapio_v1_wasm_plugin_debug_log_string(env: &HostEnvironment, a: i32, len: i32) {
-        let env = env.lock().unwrap();
+    pub fn sapio_v1_wasm_plugin_debug_log_string(mut env: HostEnvironment, a: i32, len: i32) {
+        let (env, store) = env.data_and_store_mut();
         let stdout = std::io::stdout();
         let lock = stdout.lock();
         let mut w = std::io::BufWriter::new(lock);
-        let mem = env.memory_ref().unwrap().view::<u8>();
-        for byte in mem[a as usize..(a + len) as usize].iter().map(Cell::get) {
-            w.write_all(&[byte]).unwrap();
-        }
+        let mem = env.memory.as_ref().unwrap().view(&store);
+        let mut v = vec![0; len as usize];
+        mem.read(a as u64, &mut v[..]);
+        w.write_all(&v[..]);
         w.write_all("\n".as_bytes()).unwrap();
     }
 
     /// for the provided hash value, get the clause the oracle will satisfy
-    pub fn sapio_v1_wasm_plugin_ctv_emulator_signer_for(env: &HostEnvironment, hash: i32) -> i32 {
-        let env = env.lock().unwrap();
-        let hash = hash as usize;
+    pub fn sapio_v1_wasm_plugin_ctv_emulator_signer_for(
+        mut env: HostEnvironment,
+        hash: i32,
+    ) -> i32 {
+        let (env, mut store) = env.data_and_store_mut();
+        let hash = hash as u64;
         let h = sha256::Hash::from_inner({
             let mut buf = [0u8; 32];
-            for (src, dst) in env.memory_ref().unwrap().view()[hash..hash + 32]
-                .iter()
-                .map(Cell::get)
-                .zip(buf.iter_mut())
-            {
-                *dst = src;
-            }
+            env.memory
+                .as_ref()
+                .unwrap()
+                .view(&store)
+                .read(hash, &mut buf[..]);
             buf
         });
         let clause = env.emulator.get_signer_for(h).unwrap();
         let s = serde_json::to_string_pretty(&clause).unwrap();
         let bytes = env
-            .allocate_wasm_bytes_ref()
+            .sapio_v1_wasm_plugin_client_allocate_bytes
+            .as_ref()
             .unwrap()
-            .call(s.len() as i32)
+            .call(&mut store, s.len() as i32)
             .unwrap();
-        for (byte, c) in env.memory_ref().unwrap().view::<u8>()[bytes as usize..]
-            .iter()
-            .zip(s.as_bytes())
-        {
-            byte.set(*c);
-        }
+        env.memory
+            .as_ref()
+            .unwrap()
+            .view(&store)
+            .write(bytes as u64, s.as_bytes());
         bytes
     }
 
     /// get the oracle to sign the psbt passed in
     pub fn sapio_v1_wasm_plugin_ctv_emulator_sign(
-        env: &HostEnvironment,
+        mut env: HostEnvironment,
         psbt: i32,
         len: u32,
     ) -> i32 {
-        let env = env.lock().unwrap();
+        let (env, mut store) = env.data_and_store_mut();
         let mut buf = vec![0u8; len as usize];
-        let psbt = psbt as usize;
-        for (src, dst) in env.memory_ref().unwrap().view()[psbt..]
-            .iter()
-            .map(Cell::get)
-            .zip(buf.iter_mut())
-        {
-            *dst = src;
-        }
+        let psbt = psbt as u64;
+        env.memory
+            .as_ref()
+            .unwrap()
+            .view(&store)
+            .read(psbt, &mut buf[..]);
         let psbt: PartiallySignedTransaction = serde_json::from_slice(&buf[..]).unwrap();
         let psbt = env.emulator.sign(psbt).unwrap();
         buf.clear();
         let s = serde_json::to_string_pretty(&psbt).unwrap();
         let bytes = env
-            .allocate_wasm_bytes_ref()
+            .sapio_v1_wasm_plugin_client_allocate_bytes
+            .as_ref()
             .unwrap()
-            .call(s.len() as i32)
+            .call(&mut store, s.len() as i32)
             .unwrap();
-        for (byte, c) in env.memory_ref().unwrap().view::<u8>()[bytes as usize..]
-            .iter()
-            .zip(s.as_bytes())
-        {
-            byte.set(*c);
-        }
+        env.memory
+            .as_ref()
+            .unwrap()
+            .view(&store)
+            .write(bytes as u64, s.as_bytes());
         bytes
     }
 }

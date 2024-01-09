@@ -29,10 +29,10 @@ path = "../sapio-psbt"
 version = "0.1.0"
 
 [dependencies.wasmer]
-version = "2.2.1"
+version = "4.2.5"
 
 [dependencies.wasmer-cache]
-version = "2.2.1"
+version = "4.2.5"
 
 [dependencies.bitcoin]
 package = "sapio-bitcoin"

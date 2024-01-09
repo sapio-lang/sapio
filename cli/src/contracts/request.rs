@@ -189,21 +189,21 @@ impl Request {
         };
         match command {
             Command::List(_list) => {
-                let plugins = WasmPluginHandle::<Value>::load_all_keys(
+                let mut plugins = WasmPluginHandle::<Value>::load_all_keys(
                     &path,
                     emulator.clone(),
                     context.net,
                     plugin_map,
                 )?;
                 let m = plugins
-                    .iter()
+                    .iter_mut()
                     .map(|p| p.get_name().map(|name| (p.id().to_string(), name)))
                     .collect::<Result<BTreeMap<_, _>, _>>()?;
                 Ok(CommandReturn::List(ListReturn { items: m }))
             }
             Command::Call(call) => {
                 let params = call.params;
-                let sph = default_sph()?.await?;
+                let mut sph = default_sph()?.await?;
 
                 let api = sph.get_api()?;
                 let schema = serde_json::to_value(api.input())?;
@@ -221,19 +221,19 @@ impl Request {
             }
             Command::Bind(bind) => Ok(CommandReturn::Bind(bind.call(net, emulator).await?)),
             Command::Api(_api) => {
-                let sph = default_sph()?.await?;
+                let mut sph = default_sph()?.await?;
                 Ok(CommandReturn::Api(ApiReturn {
                     api: sph.get_api()?,
                 }))
             }
             Command::Logo(_logo) => {
-                let sph = default_sph()?.await?;
+                let mut sph = default_sph()?.await?;
                 Ok(CommandReturn::Logo(LogoReturn {
                     logo: sph.get_logo()?,
                 }))
             }
             Command::Info(_info) => {
-                let sph = default_sph()?.await?;
+                let mut sph = default_sph()?.await?;
                 let api = sph.get_api()?;
                 Ok(CommandReturn::Info(InfoReturn {
                     name: sph.get_name()?,

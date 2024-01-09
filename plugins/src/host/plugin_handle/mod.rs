@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 pub use wasm::*;
-use wasmer::{imports, Function, ImportObject, Instance, LazyInit, MemoryView, Module, Store};
+use wasmer::{imports, Function, Instance, MemoryView, Module, Store};
 pub use wasmer_cache::Hash as WASMCacheID;
 
 mod wasm;

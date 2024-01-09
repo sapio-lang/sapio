@@ -40,16 +40,16 @@ where
 {
     type Input = CreateArgs<T>;
     type Output = R;
-    fn call(&self, path: &EffectPath, c: &Self::Input) -> Result<Self::Output, CompilationError> {
+    fn call(&mut self, path: &EffectPath, c: &Self::Input) -> Result<Self::Output, CompilationError> {
         call_path(path, &self.key, c.clone())
     }
-    fn get_api(&self) -> Result<API<Self::Input, Self::Output>, CompilationError> {
+    fn get_api(&mut self) -> Result<API<Self::Input, Self::Output>, CompilationError> {
         get_api(&self.key)
     }
-    fn get_name(&self) -> Result<String, CompilationError> {
+    fn get_name(&mut self) -> Result<String, CompilationError> {
         get_name(&self.key)
     }
-    fn get_logo(&self) -> Result<String, CompilationError> {
+    fn get_logo(&mut self) -> Result<String, CompilationError> {
         get_logo(&self.key)
     }
 }
@@ -106,7 +106,7 @@ where
             }
         };
 
-        let res = SapioHostAPI {
+        let mut res = SapioHostAPI {
             which_plugin,
             key,
             _pd,
