@@ -88,3 +88,17 @@ impl From<ExtendedAddress> for Script {
         }
     }
 }
+
+impl From<&ExtendedAddress> for Script {
+    fn from(s: &ExtendedAddress) -> Self {
+        match s {
+            ExtendedAddress::Address(a) => a.script_pubkey(),
+            ExtendedAddress::OpReturn(OpReturn(s)) => s.clone(),
+            ExtendedAddress::Unknown(s) => s.clone(),
+            ExtendedAddress::Descriptor(d) => {
+                let r = d.script_pubkey();
+                r
+            }
+        }
+    }
+}

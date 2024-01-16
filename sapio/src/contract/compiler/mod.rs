@@ -72,7 +72,7 @@ impl Compilable for bitcoin::XOnlyPublicKey {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 enum Nullable {
     Yes,
     No,
@@ -90,19 +90,20 @@ fn compute_all_effects<C, A: Default>(
         return Ok(def);
     }
     let mut applied_effects_ctx = top_effect_ctx.derive(PathFragment::Effects)?;
-    top_effect_ctx
+    let r = top_effect_ctx
         .get_effects(InternalCompilerTag { _secret: () })
         .get_value(top_effect_ctx.path())
         // always gets the default expansion, but will also attempt
         // operating with the effects passed in through the Context Object.
-        .fold(Ok(def), |a: TxTmplIt, (k, arg)| -> TxTmplIt {
-            let v = a?;
+        .try_fold(def, |a, (k, arg)| -> TxTmplIt {
+            let v = a;
             let c = applied_effects_ctx
                 .derive(PathFragment::Named(SArc(k.clone())))
                 .expect(UNIQUE_DERIVE_PANIC_MSG);
             let w = func.call_json(self_ref, c, arg.clone())?;
             Ok(Box::new(v.chain(w)))
-        })
+        });
+    r
 }
 
 struct Renamer {
@@ -252,6 +253,7 @@ where
                         }
                         .entry(h)
                         .or_insert(txtmpl);
+
                         let extractor = func.get_extract_clause_from_txtmpl();
                         (extractor)(txtmpl, &ctx)
                     })
@@ -262,11 +264,12 @@ where
 
                 // N.B. the order of the matches below is significant
                 Ok(if func.get_returned_txtmpls_modify_guards() {
-                    (
+                    let r = (
                         None,
                         combine_txtmpls(nullability, txtmpl_clauses, guards)?,
                         guard_metadata,
-                    )
+                    );
+                    r
                 } else {
                     let mut cp =
                         ContinuationPoint::at(func.get_schema().clone(), effect_path.clone());
@@ -346,6 +349,9 @@ where
             Err(CompilationError::MinFeerateError)
         } else {
             let metadata_ctx = ctx.derive(PathFragment::Metadata)?;
+            let metadata = self
+                .metadata(metadata_ctx)?
+                .add_guard_simps(all_guard_simps)?;
             Ok(Compiled {
                 ctv_to_tx: comitted_txns,
                 suggested_txs: other_txns,
@@ -354,9 +360,7 @@ where
                 address,
                 descriptor,
                 amount_range,
-                metadata: self
-                    .metadata(metadata_ctx)?
-                    .add_guard_simps(all_guard_simps)?,
+                metadata,
             })
         }
     }
@@ -394,10 +398,13 @@ fn combine_txtmpls(
         // Error if 0 templates return and we don't want to be nullable
         (Nullable::No, 0, _) => Err(CompilationError::MissingTemplates),
         // If the guard is trivial, return the hashes standalone
-        (_, _, Clause::Trivial) => Ok(txtmpl_clauses
-            .into_iter()
-            .map(|policy| policy.compile().map_err(Into::<CompilationError>::into))
-            .collect::<Result<Vec<_>, _>>()?),
+        (_, _, Clause::Trivial) => {
+            let r = Ok(txtmpl_clauses
+                .into_iter()
+                .map(|policy| policy.compile().map_err(Into::<CompilationError>::into))
+                .collect::<Result<Vec<_>, _>>()?);
+            r
+        }
         // If the guard is non-trivial, zip it to each hash
         // TODO: Arc in miniscript to dedup memory?
         //       This could be Clause::Shared(x) or something...
