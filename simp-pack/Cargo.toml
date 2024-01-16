@@ -1,6 +1,6 @@
 [package]
 name = "simp-pack"
-version = "0.1.0"
+version = "0.2.4"
 edition = "2021"
 repository = "https://github.com/sapio-lang/sapio"
 homepage = "https://sapio-lang.org"
