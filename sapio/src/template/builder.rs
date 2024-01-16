@@ -9,9 +9,10 @@ use super::input::InputMetadata;
 pub use super::{Output, OutputMeta};
 use super::{Template, TemplateMetadata};
 use crate::contract::{CompilationError, Context};
+use crate::util::extended_address::ExtendedAddress;
 use bitcoin::util::amount::Amount;
-use bitcoin::VarInt;
 use bitcoin::Witness;
+use bitcoin::{Script, VarInt};
 use sapio_base::effects::PathFragment;
 use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::simp::TemplateInputLT;
@@ -20,7 +21,6 @@ use sapio_base::timelocks::*;
 use sapio_base::CTVHash;
 use sapio_base::Clause;
 use std::convert::TryFrom;
-use std::convert::TryInto;
 
 /// Builder can be used to interactively put together a transaction template before
 /// finalizing into a Template.
@@ -229,28 +229,36 @@ impl Builder {
     pub fn get_tx(&self) -> bitcoin::Transaction {
         let default_seq = RelTime::try_from(0).unwrap().into();
         let default_nlt = AbsHeight::try_from(0).unwrap().into();
-        bitcoin::Transaction {
+        let input = self
+            .sequences
+            .iter()
+            .map(|sequence| bitcoin::TxIn {
+                previous_output: Default::default(),
+                script_sig: Default::default(),
+                sequence: sequence.unwrap_or(default_seq).get(),
+                witness: Witness::new(),
+            })
+            .collect();
+        let output = self
+            .outputs
+            .iter()
+            .map(|out| {
+                let value = out.amount.as_sat();
+
+                let script_pubkey: Script = From::<&ExtendedAddress>::from(&out.contract.address);
+                bitcoin::TxOut {
+                    value,
+                    script_pubkey,
+                }
+            })
+            .collect();
+        let t = bitcoin::Transaction {
             version: self.version,
             lock_time: self.lock_time.unwrap_or(default_nlt).get(),
-            input: self
-                .sequences
-                .iter()
-                .map(|sequence| bitcoin::TxIn {
-                    previous_output: Default::default(),
-                    script_sig: Default::default(),
-                    sequence: sequence.unwrap_or(default_seq).get(),
-                    witness: Witness::new(),
-                })
-                .collect(),
-            output: self
-                .outputs
-                .iter()
-                .map(|out| bitcoin::TxOut {
-                    value: TryInto::<Amount>::try_into(out.amount).unwrap().as_sat(),
-                    script_pubkey: out.contract.address.clone().into(),
-                })
-                .collect(),
-        }
+            input,
+            output,
+        };
+        t
     }
 
     /// Sets the feerate if not set, and then sets the value to the min of the
