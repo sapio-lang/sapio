@@ -1,6 +1,7 @@
 [package]
 name = "sapio-psbt"
 version = "0.2.4"
+license = "MPL-2.0"
 edition = "2021"
 authors = ["Jeremy Rubin <j@rubin.io>"]
 repository = "https://github.com/sapio-lang/sapio"
