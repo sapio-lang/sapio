@@ -24,7 +24,6 @@ use std::sync::{Arc, Mutex};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ::rand::rngs::OsRng;
     use bitcoin::secp256k1::*;
     use bitcoin::Amount;
     use miniscript::Descriptor;
@@ -35,7 +34,7 @@ mod tests {
     fn it_works() {
         db_serde::register_db("mock".to_string(), |_s| Arc::new(Mutex::new(MockDB {})));
         let full = Secp256k1::new();
-        let mut rng = OsRng::new().expect("OsRng");
+        let mut rng = bitcoin::secp256k1::rand::thread_rng();
         let public_keys: Vec<_> = (0..3)
             .map(|_| full.generate_keypair(&mut rng).1.into())
             .collect();
