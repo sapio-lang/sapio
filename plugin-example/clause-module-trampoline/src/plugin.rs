@@ -63,10 +63,11 @@ impl Callable for Wrapper {
                 amount: ctx.funds(),
                 network: ctx.network,
                 effects: unsafe { ctx.get_effects_internal() }.as_ref().clone(),
+                ordinals_info: ctx.get_ordinals().clone()
             },
             arguments: self.g.clone(),
         };
-        self.v.call(ctx.path(), &create_args)
+        self.v.clone().call(ctx.path(), &create_args)
     }
 }
 

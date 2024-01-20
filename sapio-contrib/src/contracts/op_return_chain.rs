@@ -43,8 +43,9 @@ impl ChainReturn {
     )]
     fn next_chain(self, ctx: sapio::Context, o: UpdateTypes) {
         let mut tmpl = ctx.template();
+        let mut pay_fees = (Amount::ZERO);
         if let UpdateTypes::AddData { data, fees } = o {
-            tmpl = tmpl.spend_amount(fees.into())?;
+            pay_fees += fees.into();
             tmpl = tmpl.add_output(
                 Amount::from_sat(0),
                 &Compiled::from_op_return(data.as_str().as_bytes())?,
@@ -58,7 +59,8 @@ impl ChainReturn {
             let funds = tmpl.ctx().funds();
             tmpl = tmpl.add_output(funds, &self.pk, None)?;
         }
-        tmpl.into()
+
+        tmpl.add_fees(pay_fees.into())?.into()
     }
 }
 

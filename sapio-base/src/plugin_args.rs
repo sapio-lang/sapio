@@ -48,4 +48,8 @@ pub struct ContextualArguments {
     /// # Effects to augment compilations with
     #[serde(skip_serializing_if = "MapEffectDB::skip_serializing", default)]
     pub effects: MapEffectDB,
+
+    /// # the ranges of ordinals held in the input
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub ordinals_info: Option<Vec<(u64, u64)>>
 }

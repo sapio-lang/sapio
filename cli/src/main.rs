@@ -499,6 +499,7 @@ async fn bind_command(
     client_auth: bitcoincore_rpc_async::Auth,
 ) -> Result<Command, Box<dyn Error>> {
     let use_mock = args.is_present("mock");
+    let ordinals_info = None;
     let use_base64 = args.is_present("base64_psbt");
     let outpoint: Option<bitcoin::OutPoint> = args
         .value_of("outpoint")
@@ -520,5 +521,6 @@ async fn bind_command(
         outpoint,
         use_txn,
         compiled,
+        ordinals_info
     }))
 }

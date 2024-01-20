@@ -152,8 +152,7 @@ impl MiningPayout {
                 for pay in v.iter() {
                     builder = builder.add_output(pay.0, pay.1.as_compilable(), None)?;
                 }
-                builder = builder.add_fees(self.fee_sats_per_tx)?;
-                return builder.into();
+                return builder.add_fees(self.fee_sats_per_tx)?.into();
             } else {
                 let pay = Box::new(PayoutBundle {
                     contracts: v,

@@ -1,10 +1,18 @@
 [package]
-name = "sapio-wasm-nft-trait"
+name = "sapio-wasm-ordinal-example"
 version = "0.1.0"
+license = "MPL-2.0"
+authors = ["Jeremy Rubin <j@rubin.io>"]
 edition = "2021"
+repository = "https://github.com/sapio-lang/sapio"
+homepage = "https://sapio-lang.org"
+description = "An Example Sapio Application"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/plugin.rs"
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false
 
@@ -13,13 +21,10 @@ serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
 
-[dependencies.simp-pack]
-path = "../../simp-pack"
-version = "0.2.4"
+
 [dependencies.schemars]
 version = "0.8.0"
 features = ['impl_json_schema']
-
 [dependencies.bitcoin]
 package = "sapio-bitcoin"
 version = "0.28.0"
@@ -28,19 +33,17 @@ features = ['use-serde']
 path = "../../sapio"
 version = "0.2.0"
 
+[dependencies.batching-trait]
+path = "../batching-trait"
+version = "0.1.0"
+
 [dependencies.sapio-base]
 path = "../../sapio-base"
 version = "0.2.0"
-
-[dependencies.sapio-wasm-plugin]
-path = "../../plugins"
+[dependencies.sapio-contrib]
+path = "../../sapio-contrib"
 version = "0.2.0"
-features = ["client"]
 
-
-[dependencies.sapio-trait]
-path = "../../sapio-trait"
-version = "0.2.0"
 
 [dependencies.sapio-ctv-emulator-trait]
 path = "../../emulator-trait"
@@ -51,3 +54,13 @@ package = "sapio-miniscript"
 version = "^7.0.0"
 features = ['compiler', 'use-serde', 'use-schemars', 'serde']
 optional = true
+
+
+[dependencies.sapio-wasm-plugin]
+path = "../../plugins"
+version = "0.2.0"
+features = ["client"]
+
+[dependencies.sapio-wasm-nft-trait]
+path = "../nft-trait"
+version = "0.1.0"

@@ -217,6 +217,7 @@ mod test {
             Arc::new(CTVAvailable),
             EffectPath::try_from("dlc").unwrap(),
             Arc::new(v.context.effects),
+            None
         );
         Vault::try_from(v.arguments)?.compile(ctx)?;
         Ok(())

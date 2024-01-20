@@ -100,6 +100,8 @@ pub enum CompilationError {
     ModuleFailedAPICheck(String),
     /// CompError
     ModuleCompilationErrorUnsendable(String),
+    /// Issue in the Ordinals System
+    OrdinalsError(String),
     /// Error while serializing
     SerializationError(serde_json::Error),
     /// Error while deserializing
