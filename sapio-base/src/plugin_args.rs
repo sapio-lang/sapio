@@ -6,6 +6,7 @@
 
 //! arguments for passing into a sapio module
 use crate::effects::MapEffectDB;
+use bitcoin::Amount;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -51,5 +52,22 @@ pub struct ContextualArguments {
 
     /// # the ranges of ordinals held in the input
     #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub ordinals_info: Option<Vec<(u64, u64)>>
+    pub ordinals_info: Option<OrdinalsInfo>,
 }
+
+/// Struct to contain Ordinal ID
+#[derive(
+    Serialize, Deserialize, Eq, Ord, PartialEq, PartialOrd, Clone, Copy, Debug, JsonSchema,
+)]
+pub struct Ordinal(pub u64);
+
+impl Ordinal {
+    /// How much padding in sats to require
+    /// TODO: Flexible padding
+    pub fn padding(&self) -> Amount {
+        Amount::from_sat(500)
+    }
+}
+/// Struct to contain Ordinal Spans
+#[derive(Serialize, Deserialize, Eq, Ord, PartialEq, PartialOrd, Clone, Debug, JsonSchema)]
+pub struct OrdinalsInfo(pub Vec<(Ordinal, Ordinal)>);

@@ -7,6 +7,8 @@
 //! general non-parameter compilation state required by all contracts
 use super::{Amount, Compilable, CompilationError, Compiled};
 use crate::contract::compiler::InternalCompilerTag;
+use crate::ordinals::Ordinal;
+use crate::ordinals::OrdinalsInfo;
 
 use bitcoin::Network;
 
@@ -33,22 +35,22 @@ pub struct Context {
     path: Arc<EffectPath>,
     already_derived: HashSet<PathFragment>,
     effects: Arc<MapEffectDB>,
-    ordinals_info: Option<Vec<(u64, u64)>>,
+    ordinals_info: Option<OrdinalsInfo>,
 }
 
-fn allocate_ordinals(a: Amount, ords: &Vec<(u64, u64)>) -> [Vec<(u64, u64)>; 2] {
+fn allocate_ordinals(a: Amount, ords: &OrdinalsInfo) -> [OrdinalsInfo; 2] {
     let mut amt = a.as_sat();
-    let mut ret = [vec![], vec![]];
-    for (start, end) in ords.iter().copied() {
-        let sats = end - start;
+    let mut ret = [OrdinalsInfo(vec![]), OrdinalsInfo(vec![])];
+    for (start, end) in ords.0.iter().copied() {
+        let sats = end.0 - start.0;
         if sats <= amt {
             amt -= sats;
-            ret[0].push((start, end))
+            ret[0].0.push((start, end))
         } else {
             if sats != 0 {
-                ret[0].push((start, start + sats));
+                ret[0].0.push((start, Ordinal(start.0 + sats)));
             }
-            ret[1].push((start + sats, end))
+            ret[1].0.push((Ordinal(start.0 + sats), end))
         }
     }
     ret
@@ -56,7 +58,7 @@ fn allocate_ordinals(a: Amount, ords: &Vec<(u64, u64)>) -> [Vec<(u64, u64)>; 2] 
 
 impl Context {
     /// Borrow the Ordinals Info
-    pub fn get_ordinals(&self) -> &Option<Vec<(u64, u64)>> {
+    pub fn get_ordinals(&self) -> &Option<OrdinalsInfo> {
         &self.ordinals_info
     }
     /// create a context instance. Should only happen *once* at the very top
@@ -67,7 +69,7 @@ impl Context {
         emulator: Arc<dyn CTVEmulator>,
         path: EffectPath,
         effects: Arc<MapEffectDB>,
-        ordinals_info: Option<Vec<(u64, u64)>>,
+        ordinals_info: Option<OrdinalsInfo>,
     ) -> Self {
         Context {
             available_funds,
@@ -171,7 +173,7 @@ impl Context {
                 effects: self.effects.clone(),
                 ordinals_info: self.ordinals_info.as_ref().map(|o| {
                     let mut a = allocate_ordinals(amount, o);
-                    let mut v = vec![];
+                    let mut v = OrdinalsInfo(vec![]);
                     mem::swap(&mut a[0], &mut v);
                     v
                 }),
@@ -187,7 +189,7 @@ impl Context {
 
             self.ordinals_info = self.ordinals_info.as_ref().map(|o| {
                 let mut a = allocate_ordinals(amount, o);
-                let mut v = vec![];
+                let mut v = OrdinalsInfo(vec![]);
                 mem::swap(&mut a[1], &mut v);
                 v
             });
