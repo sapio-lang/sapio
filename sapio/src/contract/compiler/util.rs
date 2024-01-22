@@ -6,11 +6,12 @@
 
 //! utility functions for compiler
 
-use ::miniscript::descriptor::TapTree;
-use ::miniscript::*;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::Hash;
 use bitcoin::XOnlyPublicKey;
+use miniscript::descriptor::TapTree;
+use miniscript::*;
+use sapio_base::miniscript;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::sync::Arc;

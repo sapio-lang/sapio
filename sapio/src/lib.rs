@@ -8,6 +8,7 @@
 #![cfg_attr(feature = "nightly", feature(associated_type_defaults))]
 #![deny(missing_docs)]
 
+pub use sapio_base::miniscript;
 #[macro_use]
 pub mod contract;
 pub mod template;

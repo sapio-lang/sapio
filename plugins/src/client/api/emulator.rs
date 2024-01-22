@@ -7,6 +7,7 @@
 //! Host based Emulator
 use crate::client::ext::*;
 use bitcoin::hashes::Hash;
+use sapio_base::miniscript;
 use sapio_ctv_emulator_trait::CTVEmulator;
 use std::ffi::CString;
 use std::os::raw::c_char;
