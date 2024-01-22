@@ -72,7 +72,7 @@ impl SellableNFT for SimpleNFT {
     fn sell(self, mut ctx: Context, sale: Sell) {
         if let Sell::MakeSale {
             sale_info_partial,
-            which_sale,
+            mut which_sale,
         } = sale
         {
             let sale_info = sale_info_partial.fill(self.data.clone());
@@ -83,6 +83,7 @@ impl SellableNFT for SimpleNFT {
                     amount: ctx.funds(),
                     network: ctx.network,
                     effects: unsafe { ctx.get_effects_internal() }.as_ref().clone(),
+                    ordinals_info: ctx.get_ordinals().clone(),
                 },
                 arguments: sale_impl::Versions::NFT_Sale_Trait_Version_0_1_0(sale_info.clone()),
             };

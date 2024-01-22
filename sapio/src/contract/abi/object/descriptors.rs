@@ -7,13 +7,11 @@
 //! Wrapper for supported descriptor types
 
 pub use crate::contract::abi::studio::*;
-
-use ::miniscript::*;
-
 use bitcoin::PublicKey;
 use bitcoin::Script;
 use bitcoin::XOnlyPublicKey;
-
+use miniscript::*;
+use sapio_base::miniscript;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

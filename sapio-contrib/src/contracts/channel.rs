@@ -75,6 +75,7 @@ mod tests {
             std::sync::Arc::new(CTVAvailable),
             "root".try_into().unwrap(),
             Default::default(),
+            None
         );
         Compilable::compile(&x, ctx.derive_str(Arc::new("X".into())).unwrap()).ok();
         Compilable::compile(&y, ctx.derive_str(Arc::new("Y".into())).unwrap()).ok();

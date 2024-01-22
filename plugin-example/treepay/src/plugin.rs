@@ -100,8 +100,7 @@ impl TreePay {
                         builder = builder.set_sequence(0, timelock)?;
                     }
                 }
-                builder = builder.add_fees(self.fee_sats_per_tx)?;
-                return builder.into();
+                return builder.add_fees(self.fee_sats_per_tx)?.into();
             } else {
                 let pay = Box::new(PayThese {
                     contracts: v,

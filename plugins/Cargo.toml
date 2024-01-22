@@ -13,7 +13,7 @@ description = "Libarary for building client/host sapio plugin bindings"
 [features]
 default = ["client"]
 host = ["wasmer", "wasmer-cache", "tokio"]
-client = ["miniscript"]
+client = []
 
 [dependencies]
 schemars = "0.8.0"
@@ -59,12 +59,6 @@ path = "src/lib.rs"
 [dependencies.sapio-ctv-emulator-trait]
 path = "../emulator-trait"
 version = "0.2.0"
-
-[dependencies.miniscript]
-package = "sapio-miniscript"
-version = "^7.0.0"
-features = ['compiler', 'use-serde', 'use-schemars', 'serde']
-optional = true
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false

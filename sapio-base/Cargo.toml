@@ -19,7 +19,7 @@ serde_derive = "1.0"
 
 [dependencies.miniscript]
 package = "sapio-miniscript"
-version = "^7.0.1"
+version = "7.0.2-alpha.0"
 features = ['compiler', 'use-serde', 'use-schemars', 'serde']
 
 [dependencies.bitcoin]

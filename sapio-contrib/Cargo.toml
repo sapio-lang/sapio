@@ -33,12 +33,6 @@ path = "../sapio-base"
 version = "0.2.0"
 
 
-[dependencies.miniscript]
-package = "sapio-miniscript"
-version = "^7.0.0"
-features = ['compiler', 'use-serde', 'use-schemars', 'serde']
-
-
 [dependencies.sapio-ctv-emulator-trait]
 path = "../emulator-trait"
 version = "0.2.0"

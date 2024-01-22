@@ -22,7 +22,6 @@ use schemars::*;
 use serde::*;
 use std::convert::TryFrom;
 
-
 use std::sync::Arc;
 
 /// # Dutch Auction Data
@@ -145,7 +144,7 @@ impl NFTDutchAuction {
             let amt = ctx.funds();
             // first, let's get the module that should be used to 're-mint' this NFT
             // to the new owner
-            let minting_module = self
+            let mut minting_module = self
                 .main
                 .data
                 .minting_module
@@ -162,6 +161,7 @@ impl NFTDutchAuction {
                     amount: ctx.funds(),
                     network: ctx.network,
                     effects: unsafe { ctx.get_effects_internal() }.as_ref().clone(),
+                    ordinals_info: ctx.get_ordinals().clone(),
                 },
                 arguments: mint_impl::Versions::Mint_NFT_Trait_Version_0_1_0(mint_data),
             };

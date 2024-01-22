@@ -10,7 +10,8 @@
 
 use crate::contract::object::ObjectError;
 use bitcoin::{Address, Script, XOnlyPublicKey};
-use miniscript::{Descriptor, DescriptorTrait};
+use crate::miniscript::{Descriptor, DescriptorTrait};
+use sapio_base::miniscript;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;

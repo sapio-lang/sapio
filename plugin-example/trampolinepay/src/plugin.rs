@@ -34,13 +34,14 @@ pub struct TrampolinePay {
 impl TrampolinePay {
     #[then]
     fn expand(self, mut ctx: Context) {
-        let contract = self.handle.call(
+        let contract = self.handle.clone().call(
             &ctx.derive_str(Arc::new("plugin_trampoline".into()))?.path(),
             &CreateArgs {
                 context: ContextualArguments {
                     amount: ctx.funds(),
                     network: ctx.network,
                     effects: unsafe { ctx.get_effects_internal() }.as_ref().clone(),
+                    ordinals_info: ctx.get_ordinals().clone(),
                 },
                 arguments: batching_trait::Versions::BatchingTraitVersion0_1_1(self.data.clone()),
             },
