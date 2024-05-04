@@ -21,10 +21,15 @@ use sapio_base::timelocks::*;
 use sapio_base::CTVHash;
 use sapio_base::Clause;
 use std::convert::TryFrom;
+use std::marker::PhantomData;
 
+/// State Type Tag for NotAddingFees
+pub struct NotAddingFees;
+/// State Type Tag for AddingFees (forces fees to be added last)
+pub struct AddingFees;
 /// Builder can be used to interactively put together a transaction template before
 /// finalizing into a Template.
-pub struct Builder {
+pub struct BuilderState<State> {
     guards: Vec<Clause>,
     // TODO: Should be Comitted/Uncomitted if not CTV
     sequences: Vec<Option<AnyRelTimeLock>>,
@@ -37,12 +42,16 @@ pub struct Builder {
     min_feerate: Option<Amount>,
     // Metadata Fields:
     metadata: TemplateMetadata,
+    _pd: PhantomData<State>,
 }
 
-impl Builder {
+///  Start state of a Builder
+pub type Builder = BuilderState<NotAddingFees>;
+
+impl BuilderState<NotAddingFees> {
     /// Creates a new transaction template with 1 input and no outputs.
-    pub fn new(ctx: Context) -> Builder {
-        Builder {
+    pub fn new(ctx: Context) -> BuilderState<NotAddingFees> {
+        Self {
             guards: Vec::new(),
             sequences: vec![None],
             inputs: vec![InputMetadata::default()],
@@ -53,25 +62,13 @@ impl Builder {
             fees: Amount::from_sat(0),
             min_feerate: None,
             ctx,
+            _pd: Default::default(),
         }
     }
 
     /// get a read-only reference to the builder's context
     pub fn ctx(&self) -> &Context {
         &self.ctx
-    }
-
-    /// reduce the amount availble in the builder's context
-    pub fn spend_amount(mut self, amount: Amount) -> Result<Self, CompilationError> {
-        self.ctx = self.ctx.spend_amount(amount)?;
-        Ok(self)
-    }
-
-    /// reduce the amount availble in the builder's context, and add to the fees
-    pub fn add_fees(self, amount: Amount) -> Result<Self, CompilationError> {
-        let mut c = self.spend_amount(amount)?;
-        c.fees += amount;
-        Ok(c)
     }
 
     /// Creates a new Output, forcing the compilation of the compilable object and defaulting
@@ -223,6 +220,33 @@ impl Builder {
         self.guards.push(guard);
         self
     }
+}
+
+impl<T> BuilderState<T> {
+    /// reduce the amount availble in the builder's context
+    pub fn spend_amount(mut self, amount: Amount) -> Result<Self, CompilationError> {
+        self.ctx = self.ctx.spend_amount(amount)?;
+        Ok(self)
+    }
+    /// reduce the amount availble in the builder's context, and add to the fees
+    pub fn add_fees(self, amount: Amount) -> Result<BuilderState<AddingFees>, CompilationError> {
+        let mut s = BuilderState {
+            _pd: Default::default(),
+            guards: self.guards,
+            sequences: self.sequences,
+            outputs: self.outputs,
+            inputs: self.inputs,
+            version: self.version,
+            lock_time: self.lock_time,
+            ctx: self.ctx,
+            fees: self.fees,
+            min_feerate: self.min_feerate,
+            metadata: self.metadata,
+        };
+        let mut c = s.spend_amount(amount)?;
+        c.fees += amount;
+        Ok(c)
+    }
 
     /// Creates a transaction from a Builder.
     /// Generally, should not be called directly.
@@ -320,8 +344,9 @@ impl Builder {
         }
     }
 }
-impl From<Builder> for Template {
-    fn from(t: Builder) -> Template {
+
+impl<T> From<BuilderState<T>> for Template {
+    fn from(t: BuilderState<T>) -> Template {
         let tx = t.get_tx();
         Template {
             guards: t.guards,
@@ -337,8 +362,8 @@ impl From<Builder> for Template {
     }
 }
 
-impl From<Builder> for crate::contract::TxTmplIt {
-    fn from(t: Builder) -> Self {
+impl<T> From<BuilderState<T>> for crate::contract::TxTmplIt {
+    fn from(t: BuilderState<T>) -> Self {
         // t.into() // works too, but prefer the explicit form so we know what we get concretely
         Ok(Box::new(std::iter::once(Ok(t.into()))))
     }

@@ -10,33 +10,28 @@ pub mod error;
 pub use error::*;
 pub mod bind;
 pub mod descriptors;
-pub use descriptors::*;
-use sapio_base::simp::CompiledObjectLT;
-use sapio_base::simp::SIMPAttachableAt;
-use sapio_base::Clause;
-use serde_json::Value;
-
 use crate::contract::abi::continuation::ContinuationPoint;
-
 use crate::contract::CompilationError;
 use crate::template::Template;
 use crate::util::amountrange::AmountRange;
 use crate::util::extended_address::ExtendedAddress;
-use ::miniscript::*;
 use bitcoin::hashes::sha256;
-
 use bitcoin::util::amount::Amount;
-
+pub use descriptors::*;
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
+use sapio_base::miniscript::*;
 use sapio_base::serialization_helpers::SArc;
-
+use sapio_base::simp::CompiledObjectLT;
+use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::simp::SIMPError;
+use sapio_base::Clause;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::BTreeMap;
-
 use std::sync::Arc;
+
 /// Metadata for Object, arbitrary KV set.
 #[derive(Serialize, Deserialize, Clone, JsonSchema, Debug, PartialEq, Eq, Default)]
 pub struct ObjectMetadata {

@@ -15,18 +15,16 @@ use crate::contract::actions::conditional_compile::CCILWrapper;
 use crate::contract::actions::CallableAsFoF;
 use crate::contract::TxTmplIt;
 use crate::util::amountrange::AmountRange;
-
-use ::miniscript::*;
 use bitcoin::schnorr::TweakedPublicKey;
 use bitcoin::XOnlyPublicKey;
+use miniscript::*;
 use sapio_base::effects::EffectDB;
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
-
+use sapio_base::miniscript;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::Clause;
 use std::collections::{BTreeMap, BTreeSet};
-
 use std::sync::Arc;
 mod cache;
 mod util;

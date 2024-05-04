@@ -7,12 +7,9 @@
 //!  Errors during object construction
 
 pub use crate::contract::abi::studio::*;
-
-use ::miniscript::{self, *};
-
 use bitcoin::util::taproot::TaprootBuilderError;
-
-use sapio_base::txindex::TxIndexError;
+use miniscript::*;
+use sapio_base::{miniscript, txindex::TxIndexError};
 use sapio_ctv_emulator_trait::EmulatorError;
 
 /// Error types that can arise when constructing an Object

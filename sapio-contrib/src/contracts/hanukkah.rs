@@ -151,11 +151,11 @@ impl Hanukkiah2Night {
         let size = txn.estimate_tx_size();
         let fees = self.feerate_per_byte * size;
         txn = txn.add_amount(fees);
-        txn = txn.add_fees(fees)?;
         let candle_time =
             AbsTime::try_from(self.night_time.get() + 24 * 60 * 60 * (self.night as u32 - 1))?
                 .into();
-        txn.set_lock_time(candle_time)?.into()
+        txn = txn.set_lock_time(candle_time)?.into();
+        txn.add_fees(fees)?.into()
     }
 }
 impl Hanukkiah2 {
@@ -181,8 +181,8 @@ impl Hanukkiah2 {
         let size = txn.estimate_tx_size();
         let fees = self.feerate_per_byte * size;
         txn = txn.add_amount(fees);
-        txn = txn.add_fees(fees)?;
-        txn.into()
+        let fee_paying_txn = txn.add_fees(fees)?;
+        fee_paying_txn.into()
     }
 }
 impl Contract for Hanukkiah2 {

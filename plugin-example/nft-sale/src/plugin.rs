@@ -53,10 +53,10 @@ impl SimpleNFTSale {
         let amt = ctx.funds();
         // first, let's get the module that should be used to 're-mint' this NFT
         // to the new owner
-        let minting_module =
+        let mut minting_module =
             self.0.data.minting_module.as_ref().ok_or_else(|| {
                 CompilationError::TerminateWith("Must Provide Module Hash".into())
-            })?;
+            })?.clone();
         // let's make a copy of the old nft metadata..
         let mut mint_data = self.0.data.clone();
         // and change the owner to the buyer
@@ -68,6 +68,7 @@ impl SimpleNFTSale {
                 amount: ctx.funds(),
                 network: ctx.network,
                 effects: unsafe { ctx.get_effects_internal() }.as_ref().clone(),
+                ordinals_info: ctx.get_ordinals().clone(),
             },
             arguments: mint_impl::Versions::Mint_NFT_Trait_Version_0_1_0(mint_data),
         };

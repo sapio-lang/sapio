@@ -7,6 +7,8 @@
 //! general non-parameter compilation state required by all contracts
 use super::{Amount, Compilable, CompilationError, Compiled};
 use crate::contract::compiler::InternalCompilerTag;
+use crate::ordinals::Ordinal;
+use crate::ordinals::OrdinalsInfo;
 
 use bitcoin::Network;
 
@@ -19,6 +21,7 @@ use std::convert::TryInto;
 
 use std::collections::HashSet;
 
+use std::mem;
 use std::sync::Arc;
 
 /// Context is used to track statet during compilation such as remaining value.
@@ -32,9 +35,32 @@ pub struct Context {
     path: Arc<EffectPath>,
     already_derived: HashSet<PathFragment>,
     effects: Arc<MapEffectDB>,
+    ordinals_info: Option<OrdinalsInfo>,
+}
+
+fn allocate_ordinals(a: Amount, ords: &OrdinalsInfo) -> [OrdinalsInfo; 2] {
+    let mut amt = a.as_sat();
+    let mut ret = [OrdinalsInfo(vec![]), OrdinalsInfo(vec![])];
+    for (start, end) in ords.0.iter().copied() {
+        let sats = end.0 - start.0;
+        if sats <= amt {
+            amt -= sats;
+            ret[0].0.push((start, end))
+        } else {
+            if sats != 0 {
+                ret[0].0.push((start, Ordinal(start.0 + sats)));
+            }
+            ret[1].0.push((Ordinal(start.0 + sats), end))
+        }
+    }
+    ret
 }
 
 impl Context {
+    /// Borrow the Ordinals Info
+    pub fn get_ordinals(&self) -> &Option<OrdinalsInfo> {
+        &self.ordinals_info
+    }
     /// create a context instance. Should only happen *once* at the very top
     /// level.
     pub fn new(
@@ -43,6 +69,7 @@ impl Context {
         emulator: Arc<dyn CTVEmulator>,
         path: EffectPath,
         effects: Arc<MapEffectDB>,
+        ordinals_info: Option<OrdinalsInfo>,
     ) -> Self {
         Context {
             available_funds,
@@ -52,6 +79,7 @@ impl Context {
             path: Arc::new(path),
             already_derived: Default::default(),
             effects,
+            ordinals_info,
         }
     }
     /// Get this Context's effect database, for clients
@@ -94,6 +122,7 @@ impl Context {
                 network: self.network,
                 already_derived: Default::default(),
                 effects: self.effects.clone(),
+                ordinals_info: self.ordinals_info.clone(),
             })
         }
     }
@@ -107,6 +136,7 @@ impl Context {
             network: self.network,
             already_derived: self.already_derived.clone(),
             effects: self.effects.clone(),
+            ordinals_info: self.ordinals_info.clone(),
         }
     }
 
@@ -141,6 +171,12 @@ impl Context {
                 network: self.network,
                 already_derived: self.already_derived.clone(),
                 effects: self.effects.clone(),
+                ordinals_info: self.ordinals_info.as_ref().map(|o| {
+                    let mut a = allocate_ordinals(amount, o);
+                    let mut v = OrdinalsInfo(vec![]);
+                    mem::swap(&mut a[0], &mut v);
+                    v
+                }),
             })
         }
     }
@@ -150,6 +186,13 @@ impl Context {
             Err(CompilationError::OutOfFunds)
         } else {
             self.available_funds -= amount;
+
+            self.ordinals_info = self.ordinals_info.as_ref().map(|o| {
+                let mut a = allocate_ordinals(amount, o);
+                let mut v = OrdinalsInfo(vec![]);
+                mem::swap(&mut a[1], &mut v);
+                v
+            });
             Ok(self)
         }
     }

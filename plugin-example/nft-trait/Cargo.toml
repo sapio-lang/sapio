@@ -15,7 +15,7 @@ serde_derive = "1.0"
 
 [dependencies.simp-pack]
 path = "../../simp-pack"
-version = "0.1.0"
+version = "0.2.4"
 [dependencies.schemars]
 version = "0.8.0"
 features = ['impl_json_schema']
@@ -45,9 +45,3 @@ version = "0.2.0"
 [dependencies.sapio-ctv-emulator-trait]
 path = "../../emulator-trait"
 version = "0.2.0"
-
-[dependencies.miniscript]
-package = "sapio-miniscript"
-version = "^7.0.0"
-features = ['compiler', 'use-serde', 'use-schemars', 'serde']
-optional = true

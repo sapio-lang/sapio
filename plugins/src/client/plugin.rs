@@ -73,6 +73,7 @@ where
                     network,
                     amount,
                     effects,
+                    ordinals_info
                 },
         } = serde_json::from_slice(s.to_bytes()).map_err(CompilationError::DeserializationError)?;
         // TODO: In theory, these trampoline bounds are robust/serialization safe...
@@ -105,6 +106,7 @@ where
             path,
             // TODO: load database?
             Arc::new(effects),
+            ordinals_info
         );
         let converted = Self::try_from(arguments)?;
         converted.call(ctx)

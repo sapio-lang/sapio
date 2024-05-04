@@ -47,11 +47,6 @@ path = "src/plugin.rs"
 path = "../../emulator-trait"
 version = "0.2.0"
 
-[dependencies.miniscript]
-package = "sapio-miniscript"
-version = "^7.0.0"
-features = ['compiler', 'use-serde', 'use-schemars', 'serde']
-optional = true
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false

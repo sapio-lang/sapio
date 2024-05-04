@@ -11,6 +11,7 @@ use crate::contract::object::ObjectError;
 use sapio_base::effects::EffectDBError;
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::ValidFragmentError;
+use sapio_base::miniscript;
 use sapio_base::plugin_args::CreateArgs;
 use sapio_base::simp::SIMPError;
 use sapio_ctv_emulator_trait::EmulatorError;
@@ -100,6 +101,8 @@ pub enum CompilationError {
     ModuleFailedAPICheck(String),
     /// CompError
     ModuleCompilationErrorUnsendable(String),
+    /// Issue in the Ordinals System
+    OrdinalsError(String),
     /// Error while serializing
     SerializationError(serde_json::Error),
     /// Error while deserializing

@@ -7,6 +7,7 @@
 use super::*;
 use bitcoin::consensus::encode::{Decodable, Encodable};
 use miniscript::serde;
+use sapio_base::miniscript;
 use serde::de::Visitor;
 use serde::de::*;
 use serde::*;

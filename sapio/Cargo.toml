@@ -11,10 +11,6 @@ description = "A programming framework for bitcoin smart contracts."
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 
-[dependencies.miniscript]
-package = "sapio-miniscript"
-version = "^7.0.1"
-features = ['compiler', 'use-serde', 'use-schemars', 'serde']
 
 [features]
 # used to enable some niceties if compiling on a nightly compiler
