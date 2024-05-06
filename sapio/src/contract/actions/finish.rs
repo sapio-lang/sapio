@@ -59,9 +59,9 @@ pub struct FinishOrFunc<'a, ContractSelf, StatefulArguments, SpecificArgs, WebAP
     /// (if negative trait bounds, could remove!)
     pub f: PhantomData<WebAPIStatus>,
     /// if txtmpls returned by the func should modify guards.
-    pub returned_txtmpls_modify_guards: bool,
+    pub returned_transaction_templates_can_modify_parent_script: bool,
     /// extract a clause from the txtmpl
-    pub extract_clause_from_txtmpl:
+    pub extract_script_preconditions_from_transaction_template:
         fn(&Template, &Context) -> Result<Option<Clause>, CompilationError>,
 }
 
@@ -97,9 +97,9 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     /// Get the RootSchema for calling this with an update
     fn get_schema(&self) -> &Option<Arc<Value>>;
     /// get if txtmpls returned by the func should modify guards.
-    fn get_returned_txtmpls_modify_guards(&self) -> bool;
+    fn returned_transaction_templates_can_modify_parent_script(&self) -> bool;
     /// extract a clause from the txtmpl
-    fn get_extract_clause_from_txtmpl(
+    fn extract_script_preconditions_from_transaction_template(
         &self,
     ) -> fn(&Template, &Context) -> Result<Option<Clause>, CompilationError>;
     /// rename this object
@@ -130,13 +130,13 @@ impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, 
     fn get_schema(&self) -> &Option<Arc<Value>> {
         &self.schema
     }
-    fn get_returned_txtmpls_modify_guards(&self) -> bool {
-        self.returned_txtmpls_modify_guards
+    fn returned_transaction_templates_can_modify_parent_script(&self) -> bool {
+        self.returned_transaction_templates_can_modify_parent_script
     }
-    fn get_extract_clause_from_txtmpl(
+    fn extract_script_preconditions_from_transaction_template(
         &self,
     ) -> fn(&Template, &Context) -> Result<Option<Clause>, CompilationError> {
-        self.extract_clause_from_txtmpl
+        self.extract_script_preconditions_from_transaction_template
     }
 
     fn rename(&mut self, a: Arc<String>) {
@@ -182,14 +182,14 @@ where
     fn get_schema(&self) -> &Option<Arc<Value>> {
         &self.schema
     }
-    fn get_returned_txtmpls_modify_guards(&self) -> bool {
-        self.returned_txtmpls_modify_guards
+    fn returned_transaction_templates_can_modify_parent_script(&self) -> bool {
+        self.returned_transaction_templates_can_modify_parent_script
     }
 
-    fn get_extract_clause_from_txtmpl(
+    fn extract_script_preconditions_from_transaction_template(
         &self,
     ) -> fn(&Template, &Context) -> Result<Option<Clause>, CompilationError> {
-        self.extract_clause_from_txtmpl
+        self.extract_script_preconditions_from_transaction_template
     }
 
     fn rename(&mut self, a: Arc<String>) {

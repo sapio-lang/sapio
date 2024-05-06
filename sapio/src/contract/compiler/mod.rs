@@ -5,6 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! The primary compilation traits and types
+use super::actions::conditional_compile;
 use super::actions::ConditionalCompileType;
 use super::AnyContract;
 use super::CompilationError;
@@ -77,14 +78,14 @@ enum Nullable {
 }
 
 const UNIQUE_DERIVE_PANIC_MSG: &str = "Must be a valid derivation or internal invariant not held";
-fn compute_all_effects<C, A: Default>(
+fn create_state_transition_iterator<C, A: Default>(
     mut top_effect_ctx: Context,
     self_ref: &C,
-    func: &dyn CallableAsFoF<C, A>,
+    state_transition: &dyn CallableAsFoF<C, A>,
 ) -> TxTmplIt {
     let default_applied_effect_ctx = top_effect_ctx.derive(PathFragment::DefaultEffect)?;
-    let def = func.call(self_ref, default_applied_effect_ctx, Default::default())?;
-    if !func.web_api() {
+    let def = state_transition.call(self_ref, default_applied_effect_ctx, Default::default())?;
+    if !state_transition.web_api() {
         return Ok(def);
     }
     let mut applied_effects_ctx = top_effect_ctx.derive(PathFragment::Effects)?;
@@ -98,7 +99,7 @@ fn compute_all_effects<C, A: Default>(
             let c = applied_effects_ctx
                 .derive(PathFragment::Named(SArc(k.clone())))
                 .expect(UNIQUE_DERIVE_PANIC_MSG);
-            let w = func.call_json(self_ref, c, arg.clone())?;
+            let w = state_transition.call_json(self_ref, c, arg.clone())?;
             Ok(Box::new(v.chain(w)))
         });
     r
@@ -152,23 +153,23 @@ where
     /// TODO: Better Document Semantics
     fn compile(&self, mut ctx: Context) -> Result<Compiled, CompilationError> {
         let self_ref = self.get_inner_ref();
-        let mut guard_clauses = GuardCache::new();
+        let mut script_precondition_compilation_cache = GuardCache::new();
 
         // The below maps track metadata that is useful for consumers / verification.
         // track transactions that are *guaranteed* via CTV
-        let mut comitted_txns = BTreeMap::new();
+        let mut committed_txn_map = BTreeMap::new();
         // All other transactions
-        let mut other_txns = BTreeMap::new();
+        let mut uncommitted_txn_map = BTreeMap::new();
 
         // the min and max amount of funds spendable in the transactions
-        let mut amount_range = AmountRange::new();
+        let mut required_amount_range = AmountRange::new();
 
         // amount ensuring that the funds required don't get tweaked
         // during recompilation passes
         // TODO: Maybe do not just cloned?
         let amount_range_ctx = ctx.derive(PathFragment::Cloned)?;
         let ensured_amount = self.ensure_amount(amount_range_ctx)?;
-        amount_range.update_range(ensured_amount);
+        required_amount_range.update_range(ensured_amount);
 
         // The code for then_fns and finish_or_fns is very similar, differing
         // only in that then_fns have a CTV enforcing the contract and
@@ -178,30 +179,37 @@ where
         // we need a unique context for each.
         let mut action_ctx = ctx.derive(PathFragment::Action)?;
         let mut renamer = Renamer::new();
-        let all_values = self
+        let all_state_transition_functions = self
             .then_fns()
             .iter()
-            .filter_map(|func| func())
+            .filter_map(|state_transition| state_transition())
             // We currently need to allocate for the the Callable as a
             // trait object since it only exists temporarily.
             // TODO: Without allocations?
             .map(|x| -> Box<dyn CallableAsFoF<_, _>> { Box::new(x) })
-            .chain(self.finish_or_fns().iter().filter_map(|func| func()))
-            .map(|mut x| {
-                let new_name = Arc::new(renamer.get_name(x.get_name().as_ref()));
-                x.rename(new_name.clone());
+            .chain(
+                self.finish_or_fns()
+                    .iter()
+                    .filter_map(|state_transition| state_transition()),
+            );
+        let rename_state_transitions_uniquely =
+            all_state_transition_functions.map(|mut state_transition| {
+                let new_name = Arc::new(renamer.get_name(state_transition.get_name().as_ref()));
+                state_transition.rename(new_name.clone());
                 let name = PathFragment::Named(SArc(new_name));
-                let f_ctx = action_ctx.derive(name).expect(UNIQUE_DERIVE_PANIC_MSG);
-                (f_ctx, x)
-            })
-            // flat_map will discard any
-            // skippable / never branches here
-            .flat_map(|(mut f_ctx, func)| {
-                let mut this_ctx = f_ctx
+                let state_transition_context =
+                    action_ctx.derive(name).expect(UNIQUE_DERIVE_PANIC_MSG);
+                (state_transition_context, state_transition)
+            });
+        // flat_map will discard any
+        // skippable / never branches here
+        let filtered_conditional_compilation = rename_state_transitions_uniquely.flat_map(
+            |(mut state_transition_context, state_transition)| {
+                let mut this_ctx = state_transition_context
                     // this should always be Ok(_)
                     .derive(PathFragment::CondCompIf)
                     .expect(UNIQUE_DERIVE_PANIC_MSG);
-                match CCILWrapper(func.get_conditional_compile_if())
+                match CCILWrapper(state_transition.get_conditional_compile_if())
                     .assemble(self_ref, &mut this_ctx)
                 {
                     // Throw errors
@@ -210,50 +218,80 @@ where
                     }
                     // Non nullable
                     ConditionalCompileType::Required | ConditionalCompileType::NoConstraint => {
-                        Some(Ok((f_ctx, func, Nullable::No)))
+                        Some(Ok((
+                            state_transition_context,
+                            state_transition,
+                            Nullable::No,
+                        )))
                     }
                     // Nullable
-                    ConditionalCompileType::Nullable => Some(Ok((f_ctx, func, Nullable::Yes))),
+                    ConditionalCompileType::Nullable => Some(Ok((
+                        state_transition_context,
+                        state_transition,
+                        Nullable::Yes,
+                    ))),
                     // Drop these
                     ConditionalCompileType::Skippable | ConditionalCompileType::Never => None,
                 }
-            })
+            },
+        );
+        let all_script_predicates = filtered_conditional_compilation
             .map(|r| {
-                let (mut f_ctx, func, nullability) = r?;
-                let gctx = f_ctx.derive(PathFragment::Guard)?;
-                let simp_ctx = f_ctx.derive(PathFragment::Metadata)?;
+                let (mut state_transition_context, state_transition, nullability_enabled) = r?;
+                let script_precondition_context =
+                    state_transition_context.derive(PathFragment::Guard)?;
+                let interactive_metadata_context =
+                    state_transition_context.derive(PathFragment::Metadata)?;
                 // TODO: Suggested path frag?
-                let (guards, guard_metadata) =
-                    create_guards(self_ref, gctx, func.get_guard(), &mut guard_clauses)?;
-                let effect_ctx = f_ctx.derive(if func.get_returned_txtmpls_modify_guards() {
-                    PathFragment::Next
-                } else {
-                    PathFragment::Suggested
-                })?;
-                let effect_path = effect_ctx.path().clone();
-                let transactions = compute_all_effects(effect_ctx, self_ref, func.as_ref());
+                let (script_precondition, script_precondition_metadata) =
+                    get_script_preconditions_for(
+                        self_ref,
+                        script_precondition_context,
+                        state_transition.get_guard(),
+                        &mut script_precondition_compilation_cache,
+                    )?;
+                // If the txtmpls that are returned from this state transition
+                // modify guards, then it is a CTV based state transition and it should be
+                // labelled as "Next"
+                let effect_ctx = state_transition_context.derive(
+                    if state_transition.returned_transaction_templates_can_modify_parent_script() {
+                        PathFragment::Next
+                    } else {
+                        PathFragment::Suggested
+                    },
+                )?;
+                let continuation_path = effect_ctx.path().clone();
+                let transactions = create_state_transition_iterator(
+                    effect_ctx,
+                    self_ref,
+                    state_transition.as_ref(),
+                )?;
                 // If no guards and not CTV, then nothing gets added (not
                 // interpreted as Trivial True)
                 //   - If CTV and no guards, just CTV added.
                 //   - If CTV and guards, CTV & guards added.
                 // it would be an error if any of r_txtmpls is an error
                 // instead of just an empty iterator.
-                let txtmpl_clauses = transactions?
-                    .map(|r_txtmpl| {
-                        let txtmpl = r_txtmpl?;
-                        let h = txtmpl.hash();
-                        amount_range.update_range(txtmpl.max);
+                let transaction_script_preconditions = transactions
+                    .map(|tx_template_or_error| {
+                        let tx_template = tx_template_or_error?;
+                        let tx_checktemplateverify_hash = tx_template.hash();
+                        required_amount_range.update_range(tx_template.max);
                         // Add the addition guards to these clauses
-                        let txtmpl = if func.get_returned_txtmpls_modify_guards() {
-                            &mut comitted_txns
+                        let stored_tx_template = if state_transition
+                            .returned_transaction_templates_can_modify_parent_script()
+                        {
+                            &mut committed_txn_map
                         } else {
-                            &mut other_txns
+                            &mut uncommitted_txn_map
                         }
-                        .entry(h)
-                        .or_insert(txtmpl);
+                        .entry(tx_checktemplateverify_hash)
+                        .or_insert(tx_template);
 
-                        let extractor = func.get_extract_clause_from_txtmpl();
-                        (extractor)(txtmpl, &ctx)
+                        state_transition.extract_script_preconditions_from_transaction_template()(
+                            stored_tx_template,
+                            &ctx,
+                        )
                     })
                     // Drop None values
                     .filter_map(|s| s.transpose())
@@ -261,22 +299,36 @@ where
                     .collect::<Result<Vec<Clause>, CompilationError>>()?;
 
                 // N.B. the order of the matches below is significant
-                Ok(if func.get_returned_txtmpls_modify_guards() {
-                    let r = (
-                        None,
-                        combine_txtmpls(nullability, txtmpl_clauses, guards)?,
-                        guard_metadata,
-                    );
-                    r
-                } else {
-                    let mut cp =
-                        ContinuationPoint::at(func.get_schema().clone(), effect_path.clone());
-                    for simp in func.gen_simps(self_ref, simp_ctx)? {
-                        cp = cp.add_simp(simp.as_ref())?;
-                    }
-                    let v = optimizer_flatten_and_compile(guards)?;
-                    (Some((SArc(effect_path), cp)), v, guard_metadata)
-                })
+                Ok(
+                    if state_transition.returned_transaction_templates_can_modify_parent_script() {
+                        let r = (
+                            None,
+                            combine_txtmpls(
+                                nullability_enabled,
+                                transaction_script_preconditions,
+                                script_precondition,
+                            )?,
+                            script_precondition_metadata,
+                        );
+                        r
+                    } else {
+                        let simps =
+                            state_transition.gen_simps(self_ref, interactive_metadata_context)?;
+                        let continuation_point = simps.iter().try_fold(
+                            ContinuationPoint::at(
+                                state_transition.get_schema().clone(),
+                                continuation_path.clone(),
+                            ),
+                            |c, simp| c.add_simp(simp.as_ref()),
+                        )?;
+                        let v = optimizer_flatten_and_compile(script_precondition)?;
+                        (
+                            Some((SArc(continuation_path), continuation_point)),
+                            v,
+                            script_precondition_metadata,
+                        )
+                    },
+                )
             })
             .collect::<Result<Vec<(_, Vec<Miniscript<XOnlyPublicKey, Tap>>, _)>, CompilationError>>(
             )?;
@@ -284,7 +336,7 @@ where
         let mut continue_apis = ContinueAPIs::default();
         let mut clause_accumulator = vec![];
         let mut all_guard_simps: BTreeMap<Clause, GuardSimps> = Default::default();
-        for (v, b, c) in all_values {
+        for (v, b, c) in all_script_predicates {
             continue_apis.extend(std::iter::once(v));
             clause_accumulator.push(b);
             for (pol, mut simps) in c {
@@ -308,8 +360,10 @@ where
                     let simp = new.derive(PathFragment::Metadata).ok()?;
                     Some((new, simp))
                 }))
-                .filter_map(|(func, (c, simp_c))| {
-                    guard_clauses.get(self_ref, *func, c, simp_c).transpose()
+                .filter_map(|(state_transition, (c, simp_c))| {
+                    script_precondition_compilation_cache
+                        .get(self_ref, *state_transition, c, simp_c)
+                        .transpose()
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             let all_g = guards
@@ -335,10 +389,10 @@ where
         let descriptor = Some(descriptor.into());
         let root_path = SArc(ctx.path().clone());
 
-        let failed_estimate = comitted_txns.values().any(|a| {
+        let failed_estimate = committed_txn_map.values().any(|a| {
             // witness space not scaled
             let tx_size = a.tx.get_weight() + estimated_max_size;
-            let fees = amount_range.max() - a.total_amount();
+            let fees = required_amount_range.max() - a.total_amount();
             a.min_feerate_sats_vbyte
                 .map(|m| fees.as_sat() < (m.as_sat() * tx_size as u64))
                 == Some(false)
@@ -351,13 +405,13 @@ where
                 .metadata(metadata_ctx)?
                 .add_guard_simps(all_guard_simps)?;
             Ok(Compiled {
-                ctv_to_tx: comitted_txns,
-                suggested_txs: other_txns,
+                ctv_to_tx: committed_txn_map,
+                suggested_txs: uncommitted_txn_map,
                 continue_apis: continue_apis.inner,
                 root_path,
                 address,
                 descriptor,
-                amount_range,
+                amount_range: required_amount_range,
                 metadata,
             })
         }

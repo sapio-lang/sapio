@@ -59,8 +59,8 @@ impl<'a, ContractSelf, StatefulArgs> From<ThenFunc<'a, ContractSelf>>
             coerce_args: ThenFuncTypeTag::coerce_args,
             schema: None,
             f: PhantomData::default(),
-            returned_txtmpls_modify_guards: true,
-            extract_clause_from_txtmpl: ctv_clause_extractor,
+            returned_transaction_templates_can_modify_parent_script: true,
+            extract_script_preconditions_from_transaction_template: ctv_clause_extractor,
             // TODO: Maybe Then should be able to get simps?
             simp_gen: None,
         }

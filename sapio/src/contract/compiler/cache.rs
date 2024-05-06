@@ -84,7 +84,7 @@ impl<T> GuardCache<T> {
     }
 }
 
-pub(crate) fn create_guards<T>(
+pub(crate) fn get_script_preconditions_for<T>(
     self_ref: &T,
     mut ctx: Context,
     guards: &[fn() -> Option<Guard<T>>],
