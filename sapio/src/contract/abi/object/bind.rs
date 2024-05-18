@@ -50,7 +50,7 @@ impl Object {
             Object {
                 root_path,
                 continue_apis,
-                descriptor,
+                taproot_spend_info,
                 ctv_to_tx,
                 suggested_txs,
                 metadata,
@@ -99,37 +99,14 @@ impl Object {
                                         blockdata.lookup_output(&tx_in.previous_output).ok();
                                 }
                                 // Missing other Witness Info.
-                                match descriptor {
-                                    Some(SupportedDescriptors::Pk(d)) => {
-                                        psbtx.inputs[0].witness_script = Some(d.explicit_script()?);
+                                if let Some(info) = taproot_spend_info {
+                                    let inp = &mut psbtx.inputs[0];
+                                    for item in info.as_script_map().keys() {
+                                        let cb = info.control_block(item).expect("Must be present");
+                                        inp.tap_scripts.insert(cb.clone(), item.clone());
                                     }
-                                    Some(SupportedDescriptors::XOnly(Descriptor::Tr(t))) => {
-                                        let mut builder = TaprootBuilder::new();
-                                        let mut added = false;
-                                        for (depth, ms) in t.iter_scripts() {
-                                            added = true;
-                                            let script = ms.encode();
-                                            builder = builder.add_leaf(depth, script)?;
-                                        }
-                                        let info = if added {
-                                            builder.finalize(&secp, *t.internal_key())?
-                                        } else {
-                                            TaprootSpendInfo::new_key_spend(
-                                                &secp,
-                                                *t.internal_key(),
-                                                None,
-                                            )
-                                        };
-                                        let inp = &mut psbtx.inputs[0];
-                                        for item in info.as_script_map().keys() {
-                                            let cb =
-                                                info.control_block(item).expect("Must be present");
-                                            inp.tap_scripts.insert(cb.clone(), item.clone());
-                                        }
-                                        inp.tap_merkle_root = info.merkle_root();
-                                        inp.tap_internal_key = Some(info.internal_key());
-                                    }
-                                    _ => (),
+                                    inp.tap_merkle_root = info.merkle_root();
+                                    inp.tap_internal_key = Some(info.internal_key());
                                 }
                                 psbtx = emulator.sign(psbtx)?;
                                 let final_tx = psbtx.clone().extract_tx();

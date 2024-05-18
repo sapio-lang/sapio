@@ -113,6 +113,8 @@ pub enum CompilationError {
     Custom(Box<dyn std::error::Error>),
     /// Error in continuation argument coercion
     ContinuationCoercion(String),
+    /// Taproot Tree Error
+    TaprootBuilderError,
 }
 
 impl From<SIMPError> for CompilationError {

@@ -17,6 +17,10 @@ use crate::contract::actions::CallableAsFoF;
 use crate::contract::TxTmplIt;
 use crate::util::amountrange::AmountRange;
 use bitcoin::schnorr::TweakedPublicKey;
+use bitcoin::secp256k1::Secp256k1;
+use bitcoin::util::taproot::LeafVersion;
+use bitcoin::util::taproot::TaprootBuilder;
+use bitcoin::Address;
 use bitcoin::XOnlyPublicKey;
 use miniscript::*;
 use sapio_base::effects::EffectDB;
@@ -380,13 +384,28 @@ where
         // TODO: Pick a better branch that is guaranteed to work!
         let some_key = pick_key_from_miniscripts(branches.iter());
         // Don't remove the key from the scripts in case it was bogus
-        let tree = branches_to_tree(branches);
-        let descriptor = Descriptor::Tr(descriptor::Tr::new(some_key, tree)?);
-        let estimated_max_size = descriptor.max_satisfaction_weight()?;
+        let huffman_tree =
+            TaprootBuilder::with_huffman_tree(branches.iter().map(|x| (1, x.encode())))
+                .map_err(|_| CompilationError::TaprootBuilderError)?;
+
+        let secp = Secp256k1::verification_only();
+        let taproot_spend_info = huffman_tree
+            .finalize(&secp, some_key)
+            .map_err(|_| CompilationError::TaprootBuilderError)?;
+        let mut estimated_max_size = 0;
+        for code in branches {
+            if let Some(blk) = taproot_spend_info.control_block(&(code.encode(), LeafVersion::TapScript)) {
+                estimated_max_size = std::cmp::max(
+                    blk.size() + code.max_satisfaction_size()?,
+                    estimated_max_size,
+                );
+            }
+        }
+        let tr_address = Address::p2tr_tweaked(taproot_spend_info.output_key(), ctx.network);
+
         // TODO: Convert into an address instead of keeping descriptor,
         // hot-fix workaround
-        let address = descriptor.clone().into();
-        let descriptor = Some(descriptor.into());
+        let address = tr_address.into();
         let root_path = SArc(ctx.path().clone());
 
         let failed_estimate = committed_txn_map.values().any(|a| {
@@ -404,13 +423,14 @@ where
             let metadata = self
                 .metadata(metadata_ctx)?
                 .add_guard_simps(all_guard_simps)?;
+            let taproot_spend_info = Some(taproot_spend_info);
             Ok(Compiled {
                 ctv_to_tx: committed_txn_map,
                 suggested_txs: uncommitted_txn_map,
                 continue_apis: continue_apis.inner,
                 root_path,
                 address,
-                descriptor,
+                taproot_spend_info,
                 amount_range: required_amount_range,
                 metadata,
             })

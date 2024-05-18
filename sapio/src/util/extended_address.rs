@@ -9,8 +9,8 @@
 //! stuff.
 
 use crate::contract::object::ObjectError;
-use bitcoin::{Address, Script, XOnlyPublicKey};
 use crate::miniscript::{Descriptor, DescriptorTrait};
+use bitcoin::{Address, Script, XOnlyPublicKey};
 use sapio_base::miniscript;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -43,6 +43,15 @@ impl ExtendedAddress {
         Ok(ExtendedAddress::OpReturn(OpReturn(
             bitcoin::Script::new_op_return(slice),
         )))
+    }
+    /// get the script_pubkey
+    pub fn script_pubkey(&self) -> Script {
+        match self {
+            ExtendedAddress::Address(a) => a.script_pubkey(),
+            ExtendedAddress::Descriptor(d) => d.script_pubkey(),
+            ExtendedAddress::OpReturn(o) => o.0.clone(),
+            ExtendedAddress::Unknown(u) => u.clone(),
+        }
     }
 }
 

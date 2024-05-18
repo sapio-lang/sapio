@@ -317,14 +317,10 @@ impl<T> BuilderState<T> {
         }
         let mut output_size: u64 = 0;
         for output in &self.outputs {
-            let spk = output
-                .contract
-                .descriptor
-                .as_ref()
-                .map(|d| d.script_pubkey().len() as u64);
+            let spk = output.contract.address.script_pubkey().len() as u64;
             output_size += 8 + // value
-                (VarInt(spk.unwrap_or(0)).len() as u64) +
-                spk.unwrap_or(0);
+                VarInt(spk).len() as u64 +
+                spk;
         }
         let non_input_size : u64=
         // version:

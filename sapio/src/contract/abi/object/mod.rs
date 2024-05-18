@@ -7,6 +7,7 @@
 //! Object is the output of Sapio Compilation & can be linked to a specific coin
 
 pub mod error;
+use bitcoin::util::taproot::TaprootSpendInfo;
 pub use error::*;
 pub mod bind;
 pub mod descriptors;
@@ -135,11 +136,12 @@ pub struct Object {
     pub address: ExtendedAddress,
     /// The Object's descriptor -- if there is one known/available
     #[serde(
-        rename = "known_descriptor",
+        rename = "taproot_spend_info",
         skip_serializing_if = "Option::is_none",
         default
     )]
-    pub descriptor: Option<SupportedDescriptors>,
+    #[schemars(with="Option<serde_json::Value>")]
+    pub taproot_spend_info: Option<TaprootSpendInfo>,
     /// The amount_range safe to send this object
     pub amount_range: AmountRange,
     /// metadata generated for this contract
@@ -159,7 +161,7 @@ impl Object {
                 PathFragment::Named(SArc(Arc::new("".into()))),
             )),
             address: address.into(),
-            descriptor: None,
+            taproot_spend_info: None,
             amount_range: a.unwrap_or_else(|| {
                 let mut a = AmountRange::new();
                 a.update_range(Amount::min_value());
@@ -195,7 +197,7 @@ impl Object {
                 PathFragment::Named(SArc(Arc::new("".into()))),
             )),
             address: ExtendedAddress::make_op_return(data)?,
-            descriptor: None,
+            taproot_spend_info: None,
             amount_range: AmountRange::new(),
             metadata: Default::default(),
         })
@@ -217,7 +219,7 @@ impl Object {
                 PathFragment::Named(SArc(Arc::new("".into()))),
             )),
             address: d.address(bitcoin::Network::Bitcoin).unwrap().into(),
-            descriptor: Some(d.into()),
+            taproot_spend_info: None,
             amount_range: a.unwrap_or_else(|| {
                 let mut a = AmountRange::new();
                 a.update_range(Amount::min_value());
