@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 pub type GuardSimps = Vec<Arc<dyn SIMPAttachableAt<GuardLT>>>;
 pub(crate) enum CacheEntry<T> {
-    Cached(Clause, GuardSimps),
     Fresh(fn(&T, Context) -> Clause, Option<SimpGen<T>>),
 }
 
@@ -41,11 +40,7 @@ impl<T> GuardCache<T> {
         simp_ctx: Context,
     ) -> Result<Option<CacheEntry<T>>, CompilationError> {
         match g {
-            Some(Guard::Cache(f, Some(simp_gen))) => {
-                Ok(Some(CacheEntry::Cached(f(t, ctx), simp_gen(t, simp_ctx)?)))
-            }
-            Some(Guard::Cache(f, None)) => Ok(Some(CacheEntry::Cached(f(t, ctx), vec![]))),
-            Some(Guard::Fresh(f, simp_gen)) => Ok(Some(CacheEntry::Fresh(f, simp_gen))),
+            Some(Guard(f, simp_gen)) => Ok(Some(CacheEntry::Fresh(f, simp_gen))),
             None => Ok(None),
         }
     }
@@ -71,7 +66,6 @@ impl<T> GuardCache<T> {
             std::collections::btree_map::Entry::Occupied(ref mut o) => o.get_mut(),
         };
         match r {
-            Some(CacheEntry::Cached(s, v)) => Ok(Some((s.clone(), v.to_vec()))),
             Some(CacheEntry::Fresh(f, s)) => Ok(Some((
                 f(t, ctx),
                 match s {

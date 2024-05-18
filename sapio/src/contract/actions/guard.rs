@@ -19,18 +19,10 @@ use sapio_base::{
 /// If bool = true, the computation of the guard is cached, which is useful if e.g. Guard
 /// must contact a remote server or it should be the same across calls *for a given contract
 /// instance*.
-pub enum Guard<ContractSelf> {
-    /// Cache Variant should only be called one time per contract and the result saved
-    Cache(
-        fn(&ContractSelf, Context) -> Clause,
-        Option<SimpGen<ContractSelf>>,
-    ),
-    /// Fresh Variant may be called repeatedly
-    Fresh(
-        fn(&ContractSelf, Context) -> Clause,
-        Option<SimpGen<ContractSelf>>,
-    ),
-}
+pub struct Guard<ContractSelf>(
+    pub fn(&ContractSelf, Context) -> Clause,
+    pub Option<SimpGen<ContractSelf>>,
+);
 
 /// A Function that can be used to generate metadata for a Guard
 pub type SimpGen<ContractSelf> =
