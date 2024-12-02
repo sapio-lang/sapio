@@ -13,7 +13,7 @@ use bitcoin::XOnlyPublicKey;
 use contract::*;
 use sapio::template::Template;
 use sapio::*;
-use sapio_base::Clause;
+use sapio_base::Pol;
 use std::sync::Arc;
 
 struct Event(String);
@@ -59,7 +59,7 @@ impl DLCContract {
     fn cooperate(&self, _ctx: Context) {
         // TODO: Add a 2nd musig_cooperate that works with whatever gets standardized
         // Keep the non-musig path in case we can't do a multi-round protocol...
-        Clause::And(self.parties.iter().cloned().map(Clause::Key).collect())
+        Pol::And(self.parties.iter().cloned().map(Pol::Key).collect())
     }
     #[then]
     fn payout(&self, mut ctx: Context) {
@@ -94,11 +94,11 @@ impl DLCContract {
                     v.1.combine(&v.0)
                         .map_err(|_| CompilationError::TerminateCompilation)?;
             }
-            let guard = Clause::Threshold(
+            let guard = Pol::Threshold(
                 self.oracles.0,
                 oracles
                     .iter()
-                    .map(|(_, oracle_k)| Ok(Clause::Key(XOnlyPublicKey::from(*oracle_k))))
+                    .map(|(_, oracle_k)| Ok(Pol::Key(XOnlyPublicKey::from(*oracle_k))))
                     .collect::<Result<Vec<_>, CompilationError>>()?,
             );
             let mut tmpl = new_ctx.derive_num(i)?.template().add_guard(guard);

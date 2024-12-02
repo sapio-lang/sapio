@@ -9,7 +9,7 @@ use bitcoin::XOnlyPublicKey;
 use sapio::contract::*;
 use sapio::*;
 use sapio_base::timelocks::AnyRelTimeLock;
-use sapio_base::Clause;
+use sapio_base::Pol;
 use sapio_macros::guard;
 use schemars::*;
 use serde::*;
@@ -93,7 +93,7 @@ impl StakerInterface for Staker<Operational> {
     /// redeeming key
     #[guard]
     fn begin_redeem_key(self, _ctx: Context) {
-        Clause::Key(self.redeeming_key)
+        Pol::Key(self.redeeming_key)
     }
     /// begin redemption process
     #[then(guarded_by = "[Self::begin_redeem_key]")]
@@ -115,18 +115,18 @@ impl StakerInterface for Staker<Operational> {
     /// staking key
     #[guard]
     fn staking_key(self, _ctx: Context) {
-        Clause::Key(self.signing_key)
+        Pol::Key(self.signing_key)
     }
 }
 
 impl StakerInterface for Staker<Closing> {
     #[guard]
     fn finish_redeem_key(self, _ctx: Context) {
-        Clause::And(vec![Clause::Key(self.redeeming_key), self.timeout.into()])
+        Pol::And(vec![Pol::Key(self.redeeming_key), self.timeout.into()])
     }
     #[guard]
     fn staking_key(self, _ctx: Context) {
-        Clause::Key(self.signing_key)
+        Pol::Key(self.signing_key)
     }
 }
 

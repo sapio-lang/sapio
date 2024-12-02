@@ -14,7 +14,7 @@ use sapio::contract::error::CompilationError;
 use sapio::template::Output;
 use sapio::*;
 use sapio_base::timelocks::RelHeight;
-use sapio_base::Clause;
+use sapio_base::Pol;
 use sapio_macros::compile_if;
 
 use bitcoin;
@@ -46,14 +46,14 @@ struct OpenChannel {
 impl OpenChannel {
     #[guard]
     fn signed_update(self, _ctx: Context) {
-        Clause::And(vec![Clause::Key(self.alice_u), Clause::Key(self.bob_u)])
+        Pol::And(vec![Pol::Key(self.alice_u), Pol::Key(self.bob_u)])
     }
     #[guard]
     fn newer_sequence_check(self, _ctx: Context) {
         if let Some(prior) = self.pending_update.as_ref() {
             AbsTime::try_from(prior.sequence.get() + 1)
-                .map(Clause::from)
-                .unwrap_or(Clause::Unsatisfiable)
+                .map(Pol::from)
+                .unwrap_or(Pol::Unsatisfiable)
         } else {
             START_OF_TIME.into()
         }
@@ -131,7 +131,7 @@ impl OpenChannel {
 
     #[guard]
     fn sign_cooperative_close(self, _ctx: Context) {
-        Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
+        Pol::And(vec![Pol::Key(self.alice), Pol::Key(self.bob)])
     }
 
     #[compile_if]

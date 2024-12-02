@@ -115,6 +115,10 @@ mod alias {
 pub use alias::*;
 
 mod trait_impls {
+    use miniscript::policy::Concrete;
+
+    use crate::Policy;
+
     use super::*;
     impl Absolutivity for Rel {
         const IS_ABSOLUTE: bool = false;
@@ -169,17 +173,17 @@ mod trait_impls {
         }
     }
 
-    impl<A, TT> From<LockTime<A, TT>> for Clause
+    impl<A, TT> From<LockTime<A, TT>> for Policy
     where
         A: Absolutivity,
         TT: TimeType,
     {
-        fn from(lt: LockTime<A, TT>) -> Clause {
+        fn from(lt: LockTime<A, TT>) -> Policy {
             match (A::IS_ABSOLUTE, TT::IS_HEIGHT) {
-                (true, true) => Clause::After(lt.0),
-                (true, false) => Clause::After(lt.0),
-                (false, true) => Clause::Older(lt.0),
-                (false, false) => Clause::Older(lt.0),
+                (true, true) => Policy::After(lt.0),
+                (true, false) => Policy::After(lt.0),
+                (false, true) => Policy::Older(lt.0),
+                (false, false) => Policy::Older(lt.0),
             }
         }
     }
@@ -244,7 +248,7 @@ mod trait_impls {
         }
     }
 
-    impl From<AnyRelTimeLock> for Clause {
+    impl From<AnyRelTimeLock> for Policy {
         fn from(lt: AnyRelTimeLock) -> Self {
             match lt {
                 AnyRelTimeLock::RH(a) => a.into(),
@@ -252,7 +256,7 @@ mod trait_impls {
             }
         }
     }
-    impl From<AnyAbsTimeLock> for Clause {
+    impl From<AnyAbsTimeLock> for Policy {
         fn from(lt: AnyAbsTimeLock) -> Self {
             match lt {
                 AnyAbsTimeLock::AH(a) => a.into(),
@@ -260,7 +264,7 @@ mod trait_impls {
             }
         }
     }
-    impl From<AnyTimeLock> for Clause {
+    impl From<AnyTimeLock> for Policy {
         fn from(lt: AnyTimeLock) -> Self {
             match lt {
                 AnyTimeLock::A(a) => a.into(),

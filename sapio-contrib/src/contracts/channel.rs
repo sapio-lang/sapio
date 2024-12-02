@@ -10,7 +10,7 @@ use bitcoin::util::amount::CoinAmount;
 use contract::*;
 
 use sapio::*;
-use sapio_base::Clause;
+use sapio_base::Pol;
 use sapio_macros::guard;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -228,11 +228,11 @@ where
 {
     #[guard]
     fn timeout(self, _ctx: Context) {
-        Clause::Older(100)
+        Pol::Older(100)
     }
     #[guard(cached)]
     fn signed(self, _ctx: Context) {
-        Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
+        Pol::And(vec![Pol::Key(self.alice), Pol::Key(self.bob)])
     }
 
     #[continuation(guarded_by = "[Self::signed]", coerce_args = "coerce_args")]

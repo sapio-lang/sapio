@@ -8,6 +8,7 @@
 
 pub mod error;
 use bitcoin::util::taproot::TaprootSpendInfo;
+use bitcoin::Script;
 pub use error::*;
 pub mod bind;
 pub mod descriptors;
@@ -68,7 +69,7 @@ impl ObjectMetadata {
     pub(crate) fn add_guard_simps(
         mut self,
         all_guard_simps: BTreeMap<
-            policy::Concrete<bitcoin::XOnlyPublicKey>,
+            Clause,
             Vec<Arc<dyn SIMPAttachableAt<sapio_base::simp::GuardLT>>>,
         >,
     ) -> Result<ObjectMetadata, CompilationError> {

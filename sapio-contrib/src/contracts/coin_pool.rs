@@ -10,7 +10,7 @@ use sapio::contract::*;
 use sapio::util::amountrange::AmountF64;
 use sapio::*;
 use sapio_base::timelocks::AnyRelTimeLock;
-use sapio_base::Clause;
+use sapio_base::Pol;
 
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -21,7 +21,7 @@ type Payouts = Vec<(Arc<Mutex<dyn Compilable>>, AmountF64)>;
 /// cooperatively share a UTXO.
 pub struct CoinPool {
     /// The list of stakeholders
-    pub clauses: Vec<Clause>,
+    pub clauses: Vec<Pol>,
     /// How to refund people if no update agreed on
     pub refunds: Payouts,
 }
@@ -71,7 +71,7 @@ impl CoinPool {
     #[guard]
     /// everyone has signed off on the transaction
     fn all_approve(self, _ctx: Context) {
-        Clause::Threshold(self.clauses.len(), self.clauses.clone())
+        Pol::Threshold(self.clauses.len(), self.clauses.clone())
     }
     /// move the coins to the next state -- payouts may recursively contain pools itself
     #[continuation(

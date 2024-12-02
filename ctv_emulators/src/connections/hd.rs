@@ -97,10 +97,11 @@ impl HDOracleEmulatorConnection {
     }
 }
 
+use sapio_base::Policy;
 use tokio::{runtime::Handle, sync::Mutex};
 impl CTVEmulator for HDOracleEmulatorConnection {
-    fn get_signer_for(&self, h: Sha256) -> Result<Clause, EmulatorError> {
-        Ok(Clause::Key(self.derive(h)?.to_x_only_pub()))
+    fn get_signer_for(&self, h: Sha256) -> Result<Policy, EmulatorError> {
+        Ok(Policy::Key(self.derive(h)?.to_x_only_pub()))
     }
     fn sign(
         &self,

@@ -16,6 +16,8 @@ use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
 pub use sapio_base::effects::{EffectDB, MapEffectDB};
 
+use sapio_base::miniscript::Tap;
+use sapio_base::Clause;
 use sapio_ctv_emulator_trait::CTVEmulator;
 use std::convert::TryInto;
 
@@ -150,7 +152,8 @@ impl Context {
         &self,
         b: bitcoin::hashes::sha256::Hash,
     ) -> Result<sapio_base::Clause, CompilationError> {
-        Ok(self.emulator.get_signer_for(b)?)
+        let script = self.emulator.get_signer_for(b)?.compile::<Tap>()?.encode();
+        Ok(Clause::Script(script))
     }
 
     /// Compile the compilable item with this context.

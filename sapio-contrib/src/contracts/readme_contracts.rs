@@ -9,7 +9,7 @@ use bitcoin::util::amount::CoinAmount;
 use sapio::contract::*;
 use sapio::*;
 use sapio_base::timelocks::RelTime;
-use sapio_base::Clause;
+use sapio_base::Pol;
 use sapio_macros::guard;
 use schemars::*;
 use serde::*;
@@ -27,7 +27,7 @@ pub struct PayToPublicKey {
 impl PayToPublicKey {
     #[guard]
     fn with_key(self, _ctx: Context) {
-        Clause::Key(self.key)
+        Pol::Key(self.key)
     }
 }
 
@@ -53,13 +53,13 @@ pub struct BasicEscrow {
 impl BasicEscrow {
     #[guard]
     fn redeem(self, _ctx: Context) {
-        Clause::Threshold(
+        Pol::Threshold(
             1,
             vec![
-                Clause::Threshold(2, vec![Clause::Key(self.alice), Clause::Key(self.bob)]),
-                Clause::And(vec![
-                    Clause::Key(self.escrow),
-                    Clause::Threshold(1, vec![Clause::Key(self.alice), Clause::Key(self.bob)]),
+                Pol::Threshold(2, vec![Pol::Key(self.alice), Pol::Key(self.bob)]),
+                Pol::And(vec![
+                    Pol::Key(self.escrow),
+                    Pol::Threshold(1, vec![Pol::Key(self.alice), Pol::Key(self.bob)]),
                 ]),
             ],
         )
@@ -88,14 +88,14 @@ pub struct BasicEscrow2 {
 impl BasicEscrow2 {
     #[guard]
     fn use_escrow(self, _ctx: Context) {
-        Clause::And(vec![
-            Clause::Key(self.escrow),
-            Clause::Threshold(2, vec![Clause::Key(self.alice), Clause::Key(self.bob)]),
+        Pol::And(vec![
+            Pol::Key(self.escrow),
+            Pol::Threshold(2, vec![Pol::Key(self.alice), Pol::Key(self.bob)]),
         ])
     }
     #[guard]
     fn cooperate(self, _ctx: Context) {
-        Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
+        Pol::And(vec![Pol::Key(self.alice), Pol::Key(self.bob)])
     }
 }
 
@@ -120,7 +120,7 @@ pub struct TrustlessEscrow {
 impl TrustlessEscrow {
     #[guard]
     fn cooperate(self, _ctx: Context) {
-        Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
+        Pol::And(vec![Pol::Key(self.alice), Pol::Key(self.bob)])
     }
     #[then]
     fn use_escrow(self, ctx: sapio::Context) {

@@ -29,11 +29,11 @@ struct ExampleA {
 impl ExampleA {
     #[guard]
     fn timeout(self, _ctx: sapio::Context) {
-        Clause::Older(100)
+        Pol::Older(100)
     }
     #[guard(cached)]
     fn signed(self, _ctx: sapio::Context) {
-        Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
+        Pol::And(vec![Pol::Key(self.alice), Pol::Key(self.bob)])
     }
 }
 
@@ -79,9 +79,9 @@ struct ExampleB<T: BState> {
 impl<T: BState> ExampleB<T> {
     #[guard(cached)]
     fn all_signed(self, _ctx: Context) {
-        Clause::Threshold(
+        Pol::Threshold(
             T::get_n(self.threshold, self.participants.len() as u8) as usize,
-            self.participants.iter().map(|k| Clause::Key(*k)).collect(),
+            self.participants.iter().map(|k| Pol::Key(*k)).collect(),
         )
     }
 }
@@ -135,7 +135,7 @@ pub struct ExampleCompileIf {
 impl ExampleCompileIf {
     #[guard]
     fn cooperate(self, _ctx: Context) {
-        Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
+        Pol::And(vec![Pol::Key(self.alice), Pol::Key(self.bob)])
     }
     /// `should_escrow` disables any branch depending on it. If not set,
     /// it checks to make the branch required. This is done in a conflict-free way;

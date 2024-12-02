@@ -28,7 +28,7 @@
 use bitcoin::util::amount::Amount;
 use sapio::contract::*;
 use sapio::*;
-use sapio_base::Clause;
+use sapio_base::Pol;
 use sapio_macros::guard;
 use schemars::*;
 use serde::*;
@@ -89,11 +89,11 @@ impl TryFrom<HodlChickenChecks> for HodlChickenInner {
 impl HodlChickenInner {
     #[guard]
     fn alice_is_a_chicken(self, _ctx: Context) {
-        Clause::Key(self.alice_key)
+        Pol::Key(self.alice_key)
     }
     #[guard]
     fn bob_is_a_chicken(self, _ctx: Context) {
-        Clause::Key(self.bob_key)
+        Pol::Key(self.bob_key)
     }
     #[then(guarded_by = "[Self::alice_is_a_chicken]")]
     fn alice_redeem(self, ctx: sapio::Context) {

@@ -8,7 +8,7 @@
 use bitcoin::util::amount::CoinAmount;
 use sapio::contract::*;
 use sapio::*;
-use sapio_base::Clause;
+use sapio_base::Pol;
 use sapio_macros::guard;
 use schemars::*;
 use serde::*;
@@ -84,14 +84,14 @@ impl StateDependentActions for FederatedPegIn<CanBeginRecovery> {
 impl StateDependentActions for FederatedPegIn<CanFinishRecovery> {
     #[guard]
     fn finish_recovery(self, _ctx: Context) {
-        Clause::And(vec![
-            Clause::Older(4725 /* 4 weeks? */),
-            Clause::Threshold(
+        Pol::And(vec![
+            Pol::Older(4725 /* 4 weeks? */),
+            Pol::Threshold(
                 self.thresh_recovery,
                 self.keys_recovery
                     .iter()
                     .cloned()
-                    .map(Clause::Key)
+                    .map(Pol::Key)
                     .collect(),
             ),
         ])
@@ -101,21 +101,21 @@ impl StateDependentActions for FederatedPegIn<CanFinishRecovery> {
 impl<T: RecoveryState> FederatedPegIn<T> {
     #[guard]
     fn recovery_signed(self, _ctx: Context) {
-        Clause::Threshold(
+        Pol::Threshold(
             self.thresh_recovery,
             self.keys_recovery
                 .iter()
                 .cloned()
-                .map(Clause::Key)
+                .map(Pol::Key)
                 .collect(),
         )
     }
 
     #[guard]
     fn normal_signed(self, _ctx: Context) {
-        Clause::Threshold(
+        Pol::Threshold(
             self.thresh_normal,
-            self.keys.iter().cloned().map(Clause::Key).collect(),
+            self.keys.iter().cloned().map(Pol::Key).collect(),
         )
     }
 }

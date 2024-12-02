@@ -10,6 +10,7 @@ use super::InternalCompilerTag;
 use crate::contract::actions::Guard;
 use crate::contract::actions::SimpGen;
 use crate::contract::CompilationError;
+use sapio_base::consts::TRUE_PATTERN;
 use sapio_base::effects::PathFragment;
 use sapio_base::simp::GuardLT;
 use sapio_base::simp::SIMPAttachableAt;
@@ -96,14 +97,18 @@ pub(crate) fn get_script_preconditions_for<T>(
     let mut clauses: Vec<_> = v
         .iter()
         .map(|x| &x.0)
-        .filter(|x| **x != Clause::Trivial)
+        .filter(|x| Clause::is_trivial(x))
         .cloned()
         .collect(); // no point in using any Trivials
     if clauses.is_empty() {
-        Ok((Clause::Trivial, v))
+        Ok((Clause::trivial(), v))
     } else if clauses.len() == 1 {
         Ok((clauses.pop().unwrap(), v))
     } else {
-        Ok((Clause::And(clauses), v))
+        let start = Clause::And(clauses.pop().unwrap().wrap(), clauses.pop().unwrap().wrap());
+        let tree = clauses
+            .into_iter()
+            .fold(start, |a, b| Clause::And(a.wrap(), b.wrap()));
+        Ok((tree, v))
     }
 }

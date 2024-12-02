@@ -16,19 +16,26 @@ use crate::contract::actions::conditional_compile::CCILWrapper;
 use crate::contract::actions::CallableAsFoF;
 use crate::contract::TxTmplIt;
 use crate::util::amountrange::AmountRange;
+use bitcoin::blockdata::opcodes::all::OP_VERIFY;
+use bitcoin::hashes::hex::FromHex;
 use bitcoin::schnorr::TweakedPublicKey;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::taproot::LeafVersion;
 use bitcoin::util::taproot::TaprootBuilder;
 use bitcoin::Address;
+use bitcoin::Script;
 use bitcoin::XOnlyPublicKey;
 use miniscript::*;
 use sapio_base::effects::EffectDB;
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
 use sapio_base::miniscript;
+use sapio_base::miniscript::miniscript::decode;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::Clause;
+use serde::Deserialize;
+use std::borrow::BorrowMut;
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 mod cache;
@@ -325,7 +332,7 @@ where
                             ),
                             |c, simp| c.add_simp(simp.as_ref()),
                         )?;
-                        let v = optimizer_flatten_and_compile(script_precondition)?;
+                        let v = sapio_base::Clause::generate_leafs(script_precondition)?;
                         (
                             Some((SArc(continuation_path), continuation_point)),
                             v,
@@ -334,8 +341,7 @@ where
                     },
                 )
             })
-            .collect::<Result<Vec<(_, Vec<Miniscript<XOnlyPublicKey, Tap>>, _)>, CompilationError>>(
-            )?;
+            .collect::<Result<Vec<(_, Vec<Script>, _)>, CompilationError>>()?;
 
         let mut continue_apis = ContinueAPIs::default();
         let mut clause_accumulator = vec![];
@@ -352,7 +358,7 @@ where
             guard_simps.dedup_by(|a, b| std::ptr::eq(a, b))
         }
 
-        let branches: Vec<Miniscript<XOnlyPublicKey, Tap>> = {
+        let branches: Vec<Script> = {
             let mut finish_fns_ctx = ctx.derive(PathFragment::FinishFn)?;
             // Compute all finish_functions at this level, caching if requested.
             let guards = self
@@ -372,7 +378,7 @@ where
                 .collect::<Result<Vec<_>, _>>()?;
             let all_g = guards
                 .into_iter()
-                .map(|(policy, _m)| optimizer_flatten_and_compile(policy))
+                .map(|(policy, _m)| Clause::generate_leafs(policy))
                 .collect::<Result<Vec<_>, _>>()?;
 
             all_g
@@ -381,11 +387,14 @@ where
                 .flatten()
                 .collect()
         };
+
+        let decode = Miniscript::<XOnlyPublicKey, Tap>::parse;
         // TODO: Pick a better branch that is guaranteed to work!
-        let some_key = pick_key_from_miniscripts(branches.iter());
+        let decoded_branches: Vec<_> = branches.iter().filter_map(|s| decode(s).ok()).collect();
+        let some_key = pick_key_from_miniscripts(decoded_branches.iter());
         // Don't remove the key from the scripts in case it was bogus
         let huffman_tree =
-            TaprootBuilder::with_huffman_tree(branches.iter().map(|x| (1, x.encode())))
+            TaprootBuilder::with_huffman_tree(branches.iter().map(|x| (1, x.clone())))
                 .map_err(|_| CompilationError::TaprootBuilderError)?;
 
         let secp = Secp256k1::verification_only();
@@ -393,8 +402,11 @@ where
             .finalize(&secp, some_key)
             .map_err(|_| CompilationError::TaprootBuilderError)?;
         let mut estimated_max_size = 0;
-        for code in branches {
-            if let Some(blk) = taproot_spend_info.control_block(&(code.encode(), LeafVersion::TapScript)) {
+        for code in decoded_branches {
+            if let Some(blk) =
+                // TODO: drop the re-encode
+                taproot_spend_info.control_block(&(code.encode(), LeafVersion::TapScript))
+            {
                 estimated_max_size = std::cmp::max(
                     blk.size() + code.max_satisfaction_size()?,
                     estimated_max_size,
@@ -438,22 +450,12 @@ where
     }
 }
 
-fn optimizer_flatten_and_compile(
-    guards: policy::Concrete<XOnlyPublicKey>,
-) -> Result<Vec<Miniscript<XOnlyPublicKey, Tap>>, CompilationError> {
-    let v = optimizer_flatten_policy(guards)
-        .into_iter()
-        .map(|g| g.compile())
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(v)
-}
-
 fn combine_txtmpls(
     nullability: Nullable,
-    txtmpl_clauses: Vec<Clause>,
+    unique_transaction_clauses: Vec<Clause>,
     guards: Clause,
-) -> Result<Vec<Miniscript<XOnlyPublicKey, Tap>>, CompilationError> {
-    match (nullability, txtmpl_clauses.len(), guards) {
+) -> Result<Vec<Script>, CompilationError> {
+    match (nullability, unique_transaction_clauses.len(), guards) {
         // This is a nullable branch without any proposed
         // transactions.
         // Therefore, mark this branch dead.
@@ -462,7 +464,9 @@ fn combine_txtmpls(
         // was unsatisfiable, irrespective of nullability. This is because
         // the behavior should be captured through a compile_if if it is
         // intended.
-        (_, n, Clause::Unsatisfiable) if n > 0 => {
+        (_, n, Clause::Script(s))
+            if n > 0 && matches!(s.as_bytes(), sapio_base::consts::FALSE_PATTERN) =>
+        {
             // TODO: Turn into a warning that the intended
             // behavior should be to compile_if
             Err(CompilationError::MissingTemplates)
@@ -470,37 +474,28 @@ fn combine_txtmpls(
         // Error if 0 templates return and we don't want to be nullable
         (Nullable::No, 0, _) => Err(CompilationError::MissingTemplates),
         // If the guard is trivial, return the hashes standalone
-        (_, _, Clause::Trivial) => {
-            let r = Ok(txtmpl_clauses
-                .into_iter()
-                .map(|policy| policy.compile().map_err(Into::<CompilationError>::into))
-                .collect::<Result<Vec<_>, _>>()?);
-            r
+        (_, _, Clause::Script(s)) if matches!(s.as_bytes(), sapio_base::consts::TRUE_PATTERN) => {
+            let mut acc = vec![];
+            for unique_tx in unique_transaction_clauses {
+                let leafs = sapio_base::Clause::generate_leafs(unique_tx)?;
+                acc.extend(leafs);
+            }
+            Ok(acc)
         }
         // If the guard is non-trivial, zip it to each hash
         // TODO: Arc in miniscript to dedup memory?
         //       This could be Clause::Shared(x) or something...
-        (_, _, guards) => Ok(txtmpl_clauses
-            .into_iter()
-            // extra_guards will contain any CTV
-            .map(|extra_guards| {
-                Clause::And(vec![guards.clone(), extra_guards])
-                    .compile()
-                    .map_err(Into::<CompilationError>::into)
-            })
-            .collect::<Result<Vec<_>, _>>()?),
-    }
-}
-
-fn optimizer_flatten_policy(p: Clause) -> Vec<Clause> {
-    match p {
-        policy::Concrete::Or(v) => v
-            .into_iter()
-            .flat_map(|(_, b)| optimizer_flatten_policy(b))
-            .collect(),
-        policy::Concrete::Threshold(1, v) => {
-            v.into_iter().flat_map(optimizer_flatten_policy).collect()
+        (_, _, guards) => {
+            let mut acc = vec![];
+            for unique_tx in unique_transaction_clauses {
+                let leafs = sapio_base::Clause::generate_leafs(Clause::And(
+                    guards.clone().wrap(),
+                    unique_tx.wrap(),
+                ))
+                .map_err(Into::<CompilationError>::into)?;
+                acc.extend(leafs);
+            }
+            Ok(acc)
         }
-        p => vec![p],
     }
 }

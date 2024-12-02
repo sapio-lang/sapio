@@ -58,7 +58,7 @@ impl<'a> TryFrom<Call<'a>> for GenericBetArguments<'a> {
             amount: max_amount_bitcoin,
             outcomes,
             oracle: v.operator_api.get_oracle(),
-            cooperate: Clause::And(vec![key, user]),
+            cooperate: Pol::And(vec![key, user]),
             symbol: v.symbol,
         })
     }

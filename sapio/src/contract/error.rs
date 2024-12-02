@@ -14,6 +14,7 @@ use sapio_base::effects::ValidFragmentError;
 use sapio_base::miniscript;
 use sapio_base::plugin_args::CreateArgs;
 use sapio_base::simp::SIMPError;
+use sapio_base::ScriptComplexityTooManyOrs;
 use sapio_ctv_emulator_trait::EmulatorError;
 use std::collections::LinkedList;
 use std::error::Error;
@@ -115,8 +116,16 @@ pub enum CompilationError {
     ContinuationCoercion(String),
     /// Taproot Tree Error
     TaprootBuilderError,
+    /// Limit script complexity
+    ScriptComplexityTooManyOrs(ScriptComplexityTooManyOrs),
 }
 
+
+impl From<ScriptComplexityTooManyOrs> for CompilationError {
+    fn from(value: ScriptComplexityTooManyOrs) -> Self {
+        CompilationError::ScriptComplexityTooManyOrs(value)
+    }
+}
 impl From<SIMPError> for CompilationError {
     fn from(e: SIMPError) -> CompilationError {
         CompilationError::SIMPError(e)

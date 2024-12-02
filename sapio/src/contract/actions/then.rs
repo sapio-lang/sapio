@@ -13,6 +13,7 @@ use crate::contract::actions::GuardList;
 use crate::contract::actions::{FinishOrFunc, WebAPIDisabled};
 use crate::template::Template;
 use sapio_base::Clause;
+use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -73,8 +74,9 @@ fn ctv_clause_extractor(t: &Template, ctx: &Context) -> Result<Option<Clause>, C
         ctx.ctv_emulator(h)
     } else {
         let mut g = t.guards.clone();
-        g.push(ctx.ctv_emulator(h)?);
-        Ok(Clause::And(g))
+        let r = ctx.ctv_emulator(h)?.wrap();
+        let acc = Clause::And(g.pop().unwrap().wrap(), r);
+        Ok(g.into_iter().fold(acc, |acc, f| Clause::And(acc.wrap(), f.wrap())))
     }
     .map(Some)
 }

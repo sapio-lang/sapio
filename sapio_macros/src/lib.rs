@@ -65,7 +65,10 @@ pub fn guard(args: TokenStream, input: TokenStream) -> TokenStream {
     let simp_gen_f = simp_at(&args).unwrap_or(TokenStream::from_str("None").unwrap().into());
     proc_macro::TokenStream::from(quote! {
         fn #guard_name(&self, #context_arg) -> sapio::sapio_base::Clause
-        #block
+        {
+            use sapio_base::IntoClause;
+            #block.to_clause().unwrap() // TODO
+        }
         fn  #name() -> Option<sapio::contract::actions::Guard<Self>> {
             Some(sapio::contract::actions::Guard(Self::#guard_name, #simp_gen_f))
         }

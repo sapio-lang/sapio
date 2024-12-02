@@ -6,6 +6,8 @@
 
 //! join together CTVEmulators as a multisig
 
+use sapio_base::Policy;
+
 use super::*;
 /// Creates a multi-condition emulator with a certain threshold.
 /// It implements CTVEmulator so that it itself can be used as a trait object.
@@ -25,13 +27,13 @@ impl FederatedEmulatorConnection {
 }
 
 impl CTVEmulator for FederatedEmulatorConnection {
-    fn get_signer_for(&self, h: Sha256) -> Result<Clause, EmulatorError> {
+    fn get_signer_for(&self, h: Sha256) -> Result<Policy, EmulatorError> {
         let v = self
             .emulators
             .iter()
             .map(|e| e.get_signer_for(h))
-            .collect::<Result<Vec<Clause>, EmulatorError>>()?;
-        Ok(Clause::Threshold(self.threshold as usize, v))
+            .collect::<Result<Vec<Policy>, EmulatorError>>()?;
+        Ok(Policy::Threshold(self.threshold as usize, v))
     }
     fn sign(
         &self,
