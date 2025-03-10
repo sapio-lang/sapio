@@ -13,7 +13,7 @@ Sapio is for anyone who wants to build with Bitcoin. That spans students
 demonstrating research concepts, corporations working on custody solutions,
 and developers improving open source solutions. Sapio is not a Solidity
 equivalent. The programming model is _very_ different. But it does help
-anyone trying to solve a transactional protocol for Bitcoin solve it
+anyone trying to solve a transactional protocol for Bitcoin and solve it
 elegantly.
 
 Sapio is currently alpha quality software. You should think very carefully
