@@ -1,23 +1,59 @@
-# Sapio &emsp; [![Build Status]][actions]
-[Build Status]: https://github.com/sapio-lang/sapio/workflows/Continuous%20integration/badge.svg
-[actions]: https://github.com/sapio-lang/sapio/actions?query=branch%3Amaster
-**a framework for creating composable multi-transaction Bitcoin Smart Contracts.**
+# Sapio
 
-<img src="https://github.com/sapio-lang/sapio/raw/master/.github/logo.png" alt="Say hi to Jared">
+Sapio is a Rust framework for describing Bitcoin contracts as graphs of
+transactions. Contracts compile into spending conditions, transaction templates,
+and metadata; the tooling can bind those templates to UTXOs and produce PSBTs.
 
+This checkout is undergoing modernization. The compiler, signing code and WASM
+boundary have regression fixes, and builds use a pinned stable Rust toolchain.
+The [modernization plan](docs/MODERNIZATION.md) records what is implemented and
+what still blocks a supported release.
 
+## Start here
 
-The root crate is a workspace for various Sapio Components such as:
+Install [Rust with rustup](https://www.rust-lang.org/tools/install) and a native C
+compiler. From the repository root:
 
-1. [Sapio CLI](cli/): Easy to use interface for using and running sapio contracts.
-1. [Sapio Language](sapio/): Base Specification for Sapio Language and Contract Generation
-1. [Plugin Example](plugin-example/): Example Project for a Sapio Plugin
-1. [Sapio Contrib](sapio-contrib/): Contract modules / functionality made available for general use
-1. [Plugin Framework](plugin/): Library for bundling Sapio Plugins
-1. [CTV Emulator](ctv_emualtors/): Emulation protocols and servers for CheckTemplateVerify.
-1. [Sapio Front](sapio-front/): Protocols for interacting with a compilation session
-1. [Sapio Compiler Server](sapio-ws/): Binary for a websocket server running sapio-front
+```sh
+cargo run --locked -p sapio --example payment
+cargo test --locked --workspace --all-features
+```
 
-## Getting Started
+Rustup selects the version in `rust-toolchain.toml`. The
+[payment example](sapio/examples/payment.rs) compiles a 1,000-satoshi payment with
+500 satoshis reserved for fees and prints the contract as JSON. It needs no node
+or signer and does not fund or broadcast a transaction. The integration tests
+start their own emulator on a local ephemeral port.
 
-Please see the [Designing Bitcoin Contracts with Sapio](https://learn.sapio-lang.org) book to get going!
+Native CTV compilation is a **research target**. A generated address does not
+establish that the target chain enforces CTV. Signer emulation has separate trust
+and availability assumptions. See the [enforcement model](docs/MODERNIZATION.md#enforcement-and-release-boundaries)
+before using either with funds.
+
+For WASM modules and development checks, follow the
+[development guide](docs/DEVELOPMENT.md). The historical
+[Designing Bitcoin Contracts with Sapio](docs/learn-sapio/src/SUMMARY.md) book
+contains broader examples; its older installation instructions are being revised.
+
+## Repository map
+
+| Component | Purpose |
+| --- | --- |
+| [sapio](sapio/) | Contract traits, compiler, transaction templates and linking |
+| [sapio-base](sapio-base/) | Bitcoin types, CTV hashing, amounts and shared formats |
+| [sapio-psbt](sapio-psbt/) | Taproot PSBT signing |
+| [sapio_macros](sapio_macros/) | Rust contract authoring macros |
+| [cli](cli/) | Contract, PSBT and emulator commands |
+| [plugins](plugins/) | WASM client ABI and host runtime |
+| [ctv_emulators](ctv_emulators/) | Signer-based CTV emulation |
+| [sapio-contrib](sapio-contrib/) | Contract library and research examples |
+| [plugin-example](plugin-example/) | Separately built WASM example workspace |
+| [integration_tests](integration_tests/) | Compilation, signing and finalization checks |
+
+Read Jeremy Rubin's [A Calculus of Covenants](https://rubin.io/bitcoin/2022/04/12/calc-cov/)
+for the conceptual foundation. Development should preserve the connection between
+intended transitions, their verifier, their prover, and the assumptions under
+which they agree.
+
+Sapio is licensed under [MPL-2.0](LICENSE). Existing ownership and contribution
+terms have not been changed by this modernization.
