@@ -275,6 +275,7 @@ impl Bind {
             outpoint,
             ordinals_info,
         } = self;
+        compiled.validate()?;
         let use_txn = use_txn
             .map(|buf| base64::decode(buf.as_bytes()))
             .transpose()?

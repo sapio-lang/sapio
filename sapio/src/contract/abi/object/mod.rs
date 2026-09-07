@@ -10,6 +10,7 @@ pub mod error;
 pub use error::*;
 pub mod bind;
 pub mod descriptors;
+mod validation;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::contract::CompilationError;
 use crate::template::Template;
@@ -31,6 +32,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+pub use validation::{ArtifactError, ArtifactErrorKind};
 
 /// Metadata for Object, arbitrary KV set.
 #[derive(Serialize, Deserialize, Clone, JsonSchema, Debug, PartialEq, Eq, Default)]
@@ -100,8 +102,8 @@ impl ObjectMetadata {
 }
 
 /// Object holds a contract's complete context required post-compilation
-/// There is no guarantee that Object is properly constructed presently.
-//TODO: Make type immutable and correct by construction...
+/// Public fields and deserialization can produce inconsistent objects. Call
+/// [`Object::validate`] before using an artifact; binding performs this check.
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct Object {
     /// a map of template hashes to the corresponding template, that in the

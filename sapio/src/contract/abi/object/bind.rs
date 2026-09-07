@@ -21,7 +21,7 @@ use sapio_base::miniscript;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::txindex::TxIndex;
 use sapio_ctv_emulator_trait::CTVEmulator;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -30,7 +30,13 @@ impl Object {
     /// Vector of PSBTs and transaction metadata.
     ///
     /// `bind_psbt` accepts a CTVEmulator, a txindex, and a map of outputs to be
-    /// bound to specific template hashes.
+    /// bound to specific template hashes. Each supplied vector must contain
+    /// one entry per transaction input. Entry zero must be `None`, since
+    /// `out_in` and the parent transaction outputs determine contract inputs.
+    /// Omitted mappings and `None` entries leave auxiliary inputs unresolved.
+    ///
+    /// The entire artifact and all mappings are validated before signing or
+    /// adding transactions to the index.
     pub fn bind_psbt(
         &self,
         out_in: bitcoin::OutPoint,
@@ -38,6 +44,40 @@ impl Object {
         blockdata: Rc<dyn TxIndex>,
         emulator: &dyn CTVEmulator,
     ) -> Result<Program, ObjectError> {
+        self.validate()?;
+        if !output_map.is_empty() {
+            let mut remaining: BTreeSet<_> = output_map.keys().collect();
+            let mut pending = vec![self];
+            while let Some(object) = pending.pop() {
+                for (hash, template) in object.ctv_to_tx.iter().chain(&object.suggested_txs) {
+                    if let Some(inputs) = output_map.get(hash) {
+                        let reason = if inputs.len() != template.tx.input.len() {
+                            Some("expected one entry per transaction input")
+                        } else if inputs[0].is_some() {
+                            Some(
+                                "entry zero must be None; the contract input is bound by the graph",
+                            )
+                        } else {
+                            None
+                        };
+                        if let Some(reason) = reason {
+                            return Err(ObjectError::InvalidInputMapping {
+                                template: *hash,
+                                reason,
+                            });
+                        }
+                        remaining.remove(hash);
+                    }
+                    pending.extend(template.outputs.iter().map(|output| &output.contract));
+                }
+            }
+            if let Some(hash) = remaining.first() {
+                return Err(ObjectError::InvalidInputMapping {
+                    template: **hash,
+                    reason: "template does not exist in the artifact",
+                });
+            }
+        }
         let mut result = BTreeMap::<SArc<EffectPath>, SapioStudioObject>::new();
         // Could use a queue instead to do BFS linking, but order doesn't matter and stack is
         // faster.
@@ -91,8 +131,7 @@ impl Object {
                                     }
                                 }
                                 let mut psbtx =
-                                    PartiallySignedTransaction::from_unsigned_tx(tx.clone())
-                                        .unwrap();
+                                    PartiallySignedTransaction::from_unsigned_tx(tx.clone())?;
                                 for (psbt_in, tx_in) in psbtx.inputs.iter_mut().zip(tx.input.iter())
                                 {
                                     psbt_in.witness_utxo =
