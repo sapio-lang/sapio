@@ -1,118 +1,51 @@
-# Based on https://github.com/rust-bitcoin/bitcoin_hashes/blob/master/.github/workflows/rust.yml
+name: Continuous integration
+
 on:
   push:
-    branches:
-      - master
+    branches: [master]
   pull_request:
-    branches:
-      - master
-name: Continuous integration
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rust-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  clippy_check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-      - uses: actions-rs/toolchain@v1
-        with:
-            toolchain: nightly
-            components: clippy
-            override: true
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all-features
-  bench_nightly:
-    name: Nightly - ASan + Bench
-    runs-on: ubuntu-latest
+  test:
+    name: Tests (${{ matrix.os }})
     strategy:
+      fail-fast: false
       matrix:
-        rust:
-          - nightly
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout Crate 
-        uses: actions/checkout@v2
-      - name: Checkout Toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: ${{ matrix.rust }}
-          override: true
-          components: rust-src
-      - name: Running address sanitizer
-        env:
-          DO_ASAN: true
-        run: ./contrib/test.sh
-      - name: Running benchmarks
-        env:
-          DO_BENCH: true
-        run: ./contrib/test.sh
+      - uses: actions/checkout@v7
+      - name: Install the pinned toolchain
+        run: rustup show
+      - run: cargo test --workspace --all-features --locked
 
-  wasm: 
-    name: Nightly - Docs / WebAssembly Build + Tests
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - nightly
+  quality:
+    runs-on: ubuntu-24.04
     steps:
-      - name: Checkout Crate
-        uses: actions/checkout@v2
-      - name: Checkout Toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: ${{ matrix.rust }}
-          target: wasm32-unknown-unknown
-          override: true
-      - name: Building docs
-        env:
-          DO_DOCS: true
-        run: ./contrib/test.sh
-      - name: Running WASM build
-        env:
-          DO_SAPIO_WASM: true
-        run: ./contrib/test.sh
+      - uses: actions/checkout@v7
+      - run: rustup show
+      - run: cargo fmt --all -- --check
+      - run: cargo fmt --manifest-path plugin-example/Cargo.toml --all -- --check
+      - run: cargo check -p sapio-wasm-plugin --no-default-features --locked
+      - run: cargo check -p sapio-wasm-plugin --no-default-features --features host --locked
+      - run: cargo clippy --workspace --all-targets --all-features --locked
+      - run: cargo doc --workspace --all-features --no-deps --locked
+      - run: cargo install mdbook --version 0.5.4 --locked
+      - run: mdbook build docs/learn-sapio
 
-  Tests:
-    name: Tests
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - 1.75.0
-          - beta
-          - stable
+  wasm:
+    runs-on: ubuntu-24.04
+    env:
+      CC_wasm32_unknown_unknown: clang
     steps:
-      - name: Checkout Crate
-        uses: actions/checkout@v2
-      - name: Checkout Toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: ${{ matrix.rust }}
-          override: true
-      - name: Pin cc if rust 1.75.0
-        if: matrix.rust == '1.75.0'
-        run: cargo generate-lockfile
-      - name: Running cargo
-        env:
-          DO_FEATURE_MATRIX: true
-        run: ./contrib/test.sh
-
-  fmt:
-    name: Rustfmt
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - run: rustup component add rustfmt
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+      - uses: actions/checkout@v7
+      - run: rustup show
+      - run: bash contrib/sapio_wasm.sh
