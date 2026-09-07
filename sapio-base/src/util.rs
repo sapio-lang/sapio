@@ -23,6 +23,18 @@ impl CTVHash for bitcoin::Transaction {
         let mut ctv_hash = sha256::Hash::engine();
         self.version.consensus_encode(&mut ctv_hash).unwrap();
         self.lock_time.consensus_encode(&mut ctv_hash).unwrap();
+        // BIP-119 includes every serialized scriptSig when any is nonempty.
+        // Omitting this field is only valid for the all-empty case.
+        if self.input.iter().any(|input| !input.script_sig.is_empty()) {
+            let mut scripts = sha256::Hash::engine();
+            for input in &self.input {
+                input.script_sig.consensus_encode(&mut scripts).unwrap();
+            }
+            sha256::Hash::from_engine(scripts)
+                .into_inner()
+                .consensus_encode(&mut ctv_hash)
+                .unwrap();
+        }
         (self.input.len() as u32)
             .consensus_encode(&mut ctv_hash)
             .unwrap();
