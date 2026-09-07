@@ -7,11 +7,11 @@
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::amount::Amount;
 use bitcoin::util::bip32::*;
-use bitcoin::Script;
 use bitcoin::TxOut;
 use emulator_connect::connections::hd::HDOracleEmulatorConnection;
 use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::*;
+use miniscript::psbt::PsbtExt;
 use sapio::contract::*;
 use sapio::*;
 use sapio_base::effects::EffectPath;
@@ -47,26 +47,16 @@ impl<T: Compilable + 'static> Contract for TestEmulation<T> {
     declare! {non updatable}
 }
 
-#[test]
-fn test_connect() {
+#[tokio::test(flavor = "multi_thread")]
+async fn compiles_signs_and_finalizes_a_two_step_contract() {
     let secp = Secp256k1::new();
     let root =
         ExtendedPrivKey::new_master(bitcoin::network::constants::Network::Regtest, &[44u8; 32])
             .unwrap();
-    let pk_root = ExtendedPubKey::from_private(&secp, &root);
-    let rt1 = Arc::new(tokio::runtime::Runtime::new().unwrap());
-    let (shutdown, quit) = tokio::sync::oneshot::channel();
-    {
-        let rt = rt1.clone();
-        std::thread::spawn(move || {
-            let oracle = HDOracleEmulator::new(root, true);
-            rt.block_on(async {
-                let server = tokio::spawn(oracle.bind("127.0.0.1:8080"));
-                quit.await.unwrap();
-                server.abort();
-            });
-        });
-    };
+    let pk_root = ExtendedPubKey::from_priv(&secp, &root);
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(HDOracleEmulator::new(root, false).serve(listener));
 
     let contract_1 = TestEmulation {
         to_contract: Compiled::from_address(
@@ -84,17 +74,10 @@ fn test_connect() {
         amount: Amount::from_btc(1.0).unwrap(),
         timeout: 4,
     };
-    let rt2 = Arc::new(tokio::runtime::Runtime::new().unwrap());
-    let connecter = rt2.block_on(async {
-        HDOracleEmulatorConnection::new(
-            "127.0.0.1:8080",
-            pk_root,
-            rt2.clone(),
-            Arc::new(Secp256k1::new()),
-        )
-        .await
-        .unwrap()
-    });
+    let connecter =
+        HDOracleEmulatorConnection::new(address, pk_root, None, Arc::new(Secp256k1::new()))
+            .await
+            .unwrap();
     let rc_conn: Arc<dyn CTVEmulator> = Arc::new(connecter);
     let compiled = contract
         .compile(Context::new(
@@ -103,6 +86,7 @@ fn test_connect() {
             rc_conn.clone(),
             EffectPath::try_from("integration_test").unwrap(),
             Arc::new(Default::default()),
+            None,
         ))
         .unwrap();
     let txindex: Rc<dyn TxIndex> = Rc::new(TxIndexLogger::new());
@@ -116,8 +100,7 @@ fn test_connect() {
         }],
     };
     let fake_txid = txindex.add_tx(std::sync::Arc::new(tx)).unwrap();
-    println!("Fake TXID: {}", fake_txid);
-    let _psbts = compiled.bind_psbt(
+    let psbts = compiled.bind_psbt(
         bitcoin::OutPoint::new(fake_txid, 0),
         BTreeMap::new(),
         txindex,
@@ -126,18 +109,28 @@ fn test_connect() {
     use bitcoin::psbt::PartiallySignedTransaction;
     use sapio::contract::abi::studio::SapioStudioFormat;
 
-    for (path, sso) in _psbts.unwrap().program.iter() {
+    let mut sequences = Vec::new();
+    for sso in psbts.unwrap().program.values() {
         for tx in &sso.txs {
-            match tx {
-                SapioStudioFormat::LinkedPSBT { psbt, .. } => {
-                    let mut psbt = PartiallySignedTransaction::from_str(&psbt).unwrap();
-                    miniscript::psbt::finalize(&mut psbt, &secp).unwrap();
-                    println!("{}", psbt.to_string());
-
-                }
-            }
+            let SapioStudioFormat::LinkedPSBT { psbt, .. } = tx;
+            let mut psbt = PartiallySignedTransaction::from_str(psbt).unwrap();
+            assert_eq!(psbt.inputs.len(), 1);
+            let original_txid = psbt.unsigned_tx.txid();
+            let mut tampered = psbt.clone();
+            tampered.unsigned_tx.output[0].value -= 1;
+            assert!(tampered.finalize_mut(&secp).is_err());
+            psbt.finalize_mut(&secp).unwrap();
+            let finalized = psbt.extract_tx();
+            assert_eq!(finalized.txid(), original_txid);
+            assert!(!finalized.input[0].witness.is_empty());
+            assert_eq!(finalized.output[0].value, 100_000_000);
+            sequences.push(finalized.input[0].sequence);
         }
     }
-    shutdown.send(()).unwrap();
-    // TODO: Test PSBT result
+    sequences.sort_unstable();
+    // BIP-68 time-based sequences retain the type flag and 512-second units.
+    assert_eq!(sequences, [(1 << 22) | 4, (1 << 22) | 6]);
+    drop(rc_conn);
+    server.abort();
+    assert!(server.await.unwrap_err().is_cancelled());
 }
