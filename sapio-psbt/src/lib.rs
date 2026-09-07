@@ -70,9 +70,10 @@ impl SigningKey {
         secp: &Secp256k1<C>,
         hash_ty: bitcoin::SchnorrSighashType,
     ) -> Result<(), PSBTSigningError> {
+        validate_psbt(psbt)?;
         let l = psbt.inputs.len();
         for idx in 0..l {
-            self.sign_psbt_input_mut(psbt, secp, idx, hash_ty)?;
+            self.sign_validated_psbt_input_mut(psbt, secp, idx, hash_ty)?;
         }
         Ok(())
     }
@@ -89,6 +90,17 @@ impl SigningKey {
         }
     }
     pub fn sign_psbt_input_mut<C: Signing + Verification>(
+        &self,
+        psbt: &mut PartiallySignedTransaction,
+        secp: &Secp256k1<C>,
+        idx: usize,
+        hash_ty: bitcoin::SchnorrSighashType,
+    ) -> Result<(), PSBTSigningError> {
+        validate_psbt(psbt)?;
+        self.sign_validated_psbt_input_mut(psbt, secp, idx, hash_ty)
+    }
+
+    fn sign_validated_psbt_input_mut<C: Signing + Verification>(
         &self,
         psbt: &mut PartiallySignedTransaction,
         secp: &Secp256k1<C>,
@@ -274,6 +286,7 @@ impl SigningKey {
 
 #[derive(Debug, Clone)]
 pub enum PSBTSigningError {
+    InvalidPSBT(PSBTValidationError),
     NoUTXOAtIndex(usize),
     NoInputAtIndex(usize),
     Sighash(bitcoin::util::sighash::Error),
@@ -282,6 +295,7 @@ pub enum PSBTSigningError {
 impl Display for PSBTSigningError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::InvalidPSBT(error) => Display::fmt(error, f),
             Self::NoUTXOAtIndex(index) => write!(f, "missing witness UTXO for input {index}"),
             Self::NoInputAtIndex(index) => write!(f, "no input at index {index}"),
             Self::Sighash(error) => write!(f, "cannot compute signature hash: {error}"),
@@ -291,10 +305,80 @@ impl Display for PSBTSigningError {
 impl Error for PSBTSigningError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::InvalidPSBT(error) => Some(error),
             Self::Sighash(error) => Some(error),
             _ => None,
         }
     }
+}
+
+impl From<PSBTValidationError> for PSBTSigningError {
+    fn from(error: PSBTValidationError) -> Self {
+        Self::InvalidPSBT(error)
+    }
+}
+
+/// A PSBT whose public fields violate the signing and finalization boundary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PSBTValidationError {
+    NoInputs,
+    InputMapCount { transaction: usize, maps: usize },
+    OutputMapCount { transaction: usize, maps: usize },
+    UnsignedTxHasScriptSig(usize),
+    UnsignedTxHasWitness(usize),
+}
+
+impl Display for PSBTValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoInputs => write!(f, "PSBT unsigned transaction has no inputs"),
+            Self::InputMapCount { transaction, maps } => write!(
+                f,
+                "PSBT has {maps} input maps for {transaction} transaction inputs"
+            ),
+            Self::OutputMapCount { transaction, maps } => write!(
+                f,
+                "PSBT has {maps} output maps for {transaction} transaction outputs"
+            ),
+            Self::UnsignedTxHasScriptSig(index) => {
+                write!(f, "PSBT unsigned transaction input {index} has a scriptSig")
+            }
+            Self::UnsignedTxHasWitness(index) => {
+                write!(f, "PSBT unsigned transaction input {index} has a witness")
+            }
+        }
+    }
+}
+
+impl Error for PSBTValidationError {}
+
+// Public PSBT fields can bypass the checks performed during deserialization.
+// Validate the complete shape before signing or entering the fork's finalizer.
+pub(crate) fn validate_psbt(psbt: &PartiallySignedTransaction) -> Result<(), PSBTValidationError> {
+    if psbt.unsigned_tx.input.is_empty() {
+        return Err(PSBTValidationError::NoInputs);
+    }
+    if psbt.inputs.len() != psbt.unsigned_tx.input.len() {
+        return Err(PSBTValidationError::InputMapCount {
+            transaction: psbt.unsigned_tx.input.len(),
+            maps: psbt.inputs.len(),
+        });
+    }
+    if psbt.outputs.len() != psbt.unsigned_tx.output.len() {
+        return Err(PSBTValidationError::OutputMapCount {
+            transaction: psbt.unsigned_tx.output.len(),
+            maps: psbt.outputs.len(),
+        });
+    }
+    for (index, input) in psbt.unsigned_tx.input.iter().enumerate() {
+        if !input.script_sig.is_empty() {
+            return Err(PSBTValidationError::UnsignedTxHasScriptSig(index));
+        }
+        if !input.witness.is_empty() {
+            return Err(PSBTValidationError::UnsignedTxHasWitness(index));
+        }
+    }
+    Ok(())
 }
 
 const DEFAULT_CODESEP: u32 = 0xffff_ffff;
