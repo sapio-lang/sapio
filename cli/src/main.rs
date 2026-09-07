@@ -54,7 +54,7 @@ async fn config(custom_config: Option<&str>) -> Result<Config, Box<dyn Error>> {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = clap_app!("sapio-cli" =>
     (@setting SubcommandRequiredElseHelp)
-    (version: "0.1.0 Beta")
+    (version: env!("CARGO_PKG_VERSION"))
     (author: "Jeremy Rubin <j@rubin.io>")
     (about: "Sapio CLI for Bitcoin Smart Contracts")
     (@arg config: -c --config +takes_value #{1,1} {check_file} "Sets a custom config file")
