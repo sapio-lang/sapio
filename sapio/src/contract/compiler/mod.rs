@@ -115,13 +115,14 @@ impl Renamer {
         }
     }
     fn get_name(&mut self, a: &String) -> String {
-        let count = 0u64;
+        let mut count = 0u64;
         let mut name: String = a.clone();
         loop {
             if self.used_names.insert(name.clone()) {
                 return name;
             } else {
                 name = format!("{}_renamed_{}", a, count);
+                count += 1;
             }
         }
     }
