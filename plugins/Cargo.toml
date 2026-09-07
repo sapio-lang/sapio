@@ -29,11 +29,11 @@ version = "0.2.0"
 path = "../sapio-trait"
 
 [dependencies.wasmer]
-version = "4.2.5"
+version = "6.1.0"
 optional = true
 
 [dependencies.wasmer-cache]
-version = "4.2.5"
+version = "6.1.0"
 optional = true
 
 [dependencies.tokio]

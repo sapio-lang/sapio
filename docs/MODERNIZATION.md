@@ -43,6 +43,7 @@ with upstream crates would remove semantics, not complete a migration.
 | Area | Change and evidence |
 | --- | --- |
 | Stable builds | Rust 1.98.1 pin, explicit compiler minimum, both dependency locks, resolver 2, removal of the nightly associated-type default |
+| Linux runtime compatibility | Upgrade Wasmer and its cache to 6.1.0, which provides the stack probe removed from Rust's x86 runtime; remove unused direct CLI runtime dependencies |
 | PSBT signing | Use the selected input index for key and script paths; reject sighash errors; verify signatures independently on a two-input transaction |
 | CTV hashing | Include nonempty scriptSig commitments; match 16 hash results from four unmodified BIP-119 vectors covering scriptSig and witness combinations |
 | Compiler termination | Advance duplicate-action suffixes; compile a contract registering one action three times |
@@ -153,7 +154,7 @@ rewrite in one change.
    reporting, and separate human diagnostics from JSON output.
 2. Replace the JSON Schema validator and align the declared schema draft across
    the CLI and module interfaces. Exercise malformed and recursive schemas.
-3. Upgrade or replace the WASM runtime after implementing the resource contract.
+3. Evaluate further WASM runtime upgrades after implementing the resource contract.
    Benchmark compile time and memory, test cache invalidation across runtime
    versions, and run real Rust modules as well as small adversarial fixtures.
 4. Port the CTV extension onto maintained Rust Bitcoin/Miniscript APIs, or maintain

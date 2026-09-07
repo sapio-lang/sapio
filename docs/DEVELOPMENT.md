@@ -101,6 +101,14 @@ memory limits, nested-call limits, and compiled-cache trust still need work.
 Use modules and module caches you trust. The runtime uses native compiled
 artifacts internally; a hash-shaped filename is not a trust boundary.
 
+The host uses Wasmer 6.1 for compatibility with current Rust on x86 Linux.
+Compiled module caches are runtime-specific. After upgrading from Wasmer 4,
+reload the original `.wasm` files before referring to their cached keys:
+
+```sh
+sapio-cli contract load --workspace PATH --file MODULE.wasm
+```
+
 ## Contributions
 
 Keep behavioral changes in small commits with focused regression coverage. Keep
