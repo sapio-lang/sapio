@@ -12,11 +12,8 @@ use bitcoin::hashes::Hash;
 use bitcoin::util::bip32::*;
 use sapio_ctv_emulator_trait::Clause;
 pub use sapio_ctv_emulator_trait::{CTVAvailable, CTVEmulator, EmulatorError, NullEmulator};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 
 use std::net::SocketAddr;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 
 use bitcoin::secp256k1::{All, Secp256k1};
@@ -24,11 +21,11 @@ use bitcoin::util::psbt::PartiallySignedTransaction;
 
 use sapio_base::CTVHash;
 use std::sync::Arc;
-const MAX_MSG: usize = 1_000_000;
 
 pub mod connections;
 mod msgs;
 pub mod servers;
+mod wire;
 
 thread_local! {
     /// global SECP instance anyone can use

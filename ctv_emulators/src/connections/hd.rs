@@ -75,26 +75,6 @@ impl HDOracleEmulatorConnection {
             secp,
         })
     }
-
-    /// make a request via the tcpstream.
-    /// wire format: length:u32 data:[u8;length]
-    async fn request(t: &mut TcpStream, r: &msgs::Request) -> Result<(), std::io::Error> {
-        let v = serde_json::to_vec(r)?;
-        t.write_u32(v.len() as u32).await?;
-        t.write_all(&v[..]).await
-    }
-    /// receive a response via the tcpstream.
-    /// wire format: length:u32 data:[u8;length]
-    ///
-    /// TODO: secure response by limiting the length to a max value.
-    /// This is not super critical because presumably the oracles are not trying to OOM your system.
-    async fn response<T: DeserializeOwned + Clone>(t: &mut TcpStream) -> Result<T, std::io::Error> {
-        let l = t.read_u32().await? as usize;
-        let mut v = vec![0u8; l];
-        t.read_exact(&mut v[..]).await?;
-        let t: T = serde_json::from_slice::<T>(&v[..])?;
-        Ok(t)
-    }
 }
 
 use tokio::{runtime::Handle, sync::Mutex};
@@ -110,16 +90,20 @@ impl CTVEmulator for HDOracleEmulatorConnection {
             tokio::task::block_in_place(|| {
                 self.handle.block_on(async {
                     let mut mconn = self.connection.lock().await;
-                    loop {
-                        if let Some(conn) = &mut *mconn {
-                            Self::request(conn, &msgs::Request::SignPSBT(msgs::PSBT(b.clone())))
-                                .await?;
-                            conn.flush().await?;
-                            return Ok(Self::response::<msgs::PSBT>(conn).await?.0);
-                        } else {
-                            *mconn = Some(TcpStream::connect(&self.reconnect).await?);
-                        }
-                    }
+                    // Take the socket out until a complete response is received.
+                    // A failed frame leaves the stream unusable for the next request.
+                    let mut connection = match mconn.take() {
+                        Some(connection) => connection,
+                        None => TcpStream::connect(self.reconnect).await?,
+                    };
+                    crate::wire::write_message(
+                        &mut connection,
+                        &msgs::Request::SignPSBT(msgs::PSBT(b.clone())),
+                    )
+                    .await?;
+                    let response = crate::wire::read_message::<msgs::PSBT>(&mut connection).await?;
+                    *mconn = Some(connection);
+                    Ok(response.0)
                 })
             });
 
