@@ -1,68 +1,66 @@
 <!DOCTYPE HTML>
-<html lang="en" class="sidebar-visible no-js light">
+<html lang="en" class="light sidebar-visible" dir="ltr">
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
         <title>Designing Bitcoin Contracts with Sapio</title>
-        
-        <meta name="robots" content="noindex" />
-        
-        
+        <meta name="robots" content="noindex">
 
 
         <!-- Custom HTML head -->
-        
 
-
-        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="theme-color" content="#ffffff" />
+        <meta name="theme-color" content="#ffffff">
 
-        
-        <link rel="icon" href="favicon.svg">
-        
-        
-        <link rel="shortcut icon" href="favicon.png">
-        
-        <link rel="stylesheet" href="css/variables.css">
-        <link rel="stylesheet" href="css/general.css">
-        <link rel="stylesheet" href="css/chrome.css">
-        
-        <link rel="stylesheet" href="css/print.css" media="print">
-        
+        <link rel="icon" href="favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="favicon-8114d1fc.png">
+        <link rel="stylesheet" href="css/variables-8adf115d.css">
+        <link rel="stylesheet" href="css/general-e96d0476.css">
+        <link rel="stylesheet" href="css/chrome-d279d366.css">
+        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
 
         <!-- Fonts -->
-        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
-        
-        <link rel="stylesheet" href="fonts/fonts.css">
-        
+        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
 
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" href="highlight.css">
-        <link rel="stylesheet" href="tomorrow-night.css">
-        <link rel="stylesheet" href="ayu-highlight.css">
+        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
 
         <!-- Custom theme stylesheets -->
-        
 
-        
         <!-- MathJax -->
-        <script async type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
-        
+        <script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex-b9dd4dd1.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc-efed9c80.js"></script>
     </head>
     <body>
-        <!-- Provide site root to javascript -->
-        <script type="text/javascript">
-            var path_to_root = "";
-            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
-        </script>
-
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
         <!-- Work around some values being stored in localStorage wrapped in quotes -->
-        <script type="text/javascript">
+        <script>
             try {
-                var theme = localStorage.getItem('mdbook-theme');
-                var sidebar = localStorage.getItem('mdbook-sidebar');
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
 
                 if (theme.startsWith('"') && theme.endsWith('"')) {
                     localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
@@ -75,115 +73,127 @@
         </script>
 
         <!-- Set the theme before any content is loaded, prevents flash -->
-        <script type="text/javascript">
-            var theme;
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
             try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
             if (theme === null || theme === undefined) { theme = default_theme; }
-            var html = document.querySelector('html');
-            html.classList.remove('no-js')
+            const html = document.documentElement;
             html.classList.remove('light')
             html.classList.add(theme);
-            html.classList.add('js');
+            html.classList.add("js");
         </script>
 
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
         <!-- Hide / unhide sidebar before it is displayed -->
-        <script type="text/javascript">
-            var html = document.querySelector('html');
-            var sidebar = 'hidden';
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
             if (document.body.clientWidth >= 1080) {
                 try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
                 sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
             }
-            html.classList.remove('sidebar-visible');
-            html.classList.add("sidebar-" + sidebar);
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
         </script>
 
-        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
-            <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded affix "><a href="title-page.html">The Sapio Language</a></li><li class="chapter-item expanded affix "><a href="ch00-00-introduction.html">Introduction</a></li><li class="chapter-item expanded affix "><li class="part-title">ABC 123</li><li class="chapter-item expanded "><a href="ch01-00-getting-started.html"><strong aria-hidden="true">1.</strong> Getting Started</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch01-01-installation.html"><strong aria-hidden="true">1.1.</strong> Installing Sapio</a></li><li class="chapter-item expanded "><a href="ch01-02-learn-rust.html"><strong aria-hidden="true">1.2.</strong> Learning Rust</a></li><li class="chapter-item expanded "><a href="ch01-03-hello-world.html"><strong aria-hidden="true">1.3.</strong> Hello World</a></li></ol></li><li class="chapter-item expanded "><a href="ch02-00-bip-119.html"><strong aria-hidden="true">2.</strong> BIP-119 CTV Fundamentals</a></li><li class="chapter-item expanded "><a href="ch03-00-basics.html"><strong aria-hidden="true">3.</strong> Sapio Basics</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch03-01-guts.html"><strong aria-hidden="true">3.1.</strong> Contract Guts</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch03-01-miniscript.html"><strong aria-hidden="true">3.1.1.</strong> Miniscript/Policy</a></li><li class="chapter-item expanded "><a href="ch03-01-builder.html"><strong aria-hidden="true">3.1.2.</strong> Template Builder</a></li><li class="chapter-item expanded "><a href="ch03-01-timelocks.html"><strong aria-hidden="true">3.1.3.</strong> Time Locks</a></li><li class="chapter-item expanded "><a href="ch03-01-amounts.html"><strong aria-hidden="true">3.1.4.</strong> Sats and Coins</a></li></ol></li><li class="chapter-item expanded "><a href="ch03-02-guts.html"><strong aria-hidden="true">3.2.</strong> Contract Actions</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch03-02-guard.html"><strong aria-hidden="true">3.2.1.</strong> guard</a></li><li class="chapter-item expanded "><a href="ch03-02-compile_if.html"><strong aria-hidden="true">3.2.2.</strong> compile_if</a></li><li class="chapter-item expanded "><a href="ch03-02-then.html"><strong aria-hidden="true">3.2.3.</strong> then</a></li><li class="chapter-item expanded "><a href="ch03-02-finish.html"><strong aria-hidden="true">3.2.4.</strong> continuation</a></li><li class="chapter-item expanded "><a href="ch03-02-when-use-macros.html"><strong aria-hidden="true">3.2.5.</strong> When to use macros?</a></li></ol></li><li class="chapter-item expanded "><a href="ch03-03-declarations.html"><strong aria-hidden="true">3.3.</strong> Contract Declarations</a></li><li class="chapter-item expanded "><a href="ch03-04-compliation.html"><strong aria-hidden="true">3.4.</strong> Contract Compilation Overview</a></li><li class="chapter-item expanded "><a href="ch03-04-continuation-effects.html"><strong aria-hidden="true">3.5.</strong> Contract Continuation Effects</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">Exercises</li><li class="chapter-item expanded "><a href="ch04-00-sapio-fun-profit.html"><strong aria-hidden="true">4.</strong> Sapio for Fun (and Profit)</a></li><li class="chapter-item expanded affix "><li class="part-title">Warnings</li><li class="chapter-item expanded "><a href="ch05-00-limitations.html"><strong aria-hidden="true">5.</strong> Limitations of Sapio</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch05-01-ctv-emulator.html"><strong aria-hidden="true">5.1.</strong> BIP-119 Emulation</a></li><li class="chapter-item expanded "><a href="ch05-02-taproot.html"><strong aria-hidden="true">5.2.</strong> Taproot Support</a></li><li class="chapter-item expanded "><a href="ch05-03-txns.html"><strong aria-hidden="true">5.3.</strong> Advanced Transaction Handling</a></li><li class="chapter-item expanded "><a href="ch05-04-gas.html"><strong aria-hidden="true">5.4.</strong> Mempool &amp; Fees</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">Advanced Topics</li><li class="chapter-item expanded "><a href="ch06-00-packaging.html"><strong aria-hidden="true">6.</strong> Application Packaging</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch06-01-wasm.html"><strong aria-hidden="true">6.1.</strong> WASM</a></li><li class="chapter-item expanded "><a href="ch06-02-rust.html"><strong aria-hidden="true">6.2.</strong> Rust Lib/Bin</a></li><li class="chapter-item expanded "><a href="ch06-02-studio.html"><strong aria-hidden="true">6.3.</strong> Sapio Studio</a></li></ol></li><li class="chapter-item expanded "><a href="ch07-00-cli.html"><strong aria-hidden="true">7.</strong> Sapio CLI</a></li><li class="chapter-item expanded "><a href="ch08-00-useful-rust.html"><strong aria-hidden="true">8.</strong> Advanced Rust Patterns</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="ch08-01-state-machines.html"><strong aria-hidden="true">8.1.</strong> Type Level State Machines</a></li><li class="chapter-item expanded "><a href="ch08-02-tryfrom.html"><strong aria-hidden="true">8.2.</strong> TryFrom Constructors</a></li><li class="chapter-item expanded "><a href="ch08-03-concrete.html"><strong aria-hidden="true">8.3.</strong> Concrete &amp; Generic Types</a></li></ol></li></ol>
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
             </div>
-            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
-        <div id="page-wrapper" class="page-wrapper">
+        <div id="mdbook-page-wrapper" class="page-wrapper">
 
             <div class="page">
-                
-                <div id="menu-bar-hover-placeholder"></div>
-                <div id="menu-bar" class="menu-bar sticky bordered">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
                     <div class="left-buttons">
-                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
-                            <i class="fa fa-bars"></i>
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
                         </button>
-                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
-                            <i class="fa fa-paint-brush"></i>
-                        </button>
-                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
-                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
-                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
-                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
-                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
-                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
                         </ul>
-                        
-                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
-                            <i class="fa fa-search"></i>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
                         </button>
-                        
                     </div>
 
                     <h1 class="menu-title">Designing Bitcoin Contracts with Sapio</h1>
 
                     <div class="right-buttons">
-                        
                         <a href="print.html" title="Print this book" aria-label="Print this book">
-                            <i id="print-button" class="fa fa-print"></i>
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
                         </a>
-                        
-                        
                         <a href="https://github.com/sapio-lang/sapio" title="Git repository" aria-label="Git repository">
-                            <i id="git-repository-button" class="fa fa-github"></i>
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
                         </a>
-                        
+
                     </div>
                 </div>
 
-                
-                <div id="search-wrapper" class="hidden">
-                    <form id="searchbar-outer" class="searchbar-outer">
-                        <input type="search" name="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
                     </form>
-                    <div id="searchresults-outer" class="searchresults-outer hidden">
-                        <div id="searchresults-header" class="searchresults-header"></div>
-                        <ul id="searchresults">
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
                         </ul>
                     </div>
                 </div>
-                
 
                 <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
-                <script type="text/javascript">
-                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
-                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
-                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
                         link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
                     });
                 </script>
 
-                <div id="content" class="content">
+                <div id="mdbook-content" class="content">
                     <main>
-                        <p><img src="https://github.com/sapio-lang/sapio/raw/master/.github/logo.png" alt="" /></p>
+                        <h1 id="the-sapio-language"><a href="#the-sapio-language" class="header">The Sapio Language</a></h1>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="https://github.com/sapio-lang/sapio/raw/master/.github/logo.png" alt=""><span class="img-wrapper"><img src="https://github.com/sapio-lang/sapio/raw/master/.github/logo.png" alt=""></span></label></p>
 <h2 id="designing-bitcoin-contracts-with-sapio"><a class="header" href="#designing-bitcoin-contracts-with-sapio">Designing Bitcoin Contracts with Sapio</a></h2>
-<p><a href="https://github.com/sapio-lang/sapio/actions?query=branch%3Amaster"><img src="https://github.com/sapio-lang/sapio/workflows/Continuous%20integration/badge.svg" alt="Build Status" /></a> <a href="https://crates.io/crates/sapio"><img src="https://img.shields.io/crates/dv/sapio" alt="crates" /></a> <a href="https://docs.rs/sapio"><img src="https://img.shields.io/docsrs/sapio/latest" alt="docs" /></a> <a href="https://github.com/sapio-lang/sapio/fork"><img src="https://img.shields.io/github/forks/sapio-lang/sapio?label=Fork%20Me&amp;style=social" alt="forkme" /></a> </p>
+<p><a href="https://github.com/sapio-lang/sapio/actions?query=branch%3Amaster"><img src="https://github.com/sapio-lang/sapio/workflows/Continuous%20integration/badge.svg" alt="Build Status"></a> <a href="https://crates.io/crates/sapio"><img src="https://img.shields.io/crates/dv/sapio" alt="crates"></a> <a href="https://docs.rs/sapio"><img src="https://img.shields.io/docsrs/sapio/latest" alt="docs"></a> <a href="https://github.com/sapio-lang/sapio/fork"><img src="https://img.shields.io/github/forks/sapio-lang/sapio?label=Fork%20Me&amp;style=social" alt="forkme"></a></p>
 <p><em>A practical guide to engineering bitcoin smart contracts using the Sapio Language.</em></p>
 <p>This book is a work in progress! Please <a href="https://github.com/sapio-lang/sapio">submit a PR</a> with
 improvements or suggestions.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
 <p>Welcome to <em>Designing Bitcoin Contracts with Sapio</em>, the official manual and
 best starting place to learn how to make Smart Contracts for Bitcoin. Sapio
 is an in-development tool that empowers Bitcoin Developers to craft smart
 contracts in an intuitive, safe, and composable way. Sapio challenges the
-notion that you can't make complex smart contracts for Bitcoin, and opens the
+notion that you can’t make complex smart contracts for Bitcoin, and opens the
 floodgates for a myriad of new ideas to be defined easily.</p>
 <h2 id="who-is-sapio-for"><a class="header" href="#who-is-sapio-for">Who is Sapio For?</a></h2>
 <p>Sapio is for anyone who wants to build with Bitcoin. That spans students
@@ -195,7 +205,7 @@ elegantly.</p>
 <p>Sapio is currently alpha quality software. You should think very carefully
 before using Sapio with any real money. There will be kinks to untwist,
 wrinkles to iron out, and bugs to squash. Hopefully you, dear reader, will
-even be able to help with that! Sapio is not -- at present -- for the faint
+even be able to help with that! Sapio is not – at present – for the faint
 of heart.</p>
 <h2 id="what-will-i-learn-if-i-read-this-book"><a class="header" href="#what-will-i-learn-if-i-read-this-book">What will I learn if I read this book?</a></h2>
 <p>This book is intended to teach you how to think about programming Sapio
@@ -206,14 +216,16 @@ for Bitcoin.</p>
 should develop a firm grasp of how to use Sapio, how it works, and how it
 will progress over time. You will also have sufficient understanding to
 contribute back meaningfully to the open source project.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="getting-started"><a class="header" href="#getting-started">Getting Started</a></h1>
-<p>Let's start buil... not so fast there.</p>
+<p>Let’s start buil… not so fast there.</p>
 <p>Before we get into it, we need to cover some basics:</p>
 <ul>
 <li>Setting up an environment</li>
 <li>Learning Rust</li>
 <li>Hello World contract</li>
 </ul>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="installing-sapio"><a class="header" href="#installing-sapio">Installing Sapio</a></h1>
 <h2 id="sapio-pod-quickstart"><a class="header" href="#sapio-pod-quickstart">Sapio Pod QuickStart:</a></h2>
 <p><a href="https://hub.docker.com/repository/docker/sapiolang/sapio"><strong>DOWNLOAD THE POD</strong></a></p>
@@ -240,7 +252,7 @@ appropriately.</p>
 <p>Sapio should work on all platforms, but is recommended for use with Linux (Ubuntu preferred).
 Follow this quickstart guide to get going.</p>
 <ol>
-<li>Get <a href="https://rustup.rs/">rust</a> if you don't have it already.</li>
+<li>Get <a href="https://rustup.rs/">rust</a> if you don’t have it already.</li>
 <li>Add the wasm target and nightly toolchain by running the below command in your terminal:</li>
 </ol>
 <pre><code class="language-bash">rustup target add wasm32-unknown-unknown
@@ -255,15 +267,15 @@ rustup toolchain install nightly
 rustup default nightly
 </code></pre>
 <p>and then load the following before compiling to use the newer llvm/clang.</p>
-<pre><code class="language-bash">export PATH=&quot;/opt/homebrew/opt/llvm/bin:$PATH&quot;
+<pre><code class="language-bash">export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
 # for older homebrew installs
-# export PATH=&quot;/usr/local/opt/llvm/bin:$PATH&quot;
+# export PATH="/usr/local/opt/llvm/bin:$PATH"
 export CC=/opt/homebrew/opt/llvm/bin/clang
 export AR=/opt/homebrew/opt/llvm/bin/llvm-ar
 </code></pre>
 </blockquote>
 <ol start="3">
-<li>Clone this repo: </li>
+<li>Clone this repo:</li>
 </ol>
 <pre><code>git clone --depth 1 git@github.com:sapio-lang/sapio.git &amp;&amp; cd sapio
 </code></pre>
@@ -277,11 +289,11 @@ export AR=/opt/homebrew/opt/llvm/bin/llvm-ar
 <ol start="5">
 <li>Instantiate a contract from the plugin:</li>
 </ol>
-<pre><code>cargo run --bin sapio-cli -- contract create &quot;{\&quot;arguments\&quot;:{\&quot;ForAddress\&quot;:{\&quot;amount_step\&quot;:{\&quot;Sats\&quot;:100},\&quot;cold_storage\&quot;:\&quot;bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj\&quot;,\&quot;hot_storage\&quot;:\&quot;bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj\&quot;,\&quot;mature\&quot;:{\&quot;RH\&quot;:10},\&quot;n_steps\&quot;:10,\&quot;timeout\&quot;:{\&quot;RH\&quot;:5}}},\&quot;context\&quot;:{\&quot;amount\&quot;:1,\&quot;network\&quot;:\&quot;Regtest\&quot;}}&quot; --file=&quot;plugin-example/target/wasm32-unknown-unknown/debug/sapio_wasm_vault.wasm&quot;
+<pre><code>cargo run --bin sapio-cli -- contract create "{\"arguments\":{\"ForAddress\":{\"amount_step\":{\"Sats\":100},\"cold_storage\":\"bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj\",\"hot_storage\":\"bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj\",\"mature\":{\"RH\":10},\"n_steps\":10,\"timeout\":{\"RH\":5}}},\"context\":{\"amount\":1000,\"network\":\"Regtest\"}}" --file="plugin-example/target/wasm32-unknown-unknown/debug/sapio_wasm_vault.wasm"
 </code></pre>
 <p>You can use <code>cargo run --release --bin sapio-cli -- help</code> to learn more about what a the
 CLI can do! and <code>cargo run --bin sapio-cli -- &lt;subcommand&gt; help</code> to learn about
-subcommands like <code>contract</code>. If you aren't modifying Sapio itself, you'll want
+subcommands like <code>contract</code>. If you aren’t modifying Sapio itself, you’ll want
 to run <code>cargo build --release</code> and use a release binary as it is much faster.</p>
 <ol start="6">
 <li>Install Sapio Studio</li>
@@ -297,12 +309,13 @@ yarn install
 yarn start-electron
 </code></pre>
 <p>The first time you run it you most likely <em>will</em> have some errors, you will need
-to ensure you've configured your client correctly. You can do this by opening
+to ensure you’ve configured your client correctly. You can do this by opening
 the Preferences menu and configuring it appropriately. Soon there will be a better
 interface for first run setup.</p>
 <h2 id="docs"><a class="header" href="#docs">Docs</a></h2>
 <p>You can review the docs either by building them locally or viewing
 <a href="https://docs.rs/sapio">online</a>.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="learning-rust"><a class="header" href="#learning-rust">Learning Rust</a></h1>
 <p>A full rust tutorial is out of scope for this guide.</p>
 <p>You may wish to begin with <a href="https://doc.rust-lang.org/book/">The Rust Programming
@@ -310,15 +323,15 @@ Language</a>.</p>
 <p>Deep expertise in Rust is not <em>required</em> to be a fluent Sapio developer, but it
 helps. Typical Sapio programs are relatively simple as we are not typically
 concerned with concurrency or memory efficiency.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="hello-world"><a class="header" href="#hello-world">Hello World</a></h1>
-<p>Let's get going with your very first hello world contract!</p>
+<p>Let’s get going with your very first hello world contract!</p>
 <p>Unfortunately, until Sapio becomes a little more popular the embedded rust
-playground won't work, so you'll want to copy it locally.</p>
-<p>We're going to start with a contract that allows two parties, Alice and Bob,
+playground won’t work, so you’ll want to copy it locally.</p>
+<p>We’re going to start with a contract that allows two parties, Alice and Bob,
 to either agree on an outcome or to default to a pre-fixed outcome after a
 relative timeout.</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>#[derive(JsonSchema, Deserialize)]
 pub struct TrustlessEscrow {
@@ -362,27 +375,27 @@ impl Contract for TrustlessEscrow {
     declare! {non updatable}
 }
 
-REGISTER![TrustlessEscrow, &quot;logo.png&quot;];
+REGISTER![TrustlessEscrow, "logo.png"];
 
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <p>Navigate to <code>sapio/plugin-example/helloworld/plugin.rs</code> in your code editor.
-You'll find this code there. You should be able to compile it using 
-<code>cargo build --target wasm32-unknown-unknown</code>. </p>
+You’ll find this code there. You should be able to compile it using
+<code>cargo build --target wasm32-unknown-unknown</code>.</p>
 <h2 id="challenges"><a class="header" href="#challenges">Challenges</a></h2>
-<p>For the challenges, you'll want to modify the helloworld plugin file directly.
-Through this tutorial we'll use this as a sandbox file.</p>
+<p>For the challenges, you’ll want to modify the helloworld plugin file directly.
+Through this tutorial we’ll use this as a sandbox file.</p>
 <ol>
 <li>Add a new finish state that allows Alice to spend after a relative timeout.</li>
 <li>Add <code>use_escrow2</code> which enables a different pair of payouts to Alice and
 Bob as an alternative.</li>
 </ol>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="bip-119-ctv-fundamentals"><a class="header" href="#bip-119-ctv-fundamentals">BIP-119 CTV Fundamentals</a></h1>
 <h2 id="background"><a class="header" href="#background">Background</a></h2>
 <p>BIP-119 OP_CHECKTEMPLATEVERIFY (CTV) is a
 <a href="https://github.com/bitcoin/bips/blob/master/bip-0119.mediawiki">proposed</a>
 soft-fork upgrade to Bitcoin for enabling a bevy of use cases.</p>
-<p>At it's core, CTV enables a script to commit to the &quot;important bits&quot; of how it can be spent, or the:</p>
+<p>At it’s core, CTV enables a script to commit to the “important bits” of how it can be spent, or the:</p>
 <ol>
 <li>nVersion</li>
 <li>nLockTime</li>
@@ -401,15 +414,15 @@ the website <a href="https://utxos.org">utxos.org</a>.</p>
 is, what is a complex set of signers and satisfactions to unlock a specific
 coin. But once we unlock a coin, the smart contract usually does not encode
 any further restrictions on how it may be spent.</p>
-<p>You could think of this as &quot;a key to a car&quot;. If it unlocks the car, you can
+<p>You could think of this as “a key to a car”. If it unlocks the car, you can
 take the car wherever you want.</p>
 <p>With CTV, we hope to encode a bit more information about how coins should
 move by providing the paths that the coins must move through as well. So
 rather than just being the key to a car, you could think of it a bit more
-like the keys to train -- still required to start the engine, but you have to
+like the keys to train – still required to start the engine, but you have to
 stay on the tracks and there is a finite number of tracks to pick at any
 juncture.</p>
-<p>That's all a bit abstract. Think back to the Hello World example we saw earlier. We
+<p>That’s all a bit abstract. Think back to the Hello World example we saw earlier. We
 created a coin with the following options:</p>
 <ol>
 <li>Alice and Bob Agree \( \rightarrow \) coin goes anywhere</li>
@@ -423,7 +436,7 @@ time that Alice or Bob claimed they wanted to use the escrow</em>.</p>
 <li>Alice and Bob Agree \( \rightarrow \) coin goes anywhere</li>
 <li>Timeout <em>since Alice or Bob requested</em> \( \rightarrow \) coins go back to Alice and Bob</li>
 </ol>
-<p>But Bitcoin doesn't have a script level notion of &quot;since&quot; a part of a witness was constructed. The CTV way to think of this script is to define a state machine with two states \( S \in \{Normal, Closing\}\) and the rules:</p>
+<p>But Bitcoin doesn’t have a script level notion of “since” a part of a witness was constructed. The CTV way to think of this script is to define a state machine with two states \( S \in \{Normal, Closing\}\) and the rules:</p>
 <ul>
 <li>
 <p>\( S \gets Normal\):</p>
@@ -448,17 +461,20 @@ state transition rules to build smart contracts for Bitcoin.</p>
 <p>When we <strong>write</strong> a program in Sapio, we are designing an <em>arbitrary</em> state
 machine that can run any program.</p>
 <p>When we <strong>compile</strong> a Sapio program, we run that state machine to completion and merkelize the resultant program states into a fixed graph.</p>
-<p>As such, Sapio is a very powerful framework for designing Bitcoin smart contracts, but we're constrained to the set of contracts where we can enumerate all possible end states.</p>
-<p>To get around these restrictions, Sapio has some tricks up it's sleeve that
+<p>As such, Sapio is a very powerful framework for designing Bitcoin smart contracts, but we’re constrained to the set of contracts where we can enumerate all possible end states.</p>
+<p>To get around these restrictions, Sapio has some tricks up it’s sleeve that
 will be described in future chapters.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="sapio-basics"><a class="header" href="#sapio-basics">Sapio Basics</a></h1>
 <p>This section is intended to introduce the basic components of Sapio and how
-they are used. It's a nice complement to the material available in the
+they are used. It’s a nice complement to the material available in the
 <a href="https://docs.rs/sapio">online docs</a>, which are more targeted to everyday users.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="contract-guts"><a class="header" href="#contract-guts">Contract Guts</a></h1>
 <p>This section covers basic modules and primitives that are handy to know as
 you navigate Sapio contracts.</p>
 <p>Feel free to skip this section and refer back to it as needed!</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="miniscript--policy"><a class="header" href="#miniscript--policy">Miniscript &amp; Policy</a></h1>
 <p>Miniscript &amp; Policy are tools for creating well formed Bitcoin scripts developed
 by Blockstream developers Pieter Wiulle, Andrew Poelstra, and Sanket Kanjalkar.</p>
@@ -472,7 +488,7 @@ combinations of signatures, hash locks, and time locks. Yet despite being
 limited in functionality it is still highly nontrivial to:</p>
 <ol>
 <li>Given a combination of spending conditions, finding the most economical script to implement it.</li>
-<li>Given two scripts, construct a script that implements a composition of their spending conditions (e.g. a multisig where one of the &quot;keys&quot; is another multisig).</li>
+<li>Given two scripts, construct a script that implements a composition of their spending conditions (e.g. a multisig where one of the “keys” is another multisig).</li>
 <li>Given a script, find out what spending conditions it permits.</li>
 <li>Given a script and access to a sufficient set of private keys, construct a general satisfying witness for it.</li>
 <li>Given a script, be able to predict the cost of spending an output.</li>
@@ -481,7 +497,7 @@ limited in functionality it is still highly nontrivial to:</p>
 <p>Miniscript functions as a representation for scripts that makes these sort of
 operations possible. It has a structure that allows composition. It is very
 easy to statically analyze for various properties (spending conditions,
-correctness, security properties, malleability, ...). It can be targeted by
+correctness, security properties, malleability, …). It can be targeted by
 spending policy compilers (see below). Finally, compatible scripts can easily
 be converted to Miniscript form - avoiding the need for additional metadata
 for e.g. signing devices that support it.</p>
@@ -489,7 +505,7 @@ for e.g. signing devices that support it.</p>
 <p>For Sapio, we use a customized
 <a href="https://github.com/sapio-lang/rust-miniscript">fork of rust-miniscript</a> library
 which extends miniscript with functionality relevant to CheckTemplateVerify and
-Sapio. All changes should be able to be upstreamed... eventually.</p>
+Sapio. All changes should be able to be upstreamed… eventually.</p>
 <p>The Policy type (named Clause in Sapio) allows us to specify the predicates upon
 which various state transitions should unlock.</p>
 <p>This makes it so that Sapio should be compatible with other software that can
@@ -502,16 +518,16 @@ Miniscript is that keys may not be repeated to preserve a guarantee of non
 malleability.</p>
 <p>Miniscript &amp; Policy are an ongoing research concern. As they develop, Sapio will
 benefit from this foundational work.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="template-builder"><a class="header" href="#template-builder">Template Builder</a></h1>
 <p>The Template builder is one of the most important parts of a Sapio contract.
 It is how you define and build a transaction step.</p>
-<p>It's also an area of active work to improve the UX of, to enable building new
+<p>It’s also an area of active work to improve the UX of, to enable building new
 kinds of smart contracts more easily, supporting more advanced constructs.</p>
 <p>The below code demonstrates how to use the template builder. See the
 <a href="https://docs.rs/sapio/0.1.2/sapio/template/builder/struct.Builder.html">docs</a>
 for more details!</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>struct X;
 impl X {
@@ -520,7 +536,7 @@ impl X {
         /// create a new template with the current context
         /// and set lock time to height 100
         let mut tmpl = ctx.template().set_lock_time(AbsHeight::from(100).into())?;
-        let h = vec![(String::from(&quot;Metadata&quot;), String::from(&quot;IS_COOL&quot;))].into_iter().collect();
+        let h = vec![(String::from("Metadata"), String::from("IS_COOL"))].into_iter().collect();
         /// Add an output
         /// make sure to assign to update after initial assignment, otherwise tmpl is consumed completely...
         /// Note: What happens when X creates an X (infinite loop)
@@ -532,8 +548,8 @@ impl X {
         if tmpl.ctx().funds() &lt; bitcoin::Amount::from_sat(100000) {
             return Err(CompilationError::TerminateCompilation);
         }
-        /// certain metadata is inteded to be &quot;non-proprietary&quot; and has dedicated setters
-        tmpl = tmpl.set_label(&quot;Example!&quot;.into());
+        /// certain metadata is inteded to be "non-proprietary" and has dedicated setters
+        tmpl = tmpl.set_label("Example!".into());
         /// adds a new _input_ and sets it sequence to relheight 1 block.
         tmpl = tmpl.add_sequence().set_sequence(-1, RelHeight::from(1))?;
         /// add some additional funds (i.e. from the input we just added)
@@ -554,19 +570,18 @@ impl Contract for X {
     /*...*/
 }
 
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <p>The Sapio model currently expects that all contracts UTXO spends are located
 in the first input. The CTV hash commits to this, so it cannot be modified at
 this time (but future work might allow changing this).</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="time-locks"><a class="header" href="#time-locks">Time Locks</a></h1>
 <p>Sapio provides some utilities for working with both relative and absolute timelocks. See <a href="https://docs.rs/sapio-base/0.1.0/sapio_base/timelocks/index.html">the sapio-base docs</a> for more details.</p>
 <p>The Time Lock Utilities have some nice interfaces for dealing with timelocks generically and converting them into Policy Clauses.</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
 </span>
-<span class="boring">fn main() {
-</span>use sapio_base::timelocks::*;
+use sapio_base::timelocks::*;
 use std::time::Duration;
 
 AbsHeight::try_from(800_000u32);
@@ -584,31 +599,31 @@ let c: Clause = RelHeight::from(20u16).into();
 let a: AnyRelTimeLock = RelHeight::from(20u16).into();
 let b: AnyTimeLock = RelHeight::from(20u16).into();
 
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <p>These are not required to be used, but care should be taken if not used to
 ensure that correct values are passed to the miniscript compiler since
-Miniscript doesn't validate these strictly.</p>
+Miniscript doesn’t validate these strictly.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="sats-and-coins"><a class="header" href="#sats-and-coins">Sats and Coins</a></h1>
 <p>There are several different ways of expressing amounts in Sapio.</p>
-<p>That there isn't a single canonical way to represent amounts is unfortunate,
-and hopefully these types can be fully unified in the future. But it's a
+<p>That there isn’t a single canonical way to represent amounts is unfortunate,
+and hopefully these types can be fully unified in the future. But it’s a
 problem for good reason.</p>
 <h2 id="a-brief-rant"><a class="header" href="#a-brief-rant">A brief rant</a></h2>
 <p>Suppose I tell you to send 10 to Alice. Is that 10 sats? or 10 bitcoin? You
 might think that 10.0 would be unambiguous, but it turns out the lightning
 network is building sub-satoshi support.</p>
 <p>The <em>only</em> way to make context-free unambiguous amounts is to have them
-explicitly tagged, e.g., {denom: &quot;sats&quot;, amount: 10}.</p>
+explicitly tagged, e.g., {denom: “sats”, amount: 10}.</p>
 <p>This would be great, but there are already myriads of services out there
 where the only way to know what unit you have is to RTFM.</p>
 <p>Generally, we know that floating point representations are evil for financial
 transactions, but because we want to be compatible with JSON/Javascript, we
-don't quite have a choice. Fortunately, 21e6 Bitcoin with 8 places fit
+don’t quite have a choice. Fortunately, 21e6 Bitcoin with 8 places fit
 exactly into floats without loss. However, bets are off when doing arithmetic
 with such values.</p>
-<p>A last wrinkle: Bitcoin's amount type is a signed integer. Rust-bitcoin uses an Unsigned integer. So in theory there are unrepresentable amounts we're happy to work with. Great.</p>
-<h2 id="its-up-to-every-programmer"><a class="header" href="#its-up-to-every-programmer">It's up to every programmer</a></h2>
+<p>A last wrinkle: Bitcoin’s amount type is a signed integer. Rust-bitcoin uses an Unsigned integer. So in theory there are unrepresentable amounts we’re happy to work with. Great.</p>
+<h2 id="its-up-to-every-programmer"><a class="header" href="#its-up-to-every-programmer">It’s up to every programmer</a></h2>
 <p>Therefore, to get amounts right is a task that is up to the programmer
 largely to get this right. There are a few different amount types to be aware
 of.</p>
@@ -622,8 +637,7 @@ of.</p>
 <p>These different types have uses in different circumstances.</p>
 <p>Because <code>bitcoin::Amount</code> does not have a standard serializer, in order to
 use it in e.g. a <code>Vec</code>, you have to wrap the type with a serializer. <code>From</code> impls can make life a little easier to work with these.</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>use bitcoin::util::amount::Amount;
 
@@ -636,8 +650,8 @@ use serde::{Deserialize, Serialize};
 )]
 #[serde(transparent)]
 struct AmountF64(
-    #[schemars(with = &quot;f64&quot;)]
-    #[serde(with = &quot;bitcoin::util::amount::serde::as_btc&quot;)]
+    #[schemars(with = "f64")]
+    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
     Amount,
 );
 
@@ -651,26 +665,34 @@ impl From&lt;AmountF64&gt; for Amount {
         a.0
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
-<p><code>CoinAmount</code> does not have this problem, but it can't be used in all
-contexts, e.g. external APIs that aren't tagged.</p>
-<h2 id="dont-panic-or-do"><a class="header" href="#dont-panic-or-do">Don't Panic (or do)</a></h2>
+<span class="boring">}</span></code></pre>
+<p><code>CoinAmount</code> does not have this problem, but it can’t be used in all
+contexts, e.g. external APIs that aren’t tagged.</p>
+<h2 id="dont-panic-or-do"><a class="header" href="#dont-panic-or-do">Don’t Panic (or do)</a></h2>
 <p>A final annoyance is that <code>bitcoin::Amount</code> has arithmetic that may panic
 (unless you use the <code>checked_</code> variants). So one must be careful to ensure
 that any set of values passed in are safe to add.</p>
 <p>Sapio currently does not do a fantastic job of this, but that can be improved
 in the future.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="contract-actions"><a class="header" href="#contract-actions">Contract Actions</a></h1>
 <p>Contracts have a variety of different actions used at different times.</p>
-<table><thead><tr><th>name</th><th>function</th></tr></thead><tbody>
-<tr><td>guard</td><td>Create a clause using miniscript with access to the contract's values and context.</td></tr>
-<tr><td>compile_if</td><td>Determine if a <code>then</code> or <code>finish</code> should be compiled based on the contract's values and context</td></tr>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>name</th><th>function</th></tr>
+</thead>
+<tbody>
+<tr><td>guard</td><td>Create a clause using miniscript with access to the contract’s values and context.</td></tr>
+<tr><td>compile_if</td><td>Determine if a <code>then</code> or <code>finish</code> should be compiled based on the contract’s values and context</td></tr>
 <tr><td>then</td><td>Create a path or paths  that are guaranteed using CTV for a contract to be spent,  with optional <code>guard</code>s and <code>compile_if</code>s.</td></tr>
 <tr><td>continuation</td><td>Create a suggested path or paths for a contract to be spent that are not guaranteed via CTV with mandatory <code>guard</code>s and <code>compile_if</code>s. Also accepts an update argument for generating transactions based on future data.</td></tr>
 <tr><td>decl_*!</td><td>For any of the above, declare the existence of a method, for e.g. a trait definition, without defining the function.</td></tr>
-</tbody></table>
+</tbody>
+</table>
+</div>
 <p>This section will teach you then ins and outs of each.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="guard"><a class="header" href="#guard">Guard</a></h1>
 <p>Guards are central to any Sapio contract. They allow declaring a piece of
 miniscript logic.</p>
@@ -682,27 +704,25 @@ where a <code>guard</code> might be expensive to call, e.g. if it is programmed 
 retrieve a <code>Clause</code> from a remote server. It is not guaranteed that the
 <code>guard</code> is only invoked once.</p>
 <h2 id="guard-macro"><a class="header" href="#guard-macro">guard macro</a></h2>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>#[guard(
     /// optional: if the compiler should attempt to only call this guard one time (not guaranteed)
     cached)]
 fn name(self, ctx: Context) {/*Clause*/}
 decl_guard!{name};
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="conditionallycompileif"><a class="header" href="#conditionallycompileif">ConditionallyCompileIf</a></h1>
 <p><code>ConditionallyCompileIf</code> enables a contract writer to evaluate certain
 value-based logic before evaluating a path function.</p>
 <p>If the return value(s) indicate that a branch should not be evaluated, it is
 skipped.</p>
 <h2 id="when-to-use-conditionallycompileif"><a class="header" href="#when-to-use-conditionallycompileif">When to Use ConditionallyCompileIf</a></h2>
-<p>Suppose we're creating a super secure wallet vault, and we want a recovery
-path that's only accessible if the amount of funds being sent to the contract is &lt; an amount.</p>
+<p>Suppose we’re creating a super secure wallet vault, and we want a recovery
+path that’s only accessible if the amount of funds being sent to the contract is &lt; an amount.</p>
 <p>We could write:</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>#[compile_if]
 fn not_too_much(self, ctx: Context) {
@@ -712,13 +732,11 @@ fn not_too_much(self, ctx: Context) {
         ConditionalCompileType::NoConstraint
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <p>and apply it to the relevant paths.</p>
 <h2 id="conditionalcompiletype-variants"><a class="header" href="#conditionalcompiletype-variants">ConditionalCompileType Variants</a></h2>
 <p>There are many different ConditionalCompileType return values:</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>pub enum ConditionalCompileType {
     /// May proceed without calling this function at all
@@ -736,26 +754,22 @@ fn not_too_much(self, ctx: Context) {
     /// The branch should always trigger an error, with some reasons
     Fail(LinkedList&lt;String&gt;),
 }
-<span class="boring">}
-</span></code></pre></pre>
-<p>These values are merged according to specific &quot;common sense&quot; logic. Please
+<span class="boring">}</span></code></pre>
+<p>These values are merged according to specific “common sense” logic. Please
 see <code>ConditionalCompileType::merge</code> for details.</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
 </span>
-<span class="boring">fn main() {
-</span>    ///     Fail &gt; non-Fail ==&gt; Fail
+    ///     Fail &gt; non-Fail ==&gt; Fail
     ///     forall X. X &gt; NoConstraint ==&gt; X
     ///     Required &gt; {Skippable, Nullable} ==&gt; Required
     ///     Skippable &gt; Nullable ==&gt; Skippable
     ///     Never &gt;&lt; Required ==&gt; Fail
     ///     Never &gt; {Skippable, Nullable}  ==&gt; Never
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <h1 id="compile_if-macro"><a class="header" href="#compile_if-macro">compile_if! macro</a></h1>
 <p>The <code>compile_if</code> macro can be called two ways:</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>#[compile_if]
 fn name(self, ctx) {
@@ -763,40 +777,39 @@ fn name(self, ctx) {
 }
 /// null implementation
 decl_compile_if!{name}
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="thenfunc"><a class="header" href="#thenfunc">ThenFunc</a></h1>
 <p>A <code>ThenFunc</code> is a continuation of a contract that can proceed when all the
 guarded_by conditions on that object are met. The <code>ThenFunc</code> provides an
 iterator of possible next transactions, using CTV to ensure execution.</p>
 <h2 id="when-to-use-a-thenfunc"><a class="header" href="#when-to-use-a-thenfunc">When to use a ThenFunc</a></h2>
-<p>We've already seen an example of a <code>then</code> function in the wild in <a href="./ch01-03-hello-world.html">Chapter
+<p>We’ve already seen an example of a <code>then</code> function in the wild in <a href="#hello-world">Chapter
 1</a>. In that example we are guaranteeing that after
-a timeout, a specific &quot;return policy&quot; is honored out of the escrow. Unless
+a timeout, a specific “return policy” is honored out of the escrow. Unless
 Alice and Bob agree to something else, the funds can only be returned via
 that transaction.</p>
-<p>In general, any time you want a state transition to be &quot;locked in&quot; you should use a <code>then!</code>.</p>
+<p>In general, any time you want a state transition to be “locked in” you should use a <code>then!</code>.</p>
 <h2 id="then-macro"><a class="header" href="#then-macro">then! macro</a></h2>
 <p>The <code>then</code> macro generates a static <code>fn() -&gt; Option&lt;ThenFunc&gt;</code> method for a given impl.</p>
 <p>There are a few variants of how you can create a <code>then</code>.</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>/// A Conditional + Guarded CTV Function
 #[then(
     /// optional: only compile these branches if these compile_if statements permit
-    compile_if= &quot;[compile_if_1, ... compile_if_n]&quot;,
+    compile_if= "[compile_if_1, ... compile_if_n]",
     /// optional: protect these branches with the conjunction (and) of these clauses
-    guarded_by= &quot;[guard_1, ... guard_n]&quot;
+    guarded_by= "[guard_1, ... guard_n]"
 )]
 fn name(self, ctx) {
     /*Result&lt;Box&lt;Iterator&lt;TransactionTemplate&gt;&gt;&gt;*/
 }
 /// Null Implementation
 decl_then!{name}
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <p>The Iterator must not be empty, or it will cause an error.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="finishorfunc"><a class="header" href="#finishorfunc">FinishOrFunc</a></h1>
 <p>A <code>FinishOrFunc</code> is a continuation of a contract that <em>may</em> terminate when
 all the guarded_by conditions on that object are met, but provides logic for some default continuations and logic for new continuations in light of new information.</p>
@@ -806,8 +819,7 @@ all the guarded_by conditions on that object are met, but provides logic for som
 <h2 id="finish-macro"><a class="header" href="#finish-macro">finish! macro</a></h2>
 <p>The <code>continuation</code> macro generates a static <code>fn() -&gt; Option&lt;FinishOrFunc&gt;</code> method for a given impl.</p>
 <p>There are a few variants of how you can create a <code>continuation</code>.</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>struct UpdateType;
 /// Helper
@@ -819,29 +831,29 @@ fn default_coerce(
 /// A Guarded CTV Function
 #[continuation(
     /// required: guards for the miniscript clauses required
-    guarded_by = &quot;[Self::guard_1,... Self::guard_n]&quot;,
+    guarded_by = "[Self::guard_1,... Self::guard_n]",
     /// optional: Conditional compilation
-    compile_if = &quot;[Self::compile_if_1, ... Self::compile_if_n]&quot;,
+    compile_if = "[Self::compile_if_1, ... Self::compile_if_n]",
     ///  optional: Enables compiling this for a json callable continuation
     web_api,
     /// helper for coercing args for json api, could be arbitrary
-    coerce_args = &quot;default_coerce&quot;
+    coerce_args = "default_coerce"
 )]
 fn name(self, ctx:Context, o:UpdateType) {
     /*Result&lt;Box&lt;Iterator&lt;TransactionTemplate&gt;&gt;&gt;*/
 }
 /// Null Implementation
 decl_finish!(name);
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <p>The parameter <code>o</code> is either called directly or attempted to be coerced from the
 higher level <code>&lt;Self as Contract&gt;::StatefulArguments</code> which mus enum wrap the
 arguments. This means that each <code>continuation</code> can have a unique parameter type,
 but also be represented as a trait object with a single type. Enums may be used
 to pass different arguments to different functions.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="when-to-use-macros"><a class="header" href="#when-to-use-macros">When to use macros?</a></h1>
 <p>Generally, you want to use <code>continuation</code>, <code>then</code>, <code>guard</code>, etc to generate your
-methods.  However, if you prefer to create them manually, it's entirely possible
+methods.  However, if you prefer to create them manually, it’s entirely possible
 to do so without much effort. A tool like <code>cargo expand</code> may be useful as you
 can just copy the macro output and customize from there.</p>
 <p>One reason you might choose to manually define them is if you want to have
@@ -849,13 +861,13 @@ custom static logic (that is, known just from the type and not a value-filled
 instance) to decide if a method should be <code>Some</code> or <code>None</code>. If it does not need
 to be static logic, a <code>compile_if</code> can be used, or the static logic can go
 inside a <code>compile_if</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="contract-declarations"><a class="header" href="#contract-declarations">Contract Declarations</a></h1>
 <h2 id="static-contracts"><a class="header" href="#static-contracts">Static Contracts</a></h2>
 <p>This is the usual way to declare a contract for Sapio.</p>
 <p>Once a contract and all relevant logic has been defined, a <code>impl Contract</code>
 should be written. This binds the functionality to the compiler interface.</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>impl Contract for T {
     declare!{then, Self::a, Self::b}
@@ -865,19 +877,19 @@ should be written. This binds the functionality to the compiler interface.</p>
     /// if there are no updatable functions
     declare!{non updatable}
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <p>The type <code>Z</code> above becomes bound for the updatable functions.</p>
 <h2 id="dynamic-contracts"><a class="header" href="#dynamic-contracts">Dynamic Contracts</a></h2>
-<p>Sapio also supports several &quot;Dynamic Contract&quot; paradigms which allows a user
+<p>Sapio also supports several “Dynamic Contract” paradigms which allows a user
 to assemble contracts at run-time. The two main paradigms are accomplished by
 either directly <code>impl AnyContract</code> or by using the <code>DynamicContract</code> struct
 which holds all functions in vecs.</p>
 <p>These are useful in rare circumstances.</p>
 <h2 id="external-addresses"><a class="header" href="#external-addresses">External Addresses?</a></h2>
-<p>The compiler is able to &quot;lift&quot; an address or a script into a contract via
+<p>The compiler is able to “lift” an address or a script into a contract via
 <code>Object::from_address</code> and <code>Object::from_script</code>. Care should be taken when
 doing so as Sapio will not be able to provide any further API data beyond such a bound.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="contract-compilation-overview"><a class="header" href="#contract-compilation-overview">Contract Compilation Overview</a></h1>
 <p>When the compiler sees a new contract, it proceeds by processing each path
 item one at a time. If the order of compilation is important for your contract:</p>
@@ -892,7 +904,7 @@ versions. Further, optimizers or data structures may be unstable with respect to
 things like renamed functions leading to changes of compilation result.</p>
 <h2 id="determinism"><a class="header" href="#determinism">Determinism?</a></h2>
 <p>Sapio is designed to be determinism-friendly. Repeated runs of the same
-program should -- unless the user includes entropy -- return the same
+program should – unless the user includes entropy – return the same
 results.</p>
 <p>However, at writing, this property is not closely audited for, so outputs
 should be treated as required to be stored in order to use a contract.</p>
@@ -902,10 +914,10 @@ WASM plugin, they can generate a contract definition and check that the
 merkle root (in this case, a bitcoin address) is the same. If it differs,
 either the arguments differed, someone cheated, or there was unexpected
 non-determinism.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="continuation-effects"><a class="header" href="#continuation-effects">Continuation Effects</a></h1>
-<p>Suppose we had the following bit of code in a contract's implementation:</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<p>Suppose we had the following bit of code in a contract’s implementation:</p>
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>#[derive(Serialize, Deserialize)]
 struct PayToKey(bitcoin::PublicKey);
@@ -918,17 +930,16 @@ fn default_coerce(
 /// A Guarded CTV Function
 #[continuation(
     /// required: guards for the miniscript clauses required
-    guarded_by = &quot;[Self::guard_1,... Self::guard_n]&quot;,
+    guarded_by = "[Self::guard_1,... Self::guard_n]",
     web_api,
     /// helper for coercing args for json api, could be arbitrary
-    coerce_args = &quot;default_coerce&quot;
+    coerce_args = "default_coerce"
 )]
 fn to_address(self, ctx:Context, o:PayToKey) {
     let amt = ctx.funds();
     ctx.template().add_output(amt, &amp;o.0, None)?.into()
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <p>When the <code>to_address</code> function gets passed by the compiler, a unique pointer (an effect path) is
 generated for it from the context object. This enabled sending it parameters
 later in the future.</p>
@@ -938,8 +949,7 @@ intended to be passed to this branch which can generate new contract transitions
 intended to be signed off on by the guards to that path.</p>
 <p>For example, consider a contract for a NFT (a provenance checkable certificate
 of ownership).</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>#[derive(Serialize, Deserialize)]
 struct NFT(bitcoin::PublicKey);
@@ -958,10 +968,10 @@ impl NFT {
         Clause::Key(self.0)
     }
     #[continuation(
-        guarded_by = &quot;[Self::signed]&quot;,
+        guarded_by = "[Self::signed]",
         web_api,
         /// helper for coercing args for json api, could be arbitrary
-        coerce_args = &quot;default_coerce&quot;
+        coerce_args = "default_coerce"
     )]
     fn make_sale(self, ctx:Context, o:Sale) {
         let amt = ctx.funds();
@@ -978,22 +988,21 @@ impl NFT {
 impl Contract for NFT {
     declare!{updatable&lt;Sale&gt;, Self::make_sale}
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <p>The updates generated through <code>make_sale</code> generate the transactions for a series
 of sales. For example, imagine I start with a <code>NFT(Bob)</code>.</p>
 <p>I can recompile <code>NFT(Bob)</code> with the context (not exactly the pointer, but just for example)
 <code>NFT(Bob)</code> with effects</p>
-<pre><code class="language-json">{&quot;0&quot;: {&quot;make_sale&quot;: [[&quot;Alice&quot;, 10]]}}
+<pre><code class="language-json">{"0": {"make_sale": [["Alice", 10]]}}
 </code></pre>
 <p>Supposing Alice pays into the transaction, a future transaction could be:</p>
-<pre><code class="language-json">{&quot;0&quot;: {&quot;make_sale&quot;: [[&quot;Alice&quot;, 10]]}, &quot;1&quot;: {&quot;make_sale&quot;: [[&quot;Carol&quot;, 11]]}}
+<pre><code class="language-json">{"0": {"make_sale": [["Alice", 10]]}, "1": {"make_sale": [["Carol", 11]]}}
 </code></pre>
 <p>Thus by starting with a known valid NFT (e.g., Bob being the original artist),
 the effects can regenerate a series of state transitions for verification of
 provenance.</p>
 <p>Further, as effects at a given point are a set, there could be multiple in flight transitions. E.g.,</p>
-<pre><code class="language-json">{&quot;0&quot;: {&quot;make_sale&quot;: [[&quot;Alice&quot;, 10], [&quot;Eve&quot;, 10]]}}
+<pre><code class="language-json">{"0": {"make_sale": [["Alice", 10], ["Eve", 10]]}}
 </code></pre>
 <p>represents Alice and Bob both having the ability to purchase the NFT for 10 BTC.</p>
 <h1 id="challenges-1"><a class="header" href="#challenges-1">Challenges</a></h1>
@@ -1001,11 +1010,12 @@ provenance.</p>
 <li>By using decreasing time locks, implement a dutch auction pitting two
 participants against each other.</li>
 </ol>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="sapio-for-fun-and-profit"><a class="header" href="#sapio-for-fun-and-profit">Sapio for Fun (and Profit)</a></h1>
-<p>In this section, we're going to build a simple option contract. This sort of
+<p>In this section, we’re going to build a simple option contract. This sort of
 contract could be used, for example, to make an on-chain asynchronous offer to
 someone to enter a bet with you.</p>
-<p>Then, you'll have some challenges to modify the contract to extend it's
+<p>Then, you’ll have some challenges to modify the contract to extend it’s
 functionality meaningfully.</p>
 <p>The logic for the basic contract is as follows:</p>
 <ol>
@@ -1020,8 +1030,7 @@ functionality meaningfully.</p>
 </ul>
 </li>
 </ol>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>/// The Data Fields required to create a on-chain bet
 pub struct UnderFundedExpiringOption {
@@ -1072,10 +1081,9 @@ impl Contract for UnderFundedExpiringOption {
     declare!(then, Self::expires, Self::strikes);
     declare!(non updatable);
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <h1 id="challenges-2"><a class="header" href="#challenges-2">Challenges</a></h1>
-<p>There's no right answer to the following challenges, and the resulting
+<p>There’s no right answer to the following challenges, and the resulting
 contract may not be too useful, but it should be a good exercise to learn
 more about writing Sapio contracts.</p>
 <ol>
@@ -1093,6 +1101,7 @@ by it are <code>Option::is_some</code> (hint: use <code>compile_if!</code>).</li
 <li>Add logic to deduct fees.</li>
 <li>Add a <code>cooperative_close</code> <code>guard!</code> clause that allows both parties to exit gracefully</li>
 </ol>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="limitations-of-sapio"><a class="header" href="#limitations-of-sapio">Limitations of Sapio</a></h1>
 <p>Sapio is rapidly maturing, but it is still early-days for bitcoin smart
 contract compilers, and early-days for Sapio in particular. As such, one
@@ -1101,12 +1110,13 @@ careful to only use such contracts with trusted inputs, and in general take
 precautions to ensure security of funds. As Sapio matures and we gain
 confidence in smart contracts built with it, Sapio should be able to greatly
 improve the security for many bitcoin users and applications.</p>
-<p>Other than these general &quot;alpha software&quot; disclaimers, Sapio is designed with
+<p>Other than these general “alpha software” disclaimers, Sapio is designed with
 certain upgrades to Bitcoin in mind that have not yet landed. While Sapio is
 designed to work even without these upgrades, the functionality is severely
 reduced or has a different security model.</p>
 <p>This section goes over some of these limitations and when we might expect to
 see them addressed.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="bip-119-emulation"><a class="header" href="#bip-119-emulation">BIP-119 Emulation</a></h1>
 <p>Changes to Bitcoin take a long time. The star player in making Sapio work is
 BIP-119, and that might take a while to get merged. To get around this, Sapio
@@ -1126,13 +1136,13 @@ safeguarded.</p>
 <p>The emulator definitions include wrapper types that compose individual
 instances of an emulator into a federated multisig. This is useful
 for circumstances where a contract is between e.g. 2 parties and both
-have an emulator server. Then the contract can be &quot;immutable&quot; unless
+have an emulator server. Then the contract can be “immutable” unless
 both collude.</p>
 <p>To aid in experimentation, Judica, Inc operates a public emulator server for
 regtest.</p>
 <pre><code class="language-json">[
-    &quot;tpubD6NzVbkrYhZ4Wf398td3H8YhWBsXx9Sxa4W3cQWkNW3N3DHSNB2qtPoUMXrA6JNaPxodQfRpoZNE5tGM9iZ4xfUEFRJEJvfs8W5paUagYCE&quot;,
-    &quot;ctv.d31373.org:8367&quot;
+    "tpubD6NzVbkrYhZ4Wf398td3H8YhWBsXx9Sxa4W3cQWkNW3N3DHSNB2qtPoUMXrA6JNaPxodQfRpoZNE5tGM9iZ4xfUEFRJEJvfs8W5paUagYCE",
+    "ctv.d31373.org:8367"
 ]
 </code></pre>
 <h3 id="how-it-works"><a class="header" href="#how-it-works">How it works</a></h3>
@@ -1144,14 +1154,14 @@ which matched a certain pattern?</p>
 <p>On initialization, a server picks a seed S and generates a root public key K
 from it, and publishes K.</p>
 <p>Users generate a transaction T and extract the CheckTemplateVerify hash H for
-it. They then take H and convert it into a derivation path D of 8 u32's and 1
+it. They then take H and convert it into a derivation path D of 8 u32’s and 1
 u8 for non-hardened derivation (see <code>hash_to_child_vec</code>).</p>
 <p>This derivation path is then applied to K to generate a key C. This key is
 added with a CheckSig(SIGHASH_ALL) to the script in place of a CTV clause.</p>
 <p>Then, when a user desires to spend an output with such a key, they create the
 entire transaction they want to occur and send it to the emulator server.</p>
 <p>Without even checking to see that the key is used in the transaction, the
-server generates the template hash H' (which should equal H) and then signs,
+server generates the template hash H’ (which should equal H) and then signs,
 returning the signature to the client.</p>
 <p>Before creating a contract, clients may wish to collect all possible
 signatures required to prevent an availability fault.</p>
@@ -1180,12 +1190,13 @@ helper structs that are needed across the sapio ecosystem.</p>
 compiler internals without needing to have the compiler directly depend on
 e.g. networking primitives.</p>
 <p>As a user of the Sapio library, you can define your own custom emulator logic
-but that's out of scope of this book.</p>
+but that’s out of scope of this book.</p>
 <h2 id="future-work"><a class="header" href="#future-work">Future Work</a></h2>
 <p><a href="https://github.com/sapio-lang/sapio/issues/100">There is a plan</a> to make
 emulation more efficient based on Merkelization, but it is not yet
 implemented because it messes with the current way the compiler works.</p>
 <p>The efficiency issues are also solvable, more or less, with taproot.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="taproot"><a class="header" href="#taproot">Taproot</a></h1>
 <p>Sapio contract logic can become very large in size, so Sapio benefits from
 being able to split up and merkelize the logic into smaller satisfiable
@@ -1193,20 +1204,22 @@ chunks. This makes it much more economical and easy to use Sapio however you lik
 <p>Generally speaking, a Sapio programmer need not think about this too much, it will be set up
 automatically under the hood. However, at writing, limited optimizing of Taproot trees is done,
 so a wise programmer would want to express their program in such a way to not allow Taproot leafs to be larger than need be.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="advanced-transaction-handling"><a class="header" href="#advanced-transaction-handling">Advanced Transaction Handling</a></h1>
 <p>Sapio does not try to handle all possible types of Bitcoin transactions.</p>
-<p>There are certain &quot;advanced techniques&quot; that have use cases, but are
+<p>There are certain “advanced techniques” that have use cases, but are
 difficult to reason about. For example, there are many ways that SIGHASH
 flags can be exploited to create all sorts of possibilities. You can use
 <code>OP_2DUP OP_SHA256 &lt;H1&gt; OP_EQUALVERIFY OP_SWAP OP_SHA256 &lt;H2&gt; OP_EQUALVERIFY OP_SIZE OP_SWAP OP_SIZE OP_EQUAL</code> (or something similar) to flip a fair coin between participants. There is a <em>lot</em>.</p>
-<p>But Sapio doesn't make an effort to cleanly handle all possible contracts. It
+<p>But Sapio doesn’t make an effort to cleanly handle all possible contracts. It
 makes an effort to address a safe and useful subset and make those contracts
 well integrated with other standard software.</p>
 <p>If you identify a killer use-case contract, please open an issue or a PR to
 discuss the new functionality and how to add it.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="mempool--fees"><a class="header" href="#mempool--fees">Mempool &amp; Fees</a></h1>
-<p>The Mempool is a treacherous place. If you're not familiar, the Mempool is
-Bitcoin's backlog of unconfirmed transactions. It is a bounded queue which makes a best
+<p>The Mempool is a treacherous place. If you’re not familiar, the Mempool is
+Bitcoin’s backlog of unconfirmed transactions. It is a bounded queue which makes a best
 effort at storing transactions that pay higher fees and dropping transactions which
 pay insufficient fees.</p>
 <p>The Mempool is an issue for a Sapio user because Sapio contracts are
@@ -1218,13 +1231,13 @@ mempool, it has gone up to 201 sats per vbyte minimum. Now I cannot easily
 broadcast my transaction, and it is unlikely to wind up in a block.</p>
 <p>There are many other ways that transactions can end up stuck.</p>
 <p>Fortunately, there are some solutions to these sorts of problems, but none of
-them are exactly &quot;easy&quot;. We'll divide them in three categories:</p>
+them are exactly “easy”. We’ll divide them in three categories:</p>
 <h1 id="careful-contract-programming"><a class="header" href="#careful-contract-programming">Careful Contract Programming</a></h1>
 <p>Careful contract programming can ensure that:</p>
 <ol>
 <li>All contract transitions pay a high enough minimum we expect to be able to get into the mempool in the future</li>
-<li>There are ways to inject &quot;gas inputs&quot; into the contract, if needed</li>
-<li>There are ways to spend &quot;gas outputs&quot; from the contract just for Child-Pays-For-Parent logic.</li>
+<li>There are ways to inject “gas inputs” into the contract, if needed</li>
+<li>There are ways to spend “gas outputs” from the contract just for Child-Pays-For-Parent logic.</li>
 <li>Relative timelocks are used to prevent pinning attacks</li>
 </ol>
 <p>For a discussion of this topic with visuals, please see the Sapio Reckless VR
@@ -1236,11 +1249,10 @@ Talk section on fees:</p>
 <li><a href="https://youtu.be/4vDuttlImPc?t=1665">video</a></li>
 </ul>
 <div style="padding-bottom: 56.25%; position: relative;">
- <iframe style="position:absolute; top:0; left:0; width:100%; height: 100%;" src="https://www.youtube.com/embed/4vDuttlImPc?start=1665"
-                                  frameborder="0" allow="accelerometer; autoplay; encrypted-media;
-                                               gyroscope; picture-in-picture"
-                                                  allowfullscreen></iframe>
+ <iframe style="position:absolute; top:0; left:0; width:100%; height: 100%;" src="https://www.youtube.com/embed/4vDuttlImPc?start=1665" frameborder="0" allow="accelerometer; autoplay; encrypted-media;
+                                               gyroscope; picture-in-picture" allowfullscreen=""></iframe>
 </div>
+
 <h1 id="p2p-networkmempool-policy-changes"><a class="header" href="#p2p-networkmempool-policy-changes">P2P Network/Mempool Policy Changes</a></h1>
 <p>Package Relay is a proposed technique that is progressing for Bitcoin whereby
 multiple transactions can be submitted in one bundle to show suitability for
@@ -1251,37 +1263,38 @@ Sapio may commonly have relative time locks (or similar) which prevent the
 mempool from considering dependents.</p>
 <p>Package Relaying does, however, improve the function of intentional gas outputs.</p>
 <h1 id="consensus-changes"><a class="header" href="#consensus-changes">Consensus Changes</a></h1>
-<p>Consensus changes are very difficult to create, but it's possible that in the
+<p>Consensus changes are very difficult to create, but it’s possible that in the
 future some set of consensus changes help decouple contract execution from fee paying.</p>
 <p>For example, there is a
 <a href="https://lists.linuxfoundation.org/pipermail/bitcoin-dev/2020-September/018168.html">proposal</a>
 to replace Replace-By-Fee and Child-Pays-For-Parent with a mechanism that
 functions as a virtual CPFP link. However, such proposals can introduce
-subtle changes to Bitcoin's behavior and must be vetted closely.</p>
+subtle changes to Bitcoin’s behavior and must be vetted closely.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="application-packaging"><a class="header" href="#application-packaging">Application Packaging</a></h1>
-<p>So you've written a Sapio contract and you're ready to get it out into the
+<p>So you’ve written a Sapio contract and you’re ready to get it out into the
 world.</p>
 <p>How should you release it? How should you use it?</p>
 <p>This section covers various ways to deploy and use Sapio contracts.</p>
 <p>In general, it is important to make the code available in an open source way,
-so others can integrate and use your contracts. Rust's <a href="https://crates.io">crates</a>
+so others can integrate and use your contracts. Rust’s <a href="https://crates.io">crates</a>
 system provides a natural place to publish for the time being, although
 in the future we may build a Sapio specific package manager as smart contracts
 have some unique differences.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="wasm"><a class="header" href="#wasm">WASM</a></h1>
-<p>WASM is &quot;WebAssembly&quot;, or a standard for producing bytecode objects that can
+<p>WASM is “WebAssembly”, or a standard for producing bytecode objects that can
 be run on any platform. As the name suggests, it was originally designed for
 use in web browsers as a compiler target for any language to produce code to
 run safely from untrusted sources.</p>
-<p>So what's it doing in Sapio?</p>
+<p>So what’s it doing in Sapio?</p>
 <p>WASM is designed to be cross platform and deterministic, which makes it a
 great target for smart contracts that we want to be able to be reproduced
 locally. It also makes it <em>relatively</em> safe to run smart contracts provided
 by untrusted parties as the security of the WASM sandbox prevents bad code from
 harming or infecting our system.</p>
 <p>Sapio Contract objects can be built into  WASM binaries very easily. The code required is basically:</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>/// MyContract must support Deserialize and JsonSchema
 #[derive(Deserialize, JsonSchema)]
@@ -1289,11 +1302,10 @@ struct MyContract;
 impl Contract for MyContract{\*...*\};
 /// binds to the plugin interface -- only one REGISTER macro permitted per project
 REGISTER![MyContract];
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <p>See <a href="https://github.com/sapio-lang/sapio/tree/master/plugin-example">the example</a> for more details.</p>
 <p>These compiled objects require a special environment to be interacted with.
-That environment is provided by the <a href="./ch07-00-cli.html">Sapio CLI</a> as a
+That environment is provided by the <a href="#sapio-command-line-interface-cli">Sapio CLI</a> as a
 standalone binary. It is also possible to use the interface provided by the
 <code>sapio-wasm-plugin</code> crate to load a plugin from your rust codebase
 programmatically. Lastly, one could create similar bindings for another
@@ -1306,16 +1318,15 @@ hash (with effective subresource integrity) or by a nickname (providing easy
 user customizability).</p>
 <p>For example, suppose I was writing a standard contract component <code>C</code> which I
 publish. Then later, I develop a contract <code>B</code> which is designed to work with
-<code>C</code>. Rather than having to depend on <code>C</code>'s source code (which I may not want
-to do for various reasons), I could simply hard code <code>C</code>'s hash into <code>B</code> and
+<code>C</code>. Rather than having to depend on <code>C</code>’s source code (which I may not want
+to do for various reasons), I could simply hard code <code>C</code>’s hash into <code>B</code> and
 call <code>create_contract_by_key(key: &amp;[u8; 32], args: Value, amt: Amount)</code> to
 get the desired code. The plugin management system automatically searches for
 a contract plugin with that hash, and tries to call it with the provided JSON
 arguments. Using <code>create_contract(key:&amp;str, args:Value: amt:Amount)</code>, a
 nickname can be provided in which case the appropriate plugin is resolved by
 the environment.</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>struct C;
 const DEPENDS_ON_MODULE : [u8; 32] = [0;32];
@@ -1324,31 +1335,29 @@ impl Contract for C {
     fn demo(self, ctx: Context) {
         let amt = ctx.funds()/2;
         ctx.template()
-            .add_output(amt, &amp;create_contract(&quot;users_cold_storage&quot;, /**/, amt), None)?
+            .add_output(amt, &amp;create_contract("users_cold_storage", /**/, amt), None)?
             .add_output(amt, &amp;create_contract(&amp;DEPENDS_ON_MODULE, /**/, amt), None)?
             .into()
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <h3 id="typed-calls"><a class="header" href="#typed-calls">Typed Calls</a></h3>
 <p>Using JSONSchemas, plugins have a basic type system that enables run-time
 checking for compatibility. Plugins can guarantee they implement particular
 interfaces faithfully. These interfaces currently only support protecting the
 call, but make no assurances about the returned value or potential errors from
-the callee's implementation of the trait.</p>
+the callee’s implementation of the trait.</p>
 <p>For example, suppose I want to be able to specify a provided module must
 statisfy a calling convention for batching. I define the trait
 <code>BatchingTraitVersion0_1_1</code> as follows:</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>/// A payment to a specific address
 #[derive(JsonSchema, Serialize, Deserialize, Clone)]
 pub struct Payment {
     /// The amount to send
-    #[serde(with = &quot;bitcoin::util::amount::serde::as_btc&quot;)]
-    #[schemars(with = &quot;f64&quot;)]
+    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    #[schemars(with = "f64")]
     pub amount: bitcoin::util::amount::Amount,
     /// # Address
     /// The Address to send to
@@ -1357,16 +1366,14 @@ pub struct Payment {
 #[derive(Serialize, JsonSchema, Deserialize, Clone)]
 pub struct BatchingTraitVersion0_1_1 {
     pub payments: Vec&lt;Payment&gt;,
-    #[serde(with = &quot;bitcoin::util::amount::serde::as_sat&quot;)]
-    #[schemars(with = &quot;u64&quot;)]
+    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    #[schemars(with = "u64")]
     pub feerate_per_byte: bitcoin::util::amount::Amount,
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <p>I can then turn this into a SapioJSONTrait by implementing the trait and
-providing an &quot;example&quot; function.</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+providing an “example” function.</p>
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>impl SapioJSONTrait for BatchingTraitVersion0_1_1 {
     /// required to implement
@@ -1389,12 +1396,10 @@ providing an &quot;example&quot; function.</p>
         Self::check_trait_implemented_inner(api).is_ok()
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <p>If a contract module can receive the example, then it is considered to have
 implemented the API. We can implement the receivers for a module as follows:</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>struct MockContract;
 /// # Different Calling Conventions to create a Treepay
@@ -1418,9 +1423,8 @@ impl From&lt;Versions&gt; for TreePay {
         }
     }
 }
-REGISTER![[MockContract, Versions], &quot;logo.png&quot;];
-<span class="boring">}
-</span></code></pre></pre>
+REGISTER![[MockContract, Versions], "logo.png"];
+<span class="boring">}</span></code></pre>
 <p>Now <code>MockContract</code> can be called via the <code>BatchingTraitVersion0_1_1</code> trait
 interface.</p>
 <p>Another module in the future need only have a field
@@ -1430,26 +1434,28 @@ time that the provided name or hash key implements the required interface(s).</p
 <ul>
 <li><strong>Gitian Packaging:</strong> Using a gitian signed packaging distribution system
 would enable a user to set up a web-of-trust setting for their sapio compiler
-and enable fetching of sub-resources by hash if they've been signed by the
+and enable fetching of sub-resources by hash if they’ve been signed by the
 appropriate parties.</li>
 <li><strong>NameSpace Registration:</strong> A system to allow people to register names
 unambiguously would aid in ensuring no conflicts. For now, we can handle
 this using a centralized repo.</li>
 <li><strong>Remote CMC:</strong> In some cases, we may want to make a call to a remote
 server that will call a given module for us. This might be desirable if the
-server holds sensitive material that we shouldn't have.</li>
-<li><strong>Concrete CMC:</strong> currently, CMC's only return the <code>Compiled</code> type. Perhaps
+server holds sensitive material that we shouldn’t have.</li>
+<li><strong>Concrete CMC:</strong> currently, CMC’s only return the <code>Compiled</code> type. Perhaps
 future <code>CMC</code> support can return arbitrary types, allowing other types of functionality
 to be packaged.</li>
 </ul>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="rust-libbin"><a class="header" href="#rust-libbin">Rust Lib/Bin</a></h1>
-<p>There's not much to be said here. Sapio code is just Rust code, so it can be
+<p>There’s not much to be said here. Sapio code is just Rust code, so it can be
 shipped as a standalone rust library or binary tool.</p>
 <p>This code can then be integrated into any codebase either natively or using
 FFI.</p>
-<p>It's a good idea to always package contracts as a library separate from the
+<p>It’s a good idea to always package contracts as a library separate from the
 binary, so that if a user wants to natively incorporate the contract it is
 easy to do, and the packaged WASM or binary can be a utility based on it.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="sapio-studio"><a class="header" href="#sapio-studio">Sapio Studio</a></h1>
 <p><a href="https://github.com/sapio-lang/sapio-studio">Sapio Studio</a> is an in-development graphical user
 interface for Sapio.</p>
@@ -1457,6 +1463,7 @@ interface for Sapio.</p>
 users can more readily add contracts of their choosing.</p>
 <p>Contracts packaged for WASM have some additional constraints or functionality
 for aiding in the generation of a UX.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="sapio-command-line-interface-cli"><a class="header" href="#sapio-command-line-interface-cli">Sapio Command Line Interface (CLI)</a></h1>
 <p>The Sapio CLI (or <code>sapio-cli</code>) is rapidly changing, but it is self
 documenting using <code>cargo run sapio-cli help</code>.</p>
@@ -1475,20 +1482,21 @@ for compilation around:</p>
 <li>to use regtest/mainnet/signet/etc</li>
 <li>bitcoind to connect to &amp; auth</li>
 <li>CTV emulator servers to use</li>
-<li>key-value mapping of nicknames to <a href="./ch06-01-wasm.html">WASM</a> plugin hashes.</li>
+<li>key-value mapping of nicknames to <a href="#wasm">WASM</a> plugin hashes.</li>
 </ol>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="advanced-rust-patterns"><a class="header" href="#advanced-rust-patterns">Advanced Rust Patterns</a></h1>
-<p>Say it with me -- Sapio's Just Rust ™. Even though there's a lot of
+<p>Say it with me – Sapio’s Just Rust ™. Even though there’s a lot of
 additional paradigms and information to take in to use Sapio over normal Rust
 programming, at the end of the day you can integrate Sapio into any Rust
 paradigm you like.</p>
 <p>That said, this section has a few useful patterns that merit specific mention
 as you may find yourself reaching for them again and again.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="type-level-state-machines"><a class="header" href="#type-level-state-machines">Type Level State Machines</a></h1>
 <p>In this example we use type level state machines to encode functionality that
 is potentially available. See the example below for a sketch of how this can work.</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>/// The contract we're building, that can be in any type-state T.
 struct StatefulContract&lt;T&gt;(PhantomData&lt;T&gt;);
@@ -1500,7 +1508,7 @@ struct StatefulContract&lt;T&gt;(PhantomData&lt;T&gt;);
 struct Opened;
 struct Closed;
 
-/// The &quot;state machine&quot; defines functionality that may be available
+/// The "state machine" defines functionality that may be available
 trait FunctionalityAtState 
 where Self : Sized + Contract
 {
@@ -1534,8 +1542,7 @@ impl Contract for StatefulContract&lt;T&gt;
 where Self : FunctionalityAtState {
     declare!{then, Self::do_something}
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <p>This technique is <em>ridiculously</em> powerful. Imagine, for instance, that we
 wanted to have different sorts of state other than Open and Closed. E.g., Red
 and Green. We could then define Transition Rules that encode a graph like:</p>
@@ -1545,8 +1552,7 @@ and Green. We could then define Transition Rules that encode a graph like:</p>
 (Open, Red) ==&gt; do_something_else ==&gt; (Closed, Red)
 </code></pre>
 <p>using two separate <code>FunctionalityAtState</code> like traits:</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>/// The contract we're building, that can be in any type-state T.
 struct StatefulContract&lt;T1, T2&gt;(PhantomData&lt;(T1, T2)&gt;);
@@ -1561,7 +1567,7 @@ struct Closed;
 struct Red;
 struct Green;
 
-/// The &quot;state machine&quot; defines functionality that may be available
+/// The "state machine" defines functionality that may be available
 trait OpenAtState 
 where Self : Sized + Contract
 {
@@ -1635,12 +1641,12 @@ impl Contract for StatefulContract&lt;T&gt;
 where Self : OpenAtState + ColorAtState {
     declare!{then, Self::do_something, Self::do_something_else}
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <p>This technique showcases how Sapio could encode very sophisticated logic in
 program generation.</p>
-<p>It's also notable that following rustc v1.51, it is possible to use <code>const</code>'s
+<p>It’s also notable that following rustc v1.51, it is possible to use <code>const</code>’s
 as generic type parameters which enables even more computation at the type level.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="tryfrom-constructors"><a class="header" href="#tryfrom-constructors">TryFrom Constructors</a></h1>
 <p>Often times we want to assure that various properties must be true about the
 arguments passed to a contract instance.</p>
@@ -1652,15 +1658,14 @@ that any deserialization of <code>X</code> first passes through <code>Y</code>. 
 particularly useful when <code>X</code> contains types (such as function pointers or
 caches) that cannot be deserialized, but we want to provide a way for a third
 party to pass JSON args to construct an <code>X</code>.</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>use std::convert::TryFrom;
 use std::convert::TryInto;
 use serde::*;
 /// inner argument not pub, X cannot be constructed without going through Y
 #[derive(Serialize, Deserialize, JsonSchema)]
-#[serde(try_from=&quot;Y&quot;)]
+#[serde(try_from="Y")]
 pub struct X(u32);
 
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -1669,7 +1674,7 @@ impl TryFrom&lt;Y&gt; for X {
     type Error = &amp;'static str;
     fn try_from(y: Y) -&gt; Result&lt;Self, Self::Error&gt; {
         if y.0 &lt; 10 {
-            Err(&quot;Too Small I Guess?&quot;)
+            Err("Too Small I Guess?")
         } else {
             Ok(X(y.0))
         }
@@ -1678,35 +1683,30 @@ impl TryFrom&lt;Y&gt; for X {
 
 let x: X = Y(10).try_into().unwrap();
 
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="concrete--generic-types"><a class="header" href="#concrete--generic-types">Concrete &amp; Generic Types</a></h1>
 <h2 id="generics"><a class="header" href="#generics">Generics</a></h2>
 <p>Often time, it can be useful to make a generic contract, such as:</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>struct GenericA {
     send_to: Box&lt;dyn Compilable&gt;
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <p>or</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>struct GenericB&lt;T:Compilable&gt; {
     send_to: T
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <p>In <code>GenericA</code> we use a <em>trait object</em> to allow us to let the <code>send_to</code> field
 equal any <code>Compilable</code> type while having the same type <code>GenericA</code>,
 whereas <code>GenericB</code> takes a type parameter that makes the <code>GenericB</code> more
 specifically typed.</p>
 <p>To highlight the differences between the approaches, suppose I had a parent contract:</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>#[derive(Serialize, Deserialize, JsonSchema)]
 struct ConcreteA;
@@ -1728,17 +1728,15 @@ struct AliceAndBobRestricted&lt;T&gt; {
 /// inner types cannot differ
 let example_restricted_fails = AliceAndBobRestricted { alice: GenericB{send_to: ConcreteA},
                                                        bob: GenericB{send_to: ConcreteB}};
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <p>It might <em>seem</em> like you always want to use the <code>GenericA</code> variant, but there are cases where you
-might want to guarantee that Alice and Bob's supplied contracts are the same type.</p>
+might want to guarantee that Alice and Bob’s supplied contracts are the same type.</p>
 <h2 id="concrete-wrappers"><a class="header" href="#concrete-wrappers">Concrete Wrappers</a></h2>
 <p>When you do have a generic type (either with trait objects or otherwise) it
 can be difficult to use across an application boundary. To get around this,
-one can create a wrapper type (or enum) that uses the <a href="./ch08-03-concrete.html"><code>TryFrom</code>
+one can create a wrapper type (or enum) that uses the <a href="#concrete--generic-types"><code>TryFrom</code>
 paradigm</a> to provide paths for the type to be concrete. E.g.,</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>#[derive(Serialize, Deserialize, JsonSchema)]
 enum Concrete {
@@ -1756,8 +1754,7 @@ impl TryFrom&lt;Concrete&gt; for GenericA {
         }
     }
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre>
 <p>Thus a <code>Concrete</code> can be used in a Serialize/Deserialize/JsonSchema API bound
 context, whereas a <code>GenericA</code> could not.</p>
 <h3 id="todo-implement-path-for-making-this-section-easier"><a class="header" href="#todo-implement-path-for-making-this-section-easier">TODO: Implement path for making this section easier!</a></h3>
@@ -1766,9 +1763,7 @@ context, whereas a <code>GenericA</code> could not.</p>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                        
 
-                        
 
                         <div style="clear: both"></div>
                     </nav>
@@ -1776,61 +1771,51 @@ context, whereas a <code>GenericA</code> could not.</p>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                
 
-                
             </nav>
 
         </div>
 
-        
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
 
-        
 
-        
-        <script type="text/javascript">
+        <script>
             window.playground_line_numbers = true;
         </script>
-        
 
-        
-        <script type="text/javascript">
+        <script>
             window.playground_copyable = true;
         </script>
-        
 
-        
-        <script src="ace.js" type="text/javascript" charset="utf-8"></script>
-        <script src="editor.js" type="text/javascript" charset="utf-8"></script>
-        <script src="mode-rust.js" type="text/javascript" charset="utf-8"></script>
-        <script src="theme-dawn.js" type="text/javascript" charset="utf-8"></script>
-        <script src="theme-tomorrow_night.js" type="text/javascript" charset="utf-8"></script>
-        
+        <script src="ace-2a3cd908.js"></script>
+        <script src="mode-rust-2c9d5c9a.js"></script>
+        <script src="editor-16ca416c.js"></script>
+        <script src="theme-dawn-4493f9c8.js"></script>
+        <script src="theme-tomorrow_night-9dbe62a9.js"></script>
 
-        
-        <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
-        
+        <script src="elasticlunr-ef4e11c1.min.js"></script>
+        <script src="mark-09e88c2c.min.js"></script>
+        <script src="searcher-09f2665d.js"></script>
 
-        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
-        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+        <script src="clipboard-1626706a.min.js"></script>
+        <script src="highlight-abc7f01d.js"></script>
+        <script src="book-609e4cb8.js"></script>
 
         <!-- Custom JS scripts -->
-        
 
-        
-        
-        <script type="text/javascript">
+        <script>
         window.addEventListener('load', function() {
             MathJax.Hub.Register.StartupHook('End', function() {
                 window.setTimeout(window.print, 100);
             });
         });
         </script>
-        
-        
 
+
+    </div>
     </body>
 </html>
