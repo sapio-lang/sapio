@@ -105,5 +105,4 @@ impl Contract for InscribingStep {
     }
 }
 
-
 REGISTER![InscribingStep, "logo.png"];
