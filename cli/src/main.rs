@@ -521,6 +521,6 @@ async fn bind_command(
         outpoint,
         use_txn,
         compiled,
-        ordinals_info
+        ordinals_info,
     }))
 }

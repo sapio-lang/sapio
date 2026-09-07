@@ -9,8 +9,8 @@
 //! stuff.
 
 use crate::contract::object::ObjectError;
-use bitcoin::{Address, Script, XOnlyPublicKey};
 use crate::miniscript::{Descriptor, DescriptorTrait};
+use bitcoin::{Address, Script, XOnlyPublicKey};
 use sapio_base::miniscript;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
