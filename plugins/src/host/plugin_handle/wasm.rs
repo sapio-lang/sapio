@@ -86,8 +86,9 @@ impl<T> WasmPluginHandle<T> {
     /// Clone with a new memory space/instance
     pub fn fresh_clone(&self) -> Result<Self, Box<dyn Error>> {
         let env = self.env.as_ref(&self.store);
+        // The compiled code and signature IDs belong to the original engine.
         Ok(Self::setup_plugin_inner(
-            Store::default(),
+            Store::new(self.store.engine().clone()),
             env.path.clone(),
             env.this,
             Some(env.module_map.clone()),
@@ -468,6 +469,26 @@ mod tests {
             WASMCacheID::generate(source.as_bytes()),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn fresh_clones_preserve_indirect_host_calls_and_isolate_memory() {
+        let mut original = plugin(
+            "i32.const 0 i32.const 0 i32.const 32 i32.const 64 i32.const 0 \
+             call_indirect (type $lookup_type) \
+             i32.const 64 i32.load8_u i32.eqz if unreachable end i32.const 8",
+            "(type $lookup_type (func (param i32 i32 i32 i32))) \
+             (table 1 funcref) (elem (i32.const 0) $lookup)",
+            8,
+        );
+        original.pass_string("changed").unwrap();
+        assert_eq!(original.get_name().unwrap(), "changed");
+
+        let mut cloned = original.fresh_clone().unwrap();
+        assert_eq!(cloned.get_name().unwrap(), "ok");
+        assert_eq!(original.get_name().unwrap(), "changed");
+        drop(original);
+        assert_eq!(cloned.get_name().unwrap(), "ok");
     }
 
     #[test]
