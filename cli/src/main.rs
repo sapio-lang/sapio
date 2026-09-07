@@ -351,7 +351,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let psbt_str = args.value_of("psbt");
 
                 let psbt = get_psbt_from(psbt_str).await?;
-                let js = sapio_psbt::external_api::finalize_psbt_format_api(psbt);
+                let js = sapio_psbt::external_api::finalize_psbt_format_api(psbt)?;
                 println!("{}", serde_json::to_string_pretty(&js)?);
             }
             _ => unreachable!(),

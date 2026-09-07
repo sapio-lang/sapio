@@ -3,6 +3,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
+use crate::{validate_psbt, PSBTValidationError};
 use bitcoin::consensus::serialize;
 use miniscript::psbt::PsbtExt;
 use serde::{Deserialize, Serialize};
@@ -26,9 +27,15 @@ pub enum PSBTApi {
     },
 }
 
-pub fn finalize_psbt_format_api(psbt: PartiallySignedTransaction) -> PSBTApi {
+/// Finalize a structurally valid PSBT, retaining incomplete signing results.
+/// Malformed transaction and metadata fields return a validation error.
+pub fn finalize_psbt_format_api(
+    psbt: PartiallySignedTransaction,
+) -> Result<PSBTApi, PSBTValidationError> {
+    validate_psbt(&psbt)?;
     let secp = Secp256k1::new();
-    psbt.finalize(&secp)
+    Ok(psbt
+        .finalize(&secp)
         .map(|tx| {
             let hex = bitcoin::consensus::encode::serialize_hex(&tx.extract_tx());
             PSBTApi::Finished {
@@ -45,5 +52,5 @@ pub fn finalize_psbt_format_api(psbt: PartiallySignedTransaction) -> PSBTApi {
                 error: "Could not fully finalize psbt".into(),
                 errors,
             }
-        })
+        }))
 }

@@ -38,13 +38,15 @@ Wasmer 4, a Clap 3 beta, and an old JSON Schema validator. The forks implement
 CTV-specific policy/compiler/interpreter behavior. Replacing their package names
 with upstream crates would remove semantics, not complete a migration.
 
-### Implemented in this modernization branch
+### Implemented
 
 | Area | Change and evidence |
 | --- | --- |
 | Stable builds | Rust 1.98.1 pin, explicit compiler minimum, both dependency locks, resolver 2, removal of the nightly associated-type default |
 | Linux runtime compatibility | Upgrade Wasmer and its cache to 6.1.0, which provides the stack probe removed from Rust's x86 runtime; remove unused direct CLI runtime dependencies |
 | PSBT signing | Use the selected input index for key and script paths; reject sighash errors; verify signatures independently on a two-input transaction |
+| Artifact binding | Validate the complete object graph before signing or indexing: unsigned input-zero templates, matching commitments, descriptors, output metadata and funding totals; reject invalid auxiliary-input mappings |
+| PSBT structure | Reject empty-input transactions, mismatched input/output maps and populated unsigned scriptSigs/witnesses before signing or finalization; preserve the PSBT on structural rejection |
 | CTV hashing | Include nonempty scriptSig commitments; match 16 hash results from four unmodified BIP-119 vectors covering scriptSig and witness combinations |
 | Compiler termination | Advance duplicate-action suffixes; compile a contract registering one action three times |
 | Fees | Enforce the strongest requested minimum in virtual bytes against that template's reserved fees; reject overflow and unknown extra-input weights |
@@ -119,14 +121,17 @@ another. Never infer mainnet safety from a successful compilation or a unit test
 
 This is the next release blocker, before a broad dependency migration.
 
-- Audit the Sapio Miniscript fork's duplicate CTV-hash implementation. The local
-  Sapio hash fix does not patch registry source; the fork still needs equivalent
-  nonempty-scriptSig behavior. The maintained builder currently emits empty
-  scriptSigs. Run the full official hash corpus and finalization tests on both
-  implementations before claiming general transaction support.
-- Audit deserialized `Object`/`Template` and PSBT invariants before indexing input
-  zero or using caller-supplied output maps. Constructors should establish the
-  required invariant once. Add malformed-artifact tests at the public boundary.
+- Repair the Sapio Miniscript fork's CTV paths following the
+  [dependency audit](CTV_FORK_AUDIT.md). The local Sapio hash fix does not patch
+  registry source. The fork needs nonempty-scriptSig hashing, checks against the
+  fully finalized transaction, and defined scriptSig finalization ordering.
+  Keep the builder's empty-scriptSig domain explicit; run the full official hash
+  corpus and finalization tests before claiming general transaction support.
+- Extend artifact boundary checks to funding UTXO identity and emulator responses.
+  Structural graph and PSBT validation now run before binding, signing and
+  finalization. Resolve graph path collisions without rejecting valid reused
+  leaf objects; preserve transaction-index errors instead of treating every
+  failed lookup as missing funding data.
 - Replace the no-op `SapioJSONTrait` compatibility check. An example accepted by a
   schema is only a compatibility probe, not a proof of schema inclusion. Specify
   versioned interfaces and validate actual calls on both sides. Use an offline

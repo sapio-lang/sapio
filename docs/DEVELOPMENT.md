@@ -109,6 +109,27 @@ reload the original `.wasm` files before referring to their cached keys:
 sapio-cli contract load --workspace PATH --file MODULE.wasm
 ```
 
+## Artifact boundaries
+
+Compiled artifacts have public fields and can be deserialized from JSON. Call
+`Object::validate()` before consuming one directly. `bind_psbt` validates the
+whole graph before requesting signatures or updating the transaction index;
+the CLI also validates before requesting a funding transaction. Errors identify
+the contract path and, when applicable, its template hash.
+
+Binding currently supports unsigned templates whose contract input is index
+zero. Template map keys and cached hashes must match the transaction, and output
+amounts/scripts must match the receiving-contract metadata. Optional input
+mappings contain one entry per input; entry zero must be `None` because the
+graph determines the contract input. Unknown template keys are rejected.
+
+Signing and finalization reject malformed PSBT maps before processing inputs.
+`finalize_psbt_format_api` returns `Result<PSBTApi, PSBTValidationError>`:
+structural errors are distinct from a valid PSBT still missing signatures.
+These checks establish structural consistency, not policy satisfaction, funding
+availability, chain enforcement, or general mixed-input CTV support. See the
+[CTV fork audit](CTV_FORK_AUDIT.md) for the remaining dependency work.
+
 ## Contributions
 
 Keep behavioral changes in small commits with focused regression coverage. Keep

@@ -6,7 +6,8 @@ use bitcoin::util::psbt::PartiallySignedTransaction;
 use bitcoin::util::sighash::{Error as SighashError, Prevouts, SighashCache};
 use bitcoin::util::taproot::{LeafVersion, TapLeafHash, TaprootBuilder};
 use bitcoin::{Network, OutPoint, SchnorrSighashType, Script, Transaction, TxIn, TxOut};
-use sapio_psbt::{PSBTSigningError, SigningKey};
+use sapio_psbt::external_api::{finalize_psbt_format_api, PSBTApi};
+use sapio_psbt::{PSBTSigningError, PSBTValidationError, SigningKey};
 
 fn two_input_psbt() -> (SigningKey, PartiallySignedTransaction, Vec<TxOut>) {
     let secp = Secp256k1::new();
@@ -123,4 +124,114 @@ fn rejects_single_without_a_corresponding_output() {
     ));
     assert!(psbt.inputs[1].tap_key_sig.is_none());
     assert!(psbt.inputs[1].tap_script_sigs.is_empty());
+}
+
+fn assert_rejected_before_signing_or_finalizing(
+    keys: &SigningKey,
+    psbt: PartiallySignedTransaction,
+    expected: PSBTValidationError,
+) {
+    let secp = Secp256k1::new();
+    for selected_input in [None, Some(0)] {
+        let mut candidate = psbt.clone();
+        let error = match selected_input {
+            None => keys.sign_psbt_mut(&mut candidate, &secp, SchnorrSighashType::All),
+            Some(index) => {
+                keys.sign_psbt_input_mut(&mut candidate, &secp, index, SchnorrSighashType::All)
+            }
+        }
+        .unwrap_err();
+        assert!(
+            matches!(error, PSBTSigningError::InvalidPSBT(ref actual) if *actual == expected),
+            "unexpected signing error: {error}"
+        );
+        assert_eq!(candidate, psbt, "rejection must not add any signatures");
+    }
+    let Err(error) = finalize_psbt_format_api(psbt) else {
+        panic!("finalizer accepted a malformed PSBT");
+    };
+    assert_eq!(error, expected);
+}
+
+#[test]
+fn rejects_empty_transactions_before_signing_or_finalizing() {
+    let (keys, mut psbt, _) = two_input_psbt();
+    psbt.unsigned_tx.input.clear();
+    psbt.inputs.clear();
+    assert_rejected_before_signing_or_finalizing(&keys, psbt, PSBTValidationError::NoInputs);
+}
+
+#[test]
+fn rejects_missing_and_extra_input_maps_before_signing() {
+    for map_count in [0, 1, 3] {
+        let (keys, mut psbt, _) = two_input_psbt();
+        psbt.inputs.resize_with(map_count, Default::default);
+        assert_rejected_before_signing_or_finalizing(
+            &keys,
+            psbt,
+            PSBTValidationError::InputMapCount {
+                transaction: 2,
+                maps: map_count,
+            },
+        );
+    }
+}
+
+#[test]
+fn rejects_missing_and_extra_output_maps_before_signing() {
+    for map_count in [0, 2] {
+        let (keys, mut psbt, _) = two_input_psbt();
+        psbt.outputs.resize_with(map_count, Default::default);
+        assert_rejected_before_signing_or_finalizing(
+            &keys,
+            psbt,
+            PSBTValidationError::OutputMapCount {
+                transaction: 1,
+                maps: map_count,
+            },
+        );
+    }
+}
+
+#[test]
+fn rejects_scriptsig_in_unsigned_transaction_before_signing() {
+    let (keys, mut psbt, _) = two_input_psbt();
+    psbt.unsigned_tx.input[1].script_sig = Builder::new().push_int(1).into_script();
+    assert_rejected_before_signing_or_finalizing(
+        &keys,
+        psbt,
+        PSBTValidationError::UnsignedTxHasScriptSig(1),
+    );
+}
+
+#[test]
+fn rejects_witness_in_unsigned_transaction_before_signing() {
+    let (keys, mut psbt, _) = two_input_psbt();
+    psbt.unsigned_tx.input[1].witness.push([1]);
+    assert_rejected_before_signing_or_finalizing(
+        &keys,
+        psbt,
+        PSBTValidationError::UnsignedTxHasWitness(1),
+    );
+}
+
+#[test]
+fn finalizer_distinguishes_missing_signatures_from_complete_psbts() {
+    let (keys, mut psbt, _) = two_input_psbt();
+    assert!(matches!(
+        finalize_psbt_format_api(psbt.clone()).unwrap(),
+        PSBTApi::NotFinished {
+            completed: false,
+            ..
+        }
+    ));
+    keys.sign_psbt_mut(&mut psbt, &Secp256k1::new(), SchnorrSighashType::All)
+        .unwrap();
+    assert!(matches!(
+        finalize_psbt_format_api(psbt).unwrap(),
+        PSBTApi::Finished {
+            completed: true,
+            ..
+        }
+    ));
 }
