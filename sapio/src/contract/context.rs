@@ -21,7 +21,6 @@ use std::convert::TryInto;
 
 use std::collections::HashSet;
 
-use std::mem;
 use std::sync::Arc;
 
 /// Context is used to track statet during compilation such as remaining value.
@@ -38,22 +37,32 @@ pub struct Context {
     ordinals_info: Option<OrdinalsInfo>,
 }
 
-fn allocate_ordinals(a: Amount, ords: &OrdinalsInfo) -> [OrdinalsInfo; 2] {
+fn allocate_ordinals(
+    a: Amount,
+    ords: &OrdinalsInfo,
+) -> Result<[OrdinalsInfo; 2], CompilationError> {
     let mut amt = a.as_sat();
     let mut ret = [OrdinalsInfo(vec![]), OrdinalsInfo(vec![])];
     for (start, end) in ords.0.iter().copied() {
-        let sats = end.0 - start.0;
-        if sats <= amt {
-            amt -= sats;
-            ret[0].0.push((start, end))
-        } else {
-            if sats != 0 {
-                ret[0].0.push((start, Ordinal(start.0 + sats)));
-            }
-            ret[1].0.push((Ordinal(start.0 + sats), end))
+        let sats = end.0.checked_sub(start.0).ok_or_else(|| {
+            CompilationError::OrdinalsError("ordinal range ends before its start".into())
+        })?;
+        let taken = amt.min(sats);
+        let split = Ordinal(start.0 + taken);
+        if taken > 0 {
+            ret[0].0.push((start, split));
         }
+        if taken < sats {
+            ret[1].0.push((split, end));
+        }
+        amt -= taken;
     }
-    ret
+    if amt != 0 {
+        return Err(CompilationError::OrdinalsError(
+            "ordinal ranges do not cover the requested amount".into(),
+        ));
+    }
+    Ok(ret)
 }
 
 impl Context {
@@ -158,26 +167,18 @@ impl Context {
         a.compile(self)
     }
 
-    // TODO: Fix
     /// return a context with the new amount if amount is smaller or equal to available
-    pub fn with_amount(self, amount: Amount) -> Result<Self, CompilationError> {
+    pub fn with_amount(mut self, amount: Amount) -> Result<Self, CompilationError> {
         if self.available_funds < amount {
             Err(CompilationError::OutOfFunds)
         } else {
-            Ok(Context {
-                available_funds: amount,
-                emulator: self.emulator.clone(),
-                path: self.path.clone(),
-                network: self.network,
-                already_derived: self.already_derived.clone(),
-                effects: self.effects.clone(),
-                ordinals_info: self.ordinals_info.as_ref().map(|o| {
-                    let mut a = allocate_ordinals(amount, o);
-                    let mut v = OrdinalsInfo(vec![]);
-                    mem::swap(&mut a[0], &mut v);
-                    v
-                }),
-            })
+            self.available_funds = amount;
+            self.ordinals_info = self
+                .ordinals_info
+                .as_ref()
+                .map(|o| allocate_ordinals(amount, o).map(|[allocated, _]| allocated))
+                .transpose()?;
+            Ok(self)
         }
     }
     /// decrease the amount available in this context object.
@@ -187,12 +188,11 @@ impl Context {
         } else {
             self.available_funds -= amount;
 
-            self.ordinals_info = self.ordinals_info.as_ref().map(|o| {
-                let mut a = allocate_ordinals(amount, o);
-                let mut v = OrdinalsInfo(vec![]);
-                mem::swap(&mut a[1], &mut v);
-                v
-            });
+            self.ordinals_info = self
+                .ordinals_info
+                .as_ref()
+                .map(|o| allocate_ordinals(amount, o).map(|[_, remaining]| remaining))
+                .transpose()?;
             Ok(self)
         }
     }
