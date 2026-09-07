@@ -5,7 +5,6 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! The Sapio Compiler Core Crate. Sapio is used to create multi-transaction Bitcoin Smart Contracts.
-#![cfg_attr(feature = "nightly", feature(associated_type_defaults))]
 #![deny(missing_docs)]
 
 pub use sapio_base::miniscript;

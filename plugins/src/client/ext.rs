@@ -6,12 +6,13 @@
 
 //! External symbols that must be provided by the WASM host
 
+#[cfg_attr(target_arch = "wasm32", link(wasm_import_module = "env"))]
 extern "C" {
     /// get the oracle to sign the psbt passed in
     pub fn sapio_v1_wasm_plugin_ctv_emulator_sign(psbt: i32, len: u32) -> i32;
     /// for the provided hash value, get the clause the oracle will satisfy
     pub fn sapio_v1_wasm_plugin_ctv_emulator_signer_for(hash: i32) -> i32;
-    /// use the hosts stdout to log a string. The host may make this a no-op.
+    /// Write a diagnostic to the host's stderr. The host may make this a no-op.
     pub fn sapio_v1_wasm_plugin_debug_log_string(a: i32, len: i32);
     /// Create an instance of a contract by "trampolining" through the host to use another
     /// plugin identified by key.
