@@ -1,69 +1,22 @@
 # Sapio
 
-Welcome!
+Sapio's core crate provides Rust contract traits, authoring macros, transaction
+compilation and PSBT linking. For the current setup and project status, start
+with the [repository README](../README.md) and
+[development guide](../docs/DEVELOPMENT.md).
 
-Sapio is a framework for creating composable multi-transaction Bitcoin Smart Contracts.
+From the repository root:
 
-### Why is Sapio Different?
-Sapio helps you build payment protocol specifiers that oblivious third parties
-can participate in being none the wiser.
-
-For example, with Sapio you can generate an address that represents a lightning
-channel between you and friend and give that address to a third party service
-like an exchange and have them create the channel without requiring any
-signature interaction from you or your friend, zero trusted parties, and an
-inability to differentiate your address from any other.
-
-That's the tip of the iceberg of what Sapio lets you accomplish.
-
-
-#### Say more...
-Before Sapio, most Bitcoin smart contracts primarily focused on who can redeem
-coins when and what unlocking conditions were required (see Ivy,
-Policy/Miniscript, etc). A few languages, such as BitML, placed emphasis on
-multi-transaction and multi-party use cases.
-
-Sapio in particular focuses on transactions using BIP-119
-`OP_CHECKTEMPLATEVERIFY`. `OP_CHECKTEMPLATEVERIFY` enables Bitcoin Script to support
-complex multi-step smart contracts without a trusted setup.
-
-Sapio is a tool for defining such smart contracts in an easy way and exporting
-easy to integrate APIs for managing open contracts. With Sapio you can turn what
-previously would require months or years of careful tinkering with Bitcoin
-internals into a 20 minute project and get a fully functional Bitcoin
-application.
-
-Sapio has intelligent built in features which help developers design safe smart
-contracts and limit risk of losing funds.
-
-For more information on Sapio, check out Jeremy's Reckless VR Talk [Sapio: Stateful Smart Contracts
-for Bitcoin with OP_CTV](https://www.youtube.com/watch?v=4vDuttlImPc) and
-[slides](https://docs.google.com/presentation/d/1X4AGNXJ5yCeHRrf5sa9DarWfDyEkm6fFUlrcIRQtUw4).
-
-### Show Me The Money! Sapio Crash Course:
-
-#### Installation QuickStart
-
-Clone the project:
-
-```bash
-git clone https://github.com/sapio-lang/sapio
+```sh
+cargo run --locked -p sapio --example payment
 ```
 
-Install Rust (https://www.rust-lang.org/learn/get-started):
+The checked-in [payment example](examples/payment.rs) is the maintained starting
+point. It compiles a contract without funding or broadcasting it. Native CTV is
+a research target; see the [enforcement model](../docs/MODERNIZATION.md#enforcement-and-release-boundaries).
 
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-Now you can run:
-
-```bash
-cargo run --example server  --features ws
-```
-
-This starts a websocket server that can compile and run Sapio contracts! You can connect the server
-to [tux](https://github.com/sapio-lang/tux) to run an interactive session.
+The sketches below explain the original authoring model and are historical
+reference material. They are not a substitute for the tested example.
 
 #### Learning Sapio
 
@@ -96,10 +49,8 @@ impl Contract for Something {
     declare! {then, /*omitted*/}
     /// [Optional] declares the updatable next steps and ArgType
     declare! {updatable<ArgType>, /*omitted*/}
-    /// note:
-    /// If no updatable, this is explicitly required if not using a nightly
-    /// compiler.
-    declare! {non updatable}
+    /// Use this instead of updatable<ArgType> when there are no continuations:
+    // declare! {non updatable}
 }
 ```
 
@@ -249,15 +200,8 @@ funded, only losing an amount for fees (user configurable).
 
 
 
-## Helpful Hints
+## Further reading
 
-### Debugging Macros
-
-First, you need to be on the nightly compiler via `rustup default nightly`.
-
-Then, you can run (for example):
-```bash
-cargo rustc --example=server --features="ws" -- -Zunstable-options --pretty=expanded
-```
-
-Which will expand all of the macros in the example "server".
+The [modernization plan](../docs/MODERNIZATION.md) describes the intended compiler
+graph, artifact and backend boundaries. The
+[historical book](../docs/learn-sapio/src/SUMMARY.md) covers more constructions.

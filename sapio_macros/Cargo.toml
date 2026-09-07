@@ -1,4 +1,5 @@
 [package]
+rust-version.workspace = true
 name = "sapio_macros"
 version = "0.2.4"
 edition = "2021"

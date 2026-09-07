@@ -7,36 +7,29 @@
 //! Functions that are made visible to the host to call inside the WASM module.
 use super::*;
 
-/// a stub to make the compiler happy
-fn sapio_v1_wasm_plugin_client_get_create_arguments_nullptr() -> *mut c_char {
-    panic!("No Function Registered");
+use std::sync::OnceLock;
+
+/// Publish the complete registration in one step before exposing any callback.
+pub(crate) struct PluginBindings {
+    pub get_arguments: fn() -> *mut c_char,
+    pub create: unsafe fn(*mut c_char, *mut c_char) -> *mut c_char,
+    pub name: &'static str,
+    pub logo: &'static [u8],
 }
 
-/// a stub to make the compiler happy
-unsafe fn sapio_v1_wasm_plugin_client_create_nullptr(
-    _p: *mut c_char,
-    _c: *mut c_char,
-) -> *mut c_char {
-    panic!("No Function Registered");
+pub(crate) static PLUGIN: OnceLock<PluginBindings> = OnceLock::new();
+
+fn registered() -> &'static PluginBindings {
+    PLUGIN
+        .get()
+        .expect("Plugin entry point must register before use")
 }
-
-/// a static mut that gets set when a Plugin::register method gets called
-/// in order to enable binding when the type is registered
-pub(crate) static mut SAPIO_V1_WASM_PLUGIN_CLIENT_GET_CREATE_ARGUMENTS_PTR: fn() -> *mut c_char =
-    sapio_v1_wasm_plugin_client_get_create_arguments_nullptr;
-
-/// a static mut that gets set when a Plugin::register method gets called
-/// in order to enable binding when the type is registered
-pub(crate) static mut SAPIO_V1_WASM_PLUGIN_CLIENT_CREATE_PTR: unsafe fn(
-    *mut c_char,
-    *mut c_char,
-) -> *mut c_char = sapio_v1_wasm_plugin_client_create_nullptr;
 
 /// returns a pointer to the schema for the arguments required to create an instance
 /// host must drop the returned pointer.
 #[no_mangle]
 extern "C" fn sapio_v1_wasm_plugin_client_get_create_arguments() -> *mut c_char {
-    unsafe { SAPIO_V1_WASM_PLUGIN_CLIENT_GET_CREATE_ARGUMENTS_PTR() }
+    (registered().get_arguments)()
 }
 
 /// create an instance of the plugin's contract from the provided json args
@@ -46,7 +39,7 @@ unsafe extern "C" fn sapio_v1_wasm_plugin_client_create(
     p: *mut c_char,
     c: *mut c_char,
 ) -> *mut c_char {
-    SAPIO_V1_WASM_PLUGIN_CLIENT_CREATE_PTR(p, c)
+    (registered().create)(p, c)
 }
 
 /// Drops a pointer that was created in the WASM
@@ -63,23 +56,20 @@ extern "C" fn sapio_v1_wasm_plugin_client_allocate_bytes(len: u32) -> *mut c_cha
     CString::new(vec![1; len as usize]).unwrap().into_raw()
 }
 
-pub(crate) static mut SAPIO_PLUGIN_NAME: &str = "Unnamed";
-
 /// Gets a name for the plugin.
 /// host must drop the returned pointer.
 #[no_mangle]
-unsafe extern "C" fn sapio_v1_wasm_plugin_client_get_name() -> *mut c_char {
-    CString::new(SAPIO_PLUGIN_NAME.as_bytes())
+extern "C" fn sapio_v1_wasm_plugin_client_get_name() -> *mut c_char {
+    CString::new(registered().name.as_bytes())
         .unwrap()
         .into_raw()
 }
 
-pub(crate) static mut SAPIO_PLUGIN_LOGO: &[u8] = include_bytes!("logo.png");
 /// Gets a name for the plugin.
 /// host must drop the returned pointer.
 #[no_mangle]
-unsafe extern "C" fn sapio_v1_wasm_plugin_client_get_logo() -> *mut c_char {
-    CString::new(Vec::<u8>::from(base64::encode(SAPIO_PLUGIN_LOGO)))
+extern "C" fn sapio_v1_wasm_plugin_client_get_logo() -> *mut c_char {
+    CString::new(Vec::<u8>::from(base64::encode(registered().logo)))
         .unwrap()
         .into_raw()
 }

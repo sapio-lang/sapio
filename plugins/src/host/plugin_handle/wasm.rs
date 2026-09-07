@@ -6,6 +6,7 @@
 
 //!  a plugin handle for a wasm plugin.
 use super::*;
+use crate::host::memory::{self, runtime_error};
 use crate::host::wasm_cache::get_all_keys_from_fs;
 use crate::host::HostEnvironmentInner;
 use crate::host::{exports::*, HostEnvironmentT};
@@ -19,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::marker::PhantomData;
 use std::path::PathBuf;
-use wasmer::{FunctionEnv, Memory, TypedFunction};
+use wasmer::{FunctionEnv, TypedFunction};
 
 /// Helper to resolve modules
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -61,7 +62,7 @@ pub struct WasmPluginHandle<Output> {
     store: Store,
     env: HostEnvironmentT,
     module: Module,
-    instance: Instance,
+    _instance: Instance,
     key: wasmer_cache::Hash,
     net: bitcoin::Network,
     _pd: PhantomData<Output>,
@@ -85,8 +86,9 @@ impl<T> WasmPluginHandle<T> {
     /// Clone with a new memory space/instance
     pub fn fresh_clone(&self) -> Result<Self, Box<dyn Error>> {
         let env = self.env.as_ref(&self.store);
+        // The compiled code and signature IDs belong to the original engine.
         Ok(Self::setup_plugin_inner(
-            Store::default(),
+            Store::new(self.store.engine().clone()),
             env.path.clone(),
             env.this,
             Some(env.module_map.clone()),
@@ -168,6 +170,8 @@ impl<Output> WasmPluginHandle<Output> {
 
     /// create an allocation
     pub fn allocate(&mut self, len: i32) -> Result<i32, CompilationError> {
+        memory::check_length((len as u32 as usize).saturating_add(1))
+            .map_err(|error| CompilationError::ModuleRuntimeError(error.into()))?;
         self.sapio_v1_wasm_plugin_client_allocate_bytes
             .call(&mut self.store, len)
             .map_err(|e| CompilationError::ModuleCouldNotAllocateError(len, e.into()))
@@ -175,6 +179,8 @@ impl<Output> WasmPluginHandle<Output> {
 
     /// pass a string to the WASM plugin
     pub fn pass_string(&mut self, s: &str) -> Result<i32, CompilationError> {
+        memory::check_length(s.len().saturating_add(1))
+            .map_err(|error| CompilationError::ModuleRuntimeError(error.into()))?;
         let offset = self.allocate(s.len() as i32)?;
         match self.pass_string_inner(s, offset) {
             Ok(_) => Ok(offset),
@@ -188,40 +194,29 @@ impl<Output> WasmPluginHandle<Output> {
     /// helper for string passing
     fn pass_string_inner(&self, s: &str, offset: i32) -> Result<(), CompilationError> {
         let env = self.env.as_ref(&self.store);
-        env.memory
-            .as_ref()
-            .ok_or(CompilationError::ModuleFailedToGetMemory(
-                "Memory Missing".into(),
-            ))?
-            .view(&self.store)
-            .write(offset as u64, &s.as_bytes()[..]);
-        Ok(())
-    }
-
-    fn get_memory(&self) -> Result<&Memory, CompilationError> {
-        self.instance
-            .exports
-            .get_memory("memory")
-            .map_err(|e| CompilationError::ModuleFailedToGetMemory(e.into()))
-    }
-    /// read something from wasm memory, null terminated
-    fn read_to_vec(&self, p: i32) -> Result<Vec<u8>, CompilationError> {
-        let env = self.env.as_ref(&self.store);
-        let mem = env
+        let memory = env
             .memory
             .as_ref()
             .ok_or(CompilationError::ModuleFailedToGetMemory(
                 "Memory Missing".into(),
             ))?
             .view(&self.store);
-        let p = p as u64;
-        let mut e = p;
-        while mem.read_u8(e).ok() != Some(0) {
-            e += 1;
-        }
-        let mut v = vec![0; (e - p) as usize];
-        mem.read(p, &mut v[..]);
-        Ok(v)
+        memory::write_string(&memory, offset, s)
+            .map_err(|error| CompilationError::ModuleRuntimeError(error.into()))
+    }
+
+    /// Read a bounded, null-terminated string from guest memory.
+    fn read_to_vec(&self, ptr: i32) -> Result<Vec<u8>, CompilationError> {
+        let env = self.env.as_ref(&self.store);
+        let memory = env
+            .memory
+            .as_ref()
+            .ok_or(CompilationError::ModuleFailedToGetMemory(
+                "Memory Missing".into(),
+            ))?
+            .view(&self.store);
+        memory::read_string(&memory, ptr)
+            .map_err(|error| CompilationError::ModuleRuntimeError(error.into()))
     }
 
     fn setup_plugin_inner<I: Into<PathBuf> + Clone>(
@@ -335,7 +330,7 @@ impl<Output> WasmPluginHandle<Output> {
             store,
             net,
             module,
-            instance,
+            _instance: instance,
             key,
             _pd: Default::default(),
         })
@@ -408,7 +403,8 @@ where
             .map_err(|e| CompilationError::ModuleCouldNotGetName(e.into()))?;
         let v = self.read_to_vec(p)?;
         self.forget(p)?;
-        Ok(String::from_utf8_lossy(&v).to_string())
+        String::from_utf8(v)
+            .map_err(|error| CompilationError::ModuleRuntimeError(runtime_error(error).into()))
     }
 
     fn get_logo(&mut self) -> Result<String, CompilationError> {
@@ -419,6 +415,152 @@ where
             .map_err(|e| CompilationError::ModuleCouldNotGetLogo(e.into()))?;
         let v = self.read_to_vec(p)?;
         self.forget(p)?;
-        Ok(String::from_utf8_lossy(&v).to_string())
+        String::from_utf8(v)
+            .map_err(|error| CompilationError::ModuleRuntimeError(runtime_error(error).into()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sapio_ctv_emulator_trait::CTVAvailable;
+
+    fn plugin(
+        name_body: &str,
+        extra: &str,
+        allocation: i32,
+    ) -> WasmPluginHandle<serde_json::Value> {
+        let source = format!(
+            r#"(module
+                (import "env" "sapio_v1_wasm_plugin_debug_log_string"
+                    (func $log (param i32 i32)))
+                (import "env" "sapio_v1_wasm_plugin_ctv_emulator_sign"
+                    (func $sign (param i32 i32) (result i32)))
+                (import "env" "sapio_v1_wasm_plugin_lookup_module_name"
+                    (func $lookup (param i32 i32 i32 i32)))
+                (memory (export "memory") 1)
+                (data (i32.const 8) "ok\00")
+                (func (export "sapio_v1_wasm_plugin_client_allocate_bytes")
+                    (param i32) (result i32) i32.const {allocation})
+                (func (export "sapio_v1_wasm_plugin_client_get_create_arguments")
+                    (result i32) i32.const 8)
+                (func (export "sapio_v1_wasm_plugin_client_get_name")
+                    (result i32) {name_body})
+                (func (export "sapio_v1_wasm_plugin_client_get_logo")
+                    (result i32) i32.const 8)
+                (func (export "sapio_v1_wasm_plugin_client_drop_allocation") (param i32))
+                (func (export "sapio_v1_wasm_plugin_client_create")
+                    (param i32 i32) (result i32) i32.const 8)
+                (func (export "sapio_v1_wasm_plugin_entry_point"))
+                {extra}
+            )"#
+        );
+        let store = Store::default();
+        let module = Module::new(&store, source.as_bytes()).unwrap();
+        let emulator: Arc<dyn CTVEmulator> = Arc::new(CTVAvailable);
+        WasmPluginHandle::setup_plugin_inner(
+            store,
+            PathBuf::from("."),
+            [0; 32],
+            None,
+            bitcoin::Network::Regtest,
+            &emulator,
+            module,
+            WASMCacheID::generate(source.as_bytes()),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn fresh_clones_preserve_indirect_host_calls_and_isolate_memory() {
+        let mut original = plugin(
+            "i32.const 0 i32.const 0 i32.const 32 i32.const 64 i32.const 0 \
+             call_indirect (type $lookup_type) \
+             i32.const 64 i32.load8_u i32.eqz if unreachable end i32.const 8",
+            "(type $lookup_type (func (param i32 i32 i32 i32))) \
+             (table 1 funcref) (elem (i32.const 0) $lookup)",
+            8,
+        );
+        original.pass_string("changed").unwrap();
+        assert_eq!(original.get_name().unwrap(), "changed");
+
+        let mut cloned = original.fresh_clone().unwrap();
+        assert_eq!(cloned.get_name().unwrap(), "ok");
+        assert_eq!(original.get_name().unwrap(), "changed");
+        drop(original);
+        assert_eq!(cloned.get_name().unwrap(), "ok");
+    }
+
+    #[test]
+    fn reads_valid_guest_strings_and_rejects_invalid_strings() {
+        assert_eq!(plugin("i32.const 8", "", 16).get_name().unwrap(), "ok");
+        for pointer in [0, -1, 65536] {
+            assert!(plugin(&format!("i32.const {pointer}"), "", 16)
+                .get_name()
+                .is_err());
+        }
+        assert!(
+            plugin("i32.const 65535", r#"(data (i32.const 65535) "x")"#, 16)
+                .get_name()
+                .is_err()
+        );
+        assert!(
+            plugin("i32.const 32", r#"(data (i32.const 32) "\ff\00")"#, 16)
+                .get_name()
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn checks_guest_allocations_before_writing() {
+        let mut valid = plugin("i32.const 16", "", 16);
+        valid.pass_string("hello").unwrap();
+        assert_eq!(valid.get_name().unwrap(), "hello");
+        for pointer in [0, -1, 65535, 65536] {
+            assert!(plugin("i32.const 8", "", pointer)
+                .pass_string("hello")
+                .is_err());
+        }
+        assert!(valid.allocate(-1).is_err());
+        assert!(valid.pass_string("embedded\0null").is_err());
+    }
+
+    #[test]
+    fn malformed_host_calls_trap_instead_of_panicking_or_allocating() {
+        for body in [
+            "i32.const 8 i32.const -1 call $log i32.const 8",
+            "i32.const 65536 i32.const 1 call $log i32.const 8",
+            "i32.const 8 i32.const 16777217 call $log i32.const 8",
+            "i32.const 8 i32.const 2 call $sign",
+            "i32.const 8 i32.const -1 call $sign",
+            "i32.const 0 i32.const 0 i32.const 65535 i32.const 64 call $lookup i32.const 8",
+            "i32.const 0 i32.const 0 i32.const 32 i32.const 65536 call $lookup i32.const 8",
+        ] {
+            assert!(plugin(body, "", 16).get_name().is_err(), "{body}");
+        }
+    }
+
+    #[test]
+    fn host_calls_during_wasm_start_trap_without_initialized_memory() {
+        let store = Store::default();
+        let source = r#"(module
+            (import "env" "sapio_v1_wasm_plugin_debug_log_string"
+                (func $log (param i32 i32)))
+            (func $start i32.const 0 i32.const 0 call $log)
+            (start $start)
+        )"#;
+        let module = Module::new(&store, source.as_bytes()).unwrap();
+        let emulator: Arc<dyn CTVEmulator> = Arc::new(CTVAvailable);
+        let result = WasmPluginHandle::<serde_json::Value>::setup_plugin_inner(
+            store,
+            PathBuf::from("."),
+            [0; 32],
+            None,
+            bitcoin::Network::Regtest,
+            &emulator,
+            module,
+            WASMCacheID::generate(source.as_bytes()),
+        );
+        assert!(result.is_err());
     }
 }

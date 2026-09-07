@@ -6,19 +6,18 @@
 
 //! Clause Module for showing non-sapio compiled object types
 
-
 #![deny(missing_docs)]
-use sapio_wasm_plugin::client::*;
-use sapio_wasm_plugin::*;
 use bitcoin::util::amount::CoinAmount;
 use sapio::contract::*;
 use sapio::*;
 use sapio_base::timelocks::RelTime;
 use sapio_base::Clause;
+use sapio_wasm_plugin::client::plugin::Callable;
+use sapio_wasm_plugin::client::*;
+use sapio_wasm_plugin::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use std::convert::{TryFrom, TryInto};
-use sapio_wasm_plugin::client::plugin::Callable;
 
 /// Get a Clause for two parties to OR together
 #[derive(JsonSchema, Deserialize)]
@@ -31,13 +30,13 @@ pub struct GetClause {
     bob: bitcoin::XOnlyPublicKey,
 }
 
-
 impl Callable for GetClause {
     type Output = Clause;
     fn call(&self, ctx: Context) -> Result<Clause, CompilationError> {
-        Ok(
-        Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
-        )
+        Ok(Clause::And(vec![
+            Clause::Key(self.alice),
+            Clause::Key(self.bob),
+        ]))
     }
 }
 

@@ -285,16 +285,16 @@ impl<T> BuilderState<T> {
         t
     }
 
-    /// Sets the feerate if not set, and then sets the value to the min of the
-    /// existing value or the new value.
-    /// For example, s.set_min_feerate(100.into()).set_min_feerate(1000.into())
-    /// results in feerate Some(100).
+    /// Requires at least this many satoshis per virtual byte, retaining the
+    /// strongest requirement when called more than once.
     ///
-    /// During compilation, templates should be checked to ensure that at least
-    /// that feerate is paid.
+    /// Fees must be explicitly reserved with [`Self::add_fees`]. Compilation
+    /// checks a conservative satisfaction estimate for single-input templates.
+    /// Multiple-input templates are rejected because their other satisfactions
+    /// are not known before binding.
     pub fn set_min_feerate(mut self, a: Amount) -> Self {
         let v: &mut Amount = self.min_feerate.get_or_insert(a);
-        *v = std::cmp::min(*v, a);
+        *v = std::cmp::max(*v, a);
         self
     }
 

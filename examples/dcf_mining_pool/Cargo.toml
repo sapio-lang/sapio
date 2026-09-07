@@ -1,4 +1,5 @@
 [package]
+rust-version.workspace = true
 name = "dcf_mining_pool"
 version = "0.2.0"
 authors = ["Jeremy Rubin <j@rubin.io>"]

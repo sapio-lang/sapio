@@ -73,7 +73,7 @@ where
                     network,
                     amount,
                     effects,
-                    ordinals_info
+                    ordinals_info,
                 },
         } = serde_json::from_slice(s.to_bytes()).map_err(CompilationError::DeserializationError)?;
         // TODO: In theory, these trampoline bounds are robust/serialization safe...
@@ -106,19 +106,29 @@ where
             path,
             // TODO: load database?
             Arc::new(effects),
-            ordinals_info
+            ordinals_info,
         );
         let converted = Self::try_from(arguments)?;
         converted.call(ctx)
     }
-    /// binds this type to the wasm interface, must be called before the plugin can be used.
-    unsafe fn register(name: &'static str, logo: Option<&'static [u8]>) {
-        SAPIO_V1_WASM_PLUGIN_CLIENT_GET_CREATE_ARGUMENTS_PTR = Self::get_api_inner;
-        SAPIO_V1_WASM_PLUGIN_CLIENT_CREATE_PTR = Self::create;
-        SAPIO_PLUGIN_NAME = name;
-        if let Some(logo) = logo {
-            SAPIO_PLUGIN_LOGO = logo;
-        }
+    /// Register this module's callbacks and metadata exactly once, before use.
+    /// Panics if the entry point registers twice or the name contains a null byte.
+    fn register(name: &'static str, logo: Option<&'static [u8]>) {
+        assert!(
+            !name.as_bytes().contains(&0),
+            "Plugin name contains a null byte"
+        );
+        assert!(
+            PLUGIN
+                .set(PluginBindings {
+                    get_arguments: Self::get_api_inner,
+                    create: Self::create,
+                    name,
+                    logo: logo.unwrap_or(include_bytes!("logo.png")),
+                })
+                .is_ok(),
+            "Plugin is already registered"
+        );
     }
 }
 
@@ -134,7 +144,7 @@ fn encode_json<S: Serialize>(s: &S) -> *mut c_char {
 /// A helper macro to implement the plugin interface for a plugin-type
 /// and register it to the plugin entry point.
 ///
-/// U.B. to call REGISTER more than once because of the internal #[no_mangle]
+/// Each module defines one entry point and registers one plugin.
 #[macro_export]
 macro_rules! REGISTER {
     [$plugin:ident$(, $logo:expr)?] => {

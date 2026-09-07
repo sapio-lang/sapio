@@ -35,6 +35,12 @@ impl HDOracleEmulator {
     /// any errors.
     pub async fn bind<A: ToSocketAddrs>(self, a: A) -> std::io::Result<()> {
         let listener = TcpListener::bind(a).await?;
+        self.serve(listener).await
+    }
+
+    /// Serve an already bound listener, allowing callers to establish readiness
+    /// and discover an automatically assigned port before starting clients.
+    pub async fn serve(self, listener: TcpListener) -> std::io::Result<()> {
         loop {
             let (mut socket, _) = listener.accept().await?;
             {
@@ -68,6 +74,14 @@ impl HDOracleEmulator {
         mut b: PartiallySignedTransaction,
         secp: &Secp256k1<All>,
     ) -> Result<PartiallySignedTransaction, std::io::Error> {
+        if b.inputs.is_empty()
+            || b.inputs.len() != b.unsigned_tx.input.len()
+            || b.outputs.len() != b.unsigned_tx.output.len()
+        {
+            return Err(input_err(
+                "PSBT input/output maps do not match a nonempty transaction",
+            ));
+        }
         let tx = b.clone().extract_tx();
         let h = tx.get_ctv_hash(0);
         let utxos: Vec<TxOut> = b
@@ -82,7 +96,10 @@ impl HDOracleEmulator {
         let untweaked = key.to_keypair(secp);
         let pk = XOnlyPublicKey::from_keypair(&untweaked);
         let mut sighash = bitcoin::util::sighash::SighashCache::new(&tx);
-        let input_zero = &mut b.inputs[0];
+        let input_zero = b
+            .inputs
+            .first_mut()
+            .ok_or_else(|| input_err("PSBT has no inputs"))?;
         use bitcoin::schnorr::TapTweak;
         let tweaked = untweaked
             .tap_tweak(secp, input_zero.tap_merkle_root)
@@ -94,11 +111,11 @@ impl HDOracleEmulator {
             let annex = None;
             let sighash: TapSighashHash = sighash
                 .taproot_signature_hash(0, prevouts, annex, path, hash_ty)
-                .expect("Signature hash cannot fail...");
-            let msg = bitcoin::secp256k1::Message::from_slice(&sighash[..])
+                .map_err(|error| input_err(&error.to_string()))?;
+            let msg = bitcoin::secp256k1::Message::from_digest_slice(&sighash[..])
                 .expect("Size must be correct.");
             let sig = secp.sign_schnorr_no_aux_rand(&msg, kp);
-            SchnorrSig { sig, hash_ty }
+            Ok::<_, std::io::Error>(SchnorrSig { sig, hash_ty })
         };
         if let Some(true) = input_zero.witness_utxo.as_ref().map(|v| {
             v.script_pubkey
@@ -106,7 +123,7 @@ impl HDOracleEmulator {
                     XOnlyPublicKey::from(tweaked_pk).dangerous_assume_tweaked(),
                 )
         }) {
-            let sig = get_sig(None, &tweaked);
+            let sig = get_sig(None, &tweaked)?;
             input_zero.tap_key_sig = Some(sig);
         }
         for tlh in input_zero
@@ -114,7 +131,7 @@ impl HDOracleEmulator {
             .values()
             .map(|(script, ver)| TapLeafHash::from_script(script, *ver))
         {
-            let sig = get_sig(Some((tlh, 0xffffffff)), &untweaked);
+            let sig = get_sig(Some((tlh, 0xffffffff)), &untweaked)?;
             input_zero.tap_script_sigs.insert((pk.0, tlh), sig);
         }
         Ok(b)
@@ -124,32 +141,35 @@ impl HDOracleEmulator {
     ///
     /// - on receiving Request::SignPSBT, signs the PSBT.
     async fn handle(&self, t: &mut TcpStream) -> Result<(), std::io::Error> {
-        let request = Self::requested(t).await?;
+        let request = crate::wire::read_message(t).await?;
         match request {
             msgs::Request::SignPSBT(msgs::PSBT(unsigned)) => {
                 let psbt = SECP.with(|secp| self.sign(unsigned, secp))?;
-                Self::respond(t, &msgs::PSBT(psbt)).await
+                crate::wire::write_message(t, &msgs::PSBT(psbt)).await
             }
         }
     }
+}
 
-    /// receive a request via the tcpstream.
-    /// wire format: length:u32 data:[u8;length]
-    ///
-    /// TODO: DoS Critical: limit the allowed max length we will attempt to derserialize
-    async fn requested(t: &mut TcpStream) -> Result<msgs::Request, std::io::Error> {
-        let l = t.read_u32().await? as usize;
-        let mut v = vec![0u8; l];
-        t.read_exact(&mut v[..]).await?;
-        Ok(serde_json::from_slice(&v[..])?)
-    }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    /// respond via the tcpstream.
-    /// wire format: length:u32 data:[u8;length]
-    async fn respond<T: Serialize>(t: &mut TcpStream, r: &T) -> Result<(), std::io::Error> {
-        let v = serde_json::to_vec(r)?;
-        t.write_u32(v.len() as u32).await?;
-        t.write_all(&v[..]).await?;
-        t.flush().await
+    #[test]
+    fn rejects_psbts_without_an_input_to_sign() {
+        let secp = Secp256k1::new();
+        let root = ExtendedPrivKey::new_master(bitcoin::Network::Regtest, &[44; 32]).unwrap();
+        let oracle = HDOracleEmulator::new(root, false);
+        let psbt = PartiallySignedTransaction::from_unsigned_tx(bitcoin::Transaction {
+            version: 2,
+            lock_time: 0,
+            input: vec![],
+            output: vec![],
+        })
+        .unwrap();
+        assert_eq!(
+            oracle.sign(psbt, &secp).unwrap_err().kind(),
+            std::io::ErrorKind::InvalidInput
+        );
     }
 }

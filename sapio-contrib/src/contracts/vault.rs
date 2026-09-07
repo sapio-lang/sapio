@@ -209,15 +209,27 @@ mod test {
     }
     #[test]
     fn example() -> Result<(), Box<dyn std::error::Error>> {
-        let string =  "{\"arguments\":{\"ForAddress\":{\"amount_step\":{\"Sats\":100},\"cold_storage\":\"bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj\",\"hot_storage\":\"bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj\",\"mature\":{\"RH\":10},\"n_steps\":10,\"timeout\":{\"RH\":5}}},\"context\":{\"amount\":1,\"network\":\"Regtest\"}}";
+        let string = r#"{
+            "arguments": {
+                "ForAddress": {
+                    "amount_step": {"Sats": 100},
+                    "cold_storage": "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj",
+                    "hot_storage": "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj",
+                    "mature": {"RH": 10},
+                    "n_steps": 10,
+                    "timeout": {"RH": 5}
+                }
+            },
+            "context": {"amount": 1000, "network": "Regtest"}
+        }"#;
         let v: CreateArgs<Versions> = serde_json::from_str(string)?;
         let ctx = Context::new(
             v.context.network,
             v.context.amount,
             Arc::new(CTVAvailable),
-            EffectPath::try_from("dlc").unwrap(),
+            EffectPath::try_from("vault").unwrap(),
             Arc::new(v.context.effects),
-            None
+            None,
         );
         Vault::try_from(v.arguments)?.compile(ctx)?;
         Ok(())

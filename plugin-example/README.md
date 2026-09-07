@@ -1,7 +1,17 @@
-# Sapio Plugin Examples
+# Sapio WASM examples
 
-To run plugin examples, you must first have zig and wasm-pack installed.
+This separate workspace builds Rust contracts as WASM modules. From the repository
+root, run:
 
-Then run: `CC="zig cc" wasm-pack build`
+```sh
+bash contrib/sapio_wasm.sh
+```
 
-For more, see the docs: https://learn.sapio-lang.org/ch01-01-installation.html#local-quickstart
+Use the pinned Rust toolchain and LLVM Clang with the WebAssembly target. See the
+[development guide](../docs/DEVELOPMENT.md) for macOS/Linux setup and focused
+commands. The script builds all examples and checks direct and cross-module
+compilation through the CLI. Zig and wasm-pack are not required.
+
+Examples are research material unless identified as supported in the
+[modernization plan](../docs/MODERNIZATION.md). Successful compilation does not
+establish safe funding, signer assumptions, or chain support for CTV.

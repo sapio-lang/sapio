@@ -7,22 +7,22 @@
 //! Clause Module Example
 
 #![deny(missing_docs)]
-use sapio_wasm_plugin::plugin_handle::PluginHandle;
-use sapio_wasm_plugin::client::*;
-use sapio_wasm_plugin::*;
 use bitcoin::util::amount::CoinAmount;
+use bitcoin::XOnlyPublicKey;
 use sapio::contract::*;
 use sapio::*;
 use sapio_base::timelocks::RelTime;
 use sapio_base::Clause;
+use sapio_trait::SapioJSONTrait;
+use sapio_wasm_plugin::client::plugin::Callable;
+use sapio_wasm_plugin::client::*;
+use sapio_wasm_plugin::plugin_handle::PluginHandle;
+use sapio_wasm_plugin::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::convert::{TryFrom, TryInto};
-use sapio_wasm_plugin::client::plugin::Callable;
-use serde_json::Value;
-use sapio_trait::SapioJSONTrait;
 use serde::Serialize;
-use bitcoin::XOnlyPublicKey;
+use serde_json::Value;
+use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 
 /// Same Inner type as the wrapped module
@@ -40,16 +40,20 @@ pub struct GetClause {
 #[derive(JsonSchema, Deserialize)]
 pub struct Wrapper {
     g: GetClause,
-    v: ClauseModule<GetClause>
+    v: ClauseModule<GetClause>,
 }
-
-
 
 impl SapioJSONTrait for GetClause {
     fn get_example_for_api_checking() -> Value {
-        serde_json::to_value(GetClause{
-            alice: XOnlyPublicKey::from_str("01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b").unwrap(),
-            bob: XOnlyPublicKey::from_str("01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546c").unwrap()
+        serde_json::to_value(GetClause {
+            alice: XOnlyPublicKey::from_str(
+                "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+            )
+            .unwrap(),
+            bob: XOnlyPublicKey::from_str(
+                "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546c",
+            )
+            .unwrap(),
         })
         .unwrap()
     }
@@ -63,7 +67,7 @@ impl Callable for Wrapper {
                 amount: ctx.funds(),
                 network: ctx.network,
                 effects: unsafe { ctx.get_effects_internal() }.as_ref().clone(),
-                ordinals_info: ctx.get_ordinals().clone()
+                ordinals_info: ctx.get_ordinals().clone(),
             },
             arguments: self.g.clone(),
         };

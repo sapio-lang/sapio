@@ -23,7 +23,7 @@ use sapio_base::{
 };
 use sapio_wasm_plugin::{
     host::{plugin_handle::ModuleLocator, PluginHandle, WasmPluginHandle},
-    CreateArgs, API, OrdinalsInfo,
+    CreateArgs, OrdinalsInfo, API,
 };
 use schemars::JsonSchema;
 use serde::*;
@@ -74,7 +74,7 @@ pub struct Bind {
     pub use_txn: Option<String>,
     pub compiled: Compiled,
     #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub ordinals_info: Option<OrdinalsInfo>
+    pub ordinals_info: Option<OrdinalsInfo>,
 }
 pub type BindReturn = Program;
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -273,7 +273,7 @@ impl Bind {
             use_txn,
             compiled,
             outpoint,
-            ordinals_info
+            ordinals_info,
         } = self;
         let use_txn = use_txn
             .map(|buf| base64::decode(buf.as_bytes()))
@@ -288,7 +288,7 @@ impl Bind {
                 emulator.clone(),
                 "mock".try_into()?,
                 Arc::new(MapEffectDB::default()),
-                ordinals_info
+                ordinals_info,
             );
             let mut tx = ctx
                 .template()

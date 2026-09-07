@@ -20,10 +20,7 @@ use std::sync::Mutex;
 /// declare!{then, a,...}
 /// declare!{finish, a,...}
 /// declare!{updatable<X>, a,...}
-/// /// because of a quirk in stable rust, non updatable
-/// /// is required if no updatable<X> declaration is made
-/// /// nightly rust does not require this, but it is availble
-/// /// for compatibility
+/// /// Required when no updatable<X> declaration is made.
 /// declare!{non updatable}
 /// ```
 #[macro_export]
@@ -38,13 +35,7 @@ macro_rules! declare {
     };
 
     [state]  => {
-        /// Due to type system limitations, all `FinishOrFuncs` for a Contract type must share a
-        /// parameter pack type. If Nightly, trait default types allowed.
-        #[cfg(feature = "nightly")]
-        type StatefulArguments = ();
-        /// Due to type system limitations, all `FinishOrFuncs` for a Contract type must share a
-        /// parameter pack type. If stable, no default type allowed.
-        #[cfg(not(feature = "nightly"))]
+        /// All continuations for a contract share this argument type.
         type StatefulArguments;
     };
     {updatable<$($i:ty)?> $(,$a:expr)*} => {
@@ -54,7 +45,6 @@ macro_rules! declare {
         declare![state $($i)?];
     };
     {non updatable} => {
-        #[cfg(not(feature = "nightly"))]
         declare![state ()];
     };
     {finish $(,$a:expr)*} => {

@@ -43,7 +43,7 @@ pub struct ContextualArguments {
     pub network: bitcoin::Network,
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
     #[schemars(with = "u64")]
-    /// # The Amount of Funds Available to the Contract as Bitcoin.
+    /// # The Amount of Funds Available to the Contract in Satoshis.
     pub amount: bitcoin::util::amount::Amount,
 
     /// # Effects to augment compilations with

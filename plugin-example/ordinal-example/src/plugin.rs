@@ -119,7 +119,11 @@ impl Contract for SimpleOrdinal {
             .get_ordinals()
             .as_ref()
             .ok_or_else(|| CompilationError::OrdinalsError("Missing Ordinals Info".into()))?;
-        if ords.0.iter().any(|(a, b)| (*a..*b).contains(&Ordinal(self.ordinal))) {
+        if ords
+            .0
+            .iter()
+            .any(|(a, b)| (*a..*b).contains(&Ordinal(self.ordinal)))
+        {
             Ok(Amount::from_sat(1 + 500))
         } else {
             Err(CompilationError::OrdinalsError(

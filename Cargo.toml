@@ -11,6 +11,10 @@ members = ["sapio"
           , 'sapio-trait'
           , 'sapio_macros'
           , 'sapio-psbt'
-          , 'simp-pack']
-exclude = ["plugin-example", "integration_tests"]
+          , 'simp-pack'
+          , 'integration_tests']
+exclude = ["plugin-example"]
 resolver = "2"
+
+[workspace.package]
+rust-version = "1.98.1"

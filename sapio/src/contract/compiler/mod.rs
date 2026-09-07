@@ -115,13 +115,14 @@ impl Renamer {
         }
     }
     fn get_name(&mut self, a: &String) -> String {
-        let count = 0u64;
+        let mut count = 0u64;
         let mut name: String = a.clone();
         loop {
             if self.used_names.insert(name.clone()) {
                 return name;
             } else {
                 name = format!("{}_renamed_{}", a, count);
+                count += 1;
             }
         }
     }
@@ -336,12 +337,22 @@ where
         let root_path = SArc(ctx.path().clone());
 
         let failed_estimate = comitted_txns.values().any(|a| {
-            // witness space not scaled
-            let tx_size = a.tx.get_weight() + estimated_max_size;
-            let fees = amount_range.max() - a.total_amount();
-            a.min_feerate_sats_vbyte
-                .map(|m| fees.as_sat() < (m.as_sat() * tx_size as u64))
-                == Some(false)
+            let Some(rate) = a.min_feerate_sats_vbyte else {
+                return false;
+            };
+            // Other inputs' satisfactions are unknown until binding. Do not
+            // promise a minimum feerate without a bound on their weight.
+            if a.tx.input.len() != 1 {
+                return true;
+            }
+            let vsize = (a.tx.weight() + estimated_max_size + 2).div_ceil(4) as u64;
+            // Only this template's reserved fees count. A larger funding
+            // requirement in another branch cannot subsidize this spend.
+            let fees = a.max.checked_sub(a.total_amount());
+            match (fees, rate.as_sat().checked_mul(vsize)) {
+                (Some(fees), Some(required)) => fees.as_sat() < required,
+                _ => true,
+            }
         });
         if failed_estimate {
             Err(CompilationError::MinFeerateError)

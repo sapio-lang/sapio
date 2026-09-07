@@ -1,4 +1,5 @@
 [package]
+rust-version.workspace = true
 name = "sapio-cli"
 version = "0.2.4"
 license = "MPL-2.0"
@@ -27,12 +28,6 @@ jsonschema-valid = "0.4.0"
 [dependencies.sapio-psbt]
 path = "../sapio-psbt"
 version = "0.2.4"
-
-[dependencies.wasmer]
-version = "4.2.5"
-
-[dependencies.wasmer-cache]
-version = "4.2.5"
 
 [dependencies.bitcoin]
 package = "sapio-bitcoin"
