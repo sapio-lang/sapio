@@ -38,7 +38,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b9dd4dd1.js";
+            window.path_to_searchindex_js = "searchindex-6bf65ee9.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-efed9c80.js"></script>
@@ -1290,9 +1290,11 @@ run safely from untrusted sources.</p>
 <p>So what’s it doing in Sapio?</p>
 <p>WASM is designed to be cross platform and deterministic, which makes it a
 great target for smart contracts that we want to be able to be reproduced
-locally. It also makes it <em>relatively</em> safe to run smart contracts provided
-by untrusted parties as the security of the WASM sandbox prevents bad code from
-harming or infecting our system.</p>
+locally. Sapio validates guest memory access and applies execution fuel,
+memory/table caps and nested-call limits before running a module. These bounds
+cover guest execution; native compilation and external services need their own
+resource policy. Loading a module is not a guarantee that its contract is safe
+or that its intended covenant is enforced on the selected chain.</p>
 <p>Sapio Contract objects can be built into  WASM binaries very easily. The code required is basically:</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
