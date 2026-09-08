@@ -9,6 +9,8 @@ use sapio_ctv_emulator_trait::{
     sign_checked, validate_signing_response, CTVAvailable, CTVEmulator, Clause, EmulatorError,
 };
 
+type Mutation = fn(&mut Psbt);
+
 fn add_signatures(psbt: &mut Psbt, input: usize, byte: u8) {
     let secp = Secp256k1::new();
     let secret = SecretKey::from_slice(&[byte; 32]).unwrap();
@@ -114,7 +116,7 @@ fn checked_signing_preserves_complete_requests_and_accepts_only_signature_additi
 
 #[test]
 fn checked_signing_rejects_changes_to_each_protected_psbt_field_family() {
-    let changes: &[(&str, fn(&mut Psbt))] = &[
+    let changes: &[(&str, Mutation)] = &[
         ("transaction", |p| p.unsigned_tx.output[0].value -= 1),
         ("input count", |p| {
             p.inputs.pop();

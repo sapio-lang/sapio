@@ -13,6 +13,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
+type Mutation = fn(&mut Psbt);
+
 fn request() -> Psbt {
     let mut psbt = Psbt::from_unsigned_tx(Transaction {
         version: 2,
@@ -136,7 +138,7 @@ fn federation_accumulates_signatures_and_preserves_prior_participant_entries() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn hd_rejects_raw_metadata_changes_instead_of_hiding_them_in_a_merge() {
-    let mutations: [(fn(&mut Psbt), bool); 5] = [
+    let mutations: [(Mutation, bool); 5] = [
         (|psbt| psbt.inputs[0].unknown.clear(), false),
         (
             |psbt| psbt.inputs[0].witness_utxo.as_mut().unwrap().value -= 1,

@@ -85,7 +85,7 @@ impl Object {
                 });
             }
         }
-        // Prepare the complete graph before invoking signers or index writers.
+        // Prepare the complete graph before signing or inserting generated transactions.
         // Descendants use the actual generated parent, not a second index lookup.
         let mut prepared = Vec::new();
         let mut stack = vec![(

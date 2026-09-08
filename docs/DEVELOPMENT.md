@@ -146,6 +146,13 @@ amounts/scripts must match the receiving-contract metadata. Optional input
 mappings contain one entry per input; entry zero must be `None` because the
 graph determines the contract input. Unknown template keys are rejected.
 
+Binding authenticates known funding transactions, checks scripts and available
+amounts, and accepts only signature additions from emulators. Matching unknown
+transactions remain unresolved for offline work; other lookup errors propagate.
+Bound graph keys identify individual occurrences, while `source_path` retains
+the original compilation path. See [the binding contract](BINDING.md) for the
+funding checks, path format and limits.
+
 Signing and finalization reject malformed PSBT maps before processing inputs.
 `finalize_psbt_format_api` returns `Result<PSBTApi, PSBTValidationError>`:
 structural errors are distinct from a valid PSBT still missing signatures.
@@ -163,8 +170,8 @@ Whole-transaction finalization can leave partial progress on error. Automatic
 ordering does not solve circular P2SH commitments or expand bare-descriptor
 support, and the builder still requires unsigned input-zero templates.
 
-Script verification uses supplied prevouts; funding UTXO authentication remains
-required at the caller boundary. Backend enforcement and native CTV node
+Script verification uses supplied prevouts; callers outside `bind_psbt` must
+authenticate them as well. Backend enforcement and native CTV node
 execution are separate release requirements. See the
 [CTV fork repair record](CTV_FORK_AUDIT.md) for exact evidence and limits. The
 separate Core inscription checks cover ordinary Taproot; they do not validate
