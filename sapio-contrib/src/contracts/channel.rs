@@ -24,69 +24,86 @@ use std::sync::{Arc, Mutex};
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitcoin::secp256k1::*;
+    use crate::test_helpers::{context, key};
     use bitcoin::Amount;
-    use miniscript::Descriptor;
-    use miniscript::DescriptorTrait;
 
-    use sapio_ctv_emulator_trait::CTVAvailable;
+    fn channel() -> Channel<Start, Args> {
+        Channel {
+            pd: PhantomData,
+            alice: key(1),
+            bob: key(2),
+            amount: Amount::from_sat(1000).into(),
+            resolution: key(3).compile(context(1000)).unwrap(),
+            db: Arc::new(Mutex::new(MockDB {})),
+        }
+    }
+
     #[test]
-    fn it_works() {
-        db_serde::register_db("mock".to_string(), |_s| Arc::new(Mutex::new(MockDB {})));
-        let full = Secp256k1::new();
-        let mut rng = bitcoin::secp256k1::rand::thread_rng();
-        let public_keys: Vec<_> = (0..3)
-            .map(|_| full.generate_keypair(&mut rng).1.into())
-            .collect();
-        let resolution = Compiled::from_address(
-            Descriptor::<bitcoin::XOnlyPublicKey>::Pkh(miniscript::descriptor::Pkh::new(
-                public_keys[2],
-            ))
-            .address(bitcoin::Network::Regtest)
-            .expect("An Address"),
-            None,
-        );
+    fn contest_compiles_and_preserves_timeout_and_balance() {
+        let object = channel().compile(context(1000)).unwrap();
+        object.validate().unwrap();
+        let start = object.ctv_to_tx.values().next().unwrap();
+        assert_eq!(start.outputs[0].amount.as_sat(), 1000);
+        let stop = start.outputs[0].contract.ctv_to_tx.values().next().unwrap();
+        assert_eq!(stop.outputs[0].amount.as_sat(), 1000);
+        assert_eq!(stop.tx.input[0].sequence, 100);
+        assert!(serde_json::to_string(&start.outputs[0].contract.descriptor)
+            .unwrap()
+            .contains("older(100)"));
+    }
 
-        let db = Arc::new(Mutex::new(MockDB {}));
-        let x: Channel<Start, Args> = Channel {
-            pd: PhantomData,
-            alice: public_keys[0],
-            bob: public_keys[1],
-            amount: Amount::from_sat(1).into(),
-            resolution: resolution.clone(),
-            db: db.clone(),
-        };
-        let y: Channel<Stop, Args> = Channel {
-            pd: PhantomData,
-            alice: public_keys[0],
-            bob: public_keys[1],
-            amount: Amount::from_sat(1).into(),
-            resolution,
-            db,
-        };
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&schemars::schema_for!(Channel<Stop, Args>)).unwrap()
+    #[test]
+    fn cooperative_close_requires_both_keys_and_conserves_value() {
+        let contract = channel();
+        assert_eq!(
+            contract.guard_signed(context(1000)),
+            Clause::And(vec![Clause::Key(key(1)), Clause::Key(key(2))])
         );
-        println!("{}", serde_json::to_string_pretty(&y).unwrap());
-        let mut ctx = sapio::contract::Context::new(
-            bitcoin::Network::Regtest,
-            Amount::from_sat(10000),
-            std::sync::Arc::new(CTVAvailable),
-            "root".try_into().unwrap(),
-            Default::default(),
-            None,
+        let update = |a, b| {
+            Some(Update {
+                split: (Amount::from_sat(a).into(), Amount::from_sat(b).into()),
+            })
+        };
+        let template = contract
+            .continue_cooperate(context(1000), update(400, 600))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            template
+                .tx
+                .output
+                .iter()
+                .map(|o| o.value)
+                .collect::<Vec<_>>(),
+            vec![400, 600]
         );
-        Compilable::compile(&x, ctx.derive_str(Arc::new("X".into())).unwrap()).ok();
-        Compilable::compile(&y, ctx.derive_str(Arc::new("Y".into())).unwrap()).ok();
+        assert!(contract
+            .continue_cooperate(context(1000), update(400, 601))
+            .is_err());
+        assert!(contract
+            .continue_cooperate(context(1000), None)
+            .unwrap()
+            .next()
+            .is_none());
+        assert!(contract.compile(context(999)).is_err());
+    }
+
+    #[test]
+    fn database_locator_round_trips_without_phantom_arguments() {
+        db_serde::register_db("mock".into(), |_| Arc::new(Mutex::new(MockDB {})));
+        let json = serde_json::to_string(&channel()).unwrap();
+        assert!(!json.contains("pd"));
+        let decoded: Channel<Start, Args> = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.alice, key(1));
+        assert_eq!(decoded.db.lock().unwrap().link().type_, "mock");
     }
 }
 
-/// Main Update to Channel
-#[derive(Debug, JsonSchema)]
+/// Balances for an authenticated cooperative channel close.
+#[derive(Debug, JsonSchema, Serialize, Deserialize)]
 pub struct Update {
-    /// hash to revoke
-    revoke: bitcoin::hashes::sha256::Hash,
     /// the balances of the channel
     split: (CoinAmount, CoinAmount),
 }
@@ -101,11 +118,11 @@ impl TryFrom<Args> for Update {
     }
 }
 /// Args are some messages that can be passed to a Channel instance
-#[derive(Debug, JsonSchema)]
+#[derive(Debug, JsonSchema, Serialize, Deserialize)]
 pub enum Args {
     /// Wrapper around Update
     Update(Update),
-    /// Revoke a hash and move to the next state...
+    /// No cooperative settlement update was supplied.
     None,
 }
 impl Default for Args {
@@ -168,7 +185,8 @@ mod db_serde {
         D: Deserializer<'de>,
     {
         let handle = DBHandle::deserialize(deserializer)?;
-        if let Some(f) = DB_TYPES.lock().unwrap().get(&handle.type_) {
+        let resolver = DB_TYPES.lock().unwrap().get(&handle.type_).copied();
+        if let Some(f) = resolver {
             Ok(f(&handle.id))
         } else {
             Err(D::Error::unknown_variant(&handle.type_, &[]))
@@ -197,13 +215,13 @@ impl State for Start {}
 impl State for Stop {}
 
 #[derive(JsonSchema, Serialize, Deserialize)]
+#[serde(bound(serialize = "", deserialize = ""))]
 struct Channel<T: State, ArgsT: TryInto<Update>> {
+    #[serde(skip, default)]
     pd: PhantomData<(T, ArgsT)>,
-    // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
-    // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
     amount: CoinAmount,
     resolution: Compiled,
@@ -213,18 +231,17 @@ struct Channel<T: State, ArgsT: TryInto<Update>> {
     db: Arc<Mutex<dyn DB>>,
 }
 
-fn coerce_args<T>(t: T) -> Result<Update, CompilationError>
-where
-    T: TryInto<Update, Error = CompilationError>,
-{
-    t.try_into()
+fn coerce_args(t: Args) -> Result<Option<Update>, CompilationError> {
+    Ok(match t {
+        Args::Update(update) => Some(update),
+        Args::None => None,
+    })
 }
 
 /// Functionality Available for a channel regardless of state
 impl<T: State> Channel<T, Args>
 where
-    Self: Contract,
-    <Self as Contract>::StatefulArguments: TryInto<Update, Error = CompilationError>,
+    Self: Contract<StatefulArguments = Args>,
 {
     #[guard]
     fn timeout(self, _ctx: Context) {
@@ -235,17 +252,24 @@ where
         Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
     }
 
-    #[continuation(guarded_by = "[Self::signed]", coerce_args = "coerce_args")]
-    fn update_state_a(self, _ctx: sapio::Context, _o: Update) {
-        Ok(Box::new(std::iter::empty()))
-    }
-    #[continuation(guarded_by = "[Self::signed]", coerce_args = "coerce_args")]
-    fn update_state_b(self, _ctx: sapio::Context, _o: Update) {
-        Ok(Box::new(std::iter::empty()))
-    }
-    #[continuation(guarded_by = "[Self::signed]", coerce_args = "coerce_args")]
-    fn cooperate(self, _ctx: sapio::Context, _o: Update) {
-        Ok(Box::new(std::iter::empty()))
+    #[continuation(guarded_by = "[Self::signed]", coerce_args = "coerce_args", web_api)]
+    fn cooperate(self, ctx: sapio::Context, update: Option<Update>) {
+        let Some(update) = update else { return empty() };
+        let alice: bitcoin::Amount = update.split.0.try_into()?;
+        let bob: bitcoin::Amount = update.split.1.try_into()?;
+        if alice.checked_add(bob) != Some(self.amount.try_into()?) {
+            return Err(CompilationError::Custom(
+                "Channel close must preserve its balance".into(),
+            ));
+        }
+        let mut template = ctx.template();
+        if alice != bitcoin::Amount::ZERO {
+            template = template.add_output(alice, &self.alice, None)?;
+        }
+        if bob != bitcoin::Amount::ZERO {
+            template = template.add_output(bob, &self.bob, None)?;
+        }
+        template.into()
     }
 }
 
@@ -270,7 +294,7 @@ impl FunctionalityAtState for Channel<Start, Args> {
                     pd: Default::default(),
                     alice: self.alice,
                     bob: self.bob,
-                    amount: self.amount.try_into().unwrap(),
+                    amount: self.amount,
                     resolution: self.resolution.clone(),
                     db: self.db.clone(),
                 },
@@ -286,6 +310,7 @@ impl FunctionalityAtState for Channel<Stop, Args> {
     fn finish_contest(self, ctx: sapio::Context) {
         ctx.template()
             .add_output(self.amount.try_into()?, &self.resolution, None)?
+            .set_sequence(0, sapio_base::timelocks::RelHeight::from(100).into())?
             .into()
     }
 }
@@ -294,12 +319,12 @@ impl FunctionalityAtState for Channel<Stop, Args> {
 /// States.
 impl Contract for Channel<Start, Args> {
     declare! {then, Self::begin_contest, Self::finish_contest}
-    declare! {updatable<Args>, Self::update_state_a, Self::update_state_b }
+    declare! {updatable<Args>, Self::cooperate }
     declare! {finish, Self::signed}
 }
 
 impl Contract for Channel<Stop, Args> {
     declare! {then, Self::begin_contest, Self::finish_contest}
-    declare! {updatable<Args>, Self::update_state_a, Self::update_state_b }
+    declare! {updatable<Args>, Self::cooperate }
     declare! {finish, Self::signed}
 }

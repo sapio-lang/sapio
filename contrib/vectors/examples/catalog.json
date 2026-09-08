@@ -1,0 +1,209 @@
+{
+  "treepay": {
+    "wasm": "sapio_wasm_plugin_example.wasm",
+    "input": "treepay.json",
+    "dependencies": [],
+    "expect": {
+      "ctv_count": 1,
+      "root_output_values": [
+        1000,
+        2000
+      ]
+    }
+  },
+  "trampolinepay": {
+    "wasm": "trampolinepay.wasm",
+    "input": "trampolinepay.json",
+    "dependencies": [
+      "treepay"
+    ],
+    "expect": {
+      "ctv_count": 1,
+      "root_output_values": [
+        3215
+      ]
+    }
+  },
+  "vault": {
+    "wasm": "sapio_wasm_vault.wasm",
+    "input": "vault.json",
+    "dependencies": [],
+    "expect": {
+      "ctv_count": 2
+    }
+  },
+  "staker": {
+    "wasm": "sapio_wasm_staker.wasm",
+    "input": "staker.json",
+    "dependencies": [],
+    "expect": {
+      "ctv_count": 2
+    }
+  },
+  "coin_pool": {
+    "wasm": "sapio_wasm_coin_pool.wasm",
+    "input": "coin_pool.json",
+    "dependencies": [],
+    "expect": {
+      "ctv_count": 1
+    }
+  },
+  "fedpeg": {
+    "wasm": "sapio_wasm_fedpeg.wasm",
+    "input": "fedpeg.json",
+    "dependencies": [],
+    "expect": {
+      "ctv_count": 1
+    }
+  },
+  "helloworld": {
+    "wasm": "sapio_wasm_helloworld.wasm",
+    "input": "helloworld.json",
+    "dependencies": [],
+    "expect": {
+      "ctv_count": 1,
+      "root_output_values": [
+        1000,
+        2000
+      ]
+    }
+  },
+  "op_return_chain": {
+    "wasm": "sapio_wasm_op_return_chain.wasm",
+    "input": "op_return_chain.json",
+    "dependencies": [],
+    "expect": {
+      "suggested_count": 1,
+      "root_output_values": [
+        1000
+      ]
+    }
+  },
+  "hanukkiah": {
+    "wasm": "sapio_wasm_hanukkiah.wasm",
+    "input": "hanukkiah.json",
+    "dependencies": [],
+    "expect": {
+      "ctv_count": 1
+    }
+  },
+  "payment_pool": {
+    "wasm": "sapio_wasm_payment_pool.wasm",
+    "input": "payment_pool.json",
+    "dependencies": [],
+    "expect": {
+      "ctv_count": 1,
+      "root_output_values": [
+        1000,
+        2000
+      ]
+    }
+  },
+  "jamesob-vault": {
+    "wasm": "sapio_wasm_jamesob_vault.wasm",
+    "input": "jamesob-vault.json",
+    "dependencies": [],
+    "expect": {
+      "ctv_count": 2
+    }
+  },
+  "nft": {
+    "wasm": "sapio_wasm_nft.wasm",
+    "input": "nft.json",
+    "dependencies": [],
+    "expect": {
+      "ctv_count": 0,
+      "suggested_count": 0,
+      "continuation_count": 1
+    }
+  },
+  "nft-sale": {
+    "wasm": "sapio_wasm_nft_sale.wasm",
+    "input": "nft-sale.json",
+    "dependencies": [
+      "nft"
+    ],
+    "expect": {
+      "ctv_count": 1,
+      "root_output_values": [
+        1000,
+        1500,
+        500
+      ],
+      "root_lock_time": 100,
+      "root_required_input_amount": 1000
+    }
+  },
+  "nft-auction": {
+    "wasm": "sapio_wasm_nft_auction.wasm",
+    "input": "nft-auction.json",
+    "dependencies": [
+      "nft"
+    ],
+    "expect": {
+      "suggested_count": 3,
+      "root_lock_times": [
+        100,
+        106,
+        112
+      ],
+      "root_required_input_amount": 1000,
+      "root_output_values_by_lock_time": {
+        "100": [
+          1000,
+          1500,
+          500
+        ],
+        "106": [
+          1000,
+          1125,
+          375
+        ],
+        "112": [
+          1000,
+          750,
+          250
+        ]
+      }
+    }
+  },
+  "clause-module": {
+    "wasm": "sapio_wasm_clause.wasm",
+    "input": "clause-module.json",
+    "dependencies": [],
+    "expect": {
+      "clause": "and(pk(79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798),pk(c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5))"
+    }
+  },
+  "clause-module-trampoline": {
+    "wasm": "sapio_wasm_clause_trampoline.wasm",
+    "input": "clause-module-trampoline.json",
+    "dependencies": [
+      "clause-module"
+    ],
+    "expect": {
+      "clause": "and(pk(79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798),pk(c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5))"
+    }
+  },
+  "ordinal-example": {
+    "wasm": "sapio_wasm_ordinal_example.wasm",
+    "input": "ordinal-example.json",
+    "dependencies": [],
+    "expect": {
+      "ctv_count": 0,
+      "suggested_count": 0,
+      "continuation_count": 2
+    }
+  },
+  "ordinal-inscription": {
+    "wasm": "sapio_wasm_ordinal_inscription.wasm",
+    "input": "ordinal-inscription.json",
+    "dependencies": [],
+    "expect": {
+      "suggested_count": 1,
+      "root_output_values": [
+        9500
+      ]
+    }
+  }
+}

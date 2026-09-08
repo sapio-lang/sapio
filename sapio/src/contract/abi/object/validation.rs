@@ -45,6 +45,9 @@ pub enum ArtifactErrorKind {
     OutputAmountOverflow,
     /// The declared funding requirement is smaller than the output total.
     InsufficientAmount,
+    /// Input zero's requirement exceeds the aggregate, or a single-input
+    /// transaction claims funding from nonexistent auxiliary inputs.
+    InvalidInputAmount,
 }
 
 impl fmt::Display for ArtifactErrorKind {
@@ -75,6 +78,12 @@ impl fmt::Display for ArtifactErrorKind {
             Self::OutputAmountOverflow => write!(f, "output amount total overflows"),
             Self::InsufficientAmount => {
                 write!(f, "declared funding amount is below the output total")
+            }
+            Self::InvalidInputAmount => {
+                write!(
+                    f,
+                    "contract input funding requirement is inconsistent with the transaction"
+                )
             }
         }
     }
@@ -154,6 +163,11 @@ impl Object {
                 }
                 if total > template.max.as_sat() {
                     return Err(error(ArtifactErrorKind::InsufficientAmount));
+                }
+                if template.required_input_amount > template.max
+                    || (tx.input.len() == 1 && template.required_input_amount != template.max)
+                {
+                    return Err(error(ArtifactErrorKind::InvalidInputAmount));
                 }
             }
         }

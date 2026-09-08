@@ -1,4 +1,5 @@
 use bitcoin::Amount;
+use sapio::contract::CompilationError;
 use sapio::contract::Contract;
 use sapio::contract::StatefulArgumentsTrait;
 use sapio::decl_continuation;
@@ -23,13 +24,36 @@ pub struct Mint_NFT_Trait_Version_0_1_0 {
     /// be None.
     pub minting_module: Option<NFTMintingModule>,
     /// how much royalty, should be paid, as a fraction of sale (0.0 to 1.0)
+    #[schemars(range(min = 0.0, max = 1.0))]
     pub royalty: f64,
 }
 
 const PRECISION: u64 = 1000000;
 impl Mint_NFT_Trait_Version_0_1_0 {
-    pub fn compute_royalty_for_artist(&self, amount: Amount) -> Amount {
-        (amount * (PRECISION as f64 * self.royalty).round() as u64) / PRECISION
+    /// Validate the mint metadata before constructing a contract or sale.
+    pub fn validate(&self) -> Result<(), CompilationError> {
+        if !self.royalty.is_finite() || !(0.0..=1.0).contains(&self.royalty) {
+            return Err(CompilationError::Custom(
+                "Royalty must be a finite fraction from 0 to 1".into(),
+            ));
+        }
+        if self.ipfs_nft.version != 0
+            || self.ipfs_nft.edition == 0
+            || self.ipfs_nft.edition > self.ipfs_nft.of_edition_count
+        {
+            return Err(CompilationError::Custom(
+                "NFT metadata requires version 0 and a valid edition".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Round the royalty fraction to millionths, then round the payout down to sats.
+    pub fn compute_royalty_for_artist(&self, amount: Amount) -> Result<Amount, CompilationError> {
+        self.validate()?;
+        let fraction = (PRECISION as f64 * self.royalty).round() as u64;
+        let sats = u128::from(amount.as_sat()) * u128::from(fraction) / u128::from(PRECISION);
+        Ok(Amount::from_sat(sats as u64))
     }
 }
 
@@ -136,3 +160,6 @@ impl Default for Sell {
     }
 }
 impl StatefulArgumentsTrait for Sell {}
+
+#[cfg(test)]
+mod tests;

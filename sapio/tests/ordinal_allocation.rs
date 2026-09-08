@@ -63,3 +63,38 @@ fn rejects_reversed_or_insufficient_ranges() {
         ));
     }
 }
+
+#[test]
+fn external_funds_follow_all_tracked_input_sats() {
+    let ranges = [(100, 105), (200, 205)];
+    assert!(context(&ranges).add_amount(Amount::ONE_SAT).is_err());
+    assert!(context(&ranges)
+        .spend_amount(Amount::from_sat(9))
+        .unwrap()
+        .add_amount(Amount::ONE_SAT)
+        .is_err());
+    let exhausted = context(&ranges).spend_amount(Amount::from_sat(10)).unwrap();
+    assert_eq!(sats(&exhausted), Vec::<u64>::new());
+    let external = exhausted.add_amount(Amount::from_sat(7)).unwrap();
+    assert!(external.get_ordinals().is_none());
+    assert_eq!(external.funds().as_sat(), 7);
+    assert_eq!(
+        external.spend_amount(Amount::from_sat(7)).unwrap().funds(),
+        Amount::ZERO
+    );
+    // A malformed context with untracked existing money is not exhausted.
+    assert!(context(&[]).add_amount(Amount::ONE_SAT).is_err());
+}
+
+#[test]
+fn adding_external_funds_rejects_overflow() {
+    let ctx = Context::new(
+        Network::Regtest,
+        Amount::from_sat(u64::MAX),
+        Arc::new(CTVAvailable),
+        EffectPath::try_from("overflow").unwrap(),
+        Arc::new(Default::default()),
+        None,
+    );
+    assert!(ctx.add_amount(Amount::ONE_SAT).is_err());
+}

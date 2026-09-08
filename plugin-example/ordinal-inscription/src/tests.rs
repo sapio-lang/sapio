@@ -60,6 +60,7 @@ fn malformed_ordinal_ranges_return_errors() {
         vec![(0, u64::MAX), (0, 1)],
         vec![(0, 9_999)],
         vec![(0, 10_001)],
+        vec![(0, 5_000), (0, 5_000)],
     ] {
         assert!(matches!(
             contract.ensure_amount(context(&ranges)),

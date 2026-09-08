@@ -123,19 +123,27 @@ pub struct Template {
     /// future version may support other indexes)
     #[serde(rename = "precomputed_template_hash_idx")]
     pub ctv_index: u32,
-    /// the amount being sent to this Template (TODO: currently computed via tx.total_amount())
+    /// Aggregate funding required across all inputs for outputs and reserved fees.
     #[serde(
         rename = "max_amount_sats",
         with = "bitcoin::util::amount::serde::as_sat"
     )]
-    #[schemars(with = "i64")]
+    #[schemars(with = "u64")]
     pub max: Amount,
-    /// the amount being sent to this Template (TODO: currently computed via tx.total_amount())
+    /// Minimum funding required from the contract input at index zero, after
+    /// accounting for declared auxiliary input contributions.
+    #[serde(
+        rename = "required_input_amount_sats",
+        with = "bitcoin::util::amount::serde::as_sat"
+    )]
+    #[schemars(with = "u64")]
+    pub required_input_amount: Amount,
+    /// Minimum fee rate requested for this transaction.
     #[serde(
         rename = "min_feerate_sats_vbyte",
         with = "bitcoin::util::amount::serde::as_sat::opt"
     )]
-    #[schemars(with = "Option<i64>")]
+    #[schemars(with = "Option<u64>")]
     pub min_feerate_sats_vbyte: Option<Amount>,
     /// any metadata fields attached to this template
     #[serde(

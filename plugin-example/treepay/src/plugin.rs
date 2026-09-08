@@ -12,8 +12,8 @@ use sapio::contract::*;
 use sapio::util::amountrange::*;
 use sapio::*;
 use sapio_base::timelocks::AnyRelTimeLock;
-use sapio_wasm_plugin::client::*;
-use sapio_wasm_plugin::*;
+#[cfg(target_arch = "wasm32")]
+use sapio_wasm_plugin::{optional_logo, REGISTER};
 use schemars::*;
 use serde::*;
 use std::collections::VecDeque;
@@ -61,12 +61,14 @@ impl PayThese {
         bld.add_fees(self.fees)?.into()
     }
 
-    fn total_to_pay(&self) -> Amount {
-        let mut amt = self.fees;
-        for (x, _) in self.contracts.iter() {
-            amt += *x;
-        }
-        amt
+    fn total_to_pay(&self) -> Result<Amount, CompilationError> {
+        self.contracts
+            .iter()
+            .try_fold(self.fees, |total, (amount, _)| {
+                total
+                    .checked_add(*amount)
+                    .ok_or(CompilationError::OutOfFunds)
+            })
     }
 }
 impl Contract for PayThese {
@@ -76,6 +78,7 @@ impl Contract for PayThese {
 impl TreePay {
     #[then]
     fn expand(self, ctx: Context) {
+        self.validate()?;
         let mut queue: VecDeque<(Amount, Box<dyn Compilable>)> = self
             .participants
             .iter()
@@ -107,14 +110,52 @@ impl TreePay {
                     fees: self.fee_sats_per_tx,
                     delay: self.timelock_backpressure,
                 });
-                queue.push_back((pay.total_to_pay(), pay))
+                queue.push_back((pay.total_to_pay()?, pay))
             }
         }
+    }
+
+    fn validate(&self) -> Result<Amount, CompilationError> {
+        if self.radix < 2 || self.participants.is_empty() {
+            return Err(CompilationError::Custom(
+                "TreePay needs payments and radix >= 2".into(),
+            ));
+        }
+        let payments = self
+            .participants
+            .iter()
+            .try_fold(Amount::ZERO, |total, payment| {
+                if payment.amount == Amount::ZERO {
+                    return Err(CompilationError::Custom(
+                        "TreePay payments must be positive".into(),
+                    ));
+                }
+                total
+                    .checked_add(payment.amount)
+                    .ok_or(CompilationError::OutOfFunds)
+            })?;
+        // Each intermediate transaction reduces the queue by radix - 1 entries;
+        // the final transaction pays the remaining entries directly.
+        let intermediate = self
+            .participants
+            .len()
+            .saturating_sub(self.radix)
+            .div_ceil(self.radix - 1);
+        let fees = self
+            .fee_sats_per_tx
+            .checked_mul(intermediate as u64 + 1)
+            .ok_or(CompilationError::OutOfFunds)?;
+        payments
+            .checked_add(fees)
+            .ok_or(CompilationError::OutOfFunds)
     }
 }
 impl Contract for TreePay {
     declare! {then, Self::expand}
     declare! {non updatable}
+    fn ensure_amount(&self, _ctx: Context) -> Result<Amount, CompilationError> {
+        self.validate()
+    }
 }
 
 /// # Different Calling Conventions to create a Treepay
@@ -132,24 +173,35 @@ enum Versions {
     /// # Batching Trait API
     BatchingTraitVersion0_1_1(BatchingTraitVersion0_1_1),
 }
-impl From<BatchingTraitVersion0_1_1> for TreePay {
-    fn from(args: BatchingTraitVersion0_1_1) -> Self {
-        TreePay {
+impl TryFrom<BatchingTraitVersion0_1_1> for TreePay {
+    type Error = CompilationError;
+    fn try_from(args: BatchingTraitVersion0_1_1) -> Result<Self, Self::Error> {
+        Ok(TreePay {
             participants: args.payments,
             radix: 4,
             // estimate fees to be 4 outputs and 1 input + change
-            fee_sats_per_tx: args.feerate_per_byte * ((4 * 41) + 41 + 10),
+            fee_sats_per_tx: args
+                .feerate_per_byte
+                .checked_mul((4 * 41) + 41 + 10)
+                .ok_or(CompilationError::OutOfFunds)?,
             timelock_backpressure: None,
-        }
+        })
     }
 }
-impl From<Versions> for TreePay {
-    fn from(v: Versions) -> TreePay {
-        match v {
+impl TryFrom<Versions> for TreePay {
+    type Error = CompilationError;
+    fn try_from(v: Versions) -> Result<TreePay, Self::Error> {
+        let tree = match v {
             Versions::TreePay(v) => v,
             Versions::Advanced { main_arguments, .. } => main_arguments,
-            Versions::BatchingTraitVersion0_1_1(v) => v.into(),
-        }
+            Versions::BatchingTraitVersion0_1_1(v) => v.try_into()?,
+        };
+        tree.validate()?;
+        Ok(tree)
     }
 }
+#[cfg(target_arch = "wasm32")]
 REGISTER![[TreePay, Versions], "logo.png"];
+
+#[cfg(test)]
+mod tests;

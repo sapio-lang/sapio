@@ -7,8 +7,8 @@
 //! Hello World Contract
 
 #![deny(missing_docs)]
-use sapio_wasm_plugin::client::*;
-use sapio_wasm_plugin::*;
+#[cfg(target_arch = "wasm32")]
+use sapio_wasm_plugin::{optional_logo, REGISTER};
 
 use bitcoin::util::amount::CoinAmount;
 use sapio::contract::*;
@@ -66,4 +66,5 @@ impl Contract for TrustlessEscrow {
     declare! {non updatable}
 }
 
+#[cfg(target_arch = "wasm32")]
 REGISTER![TrustlessEscrow, "logo.png"];

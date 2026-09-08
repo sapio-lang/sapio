@@ -1,0 +1,16 @@
+{
+  "arguments": {
+    "timeout": {
+      "RH": 6
+    },
+    "hot_key": "tpubD6NzVbkrYhZ4Wf398td3H8YhWBsXx9Sxa4W3cQWkNW3N3DHSNB2qtPoUMXrA6JNaPxodQfRpoZNE5tGM9iZ4xfUEFRJEJvfs8W5paUagYCE",
+    "backup": "tpubD6NzVbkrYhZ4Wf398td3H8YhWBsXx9Sxa4W3cQWkNW3N3DHSNB2qtPoUMXrA6JNaPxodQfRpoZNE5tGM9iZ4xfUEFRJEJvfs8W5paUagYCE",
+    "backup_addr": "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj",
+    "default_feerate": 250,
+    "cpfp": null
+  },
+  "context": {
+    "amount": 10000,
+    "network": "Regtest"
+  }
+}

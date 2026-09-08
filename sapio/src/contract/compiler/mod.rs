@@ -243,7 +243,7 @@ where
                     .map(|r_txtmpl| {
                         let txtmpl = r_txtmpl?;
                         let h = txtmpl.hash();
-                        amount_range.update_range(txtmpl.max);
+                        amount_range.update_range(txtmpl.required_input_amount);
                         // Add the addition guards to these clauses
                         let txtmpl = if func.get_returned_txtmpls_modify_guards() {
                             &mut comitted_txns

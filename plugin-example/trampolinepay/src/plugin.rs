@@ -12,7 +12,6 @@ use batching_trait::{BatchingModule, BatchingTraitVersion0_1_1};
 
 use sapio::contract::*;
 use sapio::*;
-use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::plugin_handle::PluginHandle;
 use sapio_wasm_plugin::*;
 use schemars::*;
@@ -56,4 +55,5 @@ impl Contract for TrampolinePay {
     declare! {non updatable}
 }
 
+#[cfg(target_arch = "wasm32")]
 REGISTER![TrampolinePay, "logo.png"];

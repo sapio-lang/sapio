@@ -31,12 +31,17 @@ pub struct Hanukkiah {
     night: Option<u8>,
 }
 
-fn candles_left(s: u8) -> u8 {
-    if s == 8 {
-        0
-    } else {
-        s + candles_left(s + 1)
+fn candle_time(start: AbsTime, night: u8) -> Result<AbsTime, CompilationError> {
+    if !(1..=8).contains(&night) {
+        return Err(CompilationError::Custom(
+            "Candle night must be between 1 and 8".into(),
+        ));
     }
+    let time = start
+        .get()
+        .checked_add(24 * 60 * 60 * u32::from(night - 1))
+        .ok_or(CompilationError::TerminateCompilation)?;
+    Ok(AbsTime::try_from(time)?)
 }
 impl Hanukkiah {
     #[then]
@@ -44,6 +49,7 @@ impl Hanukkiah {
         let mut ctx = ictx;
         let mut txn = ctx.derive_num(0u64)?.template();
         let night = self.night.unwrap_or(1);
+        let lock_time = candle_time(self.night_time, night)?;
         if night < 8 {
             let next_night = ctx.derive_num(1u64)?.compile(Hanukkiah {
                 night: Some(night + 1),
@@ -59,11 +65,11 @@ impl Hanukkiah {
             )?;
         }
         let size = txn.estimate_tx_size();
-        txn = txn.add_amount(self.feerate_per_byte * size);
-        let candle_time =
-            AbsTime::try_from(self.night_time.get() + 24 * 60 * 60 * (night as u32 - 1_u32))?
-                .into();
-        txn.set_lock_time(candle_time)?.into()
+        let fees = self
+            .feerate_per_byte
+            .checked_mul(size)
+            .ok_or(CompilationError::OutOfFunds)?;
+        txn.set_lock_time(lock_time.into())?.add_fees(fees)?.into()
     }
 }
 impl Contract for Hanukkiah {
@@ -136,6 +142,12 @@ struct Hanukkiah2Night {
 impl Hanukkiah2Night {
     #[then]
     fn light_candles(self, ctx: Context) {
+        let lock_time = candle_time(self.night_time, self.night)?;
+        if self.recipients.len() != usize::from(self.night) {
+            return Err(CompilationError::Custom(
+                "Each candle requires one recipient".into(),
+            ));
+        }
         let mut txn = ctx.template();
         let mut r = self.recipients.clone();
         for _ in 0..self.night {
@@ -149,13 +161,11 @@ impl Hanukkiah2Night {
             )?;
         }
         let size = txn.estimate_tx_size();
-        let fees = self.feerate_per_byte * size;
-        txn = txn.add_amount(fees);
-        let candle_time =
-            AbsTime::try_from(self.night_time.get() + 24 * 60 * 60 * (self.night as u32 - 1))?
-                .into();
-        txn = txn.set_lock_time(candle_time)?.into();
-        txn.add_fees(fees)?.into()
+        let fees = self
+            .feerate_per_byte
+            .checked_mul(size)
+            .ok_or(CompilationError::OutOfFunds)?;
+        txn.set_lock_time(lock_time.into())?.add_fees(fees)?.into()
     }
 }
 impl Hanukkiah2 {
@@ -179,8 +189,10 @@ impl Hanukkiah2 {
             txn = txn.add_output(next_night.amount_range.max(), &next_night, None)?;
         }
         let size = txn.estimate_tx_size();
-        let fees = self.feerate_per_byte * size;
-        txn = txn.add_amount(fees);
+        let fees = self
+            .feerate_per_byte
+            .checked_mul(size)
+            .ok_or(CompilationError::OutOfFunds)?;
         let fee_paying_txn = txn.add_fees(fees)?;
         fee_paying_txn.into()
     }
@@ -192,4 +204,75 @@ impl Contract for Hanukkiah2 {
 impl Contract for Hanukkiah2Night {
     declare! {then, Self::light_candles}
     declare! {non updatable}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_helpers::{address, context};
+
+    #[test]
+    fn chained_candles_cover_eight_nights_and_account_for_fees() {
+        let contract = Hanukkiah {
+            recipient: address(1),
+            amount_per_candle: Amount::from_sat(1000).into(),
+            feerate_per_byte: Amount::from_sat(1),
+            night_time: AbsTime::try_from(500_000_001).unwrap(),
+            night: None,
+        };
+        let object = contract.compile(context(100_000)).unwrap();
+        object.validate().unwrap();
+        let mut current = &object;
+        for night in 1..=8 {
+            let template = current.ctv_to_tx.values().next().unwrap();
+            assert_eq!(template.tx.lock_time, 500_000_001 + 86400 * (night - 1));
+            assert!(template.max > template.total_amount());
+            let candles = template
+                .outputs
+                .iter()
+                .filter(|o| o.contract.ctv_to_tx.is_empty())
+                .collect::<Vec<_>>();
+            assert_eq!(candles.len(), night as usize);
+            assert!(candles.iter().all(|o| o.amount.as_sat() == 1000));
+            if night < 8 {
+                current = &template.outputs[0].contract;
+            }
+        }
+    }
+
+    #[test]
+    fn parallel_candles_cover_all_recipients_and_reject_bad_shapes() {
+        let recipients = Recipients(std::array::from_fn(|_| address(1)));
+        let text = serde_json::to_string(&recipients).unwrap();
+        let parsed: Recipients = serde_json::from_str(&text).unwrap();
+        assert_eq!(parsed.0.len(), 36);
+        assert!(Recipients::try_from(address(1).to_string()).is_err());
+        let contract = Hanukkiah2 {
+            recipient: recipients,
+            amount_per_candle: Amount::from_sat(1000).into(),
+            feerate_per_byte: Amount::from_sat(1),
+            night_time: AbsTime::try_from(500_000_001).unwrap(),
+        };
+        let object = contract.compile(context(100_000)).unwrap();
+        object.validate().unwrap();
+        let nights = &object.ctv_to_tx.values().next().unwrap().outputs;
+        assert_eq!(nights.len(), 8);
+        assert_eq!(
+            nights
+                .iter()
+                .map(|o| o.contract.ctv_to_tx.values().next().unwrap().outputs.len())
+                .sum::<usize>(),
+            36
+        );
+        assert!(candle_time(contract.night_time, 0).is_err());
+        assert!(candle_time(AbsTime::try_from(u32::MAX).unwrap(), 2).is_err());
+        let expensive = Hanukkiah {
+            recipient: address(1),
+            amount_per_candle: Amount::from_sat(1000).into(),
+            feerate_per_byte: Amount::from_sat(u64::MAX),
+            night_time: contract.night_time,
+            night: Some(8),
+        };
+        assert!(expensive.compile(context(100_000)).is_err());
+    }
 }

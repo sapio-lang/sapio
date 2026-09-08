@@ -1,0 +1,22 @@
+{
+  "arguments": {
+    "ForAddress": {
+      "cold_storage": "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj",
+      "hot_storage": "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj",
+      "n_steps": 2,
+      "amount_step": {
+        "Sats": 1000
+      },
+      "timeout": {
+        "RH": 2
+      },
+      "mature": {
+        "RH": 3
+      }
+    }
+  },
+  "context": {
+    "amount": 2000,
+    "network": "Regtest"
+  }
+}

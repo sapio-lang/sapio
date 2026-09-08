@@ -15,11 +15,20 @@ use sapio::util::amountrange::{AmountF64, AmountU64};
 use sapio::*;
 use sapio_base::timelocks::AnyRelTimeLock;
 use sapio_base::*;
-use sapio_wasm_plugin::client::*;
-use sapio_wasm_plugin::*;
+#[cfg(target_arch = "wasm32")]
+use sapio_wasm_plugin::{optional_logo, REGISTER};
 use schemars::*;
 use serde::*;
 use std::marker::PhantomData;
+
+fn estimated_fee(rate: AmountU64, size: u64) -> Result<Amount, CompilationError> {
+    let fee = (u128::from(u64::from(rate)) * 4)
+        .checked_mul(u128::from(size))
+        .ok_or(CompilationError::OutOfFunds)?
+        .div_ceil(1000);
+    let fee = u64::try_from(fee).map_err(|_| CompilationError::OutOfFunds)?;
+    Ok(Amount::from_sat(fee))
+}
 
 /// A type tag which tracks state for compile_if inside of Vault
 trait State: for<'a> Deserialize<'a> + JsonSchema + 'static {
@@ -84,9 +93,9 @@ struct Vault<S: State> {
     /// Where funds should land if they are backed up
     backup_addr: bitcoin::Address,
     /// # Default Fee
-    /// How much feerate each transaction should have per virtual kilo-weight
-    /// unit, in sats
-    /// e.g., a  1 sat per virtual kilo-weight unit feerate would be 1000
+    /// Fee rate in satoshis per 1000 weight units.
+    /// The unsigned size estimate is charged at four weight units per byte;
+    /// signature and witness growth are not included.
     default_feerate: AmountU64,
     /// # CPFP Config
     /// If a CPFP anchor is to be added
@@ -208,8 +217,12 @@ impl<S: State> Vault<S> {
             )?;
         }
         let size = tmpl.estimate_tx_size() + 8 + self.backup_addr.script_pubkey().len() as u64;
-        tmpl = tmpl.spend_amount((Amount::from(self.default_feerate) * 4 * size) / 1000)?;
-        let funds = tmpl.ctx().funds();
+        let fees = estimated_fee(self.default_feerate, size)?;
+        let funds = tmpl
+            .ctx()
+            .funds()
+            .checked_sub(fees)
+            .ok_or(CompilationError::OutOfFunds)?;
         tmpl = tmpl.add_output(
             funds,
             &Compiled::from_address(self.backup_addr.clone(), None),
@@ -221,7 +234,7 @@ impl<S: State> Vault<S> {
                 .into(),
             ),
         )?;
-        tmpl.into()
+        tmpl.add_fees(fees)?.into()
     }
     /// Only allow redeeming to begin when we are in the Secure state.
     #[compile_if]
@@ -243,8 +256,12 @@ impl<S: State> Vault<S> {
             )?;
         }
         let size = tmpl.estimate_tx_size() + 8 + 35 /* 1 byte len, 1 byte version, 1 byte len, 32 bytes data*/;
-        tmpl = tmpl.spend_amount((Amount::from(self.default_feerate) * 4 * size) / 1000)?;
-        let funds = tmpl.ctx().funds();
+        let fees = estimated_fee(self.default_feerate, size)?;
+        let funds = tmpl
+            .ctx()
+            .funds()
+            .checked_sub(fees)
+            .ok_or(CompilationError::OutOfFunds)?;
         tmpl = tmpl.add_output(
             funds,
             &Vault::<Redeeming> {
@@ -264,12 +281,17 @@ impl<S: State> Vault<S> {
                 .into(),
             ),
         )?;
-        tmpl.into()
+        tmpl.add_fees(fees)?.into()
     }
 }
 impl<S: State + 'static> Contract for Vault<S> {
     declare! {updatable<Option<Output>>, Self::spend_cold, Self::spend_hot}
     declare! {then, Self::backup, Self::begin_redeem}
 }
+#[cfg(target_arch = "wasm32")]
 type JamesVault = Vault<Secure>;
+#[cfg(target_arch = "wasm32")]
 REGISTER![JamesVault, "logo.png"];
+
+#[cfg(test)]
+mod tests;

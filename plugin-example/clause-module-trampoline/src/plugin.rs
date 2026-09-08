@@ -7,10 +7,8 @@
 //! Clause Module Example
 
 #![deny(missing_docs)]
-use bitcoin::util::amount::CoinAmount;
 use sapio::contract::*;
 use sapio::*;
-use sapio_base::timelocks::RelTime;
 use sapio_base::Clause;
 use sapio_wasm_plugin::client::plugin::Callable;
 use sapio_wasm_plugin::client::*;
@@ -19,7 +17,6 @@ use sapio_wasm_plugin::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use std::convert::{TryFrom, TryInto};
 
 /// Same Inner type as the wrapped module
 #[derive(JsonSchema, Deserialize, Serialize, Clone)]
@@ -55,4 +52,5 @@ impl Callable for Wrapper {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 REGISTER![Wrapper, "logo.png"];

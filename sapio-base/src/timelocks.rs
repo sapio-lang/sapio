@@ -57,12 +57,58 @@ use type_tags::*;
 
 /// LockTime represents either a nLockTime or a Sequence field.
 /// They are represented generically in the same type
-#[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
+#[derive(Serialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
 #[serde(transparent)]
 pub struct LockTime<RelOrAbs: Absolutivity, HeightOrTime: TimeType>(
     u32,
     #[serde(skip)] PhantomData<(RelOrAbs, HeightOrTime)>,
 );
+// The wire value is the encoded consensus field, including the relative-time
+// flag. Deserialization must enforce the same domain as the smart constructors.
+fn encoded_bounds<A: Absolutivity, TT: TimeType>() -> (u32, u32) {
+    match (A::IS_ABSOLUTE, TT::IS_HEIGHT) {
+        (false, true) => (0, u16::MAX as u32),
+        (false, false) => (1 << 22, (1 << 22) | u16::MAX as u32),
+        (true, true) => (0, 499_999_999),
+        (true, false) => (500_000_000, u32::MAX),
+    }
+}
+impl<'de, A: Absolutivity, TT: TimeType> Deserialize<'de> for LockTime<A, TT> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = u32::deserialize(deserializer)?;
+        let (min, max) = encoded_bounds::<A, TT>();
+        if !(min..=max).contains(&value) {
+            return Err(serde::de::Error::custom(
+                "Invalid encoded timelock for its height/time kind",
+            ));
+        }
+        Ok(Self(value, PhantomData))
+    }
+}
+impl<A: Absolutivity, TT: TimeType> JsonSchema for LockTime<A, TT> {
+    fn schema_name() -> String {
+        match (A::IS_ABSOLUTE, TT::IS_HEIGHT) {
+            (false, true) => "RelativeHeight",
+            (false, false) => "RelativeTime",
+            (true, true) => "AbsoluteHeight",
+            (true, false) => "AbsoluteTime",
+        }
+        .into()
+    }
+    fn json_schema(_gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        use schemars::schema::{InstanceType, NumberValidation, Schema, SchemaObject};
+        let (min, max) = encoded_bounds::<A, TT>();
+        Schema::Object(SchemaObject {
+            instance_type: Some(InstanceType::Integer.into()),
+            number: Some(Box::new(NumberValidation {
+                minimum: Some(min as f64),
+                maximum: Some(max as f64),
+                ..Default::default()
+            })),
+            ..Default::default()
+        })
+    }
+}
 #[derive(JsonSchema, Serialize, Deserialize, Copy, Clone, PartialOrd, Ord, Eq, PartialEq)]
 /// # Any Relative Time Lock
 /// Represents a type which can be either type of relative lock
@@ -228,8 +274,10 @@ mod trait_impls {
 
     impl TryFrom<Duration> for RelTime {
         type Error = LockTimeError;
+        /// Round up to whole 512-second intervals so the lock cannot mature
+        /// earlier than the requested duration, including fractional seconds.
         fn try_from(u: Duration) -> Result<Self, Self::Error> {
-            u16::try_from(u.as_secs() / 512)
+            u16::try_from(u.as_nanos().div_ceil(512_000_000_000))
                 .or(Err(LockTimeError::DurationTooLong(u)))
                 .map(From::from)
         }
@@ -237,8 +285,10 @@ mod trait_impls {
 
     impl TryFrom<Duration> for AbsTime {
         type Error = LockTimeError;
+        /// Round up to a whole Unix second so fractional timestamps cannot
+        /// mature early; timestamps outside the consensus field are rejected.
         fn try_from(u: Duration) -> Result<Self, Self::Error> {
-            u32::try_from(u.as_secs())
+            u32::try_from(u.as_nanos().div_ceil(1_000_000_000))
                 .or(Err(LockTimeError::DurationTooLong(u)))?
                 .try_into()
         }
@@ -300,5 +350,90 @@ mod trait_impls {
         fn from(lt: AnyRelTimeLock) -> Self {
             AnyTimeLock::R(lt)
         }
+    }
+}
+
+#[cfg(test)]
+mod wire_tests {
+    use super::*;
+    fn bounds<T: JsonSchema + serde::de::DeserializeOwned + serde::Serialize>(min: u32, max: u32) {
+        for raw in [min, max] {
+            let lock: T = serde_json::from_value(raw.into()).unwrap();
+            assert_eq!(serde_json::to_value(lock).unwrap(), raw);
+        }
+        for invalid in [u64::from(max) + 1, u64::MAX] {
+            assert!(serde_json::from_value::<T>(invalid.into()).is_err());
+        }
+        if min > 0 {
+            assert!(serde_json::from_value::<T>((min - 1).into()).is_err());
+        }
+        assert!(serde_json::from_str::<T>("-1").is_err());
+        let schema = schemars::schema_for!(T);
+        assert_eq!(
+            schema.schema.number.as_ref().unwrap().minimum,
+            Some(min as f64)
+        );
+        assert_eq!(
+            schema.schema.number.as_ref().unwrap().maximum,
+            Some(max as f64)
+        );
+    }
+    #[test]
+    fn all_four_encoded_domains_match_the_schema() {
+        bounds::<RelHeight>(0, 65_535);
+        bounds::<RelTime>(1 << 22, (1 << 22) | 65_535);
+        bounds::<AbsHeight>(0, 499_999_999);
+        bounds::<AbsTime>(500_000_000, u32::MAX);
+    }
+    #[test]
+    fn duration_conversion_never_rounds_a_lock_earlier() {
+        for (duration, intervals) in [
+            (Duration::ZERO, 0),
+            (Duration::from_nanos(1), 1),
+            (Duration::from_secs(1), 1),
+            (Duration::from_secs(512), 1),
+            (Duration::new(512, 1), 2),
+            (Duration::from_secs(864_000), 1688),
+            (Duration::from_secs(65_535 * 512), 65_535),
+        ] {
+            assert_eq!(
+                RelTime::try_from(duration).unwrap().get(),
+                (1 << 22) | intervals
+            );
+        }
+        assert!(RelTime::try_from(Duration::new(65_535 * 512, 1)).is_err());
+        assert!(RelTime::try_from(Duration::MAX).is_err());
+        assert_eq!(
+            AbsTime::try_from(Duration::new(600_000_000, 1))
+                .unwrap()
+                .get(),
+            600_000_001
+        );
+        assert_eq!(
+            AbsTime::try_from(Duration::from_secs(u32::MAX as u64))
+                .unwrap()
+                .get(),
+            u32::MAX
+        );
+        assert!(AbsTime::try_from(Duration::new(u32::MAX as u64, 1)).is_err());
+        assert!(AbsTime::try_from(Duration::MAX).is_err());
+        assert!(AbsTime::try_from(Duration::from_secs(499_999_999)).is_err());
+    }
+
+    #[test]
+    fn relative_flags_cannot_disable_or_change_lock_kind() {
+        for value in [1 << 16, 1 << 22, 1 << 31, u32::MAX] {
+            assert!(serde_json::from_value::<RelHeight>(value.into()).is_err());
+        }
+        for value in [0u32, 1 << 16, (1 << 22) | (1 << 16), (1 << 22) | (1 << 31)] {
+            assert!(serde_json::from_value::<RelTime>(value.into()).is_err());
+        }
+        let time = RelTime::from(42);
+        let json = serde_json::to_value(time).unwrap();
+        assert_eq!(json, (42 | (1 << 22)));
+        assert_eq!(
+            serde_json::from_value::<RelTime>(json).unwrap().get(),
+            time.get()
+        );
     }
 }

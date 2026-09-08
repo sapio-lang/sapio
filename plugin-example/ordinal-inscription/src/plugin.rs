@@ -45,6 +45,13 @@ impl InscribingStep {
                 CompilationError::OrdinalsError("Ordinal range total overflows".into())
             })?;
         }
+        let mut sorted = ords.0.clone();
+        sorted.sort_unstable();
+        if sorted.windows(2).any(|pair| pair[0].1 > pair[1].0) {
+            return Err(CompilationError::OrdinalsError(
+                "Ordinal ranges must not overlap".into(),
+            ));
+        }
         if total != ctx.funds() {
             return Err(CompilationError::OrdinalsError(
                 "Ordinal ranges must cover the available funds exactly".into(),

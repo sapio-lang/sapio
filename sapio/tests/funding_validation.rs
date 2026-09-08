@@ -24,12 +24,11 @@ struct Payment {
 impl Payment {
     #[then]
     fn pay(self, ctx: Context) {
-        let mut builder =
-            ctx.template()
-                .add_output(Amount::from_sat(1_000), &self.destination, None)?;
+        let mut builder = ctx.template();
         if self.extra_input {
-            builder = builder.add_sequence();
+            builder = builder.add_sequence().add_amount(Amount::from_sat(700))?;
         }
+        builder = builder.add_output(Amount::from_sat(1_000), &self.destination, None)?;
         builder.add_fees(Amount::from_sat(self.fees))?.into()
     }
 }
@@ -54,7 +53,7 @@ fn payment(destination: Compiled, extra_input: bool, fees: u64, path: &str) -> C
     }
     .compile(Context::new(
         Network::Regtest,
-        Amount::from_sat(1_000 + fees),
+        Amount::from_sat(if extra_input { 300 } else { 1_000 } + fees),
         Arc::new(CTVAvailable),
         path.try_into().unwrap(),
         Arc::new(Default::default()),
@@ -317,6 +316,104 @@ fn sums_auxiliary_funding_and_rejects_duplicates_and_overflow() {
             assert_eq!(index.writes.get(), 0);
         }
     }
+}
+
+#[test]
+fn auxiliary_contributions_do_not_inflate_contract_funding_requirements() {
+    let object = payment(leaf(), true, 100, "payment");
+    let template = object.ctv_to_tx.values().next().unwrap();
+    assert_eq!(template.max.as_sat(), 1_100);
+    assert_eq!(template.required_input_amount.as_sat(), 400);
+    assert_eq!(object.amount_range.max().as_sat(), 400);
+    let json = serde_json::to_value(&object).unwrap();
+    let roundtrip: Compiled = serde_json::from_value(json).unwrap();
+    roundtrip.validate().unwrap();
+    assert_eq!(roundtrip.amount_range.max().as_sat(), 400);
+}
+
+#[test]
+fn known_contract_input_minimum_is_checked_with_unresolved_or_excess_auxiliary_funding() {
+    let object = payment(leaf(), true, 100, "payment");
+    let hash = *object.ctv_to_tx.keys().next().unwrap();
+    for auxiliary_value in [None, Some(1_000)] {
+        let tx = funding(&object, 399);
+        let out = OutPoint::new(tx.txid(), 0);
+        let index = Index::with(tx);
+        let mut mapping = BTreeMap::new();
+        if let Some(amount) = auxiliary_value {
+            let extra = funding(&leaf(), amount);
+            let extra_out = OutPoint::new(extra.txid(), 0);
+            index.txs.borrow_mut().insert(extra.txid(), Arc::new(extra));
+            mapping.insert(hash, vec![None, Some(extra_out)]);
+        }
+        let signer = Signer::default();
+        assert!(matches!(
+            object.bind_psbt(out, mapping, index.clone(), &signer),
+            Err(ObjectError::InvalidFunding { .. })
+        ));
+        assert_eq!(signer.calls.load(Ordering::SeqCst), 0);
+        assert_eq!(index.writes.get(), 0);
+    }
+    let tx = funding(&object, 400);
+    let out = OutPoint::new(tx.txid(), 0);
+    let signer = Signer::default();
+    let program = object
+        .bind_psbt(out, BTreeMap::new(), Index::with(tx), &signer)
+        .unwrap();
+    let bound = psbt(&program, &object);
+    assert!(bound.inputs[0].witness_utxo.is_some());
+    assert!(bound.inputs[1].witness_utxo.is_none());
+    assert!(bound
+        .inputs
+        .iter()
+        .all(|input| input.partial_sigs.is_empty()
+            && input.tap_script_sigs.is_empty()
+            && input.tap_key_sig.is_none()));
+}
+
+#[test]
+fn builder_checks_initial_and_cumulative_funding_even_after_spending() {
+    let context = |funds| {
+        Context::new(
+            Network::Regtest,
+            Amount::from_sat(funds),
+            Arc::new(CTVAvailable),
+            "funding".try_into().unwrap(),
+            Arc::new(Default::default()),
+            None,
+        )
+    };
+    assert!(context(1000)
+        .template()
+        .add_amount(Amount::ONE_SAT)
+        .is_err());
+    assert!(context(1000).template().add_amount(Amount::ZERO).is_ok());
+    assert!(context(u64::MAX)
+        .template()
+        .spend_amount(Amount::from_sat(u64::MAX))
+        .unwrap()
+        .add_sequence()
+        .add_amount(Amount::ONE_SAT)
+        .is_err());
+    let builder = context(0)
+        .template()
+        .add_sequence()
+        .add_amount(Amount::from_sat(u64::MAX))
+        .unwrap()
+        .spend_amount(Amount::from_sat(u64::MAX))
+        .unwrap();
+    assert!(builder.add_amount(Amount::ONE_SAT).is_err());
+
+    let template: sapio::template::Template = context(1000)
+        .template()
+        .add_sequence()
+        .add_amount(Amount::from_sat(2000))
+        .unwrap()
+        .add_output(Amount::from_sat(1000), &leaf(), None)
+        .unwrap()
+        .into();
+    assert_eq!(template.max.as_sat(), 1000);
+    assert_eq!(template.required_input_amount, Amount::ZERO);
 }
 
 #[test]

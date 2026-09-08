@@ -23,9 +23,24 @@ pub trait Oracle {
 /// Under *certain* circumstances, composition could be optimized (e.g., schnorr keys)
 pub struct ThresholdOracle {
     /// the list of price oracles to consult
-    pub oracles: Vec<Box<dyn Oracle>>,
+    oracles: Vec<Box<dyn Oracle>>,
     /// how many oracles must agree
-    pub thresh: usize,
+    thresh: usize,
+}
+
+impl ThresholdOracle {
+    /// Construct a nonempty quorum with a threshold between one and its size.
+    pub fn new(
+        thresh: usize,
+        oracles: Vec<Box<dyn Oracle>>,
+    ) -> Result<Self, sapio::contract::CompilationError> {
+        if thresh == 0 || thresh > oracles.len() {
+            return Err(sapio::contract::CompilationError::TerminateWith(
+                "Invalid oracle quorum".into(),
+            ));
+        }
+        Ok(Self { thresh, oracles })
+    }
 }
 
 impl Oracle for ThresholdOracle {

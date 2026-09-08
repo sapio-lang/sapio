@@ -9,8 +9,8 @@
 #![deny(missing_docs)]
 use sapio::contract::*;
 
-use sapio_wasm_plugin::client::*;
-use sapio_wasm_plugin::*;
+#[cfg(target_arch = "wasm32")]
+use sapio_wasm_plugin::{optional_logo, REGISTER};
 use schemars::*;
 use serde::*;
 
@@ -31,4 +31,5 @@ impl TryFrom<Versions> for Vault {
         }
     }
 }
+#[cfg(target_arch = "wasm32")]
 REGISTER![[Vault, Versions], "logo.png"];

@@ -1,0 +1,25 @@
+{
+  "arguments": {
+    "TreePay": {
+      "participants": [
+        {
+          "amount": 1e-05,
+          "address": "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj"
+        },
+        {
+          "amount": 2e-05,
+          "address": "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj"
+        }
+      ],
+      "radix": 2,
+      "fee_sats_per_tx": 100,
+      "timelock_backpressure": {
+        "RH": 2
+      }
+    }
+  },
+  "context": {
+    "amount": 3100,
+    "network": "Regtest"
+  }
+}

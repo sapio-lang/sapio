@@ -9,19 +9,22 @@ use super::*;
 use std::sync::Arc;
 /// Put Contracts pay out as the price goes down.
 pub struct Put<'a> {
-    /// The # of units
-    amount: Amount,
-    /// The strike with ONE_UNIT precision (bitcoin per symbol)
-    strike_x_one_unit: u64,
-    operator_api: &'a dyn apis::OperatorApi,
-    user_api: &'a dyn apis::UserApi,
-    symbol: Symbol,
+    /// Satoshi notional paid per whole oracle-price unit (PRICE_UNIT).
+    pub amount: Amount,
+    /// The strike with PRICE_UNIT precision
+    pub strike_x_one_unit: u64,
+    /// Operator keys, oracle, and payout destination.
+    pub operator_api: &'a dyn apis::OperatorApi,
+    /// Counterparty key and payout destination.
+    pub user_api: &'a dyn apis::UserApi,
+    /// Oracle price symbol.
+    pub symbol: Symbol,
     /// whether we are buying or selling the put
-    buying: bool,
-    ctx: Context,
+    pub buying: bool,
+    /// Compilation context containing the full collateral.
+    pub ctx: Context,
 }
 
-const ONE_UNIT: u64 = 10_000;
 impl<'a> TryFrom<Put<'a>> for GenericBetArguments<'a> {
     type Error = CompilationError;
     fn try_from(mut v: Put<'a>) -> Result<Self, Self::Error> {
@@ -29,23 +32,30 @@ impl<'a> TryFrom<Put<'a>> for GenericBetArguments<'a> {
         let user = v.user_api.get_key();
         let mut outcomes = vec![];
         let strike = v.strike_x_one_unit;
-        let max_amount_bitcoin = v.amount * strike;
-        // Increment 1 dollar per step
+        if v.amount.as_sat() == 0 || strike == 0 {
+            return Err(invalid("Invalid put notional or strike"));
+        }
+        let max_amount_bitcoin = scaled_amount(v.amount, strike, PRICE_UNIT)?;
+        if max_amount_bitcoin.as_sat() == 0 {
+            return Err(invalid("Option collateral rounds to zero"));
+        }
+        // Increment one whole oracle-price unit per step
         let mut strike_ctx = v.ctx.derive_str(Arc::new("strike".into()))?;
-        for price in (0..=strike).step_by(ONE_UNIT as usize) {
-            let mut profit = Amount::from_sat(strike) - Amount::from_sat(price);
+        for price in price_grid(0, strike)? {
+            let mut profit = scaled_amount(v.amount, strike - price, PRICE_UNIT)?;
             let mut refund = max_amount_bitcoin - profit;
-            if v.buying {
+            if !v.buying {
                 std::mem::swap(&mut profit, &mut refund);
             }
             outcomes.push((
                 price as i64,
-                strike_ctx
-                    .derive_num(price as u64)?
-                    .template()
-                    .add_output(profit, &v.user_api.receive_payment(profit), None)?
-                    .add_output(refund, &v.operator_api.receive_payment(refund), None)?
-                    .into(),
+                settlement(
+                    strike_ctx.derive_num(price)?,
+                    profit,
+                    refund,
+                    v.user_api,
+                    v.operator_api,
+                )?,
             ));
         }
         // Now that the schedule is constructed, build a contract
@@ -63,6 +73,6 @@ impl<'a> TryFrom<Put<'a>> for GenericBetArguments<'a> {
 impl<'a> TryFrom<Put<'a>> for GenericBet {
     type Error = CompilationError;
     fn try_from(v: Put<'a>) -> Result<Self, Self::Error> {
-        Ok(GenericBetArguments::try_from(v)?.into())
+        GenericBetArguments::try_from(v)?.try_into()
     }
 }

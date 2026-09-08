@@ -7,19 +7,16 @@
 //! Clause Module for showing non-sapio compiled object types
 
 #![deny(missing_docs)]
-use bitcoin::util::amount::CoinAmount;
 use sapio::contract::*;
 use sapio::*;
-use sapio_base::timelocks::RelTime;
 use sapio_base::Clause;
 use sapio_wasm_plugin::client::plugin::Callable;
-use sapio_wasm_plugin::client::*;
-use sapio_wasm_plugin::*;
+#[cfg(target_arch = "wasm32")]
+use sapio_wasm_plugin::{optional_logo, REGISTER};
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::convert::{TryFrom, TryInto};
 
-/// Get a Clause for two parties to OR together
+/// Get a Clause for two parties to sign together
 #[derive(JsonSchema, Deserialize)]
 pub struct GetClause {
     // TODO: Taproot Fix Encoding
@@ -32,7 +29,7 @@ pub struct GetClause {
 
 impl Callable for GetClause {
     type Output = Clause;
-    fn call(&self, ctx: Context) -> Result<Clause, CompilationError> {
+    fn call(&self, _ctx: Context) -> Result<Clause, CompilationError> {
         Ok(Clause::And(vec![
             Clause::Key(self.alice),
             Clause::Key(self.bob),
@@ -40,4 +37,5 @@ impl Callable for GetClause {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 REGISTER![GetClause, "logo.png"];

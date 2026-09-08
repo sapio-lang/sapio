@@ -658,7 +658,6 @@ checksum = "4583a4551df46e2792f82ceeac45e850d2e2d5debba0b91f102385cda5b11f06"
 name = "dcf_mining_pool"
 version = "0.2.0"
 dependencies = [
- "bitcoincore-rpc-async",
  "sapio",
  "sapio-base",
  "sapio-bitcoin",
@@ -667,7 +666,6 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
- "tokio",
 ]
 
 [[package]]

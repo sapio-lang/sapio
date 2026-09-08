@@ -47,14 +47,16 @@ struct Payouts {
 /// during conversion from `HodlChickenChecks`
 #[derive(JsonSchema, Serialize, Deserialize)]
 #[serde(try_from = "HodlChickenChecks")]
-pub struct HodlChickenInner {
+pub struct HodlChickenInner(HodlChickenChecks);
+
+/// Unchecked wire representation, validated before constructing the contract.
+#[derive(JsonSchema, Serialize, Deserialize)]
+pub struct HodlChickenChecks {
     alice_contract: Payouts,
     bob_contract: Payouts,
-    // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     alice_key: bitcoin::XOnlyPublicKey,
-    // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     bob_key: bitcoin::XOnlyPublicKey,
     alice_deposit: u64,
     bob_deposit: u64,
@@ -62,16 +64,10 @@ pub struct HodlChickenInner {
     chicken_gets: u64,
 }
 
-/// A wrapper around HodlChickenInner that ensures
-/// invariants on values are kept.
-#[derive(JsonSchema, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct HodlChickenChecks(HodlChickenInner);
-
 impl TryFrom<HodlChickenChecks> for HodlChickenInner {
     type Error = &'static str;
     fn try_from(a: HodlChickenChecks) -> Result<Self, Self::Error> {
-        let inner = a.0;
+        let inner = a;
         let deposits = inner.alice_deposit.checked_add(inner.bob_deposit);
         let outputs = inner.winner_gets.checked_add(inner.chicken_gets);
         if deposits != outputs {
@@ -81,7 +77,7 @@ impl TryFrom<HodlChickenChecks> for HodlChickenInner {
         } else if inner.alice_deposit != inner.bob_deposit {
             Err("Amounts differ")
         } else {
-            Ok(inner)
+            Ok(Self(inner))
         }
     }
 }
@@ -89,23 +85,23 @@ impl TryFrom<HodlChickenChecks> for HodlChickenInner {
 impl HodlChickenInner {
     #[guard]
     fn alice_is_a_chicken(self, _ctx: Context) {
-        Clause::Key(self.alice_key)
+        Clause::Key(self.0.alice_key)
     }
     #[guard]
     fn bob_is_a_chicken(self, _ctx: Context) {
-        Clause::Key(self.bob_key)
+        Clause::Key(self.0.bob_key)
     }
     #[then(guarded_by = "[Self::alice_is_a_chicken]")]
     fn alice_redeem(self, ctx: sapio::Context) {
         ctx.template()
             .add_output(
-                Amount::from_sat(self.winner_gets),
-                &self.bob_contract.winner,
+                Amount::from_sat(self.0.winner_gets),
+                &self.0.bob_contract.winner,
                 None,
             )?
             .add_output(
-                Amount::from_sat(self.chicken_gets),
-                &self.alice_contract.loser,
+                Amount::from_sat(self.0.chicken_gets),
+                &self.0.alice_contract.loser,
                 None,
             )?
             .into()
@@ -115,13 +111,13 @@ impl HodlChickenInner {
     fn bob_redeem(self, ctx: sapio::Context) {
         ctx.template()
             .add_output(
-                Amount::from_sat(self.winner_gets),
-                &self.alice_contract.winner,
+                Amount::from_sat(self.0.winner_gets),
+                &self.0.alice_contract.winner,
                 None,
             )?
             .add_output(
-                Amount::from_sat(self.chicken_gets),
-                &self.bob_contract.loser,
+                Amount::from_sat(self.0.chicken_gets),
+                &self.0.bob_contract.loser,
                 None,
             )?
             .into()
@@ -129,6 +125,89 @@ impl HodlChickenInner {
 }
 
 impl Contract for HodlChickenInner {
+    fn ensure_amount(&self, _ctx: Context) -> Result<Amount, CompilationError> {
+        Ok(Amount::from_sat(self.0.alice_deposit + self.0.bob_deposit))
+    }
     declare! {then, Self::alice_redeem, Self::bob_redeem}
     declare! {non updatable}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_helpers::{address, context, key};
+
+    fn input() -> serde_json::Value {
+        serde_json::json!({
+            "alice_contract": {"winner": Compiled::from_address(address(3), None),
+                               "loser": Compiled::from_address(address(4), None)},
+            "bob_contract": {"winner": Compiled::from_address(address(5), None),
+                             "loser": Compiled::from_address(address(6), None)},
+            "alice_key": key(1), "bob_key": key(2),
+            "alice_deposit": 1000, "bob_deposit": 1000,
+            "winner_gets": 1500, "chicken_gets": 500
+        })
+    }
+
+    #[test]
+    fn flat_json_round_trip_and_both_chicken_payouts() {
+        let json = input();
+        let game: HodlChickenInner = serde_json::from_value(json.clone()).unwrap();
+        assert_eq!(serde_json::to_value(&game).unwrap(), json);
+        let compiled = game.compile(context(2000)).unwrap();
+        assert_eq!(compiled.ctv_to_tx.len(), 2);
+        let mut payouts: Vec<_> = compiled
+            .ctv_to_tx
+            .values()
+            .map(|t| {
+                assert_eq!(t.tx.input.len(), 1);
+                assert_eq!(
+                    t.tx.output.iter().map(|o| o.value).collect::<Vec<_>>(),
+                    vec![1500, 500]
+                );
+                (
+                    t.tx.output[0].script_pubkey.clone(),
+                    t.tx.output[1].script_pubkey.clone(),
+                )
+            })
+            .collect();
+        payouts.sort();
+        let mut expected = vec![
+            (address(5).script_pubkey(), address(4).script_pubkey()),
+            (address(3).script_pubkey(), address(6).script_pubkey()),
+        ];
+        expected.sort();
+        assert_eq!(payouts, expected);
+        assert!(game.compile(context(1999)).is_err());
+    }
+
+    #[test]
+    fn invalid_deposits_outputs_and_overflows_are_rejected() {
+        for (alice, bob, winner, chicken) in [
+            (999, 1001, 1500, 500),
+            (1000, 1000, 1500, 501),
+            (u64::MAX, 1, 1500, 500),
+            (1000, 1000, u64::MAX, 1),
+            (u64::MAX, u64::MAX, u64::MAX, u64::MAX),
+        ] {
+            let mut json = input();
+            json["alice_deposit"] = alice.into();
+            json["bob_deposit"] = bob.into();
+            json["winner_gets"] = winner.into();
+            json["chicken_gets"] = chicken.into();
+            assert!(serde_json::from_value::<HodlChickenInner>(json).is_err());
+        }
+        let mut json = input();
+        for field in [
+            "alice_deposit",
+            "bob_deposit",
+            "winner_gets",
+            "chicken_gets",
+        ] {
+            json[field] = (u64::MAX / 2).into();
+        }
+        assert!(serde_json::from_value::<HodlChickenInner>(json).is_ok());
+        let schema = serde_json::to_value(schemars::schema_for!(HodlChickenInner)).unwrap();
+        assert!(schema.to_string().contains("alice_deposit"));
+    }
 }

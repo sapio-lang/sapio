@@ -6,8 +6,8 @@
 
 //! Federated Peg Contract
 #![deny(missing_docs)]
-use sapio_wasm_plugin::client::*;
-use sapio_wasm_plugin::*;
+#[cfg(target_arch = "wasm32")]
+use sapio_wasm_plugin::{optional_logo, REGISTER};
 use schemars::*;
 use serde::*;
 
@@ -25,4 +25,5 @@ impl From<Wrap> for FederatedPeg {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 REGISTER![[FederatedPeg, Wrap], "logo.png"];
