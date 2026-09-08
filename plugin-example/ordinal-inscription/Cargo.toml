@@ -58,3 +58,8 @@ features = ["client"]
 [dependencies.sapio-wasm-nft-trait]
 path = "../nft-trait"
 version = "0.1.0"
+
+[dev-dependencies.bitcoin]
+package = "sapio-bitcoin"
+version = "0.28.0"
+features = ["base64"]
