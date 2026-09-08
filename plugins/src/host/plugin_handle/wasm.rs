@@ -6,6 +6,7 @@
 
 //!  a plugin handle for a wasm plugin.
 use super::*;
+use crate::host::invocation::InvocationBudget;
 use crate::host::memory::{self, runtime_error};
 use crate::host::wasm_cache::get_all_keys_from_fs;
 use crate::host::HostEnvironmentInner;
@@ -20,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::marker::PhantomData;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
 use wasmer::{FunctionEnv, TypedFunction};
 
 /// Helper to resolve modules
@@ -96,6 +98,7 @@ impl<T> WasmPluginHandle<T> {
             &env.emulator,
             self.module.clone(),
             self.key,
+            InvocationBudget::new(),
         )?)
     }
 }
@@ -152,13 +155,41 @@ impl<Output> WasmPluginHandle<Output> {
         net: bitcoin::Network,
         plugin_map: Option<BTreeMap<Vec<u8>, [u8; 32]>>,
     ) -> Result<Self, Box<dyn Error>> {
+        Self::new_with_budget(
+            path,
+            emulator,
+            module_locator,
+            net,
+            plugin_map,
+            InvocationBudget::new(),
+        )
+    }
+
+    pub(in crate::host) fn new_with_budget<I: Into<PathBuf> + Clone>(
+        path: I,
+        emulator: &Arc<dyn CTVEmulator>,
+        module_locator: SyncModuleLocator,
+        net: bitcoin::Network,
+        plugin_map: Option<BTreeMap<Vec<u8>, [u8; 32]>>,
+        invocation_budget: InvocationBudget,
+    ) -> Result<Self, Box<dyn Error>> {
         let store = Store::default();
 
         let (module, key) = load_module_from_cache(module_locator, &path, &store)?;
 
         let mut this = [0; 32];
         this.clone_from_slice(&hex::decode(key.to_string())?);
-        Self::setup_plugin_inner(store, path, this, plugin_map, net, emulator, module, key)
+        Self::setup_plugin_inner(
+            store,
+            path,
+            this,
+            plugin_map,
+            net,
+            emulator,
+            module,
+            key,
+            invocation_budget,
+        )
     }
 
     /// forget an allocated pointer
@@ -228,10 +259,13 @@ impl<Output> WasmPluginHandle<Output> {
         emulator: &Arc<dyn CTVEmulator>,
         module: Module,
         key: WASMCacheID,
+        invocation_budget: InvocationBudget,
     ) -> Result<Self, Box<dyn Error>> {
         let host_env = FunctionEnv::new(
             &mut store,
             HostEnvironmentInner {
+                invocation_budget,
+                allocator_active: Arc::new(AtomicBool::new(false)),
                 path: path.into(),
                 this,
                 module_map: plugin_map.unwrap_or_default(),
@@ -459,6 +493,7 @@ mod tests {
             &emulator,
             module,
             WASMCacheID::generate(source.as_bytes()),
+            InvocationBudget::new(),
         )
         .unwrap()
     }
@@ -552,6 +587,7 @@ mod tests {
             &emulator,
             module,
             WASMCacheID::generate(source.as_bytes()),
+            InvocationBudget::new(),
         );
         assert!(result.is_err());
     }
