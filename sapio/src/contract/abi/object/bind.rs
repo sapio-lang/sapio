@@ -9,18 +9,17 @@ use super::descriptors::*;
 pub use crate::contract::abi::studio::*;
 use crate::contract::object::Object;
 use crate::contract::object::ObjectError;
-use crate::template::Template;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 use bitcoin::util::taproot::TaprootBuilder;
 use bitcoin::util::taproot::TaprootSpendInfo;
-use bitcoin::OutPoint;
+use bitcoin::{OutPoint, Transaction};
 use miniscript::*;
 use sapio_base::effects::EffectPath;
 use sapio_base::miniscript;
 use sapio_base::serialization_helpers::SArc;
-use sapio_base::txindex::TxIndex;
-use sapio_ctv_emulator_trait::CTVEmulator;
+use sapio_base::txindex::{TxIndex, TxIndexError};
+use sapio_ctv_emulator_trait::{sign_checked, CTVEmulator};
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -35,8 +34,16 @@ impl Object {
     /// `out_in` and the parent transaction outputs determine contract inputs.
     /// Omitted mappings and `None` entries leave auxiliary inputs unresolved.
     ///
-    /// The entire artifact and all mappings are validated before signing or
-    /// adding transactions to the index.
+    /// The entire artifact, all mappings and all known funding are validated
+    /// before signing. Only a matching `TxIndexError::UnknownTxid` leaves an
+    /// explicit input unresolved; operational errors and invalid outputs fail.
+    /// Known contract outputs must match the contract script. When every input
+    /// is known, their total must cover the outputs and reserved fees.
+    ///
+    /// Every known previous transaction is included in the PSBT. This checks
+    /// transaction identity, not confirmation or whether an output is unspent.
+    /// All signer responses are checked before adding transactions to the index;
+    /// an index write failure can still leave earlier writes in the index.
     pub fn bind_psbt(
         &self,
         out_in: bitcoin::OutPoint,
@@ -78,127 +85,211 @@ impl Object {
                 });
             }
         }
-        let mut result = BTreeMap::<SArc<EffectPath>, SapioStudioObject>::new();
-        // Could use a queue instead to do BFS linking, but order doesn't matter and stack is
-        // faster.
-        let mut stack = vec![(out_in, self)];
-        let mut mock_out = OutPoint::default();
-        mock_out.vout = 0;
+        // Prepare the complete graph before invoking signers or index writers.
+        // Descendants use the actual generated parent, not a second index lookup.
+        let mut prepared = Vec::new();
+        let mut stack = vec![(out_in, self, lookup_funding(blockdata.as_ref(), out_in)?)];
+        let mut reserved: BTreeSet<_> = output_map
+            .values()
+            .flatten()
+            .filter_map(|out| *out)
+            .chain(std::iter::once(out_in))
+            .collect();
+        let mut mock_out = OutPoint {
+            vout: 0,
+            ..OutPoint::default()
+        };
         let secp = bitcoin::secp256k1::Secp256k1::new();
-        while let Some((
-            out,
-            Object {
-                root_path,
-                continue_apis,
-                descriptor,
-                ctv_to_tx,
-                suggested_txs,
-                metadata,
-                ..
-            },
-        )) = stack.pop()
-        {
+        while let Some((out, object, funding)) = stack.pop() {
+            let invalid_funding = |outpoint, reason: String| ObjectError::InvalidFunding {
+                path: object.root_path.clone(),
+                outpoint,
+                reason,
+            };
+            if let Some(previous) = &funding {
+                if previous.output[out.vout as usize].script_pubkey
+                    != bitcoin::Script::from(&object.address)
+                {
+                    return Err(invalid_funding(
+                        out,
+                        "output script does not match the contract".into(),
+                    ));
+                }
+            }
+            let mut transactions = Vec::new();
+            for (hash, template) in object.ctv_to_tx.iter().chain(&object.suggested_txs) {
+                let mut tx = template.tx.clone();
+                tx.input[0].previous_output = out;
+                let mut seen = BTreeSet::from([out]);
+                let mut prev_txs = vec![funding.clone()];
+                for (i, input) in tx.input.iter_mut().enumerate().skip(1) {
+                    let mapped = output_map.get(hash).and_then(|inputs| inputs[i]);
+                    let previous = if let Some(mapped) = mapped {
+                        input.previous_output = mapped;
+                        lookup_funding(blockdata.as_ref(), mapped)?
+                    } else {
+                        // Placeholders remain explicitly unresolved even if an
+                        // index happens to contain a transaction with this ID.
+                        while reserved.contains(&mock_out) || mock_out == out {
+                            mock_out.vout = mock_out.vout.checked_add(1).ok_or_else(|| {
+                                invalid_funding(
+                                    out,
+                                    "exhausted unresolved input identifiers".into(),
+                                )
+                            })?;
+                        }
+                        input.previous_output = mock_out;
+                        reserved.insert(mock_out);
+                        None
+                    };
+                    if !seen.insert(input.previous_output) {
+                        return Err(invalid_funding(
+                            input.previous_output,
+                            "transaction spends an input more than once".into(),
+                        ));
+                    }
+                    prev_txs.push(previous);
+                }
+                let mut psbt = PartiallySignedTransaction::from_unsigned_tx(tx.clone())?;
+                let mut amount = 0u64;
+                let mut complete = true;
+                for ((input, tx_in), previous) in
+                    psbt.inputs.iter_mut().zip(&tx.input).zip(prev_txs)
+                {
+                    if let Some(previous) = previous {
+                        let output = &previous.output[tx_in.previous_output.vout as usize];
+                        amount = amount.checked_add(output.value).ok_or_else(|| {
+                            invalid_funding(
+                                tx_in.previous_output,
+                                "input amount sum overflows".into(),
+                            )
+                        })?;
+                        if output.script_pubkey.is_witness_program() {
+                            input.witness_utxo = Some(output.clone());
+                        }
+                        // The transaction lets downstream signers authenticate
+                        // amounts and scripts against the committed outpoint.
+                        input.non_witness_utxo = Some((*previous).clone());
+                    } else {
+                        complete = false;
+                    }
+                }
+                if complete && amount < template.max.as_sat() {
+                    return Err(invalid_funding(
+                        out,
+                        format!(
+                        "inputs provide {amount} sat but outputs and reserved fees require {} sat",
+                        template.max.as_sat()
+                    ),
+                    ));
+                }
+                match &object.descriptor {
+                    Some(SupportedDescriptors::Pk(d)) => {
+                        psbt.inputs[0].witness_script = Some(d.explicit_script()?);
+                    }
+                    Some(SupportedDescriptors::XOnly(Descriptor::Tr(t))) => {
+                        let mut builder = TaprootBuilder::new();
+                        let mut added = false;
+                        for (depth, ms) in t.iter_scripts() {
+                            added = true;
+                            builder = builder.add_leaf(depth, ms.encode())?;
+                        }
+                        let info = if added {
+                            builder.finalize(&secp, *t.internal_key())?
+                        } else {
+                            TaprootSpendInfo::new_key_spend(&secp, *t.internal_key(), None)
+                        };
+                        let input = &mut psbt.inputs[0];
+                        for item in info.as_script_map().keys() {
+                            let cb = info.control_block(item).expect("Must be present");
+                            input.tap_scripts.insert(cb, item.clone());
+                        }
+                        input.tap_merkle_root = info.merkle_root();
+                        input.tap_internal_key = Some(info.internal_key());
+                    }
+                    _ => (),
+                }
+                let txid = tx.txid();
+                let parent = Arc::new(tx);
+                for (vout, output) in template.outputs.iter().enumerate() {
+                    stack.push((
+                        OutPoint::new(txid, vout as u32),
+                        &output.contract,
+                        Some(parent.clone()),
+                    ));
+                }
+                transactions.push((template, psbt));
+            }
+            prepared.push((out, object, transactions));
+        }
+        // A late invalid signer response must not leave an indexed prefix.
+        for (_, _, transactions) in &mut prepared {
+            for (_, psbt) in transactions {
+                *psbt = sign_checked(emulator, psbt.clone())?;
+            }
+        }
+        let mut result = BTreeMap::<SArc<EffectPath>, SapioStudioObject>::new();
+        for (out, object, transactions) in prepared {
+            let mut txs = Vec::with_capacity(transactions.len());
+            for (template, psbt) in transactions {
+                let tx = Arc::new(psbt.clone().extract_tx());
+                let expected = tx.txid();
+                let actual = blockdata.add_tx(tx)?;
+                if actual != expected {
+                    return Err(TxIndexError::TxidMismatch { expected, actual }.into());
+                }
+                txs.push(
+                    LinkedPSBT {
+                        psbt,
+                        metadata: template.metadata_map_s2s.clone(),
+                        output_metadata: template
+                            .outputs
+                            .iter()
+                            .map(|x| x.contract.metadata.clone())
+                            .collect(),
+                        added_output_metadata: template
+                            .outputs
+                            .iter()
+                            .map(|x| x.added_metadata.clone())
+                            .collect(),
+                    }
+                    .into(),
+                );
+            }
             result.insert(
-                root_path.clone(),
+                object.root_path.clone(),
                 SapioStudioObject {
-                    metadata: metadata.clone(),
+                    metadata: object.metadata.clone(),
                     out,
-                    continue_apis: continue_apis.clone(),
-                    txs: ctv_to_tx
-                        .iter()
-                        .chain(suggested_txs.iter())
-                        .map(
-                            |(
-                                ctv_hash,
-                                Template {
-                                    metadata_map_s2s,
-                                    outputs,
-                                    tx,
-                                    ..
-                                },
-                            )| {
-                                let mut tx = tx.clone();
-                                tx.input[0].previous_output = out;
-                                for inp in tx.input[1..].iter_mut() {
-                                    inp.previous_output = mock_out;
-                                    mock_out.vout += 1;
-                                }
-                                if let Some(outputs) = output_map.get(ctv_hash) {
-                                    for (i, inp) in tx.input.iter_mut().enumerate().skip(1) {
-                                        if let Some(out) = outputs[i] {
-                                            inp.previous_output = out;
-                                        }
-                                    }
-                                }
-                                let mut psbtx =
-                                    PartiallySignedTransaction::from_unsigned_tx(tx.clone())?;
-                                for (psbt_in, tx_in) in psbtx.inputs.iter_mut().zip(tx.input.iter())
-                                {
-                                    psbt_in.witness_utxo =
-                                        blockdata.lookup_output(&tx_in.previous_output).ok();
-                                }
-                                // Missing other Witness Info.
-                                match descriptor {
-                                    Some(SupportedDescriptors::Pk(d)) => {
-                                        psbtx.inputs[0].witness_script = Some(d.explicit_script()?);
-                                    }
-                                    Some(SupportedDescriptors::XOnly(Descriptor::Tr(t))) => {
-                                        let mut builder = TaprootBuilder::new();
-                                        let mut added = false;
-                                        for (depth, ms) in t.iter_scripts() {
-                                            added = true;
-                                            let script = ms.encode();
-                                            builder = builder.add_leaf(depth, script)?;
-                                        }
-                                        let info = if added {
-                                            builder.finalize(&secp, *t.internal_key())?
-                                        } else {
-                                            TaprootSpendInfo::new_key_spend(
-                                                &secp,
-                                                *t.internal_key(),
-                                                None,
-                                            )
-                                        };
-                                        let inp = &mut psbtx.inputs[0];
-                                        for item in info.as_script_map().keys() {
-                                            let cb =
-                                                info.control_block(item).expect("Must be present");
-                                            inp.tap_scripts.insert(cb.clone(), item.clone());
-                                        }
-                                        inp.tap_merkle_root = info.merkle_root();
-                                        inp.tap_internal_key = Some(info.internal_key());
-                                    }
-                                    _ => (),
-                                }
-                                psbtx = emulator.sign(psbtx)?;
-                                let final_tx = psbtx.clone().extract_tx();
-                                let txid = blockdata.add_tx(Arc::new(final_tx))?;
-                                stack.reserve(outputs.len());
-                                for (vout, v) in outputs.iter().enumerate() {
-                                    let vout = vout as u32;
-                                    stack.push((bitcoin::OutPoint { txid, vout }, &v.contract));
-                                }
-                                Ok(LinkedPSBT {
-                                    psbt: psbtx,
-                                    metadata: metadata_map_s2s.clone(),
-                                    output_metadata: outputs
-                                        .iter()
-                                        .cloned()
-                                        .map(|x| x.contract.metadata)
-                                        .collect::<Vec<_>>(),
-                                    added_output_metadata: outputs
-                                        .iter()
-                                        .cloned()
-                                        .map(|x| x.added_metadata)
-                                        .collect::<Vec<_>>(),
-                                }
-                                .into())
-                            },
-                        )
-                        .collect::<Result<Vec<SapioStudioFormat>, ObjectError>>()?,
+                    continue_apis: object.continue_apis.clone(),
+                    txs,
                 },
             );
         }
         Ok(Program { program: result })
     }
+}
+
+// Use lookup_tx directly: a custom lookup_output implementation must not be
+// able to bypass transaction identity or output-bound checks at this boundary.
+fn lookup_funding(
+    index: &dyn TxIndex,
+    out: OutPoint,
+) -> Result<Option<Arc<Transaction>>, TxIndexError> {
+    let tx = match index.lookup_tx(&out.txid) {
+        Ok(tx) => tx,
+        Err(TxIndexError::UnknownTxid(txid)) if txid == out.txid => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let actual = tx.txid();
+    if actual != out.txid {
+        return Err(TxIndexError::TxidMismatch {
+            expected: out.txid,
+            actual,
+        });
+    }
+    if out.vout as usize >= tx.output.len() {
+        return Err(TxIndexError::IndexTooHigh(out.vout));
+    }
+    Ok(Some(tx))
 }
