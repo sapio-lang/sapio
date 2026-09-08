@@ -3,7 +3,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
-use bitcoin::{consensus::Decodable, psbt::PartiallySignedTransaction, OutPoint};
+use bitcoin::{consensus::deserialize, psbt::PartiallySignedTransaction, OutPoint};
 use bitcoincore_rpc_async as rpc;
 use bitcoincore_rpc_async::RpcApi;
 use emulator_connect::{CTVAvailable, CTVEmulator};
@@ -19,7 +19,7 @@ use sapio::{
 use sapio_base::{
     effects::{MapEffectDB, PathFragment},
     serialization_helpers::SArc,
-    txindex::{TxIndex, TxIndexLogger},
+    txindex::{TxIndex, TxIndexError, TxIndexLogger},
 };
 use sapio_wasm_plugin::{
     host::{plugin_handle::ModuleLocator, PluginHandle, WasmPluginHandle},
@@ -279,10 +279,13 @@ impl Bind {
         let use_txn = use_txn
             .map(|buf| base64::decode(buf.as_bytes()))
             .transpose()?
-            .map(|b| PartiallySignedTransaction::consensus_decode(&b[..]))
+            .map(|b| deserialize::<PartiallySignedTransaction>(&b))
             .transpose()?;
+        if let Some(psbt) = &use_txn {
+            sapio_psbt::validate_psbt(psbt)?;
+        }
         let client = rpc::Client::new(client_url, client_auth).await?;
-        let (tx, vout) = if use_mock {
+        let (tx, vout, funding_psbt) = if use_mock {
             let ctx = Context::new(
                 net,
                 compiled.amount_range.max(),
@@ -296,43 +299,33 @@ impl Bind {
                 .add_output(compiled.amount_range.max(), &compiled, None)?
                 .get_tx();
             tx.input[0].previous_output = create_mock_output();
-            (tx, 0)
+            let psbt = if outpoint.is_none() {
+                Some(PartiallySignedTransaction::from_unsigned_tx(tx.clone())?)
+            } else {
+                None
+            };
+            (tx, 0, psbt)
         } else if let Some(outpoint) = outpoint {
             let res = client.get_raw_transaction(&outpoint.txid, None).await?;
-            (res, outpoint.vout)
+            validate_funding_outpoint(&res, outpoint)?;
+            (res, outpoint.vout, None)
         } else {
             let mut spends = HashMap::new();
             if let ExtendedAddress::Address(ref a) = compiled.address {
                 spends.insert(format!("{}", a), compiled.amount_range.max());
 
-                if let Some(psbt) = use_txn {
-                    let script = a.script_pubkey();
-                    if let Some(pos) = psbt
-                        .unsigned_tx
-                        .output
-                        .iter()
-                        .enumerate()
-                        .find(|(_, o)| o.script_pubkey == script)
-                        .map(|(i, _)| i)
-                    {
-                        (psbt.extract_tx(), pos as u32)
-                    } else {
-                        return Err(Err(RequestError(
-                            format!("No Output found {:?} {:?}", psbt.unsigned_tx, a).into(),
-                        ))?);
-                    }
+                let psbt = if let Some(psbt) = use_txn {
+                    psbt
                 } else {
                     let res = client
                         .wallet_create_funded_psbt(&[], &spends, None, None, None)
                         .await?;
-                    let psbt = PartiallySignedTransaction::consensus_decode(
-                        &base64::decode(&res.psbt)?[..],
-                    )?;
-                    let tx = psbt.extract_tx();
-                    // if change pos is -1, then +1%len == 0. if it is 0, then 1. if 1, then 2 % len == 0.
-                    let vout = ((res.change_position + 1) as usize) % tx.output.len();
-                    (tx, vout as u32)
-                }
+                    deserialize(&base64::decode(&res.psbt)?)?
+                };
+                let vout = funding_output(&psbt, &a.script_pubkey())?;
+                // Final scriptSigs can change the TXID. Bind the extracted
+                // transaction while retaining the complete PSBT for signing.
+                (psbt.clone().extract_tx(), vout, Some(psbt))
             } else {
                 return Err(Err(RequestError("Must have a valid address".into()))?);
             }
@@ -340,16 +333,15 @@ impl Bind {
         let logger = Rc::new(TxIndexLogger::new());
         (*logger).add_tx(Arc::new(tx.clone()))?;
         let mut bound = compiled.bind_psbt(
-            OutPoint::new(tx.txid(), vout as u32),
+            OutPoint::new(tx.txid(), vout),
             BTreeMap::new(),
             logger,
             emulator.as_ref(),
         )?;
-        if outpoint.is_none() {
+        if let Some(psbt) = funding_psbt {
             let added_output_metadata = vec![OutputMeta::default(); tx.output.len()];
             let output_metadata = vec![ObjectMetadata::default(); tx.output.len()];
             let out = tx.input[0].previous_output;
-            let psbt = PartiallySignedTransaction::from_unsigned_tx(tx)?;
             bound.program.insert(
                 SArc(Arc::new("funding".try_into()?)),
                 SapioStudioObject {
@@ -374,3 +366,36 @@ impl Bind {
         Ok(bound)
     }
 }
+
+fn funding_output(psbt: &PartiallySignedTransaction, script: &bitcoin::Script) -> ResultT<u32> {
+    sapio_psbt::validate_psbt(psbt)?;
+    let index = psbt
+        .unsigned_tx
+        .output
+        .iter()
+        .position(|output| output.script_pubkey == *script)
+        .ok_or_else(|| {
+            RequestError("Funding transaction has no output paying the contract".into())
+        })?;
+    Ok(index.try_into()?)
+}
+
+fn validate_funding_outpoint(
+    tx: &bitcoin::Transaction,
+    outpoint: OutPoint,
+) -> Result<(), TxIndexError> {
+    let actual = tx.txid();
+    if actual != outpoint.txid {
+        return Err(TxIndexError::TxidMismatch {
+            expected: outpoint.txid,
+            actual,
+        });
+    }
+    if outpoint.vout as usize >= tx.output.len() {
+        return Err(TxIndexError::IndexTooHigh(outpoint.vout));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests;
