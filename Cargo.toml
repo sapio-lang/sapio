@@ -18,3 +18,7 @@ resolver = "2"
 
 [workspace.package]
 rust-version = "1.98.1"
+
+[patch.crates-io]
+# CTV hash and complete-transaction finalization repairs in the owned fork.
+sapio-miniscript = { git = "https://github.com/sapio-lang/rust-miniscript", rev = "f62ebf16db55732f9efc8d7d5292979332274cad" }
