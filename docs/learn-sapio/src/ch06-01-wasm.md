@@ -9,9 +9,11 @@ So what's it doing in Sapio?
 
 WASM is designed to be cross platform and deterministic, which makes it a
 great target for smart contracts that we want to be able to be reproduced
-locally. It also makes it *relatively* safe to run smart contracts provided
-by untrusted parties as the security of the WASM sandbox prevents bad code from
-harming or infecting our system.
+locally. Sapio validates guest memory access and applies execution fuel,
+memory/table caps and nested-call limits before running a module. These bounds
+cover guest execution; native compilation and external services need their own
+resource policy. Loading a module is not a guarantee that its contract is safe
+or that its intended covenant is enforced on the selected chain.
 
 Sapio Contract objects can be built into  WASM binaries very easily. The code required is basically:
 
