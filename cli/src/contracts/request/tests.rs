@@ -247,3 +247,34 @@ async fn mock_funding_still_includes_a_funding_psbt() {
         OutPoint::new(psbt.unsigned_tx.txid(), 0)
     );
 }
+
+#[tokio::test]
+async fn funding_entry_cannot_overwrite_a_contract_named_funding() {
+    for root in ["funding", "funding/@funding"] {
+        let mut compiled = contract();
+        compiled.root_path = SArc(Arc::new(root.try_into().unwrap()));
+        let psbt = funding_psbt(&compiled);
+        let bound = request(compiled.clone(), &serialize(&psbt))
+            .call(Network::Regtest, Arc::new(CTVAvailable))
+            .await
+            .unwrap();
+        assert_eq!(bound.program.len(), 2);
+        assert_preserved_funding(&bound, &compiled, &psbt);
+        let contract_node = bound.program.get(&compiled.root_path).unwrap();
+        assert_eq!(
+            contract_node.source_path.as_ref(),
+            Some(&compiled.root_path)
+        );
+        let funding_path = SArc(Arc::new(format!("{root}/@funding").try_into().unwrap()));
+        let funding = bound.program.get(&funding_path).unwrap();
+        assert!(funding.source_path.is_none());
+        let restored: Program =
+            serde_json::from_value(serde_json::to_value(&bound).unwrap()).unwrap();
+        assert!(restored
+            .program
+            .get(&funding_path)
+            .unwrap()
+            .source_path
+            .is_none());
+    }
+}

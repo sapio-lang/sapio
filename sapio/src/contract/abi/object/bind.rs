@@ -15,7 +15,7 @@ use bitcoin::util::taproot::TaprootBuilder;
 use bitcoin::util::taproot::TaprootSpendInfo;
 use bitcoin::{OutPoint, Transaction};
 use miniscript::*;
-use sapio_base::effects::EffectPath;
+use sapio_base::effects::{EffectPath, PathFragment};
 use sapio_base::miniscript;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::txindex::{TxIndex, TxIndexError};
@@ -88,7 +88,12 @@ impl Object {
         // Prepare the complete graph before invoking signers or index writers.
         // Descendants use the actual generated parent, not a second index lookup.
         let mut prepared = Vec::new();
-        let mut stack = vec![(out_in, self, lookup_funding(blockdata.as_ref(), out_in)?)];
+        let mut stack = vec![(
+            out_in,
+            self,
+            self.root_path.clone(),
+            lookup_funding(blockdata.as_ref(), out_in)?,
+        )];
         let mut reserved: BTreeSet<_> = output_map
             .values()
             .flatten()
@@ -100,7 +105,7 @@ impl Object {
             ..OutPoint::default()
         };
         let secp = bitcoin::secp256k1::Secp256k1::new();
-        while let Some((out, object, funding)) = stack.pop() {
+        while let Some((out, object, bound_path, funding)) = stack.pop() {
             let invalid_funding = |outpoint, reason: String| ObjectError::InvalidFunding {
                 path: object.root_path.clone(),
                 outpoint,
@@ -117,7 +122,17 @@ impl Object {
                 }
             }
             let mut transactions = Vec::new();
-            for (hash, template) in object.ctv_to_tx.iter().chain(&object.suggested_txs) {
+            for (kind, hash, template) in object
+                .ctv_to_tx
+                .iter()
+                .map(|(hash, template)| (PathFragment::Next, hash, template))
+                .chain(
+                    object
+                        .suggested_txs
+                        .iter()
+                        .map(|(hash, template)| (PathFragment::Suggested, hash, template)),
+                )
+            {
                 let mut tx = template.tx.clone();
                 tx.input[0].previous_output = out;
                 let mut seen = BTreeSet::from([out]);
@@ -211,25 +226,35 @@ impl Object {
                 }
                 let txid = tx.txid();
                 let parent = Arc::new(tx);
+                // Source paths can be reused. An occurrence is identified by
+                // its parent transition and output, independently of metadata.
+                let transition_path = EffectPath::push(
+                    Some(EffectPath::push(Some(bound_path.0.clone()), kind)),
+                    PathFragment::Named(SArc(Arc::new(hash.to_string()))),
+                );
                 for (vout, output) in template.outputs.iter().enumerate() {
                     stack.push((
                         OutPoint::new(txid, vout as u32),
                         &output.contract,
+                        SArc(EffectPath::push(
+                            Some(transition_path.clone()),
+                            PathFragment::Branch(vout as u64),
+                        )),
                         Some(parent.clone()),
                     ));
                 }
                 transactions.push((template, psbt));
             }
-            prepared.push((out, object, transactions));
+            prepared.push((out, object, bound_path, transactions));
         }
         // A late invalid signer response must not leave an indexed prefix.
-        for (_, _, transactions) in &mut prepared {
+        for (_, _, _, transactions) in &mut prepared {
             for (_, psbt) in transactions {
                 *psbt = sign_checked(emulator, psbt.clone())?;
             }
         }
         let mut result = BTreeMap::<SArc<EffectPath>, SapioStudioObject>::new();
-        for (out, object, transactions) in prepared {
+        for (out, object, bound_path, transactions) in prepared {
             let mut txs = Vec::with_capacity(transactions.len());
             for (template, psbt) in transactions {
                 let tx = Arc::new(psbt.clone().extract_tx());
@@ -257,8 +282,9 @@ impl Object {
                 );
             }
             result.insert(
-                object.root_path.clone(),
+                bound_path,
                 SapioStudioObject {
+                    source_path: Some(object.root_path.clone()),
                     metadata: object.metadata.clone(),
                     out,
                     continue_apis: object.continue_apis.clone(),

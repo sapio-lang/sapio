@@ -69,28 +69,24 @@ impl From<LinkedPSBT> for SapioStudioFormat {
     }
 }
 
-/// A `Program` is a wrapper type for a list of
-/// JSON objects that should be of form:
-/// ```json
-/// {
-///     "hex" : Hex Encoded Transaction
-///     "color" : HTML Color,
-///     "metadata" : JSON Value,
-///     "utxo_metadata" : {
-///         "key" : "value",
-///         ...
-///     }
-/// }
-/// ```
+/// Bound contract occurrences with their PSBTs, outputs and continuation APIs.
+///
+/// Map keys identify occurrences in the bound graph. A compiled contract can
+/// appear at several outputs; its original path is retained in `source_path`.
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub struct Program {
-    /// program contains the list of SapioStudio PSBTs
+    /// Entries keyed by their bound occurrence paths. Child paths derive from
+    /// the parent, transition kind, template hash and output index.
     pub program: BTreeMap<SArc<EffectPath>, SapioStudioObject>,
 }
 
 /// A `SapioStudioObject` is a json-friendly format for a `Object` for use in Sapio Studio
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub struct SapioStudioObject {
+    /// Original compilation path, independent of this occurrence's binding
+    /// path. Synthetic funding entries have no compilation source.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_path: Option<SArc<EffectPath>>,
     /// The object's metadata
     pub metadata: ObjectMetadata,
     /// The main covenant OutPoint

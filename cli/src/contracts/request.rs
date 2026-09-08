@@ -17,7 +17,7 @@ use sapio::{
     Context,
 };
 use sapio_base::{
-    effects::{MapEffectDB, PathFragment},
+    effects::{EffectPath, MapEffectDB, PathFragment},
     serialization_helpers::SArc,
     txindex::{TxIndex, TxIndexError, TxIndexLogger},
 };
@@ -343,8 +343,12 @@ impl Bind {
             let output_metadata = vec![ObjectMetadata::default(); tx.output.len()];
             let out = tx.input[0].previous_output;
             bound.program.insert(
-                SArc(Arc::new("funding".try_into()?)),
+                SArc(EffectPath::push(
+                    Some(compiled.root_path.0.clone()),
+                    PathFragment::Funding,
+                )),
                 SapioStudioObject {
+                    source_path: None,
                     metadata: Default::default(),
                     out,
                     continue_apis: Default::default(),
