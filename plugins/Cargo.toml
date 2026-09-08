@@ -13,7 +13,7 @@ description = "Libarary for building client/host sapio plugin bindings"
 
 [features]
 default = ["client"]
-host = ["wasmer", "wasmer-cache", "wasmer-middlewares", "wasmer-types", "tokio"]
+host = ["wasmer", "wasmer-cache", "wasmer-middlewares", "wasmer-types", "jsonschema", "referencing", "tokio"]
 client = []
 
 [dependencies]
@@ -23,10 +23,6 @@ serde = "1.0"
 serde_derive = "1.0"
 base64 = "0.13.0"
 hex = "0.4.3"
-
-[dependencies.sapio-trait]
-version = "0.2.0"
-path = "../sapio-trait"
 
 [dependencies.wasmer]
 version = "6.1.0"
@@ -42,6 +38,15 @@ optional = true
 
 [dependencies.wasmer-types]
 version = "=6.1.0"
+optional = true
+
+[dependencies.jsonschema]
+version = "=0.55.0"
+default-features = false
+optional = true
+
+[dependencies.referencing]
+version = "=0.55.1"
 optional = true
 
 [dependencies.tokio]

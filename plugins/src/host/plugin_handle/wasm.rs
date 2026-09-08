@@ -125,6 +125,16 @@ impl<T> WasmPluginHandle<T> {
     }
 }
 impl<Output> WasmPluginHandle<Output> {
+    fn api_json(&mut self) -> Result<Vec<u8>, CompilationError> {
+        let p = self
+            .sapio_v1_wasm_plugin_client_get_create_arguments
+            .call(&mut self.store)
+            .map_err(|e| CompilationError::ModuleCouldNotGetAPI(e.into()))?;
+        let bytes = self.read_to_vec(p)?;
+        self.forget(p)?;
+        Ok(bytes)
+    }
+
     /// the cache ID for this plugin
     pub fn id(&self) -> WASMCacheID {
         self.key
@@ -416,7 +426,11 @@ where
         path: &EffectPath,
         c: &Self::Input,
     ) -> Result<Self::Output, CompilationError> {
-        let arg_str = serde_json::to_string(c).map_err(CompilationError::SerializationError)?;
+        let schema = crate::host::validation::CallSchema::from_json(&self.api_json()?)?;
+        let arguments = serde_json::to_value(c).map_err(CompilationError::SerializationError)?;
+        schema.validate_input(&arguments)?;
+        let arg_str =
+            serde_json::to_string(&arguments).map_err(CompilationError::SerializationError)?;
         let args_ptr = self.pass_string(&arg_str)?;
         let path_str = serde_json::to_string(path).map_err(CompilationError::SerializationError)?;
         let path_ptr = self.pass_string(&path_str)?;
@@ -429,19 +443,14 @@ where
             })?;
         let buf = self.read_to_vec(result_ptr)?;
         self.forget(result_ptr)?;
-        let v: Result<Self::Output, String> =
+        let result: Result<serde_json::Value, String> =
             serde_json::from_slice(&buf).map_err(CompilationError::DeserializationError)?;
-        v.map_err(CompilationError::ModuleCompilationErrorUnsendable)
+        let value = result.map_err(CompilationError::ModuleCompilationErrorUnsendable)?;
+        schema.validate_output(&value)?;
+        serde_json::from_value(value).map_err(CompilationError::DeserializationError)
     }
     fn get_api(&mut self) -> Result<API<Self::Input, Self::Output>, CompilationError> {
-        let _env = self.env.as_mut(&mut self.store);
-        let p = self
-            .sapio_v1_wasm_plugin_client_get_create_arguments
-            .call(&mut self.store)
-            .map_err(|e| CompilationError::ModuleCouldNotGetAPI(e.into()))?;
-        let v = self.read_to_vec(p)?;
-        self.forget(p)?;
-        serde_json::from_slice(&v).map_err(CompilationError::DeserializationError)
+        serde_json::from_slice(&self.api_json()?).map_err(CompilationError::DeserializationError)
     }
     fn get_name(&mut self) -> Result<String, CompilationError> {
         let _env = self.env.as_mut(&mut self.store);
@@ -493,10 +502,11 @@ mod tests {
                     (func $lookup (param i32 i32 i32 i32)))
                 (memory (export "memory") 1)
                 (data (i32.const 8) "ok\00")
+                (data (i32.const 256) "{{\22arguments\22:{{}},\22returns\22:{{}}}}\00")
                 (func (export "sapio_v1_wasm_plugin_client_allocate_bytes")
                     (param i32) (result i32) i32.const {allocation})
                 (func (export "sapio_v1_wasm_plugin_client_get_create_arguments")
-                    (result i32) i32.const 8)
+                    (result i32) i32.const 256)
                 (func (export "sapio_v1_wasm_plugin_client_get_name")
                     (result i32) {name_body})
                 (func (export "sapio_v1_wasm_plugin_client_get_logo")
