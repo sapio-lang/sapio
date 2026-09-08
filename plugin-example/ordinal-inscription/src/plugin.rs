@@ -5,10 +5,11 @@ use sapio::contract::CompilationError;
 use sapio::contract::Compiled;
 use sapio::contract::Contract;
 use sapio::contract::StatefulArgumentsTrait;
-use sapio::ordinals::OrdinalPlanner;
+use sapio::ordinals::Ordinal;
 use sapio::util::amountrange::AmountU64;
 use sapio::*;
 use sapio_base::Clause;
+#[cfg(target_arch = "wasm32")]
 use sapio_wasm_plugin::*;
 use schemars::*;
 use serde::*;
@@ -22,6 +23,36 @@ pub struct InscribingStep {
     content_type: String,
 }
 impl InscribingStep {
+    fn ordinal_info(ctx: &Context) -> Result<(Ordinal, Amount), CompilationError> {
+        let ords = ctx
+            .get_ordinals()
+            .as_ref()
+            .ok_or_else(|| CompilationError::OrdinalsError("Missing Ordinals Info".into()))?;
+        let first = ords
+            .0
+            .first()
+            .ok_or_else(|| CompilationError::OrdinalsError("Empty Ordinals Info".into()))?
+            .0;
+        let mut total = Amount::ZERO;
+        for (start, end) in &ords.0 {
+            let length = end.0.checked_sub(start.0).filter(|length| *length > 0);
+            let length = length.ok_or_else(|| {
+                CompilationError::OrdinalsError(
+                    "Ordinal ranges must be nonempty and forward".into(),
+                )
+            })?;
+            total = total.checked_add(Amount::from_sat(length)).ok_or_else(|| {
+                CompilationError::OrdinalsError("Ordinal range total overflows".into())
+            })?;
+        }
+        if total != ctx.funds() {
+            return Err(CompilationError::OrdinalsError(
+                "Ordinal ranges must cover the available funds exactly".into(),
+            ));
+        }
+        Ok((first, total))
+    }
+
     /// # signed
     /// Get the current owners signature.
     #[guard]
@@ -67,17 +98,14 @@ impl InscribingStep {
         coerce_args = "Reveal::parse"
     )]
     fn reveal(self, ctx: Context, reveal: Reveal) {
-        let ord = ctx
-            .get_ordinals()
-            .as_ref()
-            .ok_or_else(|| CompilationError::OrdinalsError("Missing Ordinals Info".into()))?
-            .0[0]
-            .0;
-        let funds = ctx.funds();
-        if funds < Amount::from(reveal.fee) + ord.padding() + Amount::ONE_SAT {
+        let (ord, _) = Self::ordinal_info(&ctx)?;
+        let send_with = ctx
+            .funds()
+            .checked_sub(reveal.fee.into())
+            .ok_or(CompilationError::OutOfFunds)?;
+        if send_with < ord.padding() + Amount::ONE_SAT {
             return Err(CompilationError::OutOfFunds);
         }
-        let send_with = funds - reveal.fee.into();
         let tmpl = ctx.template();
         if let Some(address) = reveal.alternative {
             tmpl.add_output(send_with, &Compiled::from_address(address, None), None)
@@ -95,14 +123,12 @@ impl Contract for InscribingStep {
     declare! {updatable<Reveal>, Self::reveal}
 
     fn ensure_amount(&self, ctx: Context) -> Result<Amount, CompilationError> {
-        // Optional if we want to require ordinal info provided -- we can
-        // happily track ordinals abstractly with some future patches.
-        let ords = ctx
-            .get_ordinals()
-            .as_ref()
-            .ok_or_else(|| CompilationError::OrdinalsError("Missing Ordinals Info".into()))?;
-        Ok(ords.total())
+        Self::ordinal_info(&ctx).map(|(_, amount)| amount)
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 REGISTER![InscribingStep, "logo.png"];
+
+#[cfg(test)]
+mod tests;
