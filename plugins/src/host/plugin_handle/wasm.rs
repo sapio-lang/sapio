@@ -341,20 +341,12 @@ fn load_module_from_cache<I: Into<PathBuf> + Clone>(
     path: &I,
     store: &Store,
 ) -> Result<(Module, WASMCacheID), Box<dyn Error>> {
-    let (module, key) = match module_locator {
+    match module_locator {
         SyncModuleLocator::Bytes(wasm_bytes) => {
-            match wasm_cache::load_module(path.clone(), store, &wasm_bytes[..]) {
-                Ok(module) => module,
-                Err(_) => {
-                    let module = Module::new(&store, &wasm_bytes)?;
-                    let key = wasm_cache::store_module(path.clone(), &module, &wasm_bytes)?;
-                    (module, key)
-                }
-            }
+            wasm_cache::load_module(path.clone(), store, &wasm_bytes)
         }
-        SyncModuleLocator::Key(key) => wasm_cache::load_module_key(path.clone(), store, key)?,
-    };
-    Ok((module, key))
+        SyncModuleLocator::Key(key) => wasm_cache::load_module_key(path.clone(), store, key),
+    }
 }
 
 impl<GOutput> PluginHandle for WasmPluginHandle<GOutput>
