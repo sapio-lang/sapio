@@ -84,7 +84,7 @@ impl CTVEmulator for HDOracleEmulatorConnection {
     }
     fn sign(
         &self,
-        mut b: PartiallySignedTransaction,
+        b: PartiallySignedTransaction,
     ) -> Result<PartiallySignedTransaction, EmulatorError> {
         let inp: Result<PartiallySignedTransaction, std::io::Error> =
             tokio::task::block_in_place(|| {
@@ -107,8 +107,8 @@ impl CTVEmulator for HDOracleEmulatorConnection {
                 })
             });
 
-        b.combine(inp?)
-            .or_else(|_e| input_error("Fault Signed PSBT"))?;
-        Ok(b)
+        let response = inp?;
+        sapio_ctv_emulator_trait::validate_signing_response(&b, &response)?;
+        Ok(response)
     }
 }
