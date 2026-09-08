@@ -7,6 +7,20 @@ commit `Cargo.lock`; use `--locked` for builds and tests. The supported compiler
 minimum is the tested pinned version. Upgrade the compiler and lockfiles in
 reviewed commits rather than regenerating dependencies in CI.
 
+Both workspaces pin the repaired `sapio-miniscript` Git source at
+`f62ebf16db55732f9efc8d7d5292979332274cad`. Keep that revision aligned when updating
+the dependency;
+the registry release at historical revision
+`3f23950459f3424ccfeecc0bb14579ec2aec9820` does not contain these CTV finalization
+repairs. The [repair record](CTV_FORK_AUDIT.md) documents the covered behavior and
+remaining limits.
+
+Cargo reads `[patch]` only from the top-level workspace. An external application
+or plugin workspace using Sapio must copy the same `[patch.crates-io]` entry from
+this repository's `Cargo.toml`; the patch does not propagate through library
+dependencies. See [Cargo's patch rules][cargo-patch]. Publishing supported Sapio
+crates requires a repaired Miniscript release and updated dependency requirements.
+
 A native C compiler is required for secp256k1. The WASM build additionally needs
 LLVM Clang with the `wasm32` target. Apple's system Clang does not provide that
 target. With Homebrew LLVM installed on macOS, set:
@@ -126,9 +140,25 @@ graph determines the contract input. Unknown template keys are rejected.
 Signing and finalization reject malformed PSBT maps before processing inputs.
 `finalize_psbt_format_api` returns `Result<PSBTApi, PSBTValidationError>`:
 structural errors are distinct from a valid PSBT still missing signatures.
-These checks establish structural consistency, not policy satisfaction, funding
-availability, chain enforcement, or general mixed-input CTV support. See the
-[CTV fork audit](CTV_FORK_AUDIT.md) for the remaining dependency work.
+
+The pinned Miniscript fork includes conditional scriptSig hashing and verifies
+candidate and completed transactions. Whole-transaction finalization establishes
+legacy scriptSigs before native witness inputs; tests cover native WSH and
+Taproot CTV alongside a legacy input in either position. Explicit sighash metadata
+is enforced for ECDSA and Schnorr signatures, including previously finalized
+inputs. Both hash implementations cover all 400 official BIP-119 expected hashes.
+
+Single-input finalization checks the currently known scriptSigs. Finish with
+`PsbtExt::extract` or `interpreter_check` after other inputs are finalized.
+Whole-transaction finalization can leave partial progress on error. Automatic
+ordering does not solve circular P2SH commitments or expand bare-descriptor
+support, and the builder still requires unsigned input-zero templates.
+
+Script verification uses supplied prevouts; funding UTXO authentication remains
+required at the caller boundary. Backend enforcement and native CTV node
+execution are separate release requirements. See the
+[CTV fork repair record](CTV_FORK_AUDIT.md) for exact evidence and limits; library
+tests do not establish chain enforcement or general CTV transaction support.
 
 ## Contributions
 
@@ -139,3 +169,5 @@ and resource bounds. Update the roadmap when completing a release gate.
 
 See [CONTRIBUTING](../CONTRIBUTING) for the existing contribution terms.
 No license or ownership transfer policy was changed in this branch.
+
+[cargo-patch]: https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html#the-patch-section

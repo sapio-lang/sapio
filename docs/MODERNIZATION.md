@@ -47,7 +47,9 @@ with upstream crates would remove semantics, not complete a migration.
 | PSBT signing | Use the selected input index for key and script paths; reject sighash errors; verify signatures independently on a two-input transaction |
 | Artifact binding | Validate the complete object graph before signing or indexing: unsigned input-zero templates, matching commitments, descriptors, output metadata and funding totals; reject invalid auxiliary-input mappings |
 | PSBT structure | Reject empty-input transactions, mismatched input/output maps and populated unsigned scriptSigs/witnesses before signing or finalization; preserve the PSBT on structural rejection |
-| CTV hashing | Include nonempty scriptSig commitments; match 16 hash results from four unmodified BIP-119 vectors covering scriptSig and witness combinations |
+| CTV hashing | Include conditional commitments to every serialized scriptSig in Sapio and the pinned Miniscript fork; both tests cover all 400 expected hashes from the complete official BIP-119 corpus |
+| CTV finalization | Pin fork revision `f62ebf16db55732f9efc8d7d5292979332274cad`; establish legacy scriptSigs before native witness inputs, verify candidate scriptSigs and the completed transaction; regressions cover native WSH/Taproot with legacy inputs in either position |
+| Finalizer metadata | Validate PSBT structure and referenced non-witness output bounds; honor explicit ECDSA/Schnorr sighash types on partial and finalized signatures, permit valid non-ALL signatures when no type is declared |
 | Compiler termination | Advance duplicate-action suffixes; compile a contract registering one action three times |
 | Fees | Enforce the strongest requested minimum in virtual bytes against that template's reserved fees; reject overflow and unknown extra-input weights |
 | Ordinal allocation | Preserve allocated/remaining range prefixes and suffixes; reject malformed and insufficient ranges |
@@ -121,17 +123,21 @@ another. Never infer mainnet safety from a successful compilation or a unit test
 
 This is the next release blocker, before a broad dependency migration.
 
-- Repair the Sapio Miniscript fork's CTV paths following the
-  [dependency audit](CTV_FORK_AUDIT.md). The local Sapio hash fix does not patch
-  registry source. The fork needs nonempty-scriptSig hashing, checks against the
-  fully finalized transaction, and defined scriptSig finalization ordering.
-  Keep the builder's empty-scriptSig domain explicit; run the full official hash
-  corpus and finalization tests before claiming general transaction support.
 - Extend artifact boundary checks to funding UTXO identity and emulator responses.
   Structural graph and PSBT validation now run before binding, signing and
   finalization. Resolve graph path collisions without rejecting valid reused
   leaf objects; preserve transaction-index errors instead of treating every
-  failed lookup as missing funding data.
+  failed lookup as missing funding data. The repaired fork still verifies against
+  supplied prevouts; callers must authenticate them and reject conflicting UTXO
+  records.
+- Enforce backend capability information before funding and execute the supported
+  native CTV cases against a node implementing the intended semantics. The
+  [fork repair record](CTV_FORK_AUDIT.md) documents hashing, finalization and
+  explicit sighash checks, including 106 passing fork tests and Clippy. Keep the
+  builder's unsigned, empty-scriptSig, input-zero domain explicit. Automatic
+  finalization ordering covers the tested native WSH/Taproot and legacy cases;
+  circular P2SH commitments, additional bare descriptors and arbitrary CTV input
+  combinations need their own design and execution evidence.
 - Replace the no-op `SapioJSONTrait` compatibility check. An example accepted by a
   schema is only a compatibility probe, not a proof of schema inclusion. Specify
   versioned interfaces and validate actual calls on both sides. Use an offline
@@ -220,6 +226,10 @@ prover, assumptions, composition limits, and executable positive/negative cases.
 Add differential tests against reference scripts/nodes and targeted fuzzing at
 parsing, lowering, linking, signing and ABI boundaries. Record the limits of
 multi-coin and recursive constructions rather than assuming local proofs extend.
+
+Before publishing supported Sapio crates, publish the reviewed Miniscript repair
+and update the declared dependency requirements. The current workspace Git patch
+does not propagate to external application or plugin workspaces.
 
 Before tagging a supported release, establish active maintainers, a private
 security reporting route, supported platform/API policy, a changelog, release
