@@ -58,8 +58,10 @@ with upstream crates would remove semantics, not complete a migration.
 | Fees | Enforce the strongest requested minimum in virtual bytes against that template's reserved fees; reject overflow and unknown extra-input weights |
 | Ordinal allocation | Preserve allocated/remaining range prefixes and suffixes; reject malformed and insufficient ranges |
 | WASM host | Bound ABI messages, validate every memory read/write, bound string scans, propagate errors, and test hostile guests through Wasmer; register guest callbacks once with `OnceLock` |
+| WASM execution | Meter start and every guest call, charge variable-size memory/table operations, cap accessible memory and tables, disable threads, and bound nested module attempts/depth and allocator reentry |
+| WASM source cache | Limit binary sources to 128 MiB, authenticate content hashes, recompile with the current engine, preserve corruption/I/O errors and ignore legacy native caches |
 | Emulator protocol | Bound both directions of framed JSON, discard failed streams, reject malformed PSBT maps, support prebound listeners |
-| Emulator responses | Accept complete PSBT responses containing only signature additions; preserve existing signatures and every other field, including raw HD responses and each federation participant |
+| Emulator responses | Accept complete PSBT responses containing only signature additions; preserve existing signatures and every other field, including raw HD responses, each federation participant and the WASM signing import |
 | Integration | Restore the suite to the workspace; compile, sign and finalize two contract steps and reject a modified output |
 | Developer checks | Formatting, real feature checks, native tests, all WASM example builds, CLI smoke checks, and API documentation |
 
@@ -148,14 +150,16 @@ This is the next release blocker, before a broad dependency migration.
   versioned interfaces and validate actual calls on both sides. Use an offline
   validator that works in standalone WASM without browser imports; bound schema
   work and reject unresolved references.
-- Meter guest execution, total guest memory and cross-module depth. Bound cache
-  input sizes and document/validate native compiled-artifact trust. A limit on
-  one JSON transfer does not bound an entire compilation.
+- Extend the [guest execution limits](DEVELOPMENT.md) with service-level
+  compilation deadlines, process memory and concurrency policy. Guest fuel,
+  memory/table caps, nested-call bounds and authenticated source caching are
+  enforced; native compilation, schema work and emulator I/O still need their
+  own bounds. Benchmark real contracts before changing the fixed allowances.
 - Review emulator request timeouts, concurrency, authentication and authorization.
   A signature service reachable over TCP is not automatically a safe oracle.
 
-Acceptance: malformed inputs fail with attributable errors; adversarial modules
-terminate within configured limits; the hash, script, signing and finalization
+Acceptance: malformed inputs fail with attributable errors; adversarial guest execution
+traps at the documented bounds; the hash, script, signing and finalization
 layers agree on the supported transaction domain.
 
 ### 2. Modernize dependencies in semantic groups

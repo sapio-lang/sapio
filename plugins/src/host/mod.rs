@@ -12,21 +12,31 @@ use bitcoin::hashes::Hash;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 pub use plugin_handle::WasmPluginHandle;
 use sapio_base::plugin_args::CreateArgs;
-use sapio_ctv_emulator_trait::CTVEmulator;
+use sapio_ctv_emulator_trait::{sign_checked, CTVEmulator};
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use wasmer::*;
 
+mod invocation;
 mod memory;
 pub mod plugin_handle;
+mod runtime;
 pub mod wasm_cache;
+
+#[cfg(test)]
+mod tests;
 
 /// The state that host-side functions need to be able to use
 /// Also handles the imports of plugin-side functions
 #[derive(Clone)]
 pub struct HostEnvironmentInner {
+    /// Shared allowance for this instance's nested module calls.
+    pub(crate) invocation_budget: invocation::InvocationBudget,
+    /// Prevent recursive host callbacks from reentering the guest allocator.
+    pub(crate) allocator_active: Arc<AtomicBool>,
     /// the module file path
     pub path: PathBuf,
     /// the currently running module's hash
@@ -87,11 +97,16 @@ mod exports {
         value: &str,
     ) -> Result<i32, RuntimeError> {
         memory::check_length(value.len().saturating_add(1))?;
-        let ptr = env
+        let allocate = env
             .sapio_v1_wasm_plugin_client_allocate_bytes
             .as_ref()
-            .ok_or_else(|| runtime_error("WASM guest allocator is not initialized"))?
-            .call(store, value.len() as i32)?;
+            .ok_or_else(|| runtime_error("WASM guest allocator is not initialized"))?;
+        if env.allocator_active.swap(true, Ordering::Relaxed) {
+            return Err(runtime_error("WASM guest allocator reentry is not allowed"));
+        }
+        let allocation = allocate.call(store, value.len() as i32);
+        env.allocator_active.store(false, Ordering::Relaxed);
+        let ptr = allocation?;
         memory::write_string(&guest_memory(env, store)?, ptr, value)?;
         Ok(ptr)
     }
@@ -199,15 +214,17 @@ mod exports {
         } else {
             None
         };
+        let budget = env.invocation_budget.child()?;
         // Ordinary module errors retain the v1 Result JSON representation.
         // Invalid memory and malformed inputs trap before loading another module.
         let result = (|| -> Result<serde_json::Value, String> {
-            let mut plugin = WasmPluginHandle::<serde_json::Value>::new(
+            let mut plugin = WasmPluginHandle::<serde_json::Value>::new_with_budget(
                 env.path.clone(),
                 &env.emulator,
                 SyncModuleLocator::Key(wasmer_cache::Hash::new(key_bytes)),
                 env.net,
                 Some(env.module_map.clone()),
+                budget,
             )
             .map_err(|error| error.to_string())?;
             match action {
@@ -275,7 +292,7 @@ mod exports {
         let bytes = read_buffer(&guest_memory(env, &store)?, psbt, len as usize)?;
         let psbt: PartiallySignedTransaction =
             serde_json::from_slice(&bytes).map_err(runtime_error)?;
-        let signed = env.emulator.sign(psbt).map_err(runtime_error)?;
+        let signed = sign_checked(env.emulator.as_ref(), psbt).map_err(runtime_error)?;
         let value = serde_json::to_string(&signed).map_err(runtime_error)?;
         return_string(env, &mut store, &value)
     }

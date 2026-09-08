@@ -114,10 +114,13 @@ returned errors and preserve the remaining partial PSBT.
 
 The fork verifies scripts against supplied prevouts. It does not authenticate
 funding UTXO identity or reconcile conflicting witness/non-witness UTXO records.
-Funding identity and emulator-response validation remain Sapio boundary work.
-Backend capability checks and execution against a node implementing the intended
-CTV semantics remain release requirements. Guest execution, aggregate memory,
-nested-call limits and native compiled-cache trust remain hosting requirements.
+Sapio's binder now authenticates known funding transactions and checks emulator
+responses, including responses returned to WASM guests; callers outside those
+boundaries must establish the same invariants. Backend capability checks and
+execution against a node implementing the intended CTV semantics remain release
+requirements. The [host limits](DEVELOPMENT.md) cover guest fuel, accessible
+memory, tables, nested calls and source-cache integrity. Process memory, native
+compilation and external service deadlines remain hosting requirements.
 
 [fork]: https://github.com/sapio-lang/rust-miniscript
 [psbt]: https://github.com/sapio-lang/rust-miniscript/blob/04b69f69459fe3b043ca61fb649cf546d5a241b6/src/psbt/mod.rs

@@ -54,7 +54,9 @@ bash contrib/sapio_wasm.sh
 
 This requires Python 3. The smoke test uses a temporary module cache and compares
 parsed JSON with checked-in expected results. It fails on CLI errors, malformed
-output, or a changed contract result. No jq or global module-cache setup is needed.
+output, or a changed contract result. Each CLI request has a 180-second wall-clock
+allowance, including native compilation of nested modules, and reports its
+duration. No jq or global module-cache setup is needed.
 The scripts use Cargo's default target directories. The WASM script also runs
 the inscription plugin's native artifact/signing tests and compiles a 521-byte
 inscription through the real guest ABI. See [inscription validation](INSCRIPTIONS.md).
@@ -119,14 +121,50 @@ mutable global function pointers.
 Diagnostic logs go to stderr. Emulator protocol JSON frames are bounded to one
 million bytes, and failed connections are discarded before another request.
 
-These checks do not establish a complete sandbox: execution metering, aggregate
-memory limits, nested-call limits, and compiled-cache trust still need work.
-Use modules and module caches you trust. The runtime uses native compiled
-artifacts internally; a hash-shaped filename is not a trust boundary.
+The host uses Wasmer 6.1 with these fixed execution limits:
 
-The host uses Wasmer 6.1 for compatibility with current Rust on x86 Linux.
-Compiled module caches are runtime-specific. After upgrading from Wasmer 4,
-reload the original `.wasm` files before referring to their cached keys:
+| Resource | Limit |
+| --- | --- |
+| Binary module source, including debug information | 128 MiB |
+| Accessible linear memory per instance | One memory, at most 64 MiB |
+| Table per instance | One table, at most 65,536 elements |
+| Execution fuel per instance | 100,000,000 points across its entire lifetime |
+| Nested module depth | Eight levels below the top-level instance |
+| Child module attempts | 64 across the top-level handle and all descendants |
+
+Fuel is installed before instantiation: WASM start functions, plugin
+initialization, allocation, metadata and contract calls all consume the same
+allowance. Each operator costs one point, accounted at block boundaries. Bulk
+memory operations additionally cost one point per byte; memory growth costs
+65,536 points per requested page. Bulk table operations and table growth cost
+16 points per requested element. An exhausted allowance traps execution. Threads
+are disabled so atomic waits cannot block outside the fuel accounting.
+Declared memory/table maxima below the host caps remain in effect.
+
+Nested calls reserve an attempt before loading a module, including failed
+lookups. Dropping a child does not restore attempts. A new top-level handle or
+`fresh_clone()` receives independent fuel, memory and nested-call allowances;
+ordinary calls on an existing handle do not reset them. Allocating host callbacks
+cannot recursively reenter the guest allocator. The WASM signing import accepts
+only checked signature additions, just like native signing.
+
+These are guest execution limits, not a wall-clock deadline or a process memory
+limit. Native compilation, host serialization/schema work and emulator I/O are
+outside instruction metering. Wasmer may reserve substantially more virtual
+address space than the accessible linear-memory limit. Evaluate those costs
+before exposing compilation as a service.
+
+The cache stores binary WASM sources at `CACHE/sources/HASH.wasm` (the CLI uses
+`WORKSPACE/modules/sources/HASH.wasm`), verifies their
+size and content hash, and recompiles with the current host engine on every
+load. It never deserializes cached native executables. Recompilation costs more
+than loading a native artifact. The host skips Cranelift optimization passes
+to reduce compilation latency for short-lived instances. `fresh_clone()` reuses already compiled code
+while creating a separate instance. Cache corruption and I/O failures propagate
+as errors.
+
+Legacy executable caches are ignored. Reload the original `.wasm` files before
+referring to their cached keys; the content hashes remain unchanged:
 
 ```sh
 sapio-cli contract load --workspace PATH --file MODULE.wasm

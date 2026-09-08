@@ -6,6 +6,7 @@
 
 //!  a plugin handle for a wasm plugin.
 use super::*;
+use crate::host::invocation::InvocationBudget;
 use crate::host::memory::{self, runtime_error};
 use crate::host::wasm_cache::get_all_keys_from_fs;
 use crate::host::HostEnvironmentInner;
@@ -20,6 +21,8 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::marker::PhantomData;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use tokio::io::AsyncReadExt;
 use wasmer::{FunctionEnv, TypedFunction};
 
 /// Helper to resolve modules
@@ -42,7 +45,28 @@ impl ModuleLocator {
                 let key = WASMCacheID::from_str(&k)?;
                 Ok(SyncModuleLocator::Key(key))
             }
-            ModuleLocator::FileName(f) => Ok(SyncModuleLocator::Bytes(tokio::fs::read(f).await?)),
+            ModuleLocator::FileName(f) => {
+                let limit = wasm_cache::MAX_MODULE_BYTES as u64;
+                let check_file = |metadata: std::fs::Metadata| {
+                    if !metadata.is_file() || metadata.len() > limit {
+                        Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            "WASM module must be a regular file no larger than 128 MiB",
+                        ))
+                    } else {
+                        Ok(())
+                    }
+                };
+                check_file(tokio::fs::metadata(&f).await?)?;
+                let file = tokio::fs::File::open(f).await?;
+                check_file(file.metadata().await?)?;
+                let mut bytes = Vec::new();
+                file.take(limit + 1).read_to_end(&mut bytes).await?;
+                if bytes.len() > limit as usize {
+                    return Err("WASM source exceeds the module size limit".into());
+                }
+                Ok(SyncModuleLocator::Bytes(bytes))
+            }
             ModuleLocator::Bytes(b) => Ok(SyncModuleLocator::Bytes(b)),
             ModuleLocator::Unknown => Err(Err(CompilationError::UnknownModule)?),
         }
@@ -96,6 +120,7 @@ impl<T> WasmPluginHandle<T> {
             &env.emulator,
             self.module.clone(),
             self.key,
+            InvocationBudget::new(),
         )?)
     }
 }
@@ -152,13 +177,41 @@ impl<Output> WasmPluginHandle<Output> {
         net: bitcoin::Network,
         plugin_map: Option<BTreeMap<Vec<u8>, [u8; 32]>>,
     ) -> Result<Self, Box<dyn Error>> {
-        let store = Store::default();
+        Self::new_with_budget(
+            path,
+            emulator,
+            module_locator,
+            net,
+            plugin_map,
+            InvocationBudget::new(),
+        )
+    }
+
+    pub(in crate::host) fn new_with_budget<I: Into<PathBuf> + Clone>(
+        path: I,
+        emulator: &Arc<dyn CTVEmulator>,
+        module_locator: SyncModuleLocator,
+        net: bitcoin::Network,
+        plugin_map: Option<BTreeMap<Vec<u8>, [u8; 32]>>,
+        invocation_budget: InvocationBudget,
+    ) -> Result<Self, Box<dyn Error>> {
+        let store = crate::host::runtime::new_store();
 
         let (module, key) = load_module_from_cache(module_locator, &path, &store)?;
 
         let mut this = [0; 32];
         this.clone_from_slice(&hex::decode(key.to_string())?);
-        Self::setup_plugin_inner(store, path, this, plugin_map, net, emulator, module, key)
+        Self::setup_plugin_inner(
+            store,
+            path,
+            this,
+            plugin_map,
+            net,
+            emulator,
+            module,
+            key,
+            invocation_budget,
+        )
     }
 
     /// forget an allocated pointer
@@ -228,10 +281,13 @@ impl<Output> WasmPluginHandle<Output> {
         emulator: &Arc<dyn CTVEmulator>,
         module: Module,
         key: WASMCacheID,
+        invocation_budget: InvocationBudget,
     ) -> Result<Self, Box<dyn Error>> {
         let host_env = FunctionEnv::new(
             &mut store,
             HostEnvironmentInner {
+                invocation_budget,
+                allocator_active: Arc::new(AtomicBool::new(false)),
                 path: path.into(),
                 this,
                 module_map: plugin_map.unwrap_or_default(),
@@ -341,20 +397,12 @@ fn load_module_from_cache<I: Into<PathBuf> + Clone>(
     path: &I,
     store: &Store,
 ) -> Result<(Module, WASMCacheID), Box<dyn Error>> {
-    let (module, key) = match module_locator {
+    match module_locator {
         SyncModuleLocator::Bytes(wasm_bytes) => {
-            match wasm_cache::load_module(path.clone(), store, &wasm_bytes[..]) {
-                Ok(module) => module,
-                Err(_) => {
-                    let module = Module::new(&store, &wasm_bytes)?;
-                    let key = wasm_cache::store_module(path.clone(), &module, &wasm_bytes)?;
-                    (module, key)
-                }
-            }
+            wasm_cache::load_module(path.clone(), store, &wasm_bytes)
         }
-        SyncModuleLocator::Key(key) => wasm_cache::load_module_key(path.clone(), store, key)?,
-    };
-    Ok((module, key))
+        SyncModuleLocator::Key(key) => wasm_cache::load_module_key(path.clone(), store, key),
+    }
 }
 
 impl<GOutput> PluginHandle for WasmPluginHandle<GOutput>
@@ -424,13 +472,18 @@ where
 mod tests {
     use super::*;
     use sapio_ctv_emulator_trait::CTVAvailable;
+    use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints};
 
     fn plugin(
         name_body: &str,
         extra: &str,
         allocation: i32,
     ) -> WasmPluginHandle<serde_json::Value> {
-        let source = format!(
+        load_plugin(&plugin_source(name_body, extra, allocation)).unwrap()
+    }
+
+    fn plugin_source(name_body: &str, extra: &str, allocation: i32) -> String {
+        format!(
             r#"(module
                 (import "env" "sapio_v1_wasm_plugin_debug_log_string"
                     (func $log (param i32 i32)))
@@ -454,9 +507,12 @@ mod tests {
                 (func (export "sapio_v1_wasm_plugin_entry_point"))
                 {extra}
             )"#
-        );
-        let store = Store::default();
-        let module = Module::new(&store, source.as_bytes()).unwrap();
+        )
+    }
+
+    fn load_plugin(source: &str) -> Result<WasmPluginHandle<serde_json::Value>, Box<dyn Error>> {
+        let store = crate::host::runtime::new_store();
+        let module = Module::new(&store, source.as_bytes())?;
         let emulator: Arc<dyn CTVEmulator> = Arc::new(CTVAvailable);
         WasmPluginHandle::setup_plugin_inner(
             store,
@@ -467,8 +523,209 @@ mod tests {
             &emulator,
             module,
             WASMCacheID::generate(source.as_bytes()),
+            InvocationBudget::new(),
         )
-        .unwrap()
+    }
+
+    fn spinning_export(name: &str, signature: &str) -> String {
+        let export = format!("sapio_v1_wasm_plugin_{name}");
+        let mut source =
+            plugin_source("i32.const 8", "", 16).replacen(&format!("(export \"{export}\")"), "", 1);
+        let end = source.rfind(')').unwrap();
+        source.insert_str(
+            end,
+            &format!("(func (export \"{export}\") {signature} (loop br 0) unreachable)"),
+        );
+        source
+    }
+
+    #[test]
+    fn infinite_wasm_start_and_entrypoint_exhaust_fuel_before_setup_completes() {
+        let source = plugin_source(
+            "i32.const 8",
+            "(func $start (loop br 0)) (start $start)",
+            16,
+        );
+        let error = load_plugin(&source)
+            .err()
+            .expect("infinite start must trap");
+        assert!(
+            matches!(
+                error.downcast_ref::<wasmer::InstantiationError>(),
+                Some(wasmer::InstantiationError::Start(_))
+            ),
+            "{error}"
+        );
+
+        let error = load_plugin(&spinning_export("entry_point", ""))
+            .err()
+            .expect("infinite entrypoint must trap");
+        assert!(
+            error.downcast_ref::<wasmer::RuntimeError>().is_some(),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn infinite_guest_code_traps_on_every_public_call_path() {
+        let arguments = CreateArgs {
+            arguments: serde_json::Value::Null,
+            context: crate::ContextualArguments {
+                network: bitcoin::Network::Regtest,
+                amount: bitcoin::Amount::from_sat(0),
+                effects: Default::default(),
+                ordinals_info: None,
+            },
+        };
+        let path = EffectPath::try_from("metering").unwrap();
+        for (export, signature) in [
+            ("client_get_name", "(result i32)"),
+            ("client_get_logo", "(result i32)"),
+            ("client_get_create_arguments", "(result i32)"),
+            ("client_create", "(param i32 i32) (result i32)"),
+            ("client_allocate_bytes", "(param i32) (result i32)"),
+            ("client_drop_allocation", "(param i32)"),
+        ] {
+            let mut plugin = load_plugin(&spinning_export(export, signature)).unwrap();
+            let failed = match export {
+                "client_get_name" => plugin.get_name().is_err(),
+                "client_get_logo" => plugin.get_logo().is_err(),
+                "client_get_create_arguments" => plugin.get_api().is_err(),
+                "client_create" => plugin.call(&path, &arguments).is_err(),
+                "client_allocate_bytes" => plugin.pass_string("guest input").is_err(),
+                // Retrieval invokes cleanup after reading a valid result.
+                "client_drop_allocation" => plugin.get_name().is_err(),
+                _ => unreachable!(),
+            };
+            assert!(failed, "{export} must trap");
+            assert_eq!(
+                get_remaining_points(&mut plugin.store, &plugin._instance),
+                MeteringPoints::Exhausted,
+                "{export} must fail from fuel exhaustion"
+            );
+        }
+    }
+
+    struct FixtureDirectory(PathBuf);
+
+    impl FixtureDirectory {
+        fn new() -> Self {
+            use std::sync::atomic::{AtomicUsize, Ordering};
+            static NEXT: AtomicUsize = AtomicUsize::new(0);
+            let path = std::env::temp_dir().join(format!(
+                "sapio-metered-plugin-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            std::fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for FixtureDirectory {
+        fn drop(&mut self) {
+            std::fs::remove_dir_all(&self.0).unwrap();
+        }
+    }
+
+    fn remaining_fuel(plugin: &mut WasmPluginHandle<serde_json::Value>) -> u64 {
+        match get_remaining_points(&mut plugin.store, &plugin._instance) {
+            MeteringPoints::Remaining(fuel) => fuel,
+            MeteringPoints::Exhausted => panic!("expected unspent fuel"),
+        }
+    }
+
+    fn exhaust_finite_calls(plugin: &mut WasmPluginHandle<serde_json::Value>) {
+        for _ in 0..10 {
+            let before = remaining_fuel(plugin);
+            match plugin.get_name() {
+                Ok(name) => {
+                    assert_eq!(name, "ok");
+                    assert!(remaining_fuel(plugin) < before);
+                }
+                Err(_) => {
+                    assert_eq!(
+                        get_remaining_points(&mut plugin.store, &plugin._instance),
+                        MeteringPoints::Exhausted
+                    );
+                    return;
+                }
+            }
+        }
+        panic!("finite guest calls must spend one cumulative allowance");
+    }
+
+    #[test]
+    fn cache_reload_and_fresh_clone_keep_metering_with_independent_fuel() {
+        let cache = FixtureDirectory::new();
+        // Each call terminates on its own, so a regression that replenishes
+        // fuel between exports fails an assertion instead of hanging.
+        let body = format!(
+            "(local $left i32) i32.const {} local.set $left
+             (loop local.get $left i32.const 1 i32.sub local.tee $left br_if 0)
+             i32.const 8",
+            crate::host::runtime::INSTANCE_FUEL / 20,
+        );
+        let source = plugin_source(&body, "", 16);
+        let binary = wasmer::wat2wasm(source.as_bytes()).unwrap().into_owned();
+        let emulator: Arc<dyn CTVEmulator> = Arc::new(CTVAvailable);
+        let mut original = WasmPluginHandle::<serde_json::Value>::new(
+            cache.0.clone(),
+            &emulator,
+            SyncModuleLocator::Bytes(binary),
+            bitcoin::Network::Regtest,
+            None,
+        )
+        .unwrap();
+        let initial = remaining_fuel(&mut original);
+        assert!(initial > 0 && initial <= crate::host::runtime::INSTANCE_FUEL);
+        assert_eq!(original.get_name().unwrap(), "ok");
+        assert!(remaining_fuel(&mut original) < initial);
+        exhaust_finite_calls(&mut original);
+
+        let mut fresh = original.fresh_clone().unwrap();
+        assert_eq!(remaining_fuel(&mut fresh), initial);
+        assert_eq!(fresh.get_name().unwrap(), "ok");
+        exhaust_finite_calls(&mut fresh);
+
+        let mut reloaded = WasmPluginHandle::<serde_json::Value>::new(
+            cache.0.clone(),
+            &emulator,
+            SyncModuleLocator::Key(original.id()),
+            bitcoin::Network::Regtest,
+            None,
+        )
+        .unwrap();
+        assert_eq!(remaining_fuel(&mut reloaded), initial);
+        assert_eq!(reloaded.get_name().unwrap(), "ok");
+        exhaust_finite_calls(&mut reloaded);
+    }
+
+    #[tokio::test]
+    async fn async_file_locator_accepts_wasm_and_rejects_oversized_or_nonfiles() {
+        let directory = FixtureDirectory::new();
+        let valid = directory.0.join("valid.wasm");
+        let binary = wasmer::wat2wasm(b"(module)").unwrap().into_owned();
+        std::fs::write(&valid, &binary).unwrap();
+        match ModuleLocator::FileName(valid.to_str().unwrap().to_owned())
+            .locate()
+            .await
+            .unwrap()
+        {
+            SyncModuleLocator::Bytes(bytes) => assert_eq!(bytes, binary),
+            _ => panic!("file locator must return source bytes"),
+        }
+        let oversized = directory.0.join("oversized.wasm");
+        std::fs::File::create(&oversized)
+            .unwrap()
+            .set_len(crate::host::wasm_cache::MAX_MODULE_BYTES as u64 + 1)
+            .unwrap();
+        for path in [&oversized, &directory.0] {
+            assert!(ModuleLocator::FileName(path.to_str().unwrap().to_owned())
+                .locate()
+                .await
+                .is_err());
+        }
     }
 
     #[test]
@@ -542,7 +799,7 @@ mod tests {
 
     #[test]
     fn host_calls_during_wasm_start_trap_without_initialized_memory() {
-        let store = Store::default();
+        let store = crate::host::runtime::new_store();
         let source = r#"(module
             (import "env" "sapio_v1_wasm_plugin_debug_log_string"
                 (func $log (param i32 i32)))
@@ -560,6 +817,7 @@ mod tests {
             &emulator,
             module,
             WASMCacheID::generate(source.as_bytes()),
+            InvocationBudget::new(),
         );
         assert!(result.is_err());
     }
