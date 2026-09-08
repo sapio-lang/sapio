@@ -15,9 +15,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 /// The derivation path fragments allowed, including user-generated
-#[derive(
-    Serialize, Deserialize, Debug, Hash, Eq, PartialEq, JsonSchema, Clone, PartialOrd, Ord,
-)]
+#[derive(Serialize, Deserialize, Debug, Hash, Eq, PartialEq, Clone, PartialOrd, Ord)]
 #[serde(into = "String")]
 #[serde(try_from = "&str")]
 pub enum PathFragment {
@@ -49,6 +47,25 @@ pub enum PathFragment {
     Branch(u64),
     /// a named branch at this level
     Named(SArc<String>),
+}
+
+// Fragment variants are encoded as path strings, not tagged enum objects.
+impl JsonSchema for PathFragment {
+    fn is_referenceable() -> bool {
+        String::is_referenceable()
+    }
+
+    fn schema_name() -> String {
+        String::schema_name()
+    }
+
+    fn schema_id() -> std::borrow::Cow<'static, str> {
+        String::schema_id()
+    }
+
+    fn json_schema(generator: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        String::json_schema(generator)
+    }
 }
 
 impl From<PathFragment> for String {
@@ -155,5 +172,33 @@ impl TryFrom<String> for ReversePath<PathFragment> {
     type Error = ValidFragmentError;
     fn try_from(r: String) -> Result<ReversePath<PathFragment>, Self::Error> {
         Self::try_from(r.as_ref())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn schema_matches_serialized_fragment_strings() {
+        assert_eq!(
+            schemars::schema_for!(PathFragment),
+            schemars::schema_for!(String)
+        );
+        for (fragment, text) in [
+            (PathFragment::Root, "@root"),
+            (PathFragment::Branch(7), "#7"),
+            (
+                PathFragment::Named(SArc(Arc::new("leaf_1".into()))),
+                "leaf_1",
+            ),
+        ] {
+            let encoded = serde_json::to_string(text).unwrap();
+            assert_eq!(serde_json::to_string(&fragment).unwrap(), encoded);
+            assert_eq!(
+                serde_json::from_str::<PathFragment>(&encoded).unwrap(),
+                fragment
+            );
+        }
     }
 }
