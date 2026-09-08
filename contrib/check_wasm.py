@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check direct, cross-module, and inscription compilation through CLI/WASM."""
+"""Check compilation and mock funding through the real CLI/WASM workflow."""
 
 import json
 from pathlib import Path
@@ -13,11 +13,14 @@ modules = Path(sys.argv[2]).resolve()
 vectors = ROOT / "contrib" / "vectors"
 
 with tempfile.TemporaryDirectory(prefix="sapio-wasm-") as workspace:
-    def request(command, module, parameters=None):
+    def request(command, module=None, parameters=None, extra_args=()):
+        args = [str(cli), "--config", str(vectors / "basic_config.json"),
+                "contract", command]
+        if module is not None:
+            args.extend(["--workspace", workspace, "--file", str(modules / module)])
+        args.extend(extra_args)
         result = subprocess.run(
-            [str(cli), "--config", str(vectors / "basic_config.json"),
-             "contract", command, "--workspace", workspace,
-             "--file", str(modules / module)],
+            args,
             input=json.dumps(parameters) if parameters is not None else "",
             text=True, capture_output=True, check=True, timeout=60,
         )
@@ -68,4 +71,12 @@ with tempfile.TemporaryDirectory(prefix="sapio-wasm-") as workspace:
     assert len(templates) == 1, templates
     outputs = templates[0]["transaction_literal"]["output"]
     assert len(outputs) == 1 and outputs[0]["value"] == 9_500, outputs
-    print("WASM direct, cross-module, and inscription compilation passed")
+    bound = request("bind", parameters=inscription, extra_args=["--mock"])["Bind"]["program"]
+    root = inscription["root_path"]
+    template_hash = next(iter(inscription["suggested_template_hash_to_template_map"]))
+    child = f"{root}/@suggested/{template_hash}/#0"
+    assert set(bound) == {root, f"{root}/@funding", child}, bound
+    assert bound[root]["source_path"] == root, bound[root]
+    assert "source_path" not in bound[f"{root}/@funding"], bound
+    assert len(bound[root]["txs"]) == 1 and not bound[child]["txs"], bound
+    print("WASM direct, cross-module, inscription compilation and mock binding passed")

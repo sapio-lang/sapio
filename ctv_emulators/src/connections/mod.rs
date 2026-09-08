@@ -9,3 +9,5 @@
 use super::*;
 pub mod federated;
 pub mod hd;
+#[cfg(test)]
+mod tests;

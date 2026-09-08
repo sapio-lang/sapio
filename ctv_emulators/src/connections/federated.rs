@@ -38,7 +38,7 @@ impl CTVEmulator for FederatedEmulatorConnection {
         mut b: PartiallySignedTransaction,
     ) -> Result<PartiallySignedTransaction, EmulatorError> {
         for emulator in self.emulators.iter() {
-            b = emulator.sign(b)?;
+            b = sapio_ctv_emulator_trait::sign_checked(emulator.as_ref(), b)?;
         }
         Ok(b)
     }

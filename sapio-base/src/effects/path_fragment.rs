@@ -37,6 +37,8 @@ pub enum PathFragment {
     Next,
     /// Suggested Transaction
     Suggested,
+    /// The synthetic funding transaction of a bound program.
+    Funding,
     /// The Default Effect passed into a Continuation
     DefaultEffect,
     /// All the Effects for a Coninuation
@@ -65,6 +67,7 @@ impl From<&PathFragment> for String {
             PathFragment::Guard => "@guard".into(),
             PathFragment::Next => "@next".into(),
             PathFragment::Suggested => "@suggested".into(),
+            PathFragment::Funding => "@funding".into(),
             PathFragment::DefaultEffect => "@default_effect".into(),
             PathFragment::Effects => "@effects".into(),
             PathFragment::Metadata => "@metadata".into(),
@@ -116,6 +119,7 @@ impl TryFrom<&str> for PathFragment {
             "@guard" => PathFragment::Guard,
             "@next" => PathFragment::Next,
             "@suggested" => PathFragment::Suggested,
+            "@funding" => PathFragment::Funding,
             "@default_effect" => PathFragment::DefaultEffect,
             "@effects" => PathFragment::Effects,
             "@metadata" => PathFragment::Metadata,

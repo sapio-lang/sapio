@@ -46,6 +46,8 @@ with upstream crates would remove semantics, not complete a migration.
 | Linux runtime compatibility | Upgrade Wasmer and its cache to 6.1.0, which provides the stack probe removed from Rust's x86 runtime; remove unused direct CLI runtime dependencies |
 | PSBT signing | Use the selected input index for key and script paths; reject sighash errors; verify signatures independently on a two-input transaction |
 | Artifact binding | Validate the complete object graph before signing or indexing: unsigned input-zero templates, matching commitments, descriptors, output metadata and funding totals; reject invalid auxiliary-input mappings |
+| Funding integrity | Authenticate previous transactions and index acknowledgements; check contract scripts, distinct inputs, checked funding totals and reserved fees before signing; preserve operational lookup errors and authenticated PSBT prevouts |
+| Bound graph identity | Derive child keys from parent bindings and transition/output identities; preserve reused leaves and contracts, original source paths and continuation paths; keep synthetic funding in its own path |
 | PSBT structure | Reject empty-input transactions, mismatched input/output maps and populated unsigned scriptSigs/witnesses before signing or finalization; preserve the PSBT on structural rejection |
 | CTV hashing | Include conditional commitments to every serialized scriptSig in Sapio and the pinned Miniscript fork; both tests cover all 400 expected hashes from the complete official BIP-119 corpus |
 | CTV finalization | Pin fork revision `04b69f69459fe3b043ca61fb649cf546d5a241b6`; establish legacy scriptSigs before native witness inputs, verify candidate scriptSigs and the completed transaction; regressions cover native WSH/Taproot with legacy inputs in either position |
@@ -57,6 +59,7 @@ with upstream crates would remove semantics, not complete a migration.
 | Ordinal allocation | Preserve allocated/remaining range prefixes and suffixes; reject malformed and insufficient ranges |
 | WASM host | Bound ABI messages, validate every memory read/write, bound string scans, propagate errors, and test hostile guests through Wasmer; register guest callbacks once with `OnceLock` |
 | Emulator protocol | Bound both directions of framed JSON, discard failed streams, reject malformed PSBT maps, support prebound listeners |
+| Emulator responses | Accept complete PSBT responses containing only signature additions; preserve existing signatures and every other field, including raw HD responses and each federation participant |
 | Integration | Restore the suite to the workspace; compile, sign and finalize two contract steps and reject a modified output |
 | Developer checks | Formatting, real feature checks, native tests, all WASM example builds, CLI smoke checks, and API documentation |
 
@@ -125,13 +128,13 @@ another. Never infer mainnet safety from a successful compilation or a unit test
 
 This is the next release blocker, before a broad dependency migration.
 
-- Extend artifact boundary checks to funding UTXO identity and emulator responses.
-  Structural graph and PSBT validation now run before binding, signing and
-  finalization. Resolve graph path collisions without rejecting valid reused
-  leaf objects; preserve transaction-index errors instead of treating every
-  failed lookup as missing funding data. The repaired fork still verifies against
-  supplied prevouts; callers must authenticate them and reject conflicting UTXO
-  records.
+- Extend [the binding checks](BINDING.md) with explicit chain/wallet funding
+  policy. Transaction identities, known amounts, scripts, graph paths and
+  emulator response integrity are checked; unresolved offline inputs remain
+  possible. Establish confirmation/unspentness where required and keep that
+  policy separate from artifact validation. The repaired fork verifies against
+  supplied prevouts; callers outside the binder must also authenticate them and
+  reject conflicting UTXO records.
 - Enforce backend capability information before funding and execute the supported
   native CTV cases against a node implementing the intended semantics. The
   [fork repair record](CTV_FORK_AUDIT.md) documents hashing, finalization and

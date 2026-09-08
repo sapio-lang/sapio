@@ -18,6 +18,13 @@ pub enum TxIndexError {
     UnknownTxid(Txid),
     /// TXID exists, but the vout index was too high
     IndexTooHigh(u32),
+    /// An index returned a transaction or acknowledgement for another TXID.
+    TxidMismatch {
+        /// The requested transaction ID.
+        expected: Txid,
+        /// The transaction ID returned by the index.
+        actual: Txid,
+    },
     /// Error in the Rpc System
     RpcError(Box<dyn std::error::Error>),
 }
@@ -30,19 +37,27 @@ impl std::fmt::Display for TxIndexError {
 }
 type Result<T> = std::result::Result<T, TxIndexError>;
 
+fn check_txid(expected: Txid, actual: Txid) -> Result<()> {
+    if expected != actual {
+        return Err(TxIndexError::TxidMismatch { expected, actual });
+    }
+    Ok(())
+}
+
 /// Generic interface for any txindex
 pub trait TxIndex {
-    /// lookup a tx
+    /// Look up a transaction whose TXID must match the requested ID.
     fn lookup_tx(&self, b: &Txid) -> Result<Arc<bitcoin::Transaction>>;
     /// lookup a particular output
     fn lookup_output(&self, b: &bitcoin::OutPoint) -> Result<bitcoin::TxOut> {
-        self.lookup_tx(&b.txid)?
-            .output
+        let tx = self.lookup_tx(&b.txid)?;
+        check_txid(b.txid, tx.txid())?;
+        tx.output
             .get(b.vout as usize)
             .cloned()
             .ok_or(TxIndexError::IndexTooHigh(b.vout))
     }
-    /// locally add a tx for tracking
+    /// Add a transaction for tracking and return its TXID.
     fn add_tx(&self, tx: Arc<bitcoin::Transaction>) -> Result<Txid>;
 }
 
@@ -81,6 +96,10 @@ impl TxIndex for TxIndexLogger {
 }
 
 /// a cached txindex checks a cache first and then a primary txindex
+///
+/// Only an unknown requested TXID permits fallback. Identical transactions
+/// are deduplicated on insertion; changed witnesses are sent to the primary
+/// before replacing the cached transaction.
 pub struct CachedTxIndex<Cache: TxIndex, Primary: TxIndex> {
     /// the cache txindex
     pub cache: Cache,
@@ -94,21 +113,34 @@ where
     Primary: TxIndex,
 {
     fn lookup_tx(&self, b: &Txid) -> Result<Arc<bitcoin::Transaction>> {
-        if let Ok(ent) = self.cache.lookup_tx(b) {
-            Ok(ent)
-        } else {
-            let ent = self.primary.lookup_tx(b)?;
-            self.cache.add_tx(ent.clone())?;
-            Ok(ent)
+        match self.cache.lookup_tx(b) {
+            Ok(tx) => {
+                check_txid(*b, tx.txid())?;
+                Ok(tx)
+            }
+            Err(TxIndexError::UnknownTxid(txid)) if txid == *b => {
+                let tx = self.primary.lookup_tx(b)?;
+                check_txid(*b, tx.txid())?;
+                check_txid(*b, self.cache.add_tx(tx.clone())?)?;
+                Ok(tx)
+            }
+            Err(error) => Err(error),
         }
     }
     fn add_tx(&self, tx: Arc<bitcoin::Transaction>) -> Result<Txid> {
         let txid = tx.txid();
-        if self.cache.lookup_tx(&txid).is_ok() {
-            Ok(txid)
-        } else {
-            self.primary.add_tx(tx.clone())?;
-            self.cache.add_tx(tx)
+        match self.cache.lookup_tx(&txid) {
+            Ok(cached) => {
+                check_txid(txid, cached.txid())?;
+                if cached == tx {
+                    return Ok(txid);
+                }
+            }
+            Err(TxIndexError::UnknownTxid(missing)) if missing == txid => {}
+            Err(error) => return Err(error),
         }
+        check_txid(txid, self.primary.add_tx(tx.clone())?)?;
+        check_txid(txid, self.cache.add_tx(tx)?)?;
+        Ok(txid)
     }
 }

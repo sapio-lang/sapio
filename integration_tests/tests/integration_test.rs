@@ -93,7 +93,7 @@ async fn compiles_signs_and_finalizes_a_two_step_contract() {
     let tx = bitcoin::Transaction {
         version: 2,
         lock_time: 0,
-        input: vec![],
+        input: vec![bitcoin::TxIn::default()],
         output: vec![TxOut {
             value: Amount::from_btc(1.0).unwrap().as_sat(),
             script_pubkey: compiled.address.clone().into(),

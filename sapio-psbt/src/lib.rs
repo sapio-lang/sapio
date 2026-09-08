@@ -352,9 +352,12 @@ impl Display for PSBTValidationError {
 
 impl Error for PSBTValidationError {}
 
-// Public PSBT fields can bypass the checks performed during deserialization.
-// Validate the complete shape before signing or entering the fork's finalizer.
-pub(crate) fn validate_psbt(psbt: &PartiallySignedTransaction) -> Result<(), PSBTValidationError> {
+/// Validate transaction and map structure before extracting or signing a PSBT.
+///
+/// Public fields can bypass checks performed during deserialization. This
+/// checks input presence, map counts and unsigned transaction fields; it does
+/// not authenticate previous outputs or verify signatures.
+pub fn validate_psbt(psbt: &PartiallySignedTransaction) -> Result<(), PSBTValidationError> {
     if psbt.unsigned_tx.input.is_empty() {
         return Err(PSBTValidationError::NoInputs);
     }

@@ -124,7 +124,7 @@ impl HDOracleEmulator {
                 )
         }) {
             let sig = get_sig(None, &tweaked)?;
-            input_zero.tap_key_sig = Some(sig);
+            input_zero.tap_key_sig.get_or_insert(sig);
         }
         for tlh in input_zero
             .tap_scripts
@@ -132,7 +132,7 @@ impl HDOracleEmulator {
             .map(|(script, ver)| TapLeafHash::from_script(script, *ver))
         {
             let sig = get_sig(Some((tlh, 0xffffffff)), &untweaked)?;
-            input_zero.tap_script_sigs.insert((pk.0, tlh), sig);
+            input_zero.tap_script_sigs.entry((pk.0, tlh)).or_insert(sig);
         }
         Ok(b)
     }
@@ -154,6 +154,8 @@ impl HDOracleEmulator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bitcoin::util::taproot::{LeafVersion, TaprootBuilder};
+    use sapio_ctv_emulator_trait::validate_signing_response;
 
     #[test]
     fn rejects_psbts_without_an_input_to_sign() {
@@ -171,5 +173,58 @@ mod tests {
             oracle.sign(psbt, &secp).unwrap_err().kind(),
             std::io::ErrorKind::InvalidInput
         );
+    }
+
+    #[test]
+    fn signing_adds_both_taproot_signature_forms_without_replacing_existing_entries() {
+        let secp = Secp256k1::new();
+        let root = ExtendedPrivKey::new_master(bitcoin::Network::Regtest, &[44; 32]).unwrap();
+        let oracle = HDOracleEmulator::new(root, false);
+        let mut request = PartiallySignedTransaction::from_unsigned_tx(bitcoin::Transaction {
+            version: 2,
+            lock_time: 0,
+            input: vec![bitcoin::TxIn::default()],
+            output: vec![TxOut {
+                value: 9_000,
+                script_pubkey: Script::new(),
+            }],
+        })
+        .unwrap();
+        let derived = oracle
+            .derive(request.clone().extract_tx().get_ctv_hash(0), &secp)
+            .unwrap();
+        let internal = derived.to_keypair(&secp).x_only_public_key().0;
+        let leaf = (Script::from(vec![0x51]), LeafVersion::TapScript);
+        let spend = TaprootBuilder::new()
+            .add_leaf(0, leaf.0.clone())
+            .unwrap()
+            .finalize(&secp, internal)
+            .unwrap();
+        request.inputs[0].witness_utxo = Some(TxOut {
+            value: 10_000,
+            script_pubkey: Script::new_v1_p2tr_tweaked(spend.output_key()),
+        });
+        request.inputs[0].tap_merkle_root = spend.merkle_root();
+        request.inputs[0]
+            .tap_scripts
+            .insert(spend.control_block(&leaf).unwrap(), leaf);
+        let response = oracle.sign(request.clone(), &secp).unwrap();
+        validate_signing_response(&request, &response).unwrap();
+        assert!(response.inputs[0].tap_key_sig.is_some());
+        assert_eq!(response.inputs[0].tap_script_sigs.len(), 1);
+
+        // Existing entries belong to the caller, even if their validity has
+        // not been established. A signer cannot silently replace them.
+        let mut existing = response;
+        existing.inputs[0].tap_key_sig.as_mut().unwrap().hash_ty =
+            bitcoin::SchnorrSighashType::Default;
+        existing.inputs[0]
+            .tap_script_sigs
+            .values_mut()
+            .next()
+            .unwrap()
+            .hash_ty = bitcoin::SchnorrSighashType::Default;
+        let repeated = oracle.sign(existing.clone(), &secp).unwrap();
+        assert_eq!(repeated, existing);
     }
 }

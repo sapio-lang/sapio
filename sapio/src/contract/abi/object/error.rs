@@ -24,6 +24,19 @@ pub enum ObjectError {
         /// Explanation of the mapping error.
         reason: &'static str,
     },
+    /// Known funding cannot satisfy the bound contract or transaction.
+    InvalidFunding {
+        /// The contract whose funding is invalid.
+        path: sapio_base::serialization_helpers::SArc<sapio_base::effects::EffectPath>,
+        /// The contract or auxiliary input being checked.
+        outpoint: bitcoin::OutPoint,
+        /// Explanation of the funding error.
+        reason: String,
+    },
+    /// Transaction lookup or insertion failed its integrity checks.
+    TxIndex(TxIndexError),
+    /// An emulator failed or returned an invalid signing response.
+    Emulator(EmulatorError),
     /// The transaction cannot be represented as an unsigned PSBT.
     Psbt(bitcoin::util::psbt::Error),
     /// The Error was due to Miniscript Policy
@@ -44,6 +57,8 @@ impl std::error::Error for ObjectError {
         match self {
             Self::InvalidArtifact(error) => Some(error),
             Self::Psbt(error) => Some(error),
+            Self::TxIndex(error) => Some(error),
+            Self::Emulator(error) => Some(error),
             _ => None,
         }
     }
@@ -65,12 +80,12 @@ impl From<TaprootBuilderError> for ObjectError {
 }
 impl From<EmulatorError> for ObjectError {
     fn from(e: EmulatorError) -> Self {
-        ObjectError::Custom(Box::new(e))
+        ObjectError::Emulator(e)
     }
 }
 impl From<TxIndexError> for ObjectError {
     fn from(e: TxIndexError) -> Self {
-        ObjectError::Custom(Box::new(e))
+        ObjectError::TxIndex(e)
     }
 }
 
@@ -94,6 +109,19 @@ impl std::fmt::Display for ObjectError {
                 write!(f, "invalid input mapping for template {template}: {reason}")
             }
             Self::Psbt(error) => write!(f, "invalid unsigned transaction: {error}"),
+            Self::InvalidFunding {
+                path,
+                outpoint,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "invalid funding {outpoint} for contract {}: {reason}",
+                    String::from(path.0.as_ref().clone())
+                )
+            }
+            Self::TxIndex(error) => write!(f, "transaction index: {error}"),
+            Self::Emulator(error) => write!(f, "signing: {error}"),
             _ => write!(f, "{:?}", self),
         }
     }
