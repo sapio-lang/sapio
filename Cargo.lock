@@ -2088,7 +2088,7 @@ dependencies = [
 [[package]]
 name = "sapio-miniscript"
 version = "7.0.2-alpha.0"
-source = "git+https://github.com/sapio-lang/rust-miniscript?rev=4b30433f0b64f374a0314be25aafd32d1c0218a8#4b30433f0b64f374a0314be25aafd32d1c0218a8"
+source = "git+https://github.com/sapio-lang/rust-miniscript?rev=04b69f69459fe3b043ca61fb649cf546d5a241b6#04b69f69459fe3b043ca61fb649cf546d5a241b6"
 dependencies = [
  "sapio-bitcoin",
  "schemars",

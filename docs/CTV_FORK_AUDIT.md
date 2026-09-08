@@ -1,13 +1,14 @@
 # CTV hashing and finalization in the Miniscript fork
 
 This record describes the repaired CTV hashing and PSBT finalization boundary.
-It establishes tested library behavior for the domain below. Chain enforcement,
-funding-data authentication and production readiness require separate evidence.
+It establishes tested library behavior for the domain below. Native CTV
+enforcement, funding-data authentication and production readiness require
+separate evidence.
 
 ## Dependency revisions
 
 - Package: `sapio-miniscript 7.0.2-alpha.0`.
-- Repaired source: `4b30433f0b64f374a0314be25aafd32d1c0218a8`, pinned in both Sapio
+- Repaired source: `04b69f69459fe3b043ca61fb649cf546d5a241b6`, pinned in both Sapio
   workspaces.
 - Historical source: `3f23950459f3424ccfeecc0bb14579ec2aec9820`, recorded in the
   published crate's `.cargo_vcs_info.json` and audited on 2026-09-07.
@@ -82,11 +83,16 @@ signatures. They accept matching `DEFAULT`, reject mismatched declarations on
 partial and finalized inputs without mutation, check unused supplied signatures,
 and accept valid non-`ALL` signatures when no type was declared.
 
-Local fork validation passed 131 tests with the stable feature set and passed
-Clippy. Sapio's native suite and WASM smoke checks are described in the
-[development guide](DEVELOPMENT.md). The existing Sapio integration test remains
-a signer-emulated two-step transaction test. These tests do not execute CTV in a
-Bitcoin node; the historical fork live-node and fuzz suites still need updates.
+The merged fork suite passes 157 tests with the stable feature set, including
+51 inscription tests, and passes Clippy. Its separate Bitcoin Core 31.1 regtest
+check accepts five library-finalized inscription reveals and rejects 21 invalid
+variants. Those node checks use ordinary Taproot conditions; they do not execute
+native CTV. The [inscription record](INSCRIPTIONS.md) describes their scope.
+
+Sapio's native suite and WASM smoke checks are described in the
+[development guide](DEVELOPMENT.md). Its existing covenant integration test
+remains a signer-emulated two-step transaction test. Native CTV node execution
+and maintained coverage-guided fuzzing still require separate work.
 
 ## Supported domain and remaining limits
 
@@ -114,11 +120,11 @@ CTV semantics remain release requirements. Guest execution, aggregate memory,
 nested-call limits and native compiled-cache trust remain hosting requirements.
 
 [fork]: https://github.com/sapio-lang/rust-miniscript
-[psbt]: https://github.com/sapio-lang/rust-miniscript/blob/4b30433f0b64f374a0314be25aafd32d1c0218a8/src/psbt/mod.rs
-[finalizer]: https://github.com/sapio-lang/rust-miniscript/blob/4b30433f0b64f374a0314be25aafd32d1c0218a8/src/psbt/finalizer.rs
-[hash-test]: https://github.com/sapio-lang/rust-miniscript/blob/4b30433f0b64f374a0314be25aafd32d1c0218a8/tests/ctv_hash.rs
-[finalization-test]: https://github.com/sapio-lang/rust-miniscript/blob/4b30433f0b64f374a0314be25aafd32d1c0218a8/tests/ctv_finalization.rs
-[sighash-test]: https://github.com/sapio-lang/rust-miniscript/blob/4b30433f0b64f374a0314be25aafd32d1c0218a8/tests/psbt_sighash.rs
+[psbt]: https://github.com/sapio-lang/rust-miniscript/blob/04b69f69459fe3b043ca61fb649cf546d5a241b6/src/psbt/mod.rs
+[finalizer]: https://github.com/sapio-lang/rust-miniscript/blob/04b69f69459fe3b043ca61fb649cf546d5a241b6/src/psbt/finalizer.rs
+[hash-test]: https://github.com/sapio-lang/rust-miniscript/blob/04b69f69459fe3b043ca61fb649cf546d5a241b6/tests/ctv_hash.rs
+[finalization-test]: https://github.com/sapio-lang/rust-miniscript/blob/04b69f69459fe3b043ca61fb649cf546d5a241b6/tests/ctv_finalization.rs
+[sighash-test]: https://github.com/sapio-lang/rust-miniscript/blob/04b69f69459fe3b043ca61fb649cf546d5a241b6/tests/psbt_sighash.rs
 [bip119]: https://github.com/bitcoin/bips/blob/master/bip-0119.mediawiki
 [bip174]: https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki
 [vectors]: https://github.com/bitcoin/bips/blob/ae747e2b909ab5dd32632ed3a8b09839193d53e3/bip-0119/vectors/ctvhash.json

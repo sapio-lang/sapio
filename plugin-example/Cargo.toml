@@ -23,4 +23,4 @@ members = ["treepay"
 
 [patch.crates-io]
 # CTV finalization and inscription correctness repairs in the owned fork.
-sapio-miniscript = { git = "https://github.com/sapio-lang/rust-miniscript", rev = "4b30433f0b64f374a0314be25aafd32d1c0218a8" }
+sapio-miniscript = { git = "https://github.com/sapio-lang/rust-miniscript", rev = "04b69f69459fe3b043ca61fb649cf546d5a241b6" }

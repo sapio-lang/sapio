@@ -8,9 +8,8 @@ minimum is the tested pinned version. Upgrade the compiler and lockfiles in
 reviewed commits rather than regenerating dependencies in CI.
 
 Both workspaces pin the repaired `sapio-miniscript` Git source at
-`4b30433f0b64f374a0314be25aafd32d1c0218a8`. Keep that revision aligned when updating
-the dependency;
-the registry release at historical revision
+`04b69f69459fe3b043ca61fb649cf546d5a241b6`. Keep that revision aligned when updating
+the dependency. The registry release at historical revision
 `3f23950459f3424ccfeecc0bb14579ec2aec9820` does not contain these correctness
 repairs. The [repair record](CTV_FORK_AUDIT.md) documents the covered behavior and
 remaining limits.
@@ -59,6 +58,13 @@ output, or a changed contract result. No jq or global module-cache setup is need
 The scripts use Cargo's default target directories. The WASM script also runs
 the inscription plugin's native artifact/signing tests and compiles a 521-byte
 inscription through the real guest ABI. See [inscription validation](INSCRIPTIONS.md).
+
+The pinned fork's Rust suite passes 157 tests, including 51 inscription tests.
+Its dedicated node job separately checks reveals against Bitcoin Core 31.1:
+five valid transactions are accepted and 21 invalid variants are rejected.
+These ordinary Taproot checks run in the fork repository and do not require a
+node for Sapio's commands above. The [fork's validation guide][fork-inscriptions]
+provides the fixture build and isolated regtest commands.
 
 For a faster native compiler example:
 
@@ -160,8 +166,9 @@ support, and the builder still requires unsigned input-zero templates.
 Script verification uses supplied prevouts; funding UTXO authentication remains
 required at the caller boundary. Backend enforcement and native CTV node
 execution are separate release requirements. See the
-[CTV fork repair record](CTV_FORK_AUDIT.md) for exact evidence and limits; library
-tests do not establish chain enforcement or general CTV transaction support.
+[CTV fork repair record](CTV_FORK_AUDIT.md) for exact evidence and limits. The
+separate Core inscription checks cover ordinary Taproot; they do not validate
+native CTV, Ord indexing, sat assignment or supplied funding history.
 
 ## Contributions
 
@@ -174,3 +181,4 @@ See [CONTRIBUTING](../CONTRIBUTING) for the existing contribution terms.
 No license or ownership transfer policy was changed in this branch.
 
 [cargo-patch]: https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html#the-patch-section
+[fork-inscriptions]: https://github.com/sapio-lang/rust-miniscript/blob/04b69f69459fe3b043ca61fb649cf546d5a241b6/docs/INSCRIPTIONS.md
