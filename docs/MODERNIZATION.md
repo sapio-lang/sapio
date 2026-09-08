@@ -60,6 +60,7 @@ with upstream crates would remove semantics, not complete a migration.
 | WASM host | Bound ABI messages, validate every memory read/write, bound string scans, propagate errors, and test hostile guests through Wasmer; register guest callbacks once with `OnceLock` |
 | WASM execution | Meter start and every guest call, charge variable-size memory/table operations, cap accessible memory and tables, disable threads, and bound nested module attempts/depth and allocator reentry |
 | WASM source cache | Limit binary sources to 128 MiB, authenticate content hashes, recompile with the current engine, preserve corruption/I/O errors and ignore legacy native caches |
+| Module schemas | Validate actual inputs and successful outputs at the common host boundary, including raw nested calls; use offline Draft 7 validation, guard reference expansion and remove the no-op interface check |
 | Emulator protocol | Bound both directions of framed JSON, discard failed streams, reject malformed PSBT maps, support prebound listeners |
 | Emulator responses | Accept complete PSBT responses containing only signature additions; preserve existing signatures and every other field, including raw HD responses, each federation participant and the WASM signing import |
 | Integration | Restore the suite to the workspace; compile, sign and finalize two contract steps and reject a modified output |
@@ -145,11 +146,17 @@ This is the next release blocker, before a broad dependency migration.
   finalization ordering covers the tested native WSH/Taproot and legacy cases;
   circular P2SH commitments, additional bare descriptors and arbitrary CTV input
   combinations need their own design and execution evidence.
-- Replace the no-op `SapioJSONTrait` compatibility check. An example accepted by a
-  schema is only a compatibility probe, not a proof of schema inclusion. Specify
-  versioned interfaces and validate actual calls on both sides. Use an offline
-  validator that works in standalone WASM without browser imports; bound schema
-  work and reject unresolved references.
+- Specify the semantics and evolution of versioned module interfaces. Actual
+  inputs and successful outputs are now checked against advertised Draft 7
+  schemas at the host boundary. This does not prove behavioral compatibility or
+  schema inclusion. The offline validator rejects unresolved references and
+  excessive expansion; complete native validation work budgets remain open.
+- Before enabling the currently unregistered PowSwap module, align its input
+  schema with the timelock list and repair its combination constructor. Single
+  locks and mixed height/time locks need dedicated correctness coverage.
+- Replace HodlChicken's recursive deserialization conversion with an unchecked
+  input type followed by its smart constructor. The current conversion helper
+  wraps the same type whose deserializer invokes it.
 - Extend the [guest execution limits](DEVELOPMENT.md) with service-level
   compilation deadlines, process memory and concurrency policy. Guest fuel,
   memory/table caps, nested-call bounds and authenticated source caching are
@@ -172,8 +179,9 @@ rewrite in one change.
 1. Move Clap to a maintained stable release. Preserve intentional command
    behavior with CLI tests, replace panic paths, fix exit codes and version
    reporting, and separate human diagnostics from JSON output.
-2. Replace the JSON Schema validator and align the declared schema draft across
-   the CLI and module interfaces. Exercise malformed and recursive schemas.
+2. Keep the host's JSON Schema validator and Draft 7 declarations aligned when
+   upgrading Schemars. Preserve malformed, recursive and nested-call coverage;
+   keep native validation dependencies out of standalone guests.
 3. Evaluate further WASM runtime upgrades after implementing the resource contract.
    Benchmark compile time and memory, test cache invalidation across runtime
    versions, and run real Rust modules as well as small adversarial fixtures.

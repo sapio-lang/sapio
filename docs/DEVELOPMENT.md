@@ -121,6 +121,32 @@ mutable global function pointers.
 Diagnostic logs go to stderr. Emulator protocol JSON frames are bounded to one
 million bytes, and failed connections are discarded before another request.
 
+The native host validates every actual call against the module's advertised
+JSON Schemas, including calls made through raw nested-module imports. It checks
+the complete `CreateArgs` input before invoking the create function, then checks
+each successful output before returning it. A module's `Err(String)` remains an
+ordinary module error. Schema acceptance does not prove contract behavior or
+compatibility for every value of another interface.
+Validation reads the advertised JSON directly, preserving integer limits above
+the exact range of floating point numbers.
+
+Schemas use Draft 7, matching Schemars 0.8. References must resolve within the
+advertised schema: validation never fetches network resources or local files.
+Patterns use the Rust regex engine, so backreferences and lookaround are not
+supported. A preflight rejects nonproductive reference cycles and excessive
+reference expansion (65,536 schema visits or 128 levels), while allowing
+recursive schemas that descend into child values. These guards are not a
+complete budget for native schema compilation or validation; service deployments
+still need process memory and time limits.
+
+`SapioHostAPI<T, R>` resolves a locator and provides typed calls. The old
+`SapioJSONTrait` crate and its example-based construction check have been removed;
+custom arguments need `Serialize + JsonSchema + Clone`, without an example
+implementation. Results need `Deserialize + JsonSchema`. Existing versioned enum
+tags remain the calling convention, and a receiver may accept additional
+variants. The validator is a host dependency and adds no browser imports to
+standalone WASM guests.
+
 The host uses Wasmer 6.1 with these fixed execution limits:
 
 | Resource | Limit |
