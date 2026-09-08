@@ -48,9 +48,10 @@ with upstream crates would remove semantics, not complete a migration.
 | Artifact binding | Validate the complete object graph before signing or indexing: unsigned input-zero templates, matching commitments, descriptors, output metadata and funding totals; reject invalid auxiliary-input mappings |
 | PSBT structure | Reject empty-input transactions, mismatched input/output maps and populated unsigned scriptSigs/witnesses before signing or finalization; preserve the PSBT on structural rejection |
 | CTV hashing | Include conditional commitments to every serialized scriptSig in Sapio and the pinned Miniscript fork; both tests cover all 400 expected hashes from the complete official BIP-119 corpus |
-| CTV finalization | Pin fork revision `f62ebf16db55732f9efc8d7d5292979332274cad`; establish legacy scriptSigs before native witness inputs, verify candidate scriptSigs and the completed transaction; regressions cover native WSH/Taproot with legacy inputs in either position |
+| CTV finalization | Pin fork revision `4b30433f0b64f374a0314be25aafd32d1c0218a8`; establish legacy scriptSigs before native witness inputs, verify candidate scriptSigs and the completed transaction; regressions cover native WSH/Taproot with legacy inputs in either position |
 | Finalizer metadata | Validate PSBT structure and referenced non-witness output bounds; honor explicit ECDSA/Schnorr sighash types on partial and finalized signatures, permit valid non-ALL signatures when no type is declared |
-| Compiler termination | Advance duplicate-action suffixes; compile a contract registering one action three times |
+| Compiler termination | Advance duplicate-action suffixes; derive guard metadata beneath each guard branch and propagate errors; regressions compile repeated actions and a contract with two guards |
+| Inscriptions | Repair fork parsing, script-byte preservation, resource/key analysis and interpreter support; test the plugin through artifact JSON, owner signing, finalization and WASM compilation, with checked ordinal ranges and fees |
 | Fees | Enforce the strongest requested minimum in virtual bytes against that template's reserved fees; reject overflow and unknown extra-input weights |
 | Ordinal allocation | Preserve allocated/remaining range prefixes and suffixes; reject malformed and insufficient ranges |
 | WASM host | Bound ABI messages, validate every memory read/write, bound string scans, propagate errors, and test hostile guests through Wasmer; register guest callbacks once with `OnceLock` |
@@ -133,7 +134,7 @@ This is the next release blocker, before a broad dependency migration.
 - Enforce backend capability information before funding and execute the supported
   native CTV cases against a node implementing the intended semantics. The
   [fork repair record](CTV_FORK_AUDIT.md) documents hashing, finalization and
-  explicit sighash checks, including 106 passing fork tests and Clippy. Keep the
+  explicit sighash checks, including 131 passing fork tests and Clippy. Keep the
   builder's unsigned, empty-scriptSig, input-zero domain explicit. Automatic
   finalization ordering covers the tested native WSH/Taproot and legacy cases;
   circular P2SH commitments, additional bare descriptors and arbitrary CTV input

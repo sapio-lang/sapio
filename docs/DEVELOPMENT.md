@@ -8,10 +8,10 @@ minimum is the tested pinned version. Upgrade the compiler and lockfiles in
 reviewed commits rather than regenerating dependencies in CI.
 
 Both workspaces pin the repaired `sapio-miniscript` Git source at
-`f62ebf16db55732f9efc8d7d5292979332274cad`. Keep that revision aligned when updating
+`4b30433f0b64f374a0314be25aafd32d1c0218a8`. Keep that revision aligned when updating
 the dependency;
 the registry release at historical revision
-`3f23950459f3424ccfeecc0bb14579ec2aec9820` does not contain these CTV finalization
+`3f23950459f3424ccfeecc0bb14579ec2aec9820` does not contain these correctness
 repairs. The [repair record](CTV_FORK_AUDIT.md) documents the covered behavior and
 remaining limits.
 
@@ -56,7 +56,9 @@ bash contrib/sapio_wasm.sh
 This requires Python 3. The smoke test uses a temporary module cache and compares
 parsed JSON with checked-in expected results. It fails on CLI errors, malformed
 output, or a changed contract result. No jq or global module-cache setup is needed.
-The scripts use Cargo's default target directories.
+The scripts use Cargo's default target directories. The WASM script also runs
+the inscription plugin's native artifact/signing tests and compiles a 521-byte
+inscription through the real guest ABI. See [inscription validation](INSCRIPTIONS.md).
 
 For a faster native compiler example:
 
@@ -75,6 +77,7 @@ cargo test --locked -p sapio-base --test ctv_hash
 cargo test --locked -p sapio --test fees --test action_names --test ordinal_allocation
 cargo test --locked -p sapio-wasm-plugin --features host
 cargo test --locked -p sapio_integration_tests
+cargo test --locked --manifest-path plugin-example/Cargo.toml -p sapio-wasm-ordinal-inscription
 cargo fmt --all -- --check
 cargo fmt --manifest-path plugin-example/Cargo.toml --all -- --check
 ```

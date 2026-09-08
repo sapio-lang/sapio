@@ -7,7 +7,7 @@ funding-data authentication and production readiness require separate evidence.
 ## Dependency revisions
 
 - Package: `sapio-miniscript 7.0.2-alpha.0`.
-- Repaired source: `f62ebf16db55732f9efc8d7d5292979332274cad`, pinned in both Sapio
+- Repaired source: `4b30433f0b64f374a0314be25aafd32d1c0218a8`, pinned in both Sapio
   workspaces.
 - Historical source: `3f23950459f3424ccfeecc0bb14579ec2aec9820`, recorded in the
   published crate's `.cargo_vcs_info.json` and audited on 2026-09-07.
@@ -82,7 +82,7 @@ signatures. They accept matching `DEFAULT`, reject mismatched declarations on
 partial and finalized inputs without mutation, check unused supplied signatures,
 and accept valid non-`ALL` signatures when no type was declared.
 
-Local fork validation passed 106 tests with the stable feature set and passed
+Local fork validation passed 131 tests with the stable feature set and passed
 Clippy. Sapio's native suite and WASM smoke checks are described in the
 [development guide](DEVELOPMENT.md). The existing Sapio integration test remains
 a signer-emulated two-step transaction test. These tests do not execute CTV in a
@@ -114,11 +114,11 @@ CTV semantics remain release requirements. Guest execution, aggregate memory,
 nested-call limits and native compiled-cache trust remain hosting requirements.
 
 [fork]: https://github.com/sapio-lang/rust-miniscript
-[psbt]: https://github.com/sapio-lang/rust-miniscript/blob/f62ebf16db55732f9efc8d7d5292979332274cad/src/psbt/mod.rs
-[finalizer]: https://github.com/sapio-lang/rust-miniscript/blob/f62ebf16db55732f9efc8d7d5292979332274cad/src/psbt/finalizer.rs
-[hash-test]: https://github.com/sapio-lang/rust-miniscript/blob/f62ebf16db55732f9efc8d7d5292979332274cad/tests/ctv_hash.rs
-[finalization-test]: https://github.com/sapio-lang/rust-miniscript/blob/f62ebf16db55732f9efc8d7d5292979332274cad/tests/ctv_finalization.rs
-[sighash-test]: https://github.com/sapio-lang/rust-miniscript/blob/f62ebf16db55732f9efc8d7d5292979332274cad/tests/psbt_sighash.rs
+[psbt]: https://github.com/sapio-lang/rust-miniscript/blob/4b30433f0b64f374a0314be25aafd32d1c0218a8/src/psbt/mod.rs
+[finalizer]: https://github.com/sapio-lang/rust-miniscript/blob/4b30433f0b64f374a0314be25aafd32d1c0218a8/src/psbt/finalizer.rs
+[hash-test]: https://github.com/sapio-lang/rust-miniscript/blob/4b30433f0b64f374a0314be25aafd32d1c0218a8/tests/ctv_hash.rs
+[finalization-test]: https://github.com/sapio-lang/rust-miniscript/blob/4b30433f0b64f374a0314be25aafd32d1c0218a8/tests/ctv_finalization.rs
+[sighash-test]: https://github.com/sapio-lang/rust-miniscript/blob/4b30433f0b64f374a0314be25aafd32d1c0218a8/tests/psbt_sighash.rs
 [bip119]: https://github.com/bitcoin/bips/blob/master/bip-0119.mediawiki
 [bip174]: https://github.com/bitcoin/bips/blob/master/bip-0174.mediawiki
 [vectors]: https://github.com/bitcoin/bips/blob/ae747e2b909ab5dd32632ed3a8b09839193d53e3/bip-0119/vectors/ctvhash.json
