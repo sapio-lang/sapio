@@ -1,8 +1,9 @@
-# Trampoline Pay
+# Delegated tree payments
 
-This crate can be compiled with `wasm-pack build`. The `*.wasm` artifact will
-be created in the `pkg` directory, not in `target`.
+Calls a batching module and funds the returned contract. The selected module must implement a compatible batching wire interface.
 
-Feel free to modify this code to experiment with creating your own Sapio plugins.
+See the [workspace guide](../README.md) for Cargo build and test commands,
+funding assumptions, and the complete executable catalog. This module has a
+[representative input](../../contrib/vectors/examples/trampolinepay.json).
 
-Trampoline Pay demonstrates using the Traits API.
+Coverage: Catalog calls the actual treepay guest.

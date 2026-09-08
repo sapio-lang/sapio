@@ -1,6 +1,9 @@
-# Sapio Vault Example
+# Ordinal sale
 
-This crate can be compiled with `wasm-pack build`. The `*.wasm` artifact will
-be created in the `pkg` directory, not in `target`.
+Preserves the requested sat at the start of a 501-sat buyer output, with direct and planned sale continuations. Ordered input ranges must be complete, non-overlapping and include the target plus padding.
 
-Feel free to modify this code to experiment with creating your own Sapio plugins.
+See the [workspace guide](../README.md) for Cargo build and test commands,
+funding assumptions, and the complete executable catalog. This module has a
+[representative input](../../contrib/vectors/examples/ordinal-example.json).
+
+Coverage: Native target-position, payment, fee, invalid-range and planner tests.

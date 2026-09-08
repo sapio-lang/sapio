@@ -18,7 +18,11 @@ input.
 Known contract inputs must pay the compiled contract's script. Every transaction
 must use distinct input outpoints, and known input values must sum without
 overflow. When all inputs are known, that total must cover the template's
-outputs and reserved fees. Auxiliary inputs may contribute to that total;
+outputs and reserved fees. `required_input_amount_sats` separately declares the amount input zero must
+provide; known contract inputs must meet it even when other inputs are unknown.
+`max_amount_sats` remains the aggregate requirement, and the artifact rejects a
+single-input template that claims external funding. Auxiliary inputs may
+contribute to the aggregate total;
 additional funding is permitted. These checks also apply to suggested
 transactions and descendants, using generated parent transactions directly.
 

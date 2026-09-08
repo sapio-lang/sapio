@@ -69,6 +69,10 @@ version = "0.2.0"
 [lib]
 path = "src/lib.rs"
 
+[[example]]
+name = "check_examples"
+required-features = ["host"]
+
 
 [dependencies.sapio-ctv-emulator-trait]
 path = "../emulator-trait"

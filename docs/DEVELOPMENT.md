@@ -45,21 +45,30 @@ port. A sandbox must permit loopback sockets to run it. No Bitcoin node or remot
 emulator is required. Clippy currently reports warnings from older code; removing
 that debt is a separate milestone, not a claim that this checkout is warning-free.
 
-Build every WASM example and exercise direct and cross-module compilation through
-the CLI:
+Test every WASM example natively, build optimized release guests, and run the complete
+[example catalog](EXAMPLES.md) through the real host:
 
 ```sh
 bash contrib/sapio_wasm.sh
 ```
 
-This requires Python 3. The smoke test uses a temporary module cache and compares
-parsed JSON with checked-in expected results. It fails on CLI errors, malformed
-output, or a changed contract result. Each CLI request has a 180-second wall-clock
-allowance, including native compilation of nested modules, and reports its
-duration. No jq or global module-cache setup is needed.
-The scripts use Cargo's default target directories. The WASM script also runs
-the inscription plugin's native artifact/signing tests and compiles a 521-byte
-inscription through the real guest ABI. See [inscription validation](INSCRIPTIONS.md).
+This requires Python 3. The catalog checks that every workspace guest has a
+fixture, compiles all 18 modules with their actual schemas, validates complete
+artifacts, checks payment/timing expectations, compares fresh-instance results,
+and rejects malformed arguments. The two shared interface crates are inventoried
+separately. A CLI smoke test additionally covers cross-module calls, a 521-byte
+inscription, and mock binding. Each catalog process has a 360-second wall-clock allowance for its two create
+requests; each individual CLI request has 180 seconds. Both allowances include
+native compilation of nested modules.
+Checks use temporary caches and report each case's duration. Guest release
+optimization is required for the catalog: unoptimized compiler guests can
+approach the 128 MiB module size limit and exhaust fuel on small contracts. No jq or global
+module-cache setup is needed. See [inscription validation](INSCRIPTIONS.md).
+
+The scripts use Cargo's default target directories. The native suite also tests
+the mining payout compiler and the payment example. For custom build directories,
+run the same commands with `CARGO_TARGET_DIR` and pass the resulting binary and
+WASM paths to `contrib/check_examples.py` and `contrib/check_wasm.py`.
 
 The pinned fork's Rust suite passes 157 tests, including 51 inscription tests.
 Its dedicated node job separately checks reveals against Bitcoin Core 31.1:
@@ -75,7 +84,8 @@ cargo run --locked -p sapio --example payment > payment.json
 ```
 
 That command prints a research compilation artifact, including its explicit
-backend label. It performs no funding or broadcasting.
+backend label. It performs no funding or broadcasting. The [native examples
+guide](../examples/README.md) also describes the runnable mining payout tree.
 
 Useful focused checks:
 
@@ -85,7 +95,7 @@ cargo test --locked -p sapio-base --test ctv_hash
 cargo test --locked -p sapio --test fees --test action_names --test ordinal_allocation
 cargo test --locked -p sapio-wasm-plugin --features host
 cargo test --locked -p sapio_integration_tests
-cargo test --locked --manifest-path plugin-example/Cargo.toml -p sapio-wasm-ordinal-inscription
+cargo test --locked --manifest-path plugin-example/Cargo.toml --workspace
 cargo fmt --all -- --check
 cargo fmt --manifest-path plugin-example/Cargo.toml --all -- --check
 ```
@@ -109,7 +119,24 @@ Every `Contract` declares its continuation argument type through either
 `declare! {non updatable}` or `declare! {updatable<Arguments>, ...}`. There is no
 nightly feature or associated-type-default variant.
 
-Amounts in module JSON are integer satoshis. `set_min_feerate` uses satoshis per
+Context funding, template amounts, and `AmountU64` fields use integer satoshis.
+Some example inputs use `AmountF64` or explicit `as_btc` serialization for BTC
+amounts; consult the module schema and its checked-in fixture rather than infer
+units from a JSON number. All contract accounting uses integer `Amount` values.
+`Builder::add_amount` is fallible
+and requires an auxiliary input (`add_sequence`) before declaring external
+funding. With tracked ordinals, allocate the entire original input before adding
+unknown external sats. The ordinal planner preserves input range order, places
+each requested ordinal at its output's first sat, and puts fees last. Its greedy
+payout placement can reject a layout that a more expensive packing search could
+solve; it never reorders the input ranges to make it fit.
+
+Timelock JSON retains Bitcoin's encoded values: relative time is the type bit
+`1 << 22` plus 512-second units, not a count of seconds. Deserialization rejects
+wrong type bits and out-of-range values. Converting a `Duration` rounds up to the
+next representable unit, so the lock never matures earlier than requested.
+
+`set_min_feerate` uses satoshis per
 virtual byte and checks explicitly reserved fees; it does not add fees. Repeated
 minimums keep the strongest requirement. Minimum-feerate checks currently reject
 additional inputs whose satisfaction weights are unknown.
@@ -209,6 +236,14 @@ zero. Template map keys and cached hashes must match the transaction, and output
 amounts/scripts must match the receiving-contract metadata. Optional input
 mappings contain one entry per input; entry zero must be `None` because the
 graph determines the contract input. Unknown template keys are rejected.
+
+Each template now requires `required_input_amount_sats`, the funding needed from
+contract input zero after declared external contributions. `max_amount_sats`
+continues to cover aggregate outputs plus reserved fees. Object amount ranges
+refer to the contract input, so a buyer's payment does not inflate an NFT's own
+funding requirement. Binding checks a known input zero independently, even if
+auxiliary inputs remain unresolved. Recompile old artifacts to obtain the new
+mandatory field; there is no guessed default for missing funding metadata.
 
 Binding authenticates known funding transactions, checks scripts and available
 amounts, and accepts only signature additions from emulators. Matching unknown

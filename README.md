@@ -35,6 +35,10 @@ For WASM modules and development checks, follow the
 [Designing Bitcoin Contracts with Sapio](docs/learn-sapio/src/SUMMARY.md) book
 contains broader examples; its older installation instructions are being revised.
 
+The [contract example catalog](docs/EXAMPLES.md) inventories every library family,
+all 18 WASM modules, and both runnable native examples, with regression coverage
+and the assumptions each construction still requires.
+
 ## Repository map
 
 | Component | Purpose |
