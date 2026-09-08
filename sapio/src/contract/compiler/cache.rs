@@ -92,12 +92,13 @@ pub(crate) fn create_guards<T>(
 ) -> Result<(Clause, Vec<(Clause, GuardSimps)>), CompilationError> {
     let v = guards
         .iter()
-        .zip((0..).flat_map(|i| {
-            let new = ctx.derive(PathFragment::Branch(i)).ok()?;
-            let simp = ctx.derive(PathFragment::Metadata).ok()?;
-            Some((new, simp))
-        }))
-        .filter_map(|(x, (c, simp_c))| gc.get(self_ref, *x, c, simp_c).transpose())
+        .enumerate()
+        .map(|(i, guard)| {
+            let mut guard_ctx = ctx.derive(PathFragment::Branch(i as u64))?;
+            let simp_ctx = guard_ctx.derive(PathFragment::Metadata)?;
+            gc.get(self_ref, *guard, guard_ctx, simp_ctx)
+        })
+        .filter_map(Result::transpose)
         .collect::<Result<Vec<_>, _>>()?;
     let mut clauses: Vec<_> = v
         .iter()
