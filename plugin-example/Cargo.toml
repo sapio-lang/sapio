@@ -20,3 +20,7 @@ members = ["treepay"
           , "clause-module-trampoline"
           , "ordinal-example"
           , "ordinal-inscription"]
+
+[patch.crates-io]
+# CTV finalization and inscription correctness repairs in the owned fork.
+sapio-miniscript = { git = "https://github.com/sapio-lang/rust-miniscript", rev = "04b69f69459fe3b043ca61fb649cf546d5a241b6" }

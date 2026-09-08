@@ -9,6 +9,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
+name = "base64-compat"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a8d4d2746f89841e49230dd26917df1876050f95abafafbe34f47cb534b88d7"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
 name = "batching-trait"
 version = "0.1.0"
 dependencies = [
@@ -39,6 +48,12 @@ dependencies = [
  "schemars",
  "serde",
 ]
+
+[[package]]
+name = "byteorder"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "cc"
@@ -167,6 +182,7 @@ version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3912fcfee4e0e9d2120731f4ae8afd122a5b87f6da080573e5831c97b1213575"
 dependencies = [
+ "base64-compat",
  "bech32",
  "bitcoin_hashes",
  "sapio-secp256k1",
@@ -205,8 +221,7 @@ dependencies = [
 [[package]]
 name = "sapio-miniscript"
 version = "7.0.2-alpha.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "077ce75160d406c7c177fac8919ad1987e169f6b94100df83db81427360934d6"
+source = "git+https://github.com/sapio-lang/rust-miniscript?rev=04b69f69459fe3b043ca61fb649cf546d5a241b6#04b69f69459fe3b043ca61fb649cf546d5a241b6"
 dependencies = [
  "sapio-bitcoin",
  "schemars",

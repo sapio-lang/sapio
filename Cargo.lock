@@ -2088,8 +2088,7 @@ dependencies = [
 [[package]]
 name = "sapio-miniscript"
 version = "7.0.2-alpha.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "077ce75160d406c7c177fac8919ad1987e169f6b94100df83db81427360934d6"
+source = "git+https://github.com/sapio-lang/rust-miniscript?rev=04b69f69459fe3b043ca61fb649cf546d5a241b6#04b69f69459fe3b043ca61fb649cf546d5a241b6"
 dependencies = [
  "sapio-bitcoin",
  "schemars",

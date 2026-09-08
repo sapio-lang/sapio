@@ -7,6 +7,19 @@ commit `Cargo.lock`; use `--locked` for builds and tests. The supported compiler
 minimum is the tested pinned version. Upgrade the compiler and lockfiles in
 reviewed commits rather than regenerating dependencies in CI.
 
+Both workspaces pin the repaired `sapio-miniscript` Git source at
+`04b69f69459fe3b043ca61fb649cf546d5a241b6`. Keep that revision aligned when updating
+the dependency. The registry release at historical revision
+`3f23950459f3424ccfeecc0bb14579ec2aec9820` does not contain these correctness
+repairs. The [repair record](CTV_FORK_AUDIT.md) documents the covered behavior and
+remaining limits.
+
+Cargo reads `[patch]` only from the top-level workspace. An external application
+or plugin workspace using Sapio must copy the same `[patch.crates-io]` entry from
+this repository's `Cargo.toml`; the patch does not propagate through library
+dependencies. See [Cargo's patch rules][cargo-patch]. Publishing supported Sapio
+crates requires a repaired Miniscript release and updated dependency requirements.
+
 A native C compiler is required for secp256k1. The WASM build additionally needs
 LLVM Clang with the `wasm32` target. Apple's system Clang does not provide that
 target. With Homebrew LLVM installed on macOS, set:
@@ -42,7 +55,16 @@ bash contrib/sapio_wasm.sh
 This requires Python 3. The smoke test uses a temporary module cache and compares
 parsed JSON with checked-in expected results. It fails on CLI errors, malformed
 output, or a changed contract result. No jq or global module-cache setup is needed.
-The scripts use Cargo's default target directories.
+The scripts use Cargo's default target directories. The WASM script also runs
+the inscription plugin's native artifact/signing tests and compiles a 521-byte
+inscription through the real guest ABI. See [inscription validation](INSCRIPTIONS.md).
+
+The pinned fork's Rust suite passes 157 tests, including 51 inscription tests.
+Its dedicated node job separately checks reveals against Bitcoin Core 31.1:
+five valid transactions are accepted and 21 invalid variants are rejected.
+These ordinary Taproot checks run in the fork repository and do not require a
+node for Sapio's commands above. The [fork's validation guide][fork-inscriptions]
+provides the fixture build and isolated regtest commands.
 
 For a faster native compiler example:
 
@@ -61,6 +83,7 @@ cargo test --locked -p sapio-base --test ctv_hash
 cargo test --locked -p sapio --test fees --test action_names --test ordinal_allocation
 cargo test --locked -p sapio-wasm-plugin --features host
 cargo test --locked -p sapio_integration_tests
+cargo test --locked --manifest-path plugin-example/Cargo.toml -p sapio-wasm-ordinal-inscription
 cargo fmt --all -- --check
 cargo fmt --manifest-path plugin-example/Cargo.toml --all -- --check
 ```
@@ -126,9 +149,26 @@ graph determines the contract input. Unknown template keys are rejected.
 Signing and finalization reject malformed PSBT maps before processing inputs.
 `finalize_psbt_format_api` returns `Result<PSBTApi, PSBTValidationError>`:
 structural errors are distinct from a valid PSBT still missing signatures.
-These checks establish structural consistency, not policy satisfaction, funding
-availability, chain enforcement, or general mixed-input CTV support. See the
-[CTV fork audit](CTV_FORK_AUDIT.md) for the remaining dependency work.
+
+The pinned Miniscript fork includes conditional scriptSig hashing and verifies
+candidate and completed transactions. Whole-transaction finalization establishes
+legacy scriptSigs before native witness inputs; tests cover native WSH and
+Taproot CTV alongside a legacy input in either position. Explicit sighash metadata
+is enforced for ECDSA and Schnorr signatures, including previously finalized
+inputs. Both hash implementations cover all 400 official BIP-119 expected hashes.
+
+Single-input finalization checks the currently known scriptSigs. Finish with
+`PsbtExt::extract` or `interpreter_check` after other inputs are finalized.
+Whole-transaction finalization can leave partial progress on error. Automatic
+ordering does not solve circular P2SH commitments or expand bare-descriptor
+support, and the builder still requires unsigned input-zero templates.
+
+Script verification uses supplied prevouts; funding UTXO authentication remains
+required at the caller boundary. Backend enforcement and native CTV node
+execution are separate release requirements. See the
+[CTV fork repair record](CTV_FORK_AUDIT.md) for exact evidence and limits. The
+separate Core inscription checks cover ordinary Taproot; they do not validate
+native CTV, Ord indexing, sat assignment or supplied funding history.
 
 ## Contributions
 
@@ -139,3 +179,6 @@ and resource bounds. Update the roadmap when completing a release gate.
 
 See [CONTRIBUTING](../CONTRIBUTING) for the existing contribution terms.
 No license or ownership transfer policy was changed in this branch.
+
+[cargo-patch]: https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html#the-patch-section
+[fork-inscriptions]: https://github.com/sapio-lang/rust-miniscript/blob/04b69f69459fe3b043ca61fb649cf546d5a241b6/docs/INSCRIPTIONS.md

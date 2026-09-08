@@ -13,8 +13,16 @@ struct Vector {
 
 #[test]
 fn matches_bip119_hash_vectors() {
-    let vectors: Vec<Vector> = serde_json::from_str(include_str!("data/ctvhash.json")).unwrap();
-    for vector in vectors {
+    let entries: Vec<serde_json::Value> =
+        serde_json::from_str(include_str!("data/ctvhash.json")).unwrap();
+    let mut transactions = 0;
+    let mut hashes = 0;
+    for entry in entries {
+        // The official file includes a format header and a trailing comment.
+        if entry.is_string() {
+            continue;
+        }
+        let vector: Vector = serde_json::from_value(entry).unwrap();
         let tx: Transaction = deserialize(&Vec::<u8>::from_hex(&vector.hex_tx).unwrap()).unwrap();
         assert_eq!(vector.spend_index.len(), vector.result.len());
         for (index, expected) in vector.spend_index.into_iter().zip(vector.result) {
@@ -24,6 +32,10 @@ fn matches_bip119_hash_vectors() {
                 "BIP-119 hash for input {index} of {}",
                 vector.hex_tx,
             );
+            hashes += 1;
         }
+        transactions += 1;
     }
+    assert_eq!(transactions, 100);
+    assert_eq!(hashes, 400);
 }
