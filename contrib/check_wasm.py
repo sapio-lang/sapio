@@ -6,11 +6,15 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 
 ROOT = Path(__file__).resolve().parent.parent
 cli = Path(sys.argv[1]).resolve()
 modules = Path(sys.argv[2]).resolve()
 vectors = ROOT / "contrib" / "vectors"
+# Cross-module calls compile several Rust modules from authenticated source.
+# This bounds the whole CLI request, including native compilation outside fuel.
+REQUEST_TIMEOUT_SECONDS = 180
 
 with tempfile.TemporaryDirectory(prefix="sapio-wasm-") as workspace:
     def request(command, module=None, parameters=None, extra_args=()):
@@ -19,11 +23,14 @@ with tempfile.TemporaryDirectory(prefix="sapio-wasm-") as workspace:
         if module is not None:
             args.extend(["--workspace", workspace, "--file", str(modules / module)])
         args.extend(extra_args)
+        started = time.monotonic()
         result = subprocess.run(
             args,
             input=json.dumps(parameters) if parameters is not None else "",
-            text=True, capture_output=True, check=True, timeout=60,
+            text=True, capture_output=True, check=True, timeout=REQUEST_TIMEOUT_SECONDS,
         )
+        print(f"WASM {command} {module or ''}: {time.monotonic() - started:.2f}s",
+              file=sys.stderr)
         response = json.loads(result.stdout)["result"]
         if "Err" in response:
             raise RuntimeError(response["Err"])

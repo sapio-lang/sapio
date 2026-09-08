@@ -54,7 +54,9 @@ bash contrib/sapio_wasm.sh
 
 This requires Python 3. The smoke test uses a temporary module cache and compares
 parsed JSON with checked-in expected results. It fails on CLI errors, malformed
-output, or a changed contract result. No jq or global module-cache setup is needed.
+output, or a changed contract result. Each CLI request has a 180-second wall-clock
+allowance, including native compilation of nested modules, and reports its
+duration. No jq or global module-cache setup is needed.
 The scripts use Cargo's default target directories. The WASM script also runs
 the inscription plugin's native artifact/signing tests and compiles a 521-byte
 inscription through the real guest ABI. See [inscription validation](INSCRIPTIONS.md).
