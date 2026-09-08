@@ -23,6 +23,7 @@ use wasmer::*;
 mod invocation;
 mod memory;
 pub mod plugin_handle;
+mod runtime;
 pub mod wasm_cache;
 
 #[cfg(test)]
