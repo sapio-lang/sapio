@@ -8,8 +8,8 @@
 //! concrete emulators for CTV
 
 use bitcoin::hashes::sha256::Hash as Sha256;
-use bitcoin::hashes::Hash;
 use bitcoin::util::bip32::*;
+use sapio_base::covenant::hash_to_child_vec;
 use sapio_ctv_emulator_trait::Clause;
 pub use sapio_ctv_emulator_trait::{CTVAvailable, CTVEmulator, EmulatorError, NullEmulator};
 
@@ -51,33 +51,4 @@ fn input_error<T>(s: &str) -> Result<T, std::io::Error> {
 }
 fn input_err(s: &str) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::InvalidInput, s)
-}
-
-/// Compute a derivation path from a sha256 hash.
-///
-/// Format is a bit peculiar, it's 9 u32's with the top bit as 0 (for unhardened
-/// derivation). We take each u32 in the hash (big endian) and mask off the top bit.
-/// Then we go over the 8 u32s and make a 8 bit u32 from the top bits.
-///
-/// This is because the ChildNumber is a enum u31 where the top bit is used to
-/// indicate hardened or not, so we can't just do the simple thing.
-fn hash_to_child_vec(h: Sha256) -> Vec<ChildNumber> {
-    let a: [u8; 32] = h.into_inner();
-    let b: [[u8; 4]; 8] = unsafe { std::mem::transmute(a) };
-    let mut c: Vec<ChildNumber> = b
-        .iter()
-        // Note: We mask off the top bit. This removes 8 bits of entropy from the hash,
-        // but we add it back in later.
-        .map(|x| (u32::from_be_bytes(*x) << 1) >> 1)
-        .map(ChildNumber::from)
-        .collect();
-    // Add a unique 9th path for the MSB's
-    c.push(
-        b.iter()
-            .enumerate()
-            .map(|(i, x)| (u32::from_be_bytes(*x) >> 31) << i)
-            .sum::<u32>()
-            .into(),
-    );
-    c
 }
