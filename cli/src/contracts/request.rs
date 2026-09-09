@@ -151,7 +151,7 @@ impl Request {
     async fn get_emulator(&self) -> ResultT<Arc<dyn CTVEmulator>> {
         let emulator: Arc<dyn CTVEmulator> = if let Some(emcfg) = &self.context.emulator {
             if emcfg.enabled {
-                emcfg.get_emulator()?
+                emcfg.get_emulator().await?
             } else {
                 Arc::new(CTVAvailable)
             }

@@ -17,12 +17,15 @@ use schemars::JsonSchema;
 use serde::*;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
-use std::net::ToSocketAddrs;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
-use tokio::sync::Mutex;
-use tokio::{io::BufReader, runtime::Handle};
+use std::time::Duration;
+use tokio::io::BufReader;
+
+#[cfg(test)]
+mod tests;
+
 /// EmulatorConfig is used to determine how this sapio-cli instance should stub
 /// out CTV. Emulators are specified by EPK and interface address. Threshold
 /// should be <= emulators.len().
@@ -36,51 +39,54 @@ pub struct EmulatorConfig {
     pub emulators: Vec<(ExtendedPubKey, String)>,
     /// threshold could be larger than u8, but that seems very unlikely/an error.
     pub threshold: u8,
+    /// Elapsed seconds allowed for configuration resolution and each signing
+    /// request, including time waiting for this connection's previous request.
+    #[serde(default = "default_request_timeout_secs")]
+    pub request_timeout_secs: u64,
+}
+
+fn default_request_timeout_secs() -> u64 {
+    emulator_connect::DEFAULT_REQUEST_TIMEOUT.as_secs()
 }
 
 impl EmulatorConfig {
-    /// Converts a config instance into an emulator trait object. Intenrally, we
-    /// are using a Federated Emulator Connection if emulators.len() > 1, or a
-    /// bare HDOracleEmulatorConnection if emulators.len() == 1
-    pub fn get_emulator(&self) -> Result<Arc<dyn CTVEmulator>, Box<dyn std::error::Error>> {
-        if self.emulators.len() < self.threshold as usize {
-            Err(String::from("Too High Thresh"))?;
-        } else if self.emulators.is_empty() {
-            Err(String::from("No Emulators Provided"))?;
+    /// Resolve the configured peers without opening signing connections.
+    /// Waiting for resolution has one deadline across the whole configuration.
+    /// The system's blocking DNS work can outlive this wait and delay shutdown.
+    pub async fn get_emulator(&self) -> Result<Arc<dyn CTVEmulator>, Box<dyn std::error::Error>> {
+        if self.threshold == 0 || usize::from(self.threshold) > self.emulators.len() {
+            return Err(
+                "Emulator threshold must be positive and no greater than the peer count".into(),
+            );
         }
-        let _n_emulators = self.emulators.len();
-        let rt = Handle::try_current()
-            .err()
-            .map(|_e| Arc::new(tokio::runtime::Runtime::new().unwrap()));
-        let secp = Arc::new(bitcoin::secp256k1::Secp256k1::new());
-        let mut it =
-            self.emulators
-                .iter()
-                .map(|(epk, host)| -> Result<_, Box<dyn std::error::Error>> {
-                    let handle = Handle::try_current().unwrap_or_else(|_e| {
-                        rt.as_ref().expect("must have own runtime").handle().clone()
-                    });
-                    Ok(HDOracleEmulatorConnection {
-                        handle,
-                        runtime: rt.clone(),
-                        connection: Mutex::new(None),
-                        reconnect: host.to_socket_addrs()?.next().unwrap(),
-                        root: *epk,
-                        secp: secp.clone(),
-                    })
-                });
-        Ok(if self.emulators.len() == 1 {
-            Arc::new(it.next().unwrap()?)
-        } else {
-            Arc::new(FederatedEmulatorConnection::new(
-                it.map(|n| -> Result<_, Box<dyn std::error::Error>> {
-                    let b: Arc<dyn CTVEmulator> = Arc::new(n?);
-                    Ok(b)
-                })
-                .collect::<Result<Vec<_>, _>>()?,
-                self.threshold,
-            ))
+        let timeout = Duration::from_secs(self.request_timeout_secs);
+        let deadline = tokio::time::Instant::now()
+            .checked_add(timeout)
+            .filter(|_| !timeout.is_zero())
+            .ok_or("Emulator request timeout must be positive and representable")?;
+        tokio::time::timeout_at(deadline, async {
+            let secp = Arc::new(bitcoin::secp256k1::Secp256k1::new());
+            let mut peers: Vec<Arc<dyn CTVEmulator>> = Vec::with_capacity(self.emulators.len());
+            for (root, host) in &self.emulators {
+                peers.push(Arc::new(
+                    HDOracleEmulatorConnection::new(host.as_str(), *root, None, secp.clone())
+                        .await?
+                        .with_request_timeout(timeout)?,
+                ));
+            }
+            Ok(if peers.len() == 1 {
+                peers.pop().expect("one peer")
+            } else {
+                Arc::new(FederatedEmulatorConnection::new(peers, self.threshold))
+            })
         })
+        .await
+        .map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "Emulator configuration resolution timed out",
+            )
+        })?
     }
 }
 
@@ -437,6 +443,7 @@ impl ConfigVerifier {
             emulator_nodes: Some(EmulatorConfig{
                 enabled: false,
                 threshold: 1u8,
+                request_timeout_secs: default_request_timeout_secs(),
                 emulators: vec![(ExtendedPubKey::from_str("tpubD6NzVbkrYhZ4Wf398td3H8YhWBsXx9Sxa4W3cQWkNW3N3DHSNB2qtPoUMXrA6JNaPxodQfRpoZNE5tGM9iZ4xfUEFRJEJvfs8W5paUagYCE").unwrap(),
                     "example.please.change.this.before.using:8367".into())],
             }),
@@ -484,6 +491,7 @@ impl std::default::Default for ConfigVerifier {
             emulator_nodes: Some(EmulatorConfig{
                 enabled: true,
                 threshold: 1u8,
+                request_timeout_secs: default_request_timeout_secs(),
                 emulators: vec![(ExtendedPubKey::from_str("tpubD6NzVbkrYhZ4Wf398td3H8YhWBsXx9Sxa4W3cQWkNW3N3DHSNB2qtPoUMXrA6JNaPxodQfRpoZNE5tGM9iZ4xfUEFRJEJvfs8W5paUagYCE").unwrap(),
                     "ctv.d31373.org:8367".into())],
             }),

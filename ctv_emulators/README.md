@@ -9,6 +9,48 @@ This crate also defines logic for servers that want to offer emulator services.
 
 See [Sapio CLI](../cli/README.md) for how to run a server.
 
+## Connection lifecycle
+
+The default client deadline is 30 seconds for each peer's signing exchange. It
+includes waiting for that connection's previous request, connecting, sending the
+request, reading the complete response and validating that only signatures were
+added. Only a successfully validated exchange returns its socket to the cache.
+Timeout, invalid response or cancellation during an exchange discards the socket;
+the next call connects again. A request that times out while queued leaves the
+previous request's socket alone.
+
+`HDOracleEmulatorConnection::with_request_timeout` changes this allowance. The
+CLI's `emulator_nodes.request_timeout_secs` defaults to 30 and also supplies a
+separate deadline for awaiting resolution of the complete peer configuration.
+Blocking system resolver work can continue after that deadline and delay runtime
+shutdown. Library callers
+using the asynchronous connection constructor directly must bound its DNS
+resolution themselves. Federation signing visits peers sequentially, with a
+separate request deadline for each peer. A federation with N peers can therefore
+spend N times the configured allowance on peer exchanges.
+
+The server admits at most 64 live connections by default. At capacity it stops
+accepting sockets; additional clients wait in the operating system's backlog.
+Time spent in that backlog is outside the server request allowance. Each admitted
+connection has 30 seconds per request, including idle time, the complete frame
+header/body and the response write. Partial bytes do not restart the deadline.
+A successfully completed response starts a fresh allowance for the next request.
+JSON frames remain limited to one million bytes.
+
+Create a server with `HDOracleEmulator::new(root)`, and override its policy with
+`.with_limits(request_timeout, max_connections)`. Both limits must be positive
+and the timeout must fit the runtime's clock. The CLI exposes these as
+`--request-timeout-secs` and `--max-connections`. The former debug/`--sync` mode
+has been removed: a malformed request or disconnected peer closes its connection
+without terminating the listener. Completed tasks are reaped; cancelling the
+server aborts its active connection tasks. Listener failures and unexpected task
+failures are returned to the caller.
+
+These are I/O and connection-admission limits. Async timers cannot interrupt
+synchronous parsing, cryptography or response validation, and cancellation of
+running native work takes effect when it yields. They do not establish a hard
+CPU or process-memory budget for a public deployment.
+
 
 ## How it works
 
@@ -36,6 +78,14 @@ entire transaction they want to occur and send it to the emulator server.
 Without even checking to see that the key is used in the transaction, the
 server generates the template hash H' (which should equal H) and then signs,
 returning the signature to the client.
+
+The implemented signing rule derives its key from this transaction's CTV hash
+at input zero and signs with `SIGHASH_ALL`. The service does not accept an
+arbitrary derivation path or a caller-selected signing policy. This restriction
+is structural and does not depend on authenticating the requesting account.
+Operator access controls can govern service availability and privacy; they do
+not replace the covenant's key-derivation rule. Backend selection, key custody
+and deployment availability still need explicit assumptions.
 
 Before creating a contract, clients may wish to collect all possible
 signatures required to prevent an availability fault.

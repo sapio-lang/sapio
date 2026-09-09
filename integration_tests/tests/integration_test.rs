@@ -56,7 +56,7 @@ async fn compiles_signs_and_finalizes_a_two_step_contract() {
     let pk_root = ExtendedPubKey::from_priv(&secp, &root);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
-    let server = tokio::spawn(HDOracleEmulator::new(root, false).serve(listener));
+    let server = tokio::spawn(HDOracleEmulator::new(root).serve(listener));
 
     let contract_1 = TestEmulation {
         to_contract: Compiled::from_address(

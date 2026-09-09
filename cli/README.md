@@ -34,7 +34,8 @@ A Sapio Config file (on linux at `~/.config/sapio-cli/config.json`) is a valid J
           "ctv.d31373.org:8367"
         ]
       ],
-      "threshold": 1
+      "threshold": 1,
+      "request_timeout_secs": 30
     },
     "plugin_map": {
       "example": "95db1a828dd1c9ab18d431eda9f99af46b9913e818277278a60708012f1d41b3"
@@ -54,6 +55,34 @@ CheckTemplateVerify-like functionality. You can replace emulators with your
 own servers (which can be started via the CLI), and you can set up emulation
 to work with an arbitrary M of N of your choice. Note that this may create
 issues with script lengths. You can read more about the emulator in [ctv_emulators](../ctv_emulators/README.md).
+
+`request_timeout_secs` defaults to 30. Resolving the complete peer list has one
+deadline; each peer signing request has a separate deadline covering the wait
+for a previous request, connecting, and the complete exchange. A federation
+contacts peers sequentially, so its total duration can span multiple deadlines.
+The threshold must be between one and the number of peers.
+Failed or interrupted exchanges close the
+connection so that the next request can reconnect.
+The DNS deadline stops the async wait; blocking system resolver work can
+continue and delay process shutdown.
+
+Run your own emulator with a seed file and a listening address:
+
+```sh
+sapio-cli --config config.json emulator server seed.bin 127.0.0.1:8367 \
+  --request-timeout-secs 30 --max-connections 64
+```
+
+Both limits must be positive. They default to 30 seconds per request and 64
+admitted connections. Idle connections expire under the same deadline; partial
+progress does not restart it. At capacity, new connections wait in the operating
+system's backlog. These limits bound I/O waits and admitted connections, not
+synchronous signing CPU time.
+
+The server prints one JSON readiness record after binding, including the actual
+address, public key and limits. Port `0` requests an automatically assigned port.
+Starting a server does not resolve the configured remote emulator peers. The
+old `--sync` debug mode has been removed.
 
 The plugin_map parameter is used to map human readable names to keys for a
 plugin (you can see a plugin's key with the `cli contract load` command).

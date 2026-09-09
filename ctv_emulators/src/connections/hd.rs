@@ -7,6 +7,7 @@
 //! Hierarchical Deterministic Emulator Connection
 
 use super::*;
+use std::time::Duration;
 /// HDOracleEmulatorConnection wraps a tokio runtime and a TCPStream
 /// with a key to be able to talk to an Oracle server.
 ///
@@ -28,6 +29,7 @@ pub struct HDOracleEmulatorConnection {
     pub root: ExtendedPubKey,
     /// a secp context
     pub secp: Arc<bitcoin::secp256k1::Secp256k1<bitcoin::secp256k1::All>>,
+    request_timeout: Duration,
 }
 
 impl HDOracleEmulatorConnection {
@@ -73,7 +75,49 @@ impl HDOracleEmulatorConnection {
             runtime,
             root,
             secp,
+            request_timeout: crate::DEFAULT_REQUEST_TIMEOUT,
         })
+    }
+
+    /// Set the deadline for one signing request, including waiting for another
+    /// request, connecting, and exchanging the complete response.
+    ///
+    /// The duration must be positive and representable by the runtime's clock.
+    pub fn with_request_timeout(mut self, timeout: Duration) -> Result<Self, std::io::Error> {
+        crate::validate_request_timeout(timeout)?;
+        self.request_timeout = timeout;
+        Ok(self)
+    }
+
+    async fn request(
+        &self,
+        request: PartiallySignedTransaction,
+    ) -> Result<PartiallySignedTransaction, EmulatorError> {
+        tokio::time::timeout(self.request_timeout, async {
+            let mut mconn = self.connection.lock().await;
+            // Only a fully validated exchange restores the cached connection.
+            // Timeout or caller cancellation drops a partially consumed stream.
+            let mut connection = match mconn.take() {
+                Some(connection) => connection,
+                None => TcpStream::connect(self.reconnect).await?,
+            };
+            crate::wire::write_message(
+                &mut connection,
+                &msgs::Request::SignPSBT(msgs::PSBT(request.clone())),
+            )
+            .await?;
+            let response = crate::wire::read_message::<msgs::PSBT>(&mut connection).await?;
+            sapio_ctv_emulator_trait::validate_signing_response(&request, &response.0)?;
+            *mconn = Some(connection);
+            Ok(response.0)
+        })
+        .await
+        .map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "Emulator signing request deadline exceeded",
+            )
+        })?
     }
 }
 
@@ -86,29 +130,9 @@ impl CTVEmulator for HDOracleEmulatorConnection {
         &self,
         b: PartiallySignedTransaction,
     ) -> Result<PartiallySignedTransaction, EmulatorError> {
-        let inp: Result<PartiallySignedTransaction, std::io::Error> =
-            tokio::task::block_in_place(|| {
-                self.handle.block_on(async {
-                    let mut mconn = self.connection.lock().await;
-                    // Take the socket out until a complete response is received.
-                    // A failed frame leaves the stream unusable for the next request.
-                    let mut connection = match mconn.take() {
-                        Some(connection) => connection,
-                        None => TcpStream::connect(self.reconnect).await?,
-                    };
-                    crate::wire::write_message(
-                        &mut connection,
-                        &msgs::Request::SignPSBT(msgs::PSBT(b.clone())),
-                    )
-                    .await?;
-                    let response = crate::wire::read_message::<msgs::PSBT>(&mut connection).await?;
-                    *mconn = Some(connection);
-                    Ok(response.0)
-                })
-            });
-
-        let response = inp?;
-        sapio_ctv_emulator_trait::validate_signing_response(&b, &response)?;
-        Ok(response)
+        tokio::task::block_in_place(|| self.handle.block_on(self.request(b)))
     }
 }
+
+#[cfg(test)]
+mod tests;
