@@ -73,5 +73,5 @@ fn compiles_both_guards_with_distinct_metadata_paths() {
     });
     assert!(keys.contains(&contract.first));
     assert!(keys.contains(&contract.second));
-    assert_eq!(compiled.metadata.simps_for_guards.len(), 2);
+    assert!(compiled.metadata.simps_for_guards.is_empty());
 }

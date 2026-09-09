@@ -1,6 +1,6 @@
 # Contract examples
 
-This inventory covers every contract family in `sapio-contrib`, all 18 WASM
+This inventory covers every contract family in `sapio-contrib`, all 19 WASM
 modules and both shared interfaces in `plugin-example`, and the two native
 executables. The examples demonstrate contract construction and have behavioral
 regressions for their supported paths. They remain research examples: compiling
@@ -113,6 +113,7 @@ native mocks.
 | [clause-module-trampoline](../plugin-example/clause-module-trampoline) | Obtains that clause from the real `clause-module` child and returns the same policy. The catalog asserts the exact result. |
 | [ordinal-example](../plugin-example/ordinal-example) | Owner-authorized ordinal sales with direct and planner-based construction. Native regressions check actual ordinal positions, payout destinations, fees, malformed ranges and auxiliary funding; the catalog checks both exposed continuations. |
 | [ordinal-inscription](../plugin-example/ordinal-inscription) | Constructs and carries an inscription through a signed continuation. Native regressions check envelope/payload preservation, ownership and funding; the catalog compiles the artifact and checks its fee-adjusted output. |
+| [custom-policy](../plugin-example/custom-policy) | Implements `PolicyCompiler` with an arithmetic signature predicate outside Miniscript. The catalog validates the raw Taproot artifact and its committed payout; native tests check the payment and reject underfunding. |
 
 The two remaining workspace members are interfaces, not WASM entry points:
 
@@ -137,6 +138,11 @@ known input sats have been allocated and must cover fees when present.
 | --- | --- |
 | [payment](../sapio/examples/payment.rs) | Compiles a fixed 1,000-satoshi payment with a 500-satoshi fee reserve. The test checks the destination, value, one-input shape, 1,500-satoshi input requirement and underfunding. |
 | [dcf_mining_pool](../examples/dcf_mining_pool) | Compiles an offline mining reward payout tree from JSON or a deterministic demonstration. Sorted unique keys receive equal shares after every tree transaction's fee is reserved; remainder sats go to the first keys. Tests traverse all levels, check each P2TR recipient exactly once, conserve the full reward and fees, enforce fanout, and reject invalid radix, duplicates, overflow and insufficient rewards. It replaces the unfinished RPC coordinator; share verification, networking and coinbase coordination are not implemented. |
+
+The [custom policy vector exporter](../sapio/examples/custom_policy_vectors.rs)
+is also an executable test fixture. Its [isolated node driver](../contrib/check_custom_policy.py)
+funds actual regtest outputs and checks custom witnesses against Bitcoin Core.
+See [policy backend validation](POLICY_BACKENDS.md#node-validation).
 
 See the [native example instructions](../examples/README.md) for commands and
 the mining request format.

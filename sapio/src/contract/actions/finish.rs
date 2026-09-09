@@ -12,9 +12,9 @@ use crate::contract::actions::ConditionallyCompileIfList;
 use crate::contract::actions::GuardList;
 use crate::template::Template;
 use sapio_base::effects::EffectDBError;
+use sapio_base::policy::ScriptPolicy;
 use sapio_base::simp::ContinuationPointLT;
 use sapio_base::simp::SIMPAttachableAt;
-use sapio_base::Clause;
 use serde_json::Value;
 
 use core::marker::PhantomData;
@@ -62,7 +62,7 @@ pub struct FinishOrFunc<'a, ContractSelf, StatefulArguments, SpecificArgs, WebAP
     pub returned_txtmpls_modify_guards: bool,
     /// extract a clause from the txtmpl
     pub extract_clause_from_txtmpl:
-        fn(&Template, &Context) -> Result<Option<Clause>, CompilationError>,
+        fn(&Template, &Context) -> Result<Option<ScriptPolicy>, CompilationError>,
 }
 
 /// This trait hides the generic parameter `SpecificArgs` in FinishOrFunc
@@ -101,7 +101,7 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     /// extract a clause from the txtmpl
     fn get_extract_clause_from_txtmpl(
         &self,
-    ) -> fn(&Template, &Context) -> Result<Option<Clause>, CompilationError>;
+    ) -> fn(&Template, &Context) -> Result<Option<ScriptPolicy>, CompilationError>;
     /// rename this object
     fn rename(&mut self, a: Arc<String>);
 }
@@ -135,7 +135,7 @@ impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, 
     }
     fn get_extract_clause_from_txtmpl(
         &self,
-    ) -> fn(&Template, &Context) -> Result<Option<Clause>, CompilationError> {
+    ) -> fn(&Template, &Context) -> Result<Option<ScriptPolicy>, CompilationError> {
         self.extract_clause_from_txtmpl
     }
 
@@ -188,7 +188,7 @@ where
 
     fn get_extract_clause_from_txtmpl(
         &self,
-    ) -> fn(&Template, &Context) -> Result<Option<Clause>, CompilationError> {
+    ) -> fn(&Template, &Context) -> Result<Option<ScriptPolicy>, CompilationError> {
         self.extract_clause_from_txtmpl
     }
 
@@ -209,7 +209,7 @@ where
 pub fn default_extract_clause_from_txtmpl(
     t: &Template,
     _ctx: &Context,
-) -> Result<Option<Clause>, CompilationError> {
+) -> Result<Option<ScriptPolicy>, CompilationError> {
     // Don't return or use the extra guards here
     // because we're within a non-CTV context... if
     // we did, then it would destabilize compilation

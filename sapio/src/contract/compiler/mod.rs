@@ -22,12 +22,16 @@ use sapio_base::effects::EffectDB;
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
 use sapio_base::miniscript;
+use sapio_base::policy::ScriptPolicy;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::Clause;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 mod cache;
+mod feasibility;
+mod script;
 mod util;
+mod validation;
 use cache::*;
 use util::*;
 /// Grants the compiler access to effects at the current compilation path.
@@ -172,8 +176,9 @@ where
         let mut action_ctx = ctx.derive(PathFragment::Action)?;
         let mut renamer = Renamer::new();
         let mut continue_apis = BTreeMap::new();
-        let mut action_branches = vec![];
-        let mut all_guard_simps: BTreeMap<Clause, GuardSimps> = BTreeMap::new();
+        let mut branches = vec![];
+        let mut branch_bytes = 0usize;
+        let mut all_guard_simps: BTreeMap<ScriptPolicy, GuardSimps> = BTreeMap::new();
         let then_fns = self.then_fns();
         let finish_or_fns = self.finish_or_fns();
         let actions = then_fns
@@ -219,15 +224,30 @@ where
                 PathFragment::Suggested
             })?;
             let effect_path = effect_context.path().clone();
-            let mut template_clauses = vec![];
+            let mut produced_clause = false;
             for template in compute_all_effects(effect_context, self_ref, action.as_ref())? {
                 let mut template = template?;
+                for guard in &template.guards {
+                    script::validate_source(guard)?;
+                }
                 // This also rejects forbidden guards on every suggested
                 // template, including duplicates of an earlier valid template.
                 let clause = (action.get_extract_clause_from_txtmpl())(&template, &ctx)?;
+                if let Some(clause) = &clause {
+                    script::validate_source(clause)?;
+                    if committed
+                        && (!source_policy_possible(&guards, &template.tx)
+                            || !source_policy_possible(clause, &template.tx))
+                    {
+                        return Err(CompilationError::ImpossibleTemplate {
+                            hash: template.hash(),
+                            at: effect_path.as_ref().clone(),
+                        });
+                    }
+                }
                 amount_range.update_range(template.required_input_amount);
                 if committed {
-                    template.guards = policy_as_guards(conjoin_guards(
+                    template.guards = policy_as_guards(conjoin_source(
                         std::iter::once(&guards).chain(template.guards.iter()),
                     ));
                 }
@@ -241,11 +261,20 @@ where
                     &effect_path,
                 )?;
                 if let Some(clause) = clause {
-                    template_clauses.push(clause);
+                    produced_clause = true;
+                    if committed {
+                        append_branches(
+                            &mut branches,
+                            &mut branch_bytes,
+                            compile_branches(conjoin_source([&guards, &clause].into_iter()))?,
+                        )?;
+                    }
                 }
             }
-            action_branches.extend(if committed {
-                combine_txtmpls(nullability, template_clauses, guards)?
+            if committed {
+                if !produced_clause && nullability == Nullable::No {
+                    return Err(CompilationError::MissingTemplates);
+                }
             } else {
                 let mut continuation =
                     ContinuationPoint::at(action.get_schema().clone(), effect_path.clone());
@@ -253,8 +282,8 @@ where
                     continuation = continuation.add_simp(simp.as_ref())?;
                 }
                 continue_apis.insert(SArc(effect_path), continuation);
-                optimizer_flatten_and_compile(guards)?
-            });
+                append_branches(&mut branches, &mut branch_bytes, compile_branches(guards)?)?;
+            }
             for (policy, mut simps) in guard_metadata {
                 all_guard_simps
                     .entry(policy)
@@ -264,7 +293,6 @@ where
         }
 
         let mut finish_context = ctx.derive(PathFragment::FinishFn)?;
-        let mut branches = vec![];
         for (index, factory) in self.finish_fns().iter().enumerate() {
             let mut guard_context = finish_context.derive_num(index as u64)?;
             let metadata_context = guard_context.derive(PathFragment::Metadata)?;
@@ -275,21 +303,60 @@ where
                     .entry(policy.clone())
                     .or_default()
                     .append(&mut simps);
-                branches.extend(optimizer_flatten_and_compile(policy)?);
+                append_branches(&mut branches, &mut branch_bytes, compile_branches(policy)?)?;
             }
         }
-        branches.extend(action_branches);
-        // TODO: Pick a better branch that is guaranteed to work!
-        let some_key = pick_key_from_miniscripts(branches.iter());
-        // Don't remove the key from the scripts in case it was bogus
-        let tree = branches_to_tree(branches);
-        let descriptor = Descriptor::Tr(descriptor::Tr::new(some_key, tree)?);
-        let estimated_max_size = descriptor.max_satisfaction_weight()?;
-        // TODO: Convert into an address instead of keeping descriptor,
-        // hot-fix workaround
-        let address = descriptor.clone().into();
-        let descriptor = Some(descriptor.into());
+        if branches.is_empty() {
+            return Err(CompilationError::EmptyPolicy);
+        }
+        // Only a proven standalone Miniscript key may become a key-path spend.
+        let some_key =
+            pick_key_from_miniscripts(branches.iter().filter_map(|branch| match branch {
+                CompiledBranch::Miniscript(script) => Some(script),
+                CompiledBranch::Script(_) => None,
+            }));
+        let opaque = branches
+            .iter()
+            .any(|branch| matches!(branch, CompiledBranch::Script(_)));
+        let (address, descriptor, estimated_max_size) = if opaque {
+            let scripts = branches
+                .into_iter()
+                .map(|branch| match branch {
+                    CompiledBranch::Miniscript(script) => script.encode(),
+                    CompiledBranch::Script(script) => script,
+                })
+                .collect();
+            let raw = crate::contract::object::RawTaproot::from_scripts(some_key, scripts)?;
+            let address =
+                bitcoin::Address::p2tr_tweaked(raw.spend_info().output_key(), ctx.network).into();
+            (
+                address,
+                crate::contract::object::SupportedDescriptors::Taproot(raw),
+                None,
+            )
+        } else {
+            let native = branches
+                .into_iter()
+                .filter_map(|branch| match branch {
+                    CompiledBranch::Miniscript(script) => Some(script),
+                    CompiledBranch::Script(_) => None,
+                })
+                .collect();
+            let tree = branches_to_tree(native);
+            let descriptor = Descriptor::Tr(descriptor::Tr::new(some_key, tree)?);
+            let weight = descriptor.max_satisfaction_weight()?;
+            (descriptor.clone().into(), descriptor.into(), Some(weight))
+        };
+        let descriptor = Some(descriptor);
         let root_path = SArc(ctx.path().clone());
+
+        if estimated_max_size.is_none()
+            && comitted_txns
+                .values()
+                .any(|t| t.min_feerate_sats_vbyte.is_some())
+        {
+            return Err(CompilationError::UnknownSatisfactionWeight);
+        }
 
         let failed_estimate = comitted_txns.values().any(|a| {
             let Some(rate) = a.min_feerate_sats_vbyte else {
@@ -300,6 +367,9 @@ where
             if a.tx.input.len() != 1 {
                 return true;
             }
+            let Some(estimated_max_size) = estimated_max_size else {
+                return true;
+            };
             let vsize = (a.tx.weight() + estimated_max_size + 2).div_ceil(4) as u64;
             // Only this template's reserved fees count. A larger funding
             // requirement in another branch cannot subsidize this spend.
@@ -362,11 +432,84 @@ pub(crate) fn conjoin_guards<'a>(guards: impl Iterator<Item = &'a Clause>) -> Cl
     }
 }
 
-fn policy_as_guards(policy: Clause) -> Vec<Clause> {
-    if policy == Clause::Trivial {
+/// Compose policy sources without lowering a raw fragment prematurely.
+pub(crate) fn conjoin_source<'a>(policies: impl Iterator<Item = &'a ScriptPolicy>) -> ScriptPolicy {
+    let policies: Vec<_> = policies.collect();
+    if policies
+        .iter()
+        .all(|p| matches!(p, ScriptPolicy::Miniscript(_)))
+    {
+        return conjoin_guards(policies.into_iter().filter_map(|p| match p {
+            ScriptPolicy::Miniscript(clause) => Some(clause),
+            _ => None,
+        }))
+        .into();
+    }
+    let mut policies: Vec<_> = policies
+        .into_iter()
+        .filter(|p| !is_trivial(p))
+        .cloned()
+        .collect();
+    if policies.len() == 1 {
+        policies.pop().unwrap()
+    } else {
+        ScriptPolicy::And(policies)
+    }
+}
+
+fn is_trivial(policy: &ScriptPolicy) -> bool {
+    matches!(policy, ScriptPolicy::Miniscript(Clause::Trivial))
+        || matches!(policy, ScriptPolicy::And(children) if children.is_empty())
+}
+
+fn policy_as_guards(policy: ScriptPolicy) -> Vec<ScriptPolicy> {
+    if is_trivial(&policy) {
         vec![]
     } else {
         vec![policy]
+    }
+}
+
+fn source_policy_possible(policy: &ScriptPolicy, tx: &bitcoin::Transaction) -> bool {
+    match policy {
+        ScriptPolicy::Miniscript(clause) => feasibility::miniscript_policy_possible(clause, tx, 0),
+        ScriptPolicy::Script(_) => true,
+        ScriptPolicy::And(children) => children.iter().all(|p| source_policy_possible(p, tx)),
+        ScriptPolicy::Or(children) => children.iter().any(|p| source_policy_possible(p, tx)),
+    }
+}
+
+fn source_alternatives(policy: ScriptPolicy) -> Vec<ScriptPolicy> {
+    match policy {
+        ScriptPolicy::Miniscript(clause) => optimizer_flatten_policy(clause)
+            .into_iter()
+            .map(Into::into)
+            .collect(),
+        ScriptPolicy::Or(children) => children.into_iter().flat_map(source_alternatives).collect(),
+        policy => vec![policy],
+    }
+}
+
+fn disjoin_source(policies: BTreeSet<ScriptPolicy>) -> ScriptPolicy {
+    if policies.len() == 1 {
+        policies.into_iter().next().unwrap()
+    } else if policies
+        .iter()
+        .all(|p| matches!(p, ScriptPolicy::Miniscript(_)))
+    {
+        Clause::Threshold(
+            1,
+            policies
+                .into_iter()
+                .filter_map(|p| match p {
+                    ScriptPolicy::Miniscript(clause) => Some(clause),
+                    _ => None,
+                })
+                .collect(),
+        )
+        .into()
+    } else {
+        ScriptPolicy::Or(policies.into_iter().collect())
     }
 }
 
@@ -405,19 +548,11 @@ fn insert_template(
                 inputs,
                 outputs
             );
-            let alternatives = optimizer_flatten_policy(conjoin_guards(existing.guards.iter()))
+            let alternatives = source_alternatives(conjoin_source(existing.guards.iter()))
                 .into_iter()
-                .chain(optimizer_flatten_policy(conjoin_guards(
-                    template.guards.iter(),
-                )))
-                .collect::<BTreeSet<_>>();
-            existing.guards = if alternatives.contains(&Clause::Trivial) {
-                vec![]
-            } else if alternatives.len() == 1 {
-                alternatives.into_iter().collect()
-            } else {
-                vec![Clause::Threshold(1, alternatives.into_iter().collect())]
-            };
+                .chain(source_alternatives(conjoin_source(template.guards.iter())))
+                .collect();
+            existing.guards = policy_as_guards(disjoin_source(alternatives));
         }
     }
     Ok(())
@@ -433,48 +568,52 @@ fn optimizer_flatten_and_compile(
     Ok(v)
 }
 
-fn combine_txtmpls(
-    nullability: Nullable,
-    txtmpl_clauses: Vec<Clause>,
-    guards: Clause,
-) -> Result<Vec<Miniscript<XOnlyPublicKey, Tap>>, CompilationError> {
-    match (nullability, txtmpl_clauses.len(), guards) {
-        // This is a nullable branch without any proposed
-        // transactions.
-        // Therefore, mark this branch dead.
-        (Nullable::Yes, 0, _) => Ok(vec![]),
-        // Error if we expect CTV, returned some templates, but our guard
-        // was unsatisfiable, irrespective of nullability. This is because
-        // the behavior should be captured through a compile_if if it is
-        // intended.
-        (_, n, Clause::Unsatisfiable) if n > 0 => {
-            // TODO: Turn into a warning that the intended
-            // behavior should be to compile_if
-            Err(CompilationError::MissingTemplates)
-        }
-        // Error if 0 templates return and we don't want to be nullable
-        (Nullable::No, 0, _) => Err(CompilationError::MissingTemplates),
-        // If the guard is trivial, return the hashes standalone
-        (_, _, Clause::Trivial) => {
-            let r = Ok(txtmpl_clauses
-                .into_iter()
-                .map(|policy| policy.compile().map_err(Into::<CompilationError>::into))
-                .collect::<Result<Vec<_>, _>>()?);
-            r
-        }
-        // If the guard is non-trivial, zip it to each hash
-        // TODO: Arc in miniscript to dedup memory?
-        //       This could be Clause::Shared(x) or something...
-        (_, _, guards) => Ok(txtmpl_clauses
+enum CompiledBranch {
+    Miniscript(Miniscript<XOnlyPublicKey, Tap>),
+    Script(bitcoin::Script),
+}
+
+fn compile_branches(policy: ScriptPolicy) -> Result<Vec<CompiledBranch>, CompilationError> {
+    script::validate_source(&policy)?;
+    match policy {
+        ScriptPolicy::Miniscript(clause) => Ok(optimizer_flatten_and_compile(clause)?
             .into_iter()
-            // extra_guards will contain any CTV
-            .map(|extra_guards| {
-                Clause::And(vec![guards.clone(), extra_guards])
-                    .compile()
-                    .map_err(Into::<CompilationError>::into)
-            })
-            .collect::<Result<Vec<_>, _>>()?),
+            .map(CompiledBranch::Miniscript)
+            .collect()),
+        policy => Ok(script::lower_script_policy(&policy)?
+            .into_iter()
+            .map(CompiledBranch::Script)
+            .collect()),
     }
+}
+
+/// Admit branches incrementally so separate actions share one output budget.
+fn append_branches(
+    branches: &mut Vec<CompiledBranch>,
+    bytes: &mut usize,
+    additions: Vec<CompiledBranch>,
+) -> Result<(), CompilationError> {
+    for branch in additions {
+        if branches.len() == 1_024 {
+            return Err(CompilationError::PolicyLimit {
+                resource: "contract branches",
+                limit: 1_024,
+            });
+        }
+        let size = match &branch {
+            CompiledBranch::Miniscript(script) => script.script_size(),
+            CompiledBranch::Script(script) => script.len(),
+        };
+        *bytes = bytes
+            .checked_add(size)
+            .filter(|total| *total <= script::MAX_SCRIPT_BYTES)
+            .ok_or(CompilationError::PolicyLimit {
+                resource: "contract script bytes",
+                limit: script::MAX_SCRIPT_BYTES,
+            })?;
+        branches.push(branch);
+    }
+    Ok(())
 }
 
 fn optimizer_flatten_policy(p: Clause) -> Vec<Clause> {

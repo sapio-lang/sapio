@@ -3,6 +3,9 @@
 Sapio's Rust frontend declares guarded transaction transitions and continuation
 entry points. The compiler must preserve their authorization through Bitcoin
 lowering, even when several transitions produce the same transaction.
+Native Miniscript clauses and custom policy backends share those action rules;
+see [policy backends](POLICY_BACKENDS.md) for the extension API, raw-script
+obligations, compilation budgets and artifact schema changes.
 
 ## Declarations
 
@@ -42,17 +45,38 @@ lowered descriptor for every signer combination, with native CTV and an emulated
 covenant key, and with a matching or different template commitment.
 
 All listed guards are conjunctive. Zero effective guards mean true, one means
-that guard, and larger lists use valid binary or threshold policy nodes. Exact
-duplicate ordinary predicates and trivial clauses do not add requirements.
-Inscription clauses carry script data: conjunction preserves their order and
-multiplicity, including when nested inside another predicate. A continuation
+that guard, and larger native lists use valid binary or threshold policy nodes.
+Exact duplicate ordinary native predicates and trivial clauses do not add
+requirements. Inscription clauses carry script data: conjunction preserves their
+order and multiplicity, including when nested inside another predicate. Raw
+policy fragments also preserve order and multiplicity; Sapio combines them with
+verification instructions between predicates. A continuation
 contributes its declared guards, while its returned transactions are suggestions;
 **every** suggested template is checked for forbidden additional guards before
 deduplication.
 
 The compiled template's `additional_preconditions` includes the action guards.
 For a shared transaction it records their complete alternative conditions in
-canonical policy order. The descriptor remains the authority for spending.
+canonical policy order. The committed descriptor or raw Taproot tree remains the
+authority for spending.
+
+## Source validity and possible transitions
+
+Native policy nodes are validated before simplification or alternative
+splitting. Invalid arities, thresholds, time constants and inscription fields
+remain errors even when another predicate would make their branch unreachable.
+Keys may occur in separate alternatives such as `(A AND B) OR (A AND C)`;
+Miniscript checks each eventual native script. General `ScriptPolicy::And` and
+`ScriptPolicy::Or` permit n-ary lists, while native `Clause::And` and `Clause::Or`
+require binary nodes. A contract that produces no spending branches returns
+`EmptyPolicy`.
+
+For a committed transition, native constraints must at least be possible for
+the template's fixed transaction fields. Contradictions involving the committed
+input's version, sequence, locktime or CTV hash produce `ImpossibleTemplate`
+with its hash and action path. Keys and preimages are treated as potentially
+available. This check does not establish chain maturity, funding availability
+or complete satisfiability, and it does not infer the meaning of raw scripts.
 
 ## Duplicate transaction payloads
 
@@ -75,11 +99,18 @@ Fresh guards receive `(self, Context)` at each attachment. Cached guards use
 context and is evaluated once per compilation of that contract. At the Rust API
 boundary this is `Guard::Cache(fn(&Self) -> Clause, ...)`.
 
+Custom guards opt in with `#[guard(policy)]` and an explicit backend return
+type. Adding `cached` likewise removes `Context`; the helper and its backend
+translation run once per contract compilation. Fresh backend guards translate
+at every attachment. Backend failures propagate as compilation errors.
+
 Guard metadata callbacks always receive their actual attachment context, for
 both cached and fresh clauses. Finish guards contribute metadata as well as
-spending conditions. Equal serialized metadata values for a clause/protocol
+spending conditions. Equal serialized metadata values for a policy/protocol
 are deduplicated; distinct values from different attachments are retained in
 declaration order. Allocation addresses never control metadata ordering.
+The artifact stores these as ordered policy records with per-protocol values,
+so native and custom guard sources retain the same metadata semantics.
 
 Caching does not make arbitrary Rust code pure. Reproducible compilation still
 requires contract authors to derive behavior from explicit inputs rather than

@@ -11,6 +11,7 @@ use crate::contract::object::Object;
 use crate::contract::object::ObjectError;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::psbt::PartiallySignedTransaction;
+use bitcoin::util::taproot::ControlBlock;
 use bitcoin::util::taproot::TaprootBuilder;
 use bitcoin::util::taproot::TaprootSpendInfo;
 use bitcoin::{OutPoint, Transaction};
@@ -230,6 +231,27 @@ impl Object {
                         for item in info.as_script_map().keys() {
                             let cb = info.control_block(item).expect("Must be present");
                             input.tap_scripts.insert(cb, item.clone());
+                        }
+                        input.tap_merkle_root = info.merkle_root();
+                        input.tap_internal_key = Some(info.internal_key());
+                    }
+                    Some(SupportedDescriptors::Taproot(tree)) => {
+                        let info = tree.spend_info();
+                        let input = &mut psbt.inputs[0];
+                        for ((script, version), branches) in info.as_script_map() {
+                            // Preserve every proof when the same script occurs
+                            // at different positions in the explicit tree.
+                            for branch in branches {
+                                let control = ControlBlock {
+                                    leaf_version: *version,
+                                    output_key_parity: info.output_key_parity(),
+                                    internal_key: info.internal_key(),
+                                    merkle_branch: branch.clone(),
+                                };
+                                input
+                                    .tap_scripts
+                                    .insert(control, (script.clone(), *version));
+                            }
                         }
                         input.tap_merkle_root = info.merkle_root();
                         input.tap_internal_key = Some(info.internal_key());

@@ -27,6 +27,61 @@ fn key(byte: u8) -> XOnlyPublicKey {
     .0
 }
 
+trait BackendGuards: Contract {
+    sapio::decl_guard! { policy external<Result<Clause, &'static str>> }
+    sapio::decl_guard! { cached policy cached_external<Clause> }
+}
+
+struct BackendContract(bool);
+impl BackendGuards for BackendContract {
+    #[sapio::guard(policy)]
+    fn external(self, _ctx: Context) -> Result<Clause, &'static str> {
+        if self.0 {
+            Ok(Clause::Key(key(1)))
+        } else {
+            Err("external policy unavailable")
+        }
+    }
+
+    #[sapio::guard(policy, cached)]
+    fn cached_external(self) -> Clause {
+        Clause::Key(key(2))
+    }
+}
+impl Contract for BackendContract {
+    sapio::declare! {finish, Self::external, Self::cached_external}
+    sapio::declare! {non updatable}
+}
+
+#[test]
+fn custom_backend_trait_guards_preserve_fallibility_and_optional_declarations() {
+    assert!(matches!(
+        BackendContract::external(),
+        Some(Guard::FreshPolicy(..))
+    ));
+    assert!(matches!(
+        BackendContract::cached_external(),
+        Some(Guard::CachedPolicy(..))
+    ));
+    BackendContract(true)
+        .compile(context())
+        .unwrap()
+        .validate()
+        .unwrap();
+    let error = BackendContract(false).compile(context()).unwrap_err();
+    assert!(
+        matches!(error, CompilationError::Policy(sapio::policy::PolicyError::Backend(message)) if message == "external policy unavailable")
+    );
+
+    struct Optional;
+    impl BackendGuards for Optional {}
+    impl Contract for Optional {
+        sapio::declare! {non updatable}
+    }
+    assert!(Optional::external().is_none());
+    assert!(Optional::cached_external().is_none());
+}
+
 struct OfflineArgs(u64);
 
 trait Actions: Contract {

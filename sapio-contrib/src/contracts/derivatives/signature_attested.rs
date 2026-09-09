@@ -215,7 +215,8 @@ mod tests {
                 vec![Clause::Threshold(
                     2,
                     vec![Clause::Key(key(10 + point)), Clause::Key(key(20 + point))]
-                )]
+                )
+                .into()]
             );
             distributions.push(
                 template
@@ -273,7 +274,10 @@ mod tests {
         );
         use sapio_base::miniscript::policy::Liftable;
         assert_eq!(template.guards.len(), 1);
-        let actual = template.guards[0].lift().unwrap();
+        let sapio_base::policy::ScriptPolicy::Miniscript(actual) = &template.guards[0] else {
+            panic!()
+        };
+        let actual = actual.lift().unwrap();
         let expected = expected.lift().unwrap();
         assert!(actual.clone().entails(expected.clone()).unwrap());
         assert!(expected.entails(actual).unwrap());

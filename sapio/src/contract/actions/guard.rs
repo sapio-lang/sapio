@@ -12,6 +12,7 @@ use crate::contract::CompilationError;
 use super::Context;
 
 use sapio_base::{
+    policy::ScriptPolicy,
     simp::{GuardLT, SIMPAttachableAt},
     Clause,
 };
@@ -26,6 +27,16 @@ pub enum Guard<ContractSelf> {
     /// Evaluate the policy with the context of each attachment.
     Fresh(
         fn(&ContractSelf, Context) -> Clause,
+        Option<SimpGen<ContractSelf>>,
+    ),
+    /// Compile another policy language at this attachment's context.
+    FreshPolicy(
+        fn(&ContractSelf, Context) -> Result<ScriptPolicy, CompilationError>,
+        Option<SimpGen<ContractSelf>>,
+    ),
+    /// Compile another policy language once, independently of attachment context.
+    CachedPolicy(
+        fn(&ContractSelf) -> Result<ScriptPolicy, CompilationError>,
         Option<SimpGen<ContractSelf>>,
     ),
 }

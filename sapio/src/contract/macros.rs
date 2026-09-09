@@ -200,8 +200,36 @@ macro_rules! decl_continuation {
 /// Use `decl_guard! { cached name }` for a context-free cached clause.
 /// Implement these with `#[guard] fn name(self, ctx: Context)` and
 /// `#[guard(cached)] fn name(self)` respectively.
+/// Custom backends use `decl_guard! { policy name<Backend> }` or
+/// `decl_guard! { cached policy name<Backend> }` and `#[guard(policy)]`.
 #[macro_export]
 macro_rules! decl_guard {
+    {
+        $(#[$meta:meta])*
+        cached policy $name:ident<$policy:ty>
+    } => {
+        $crate::contract::macros::paste! {
+            $(#[$meta])*
+            fn [<guard_ $name>](&self) -> $policy { unimplemented!(); }
+            $(#[$meta])*
+            fn $name() -> ::std::option::Option<$crate::contract::actions::Guard<Self>> {
+                ::std::option::Option::None
+            }
+        }
+    };
+    {
+        $(#[$meta:meta])*
+        policy $name:ident<$policy:ty>
+    } => {
+        $crate::contract::macros::paste! {
+            $(#[$meta])*
+            fn [<guard_ $name>](&self, _ctx: $crate::contract::Context) -> $policy { unimplemented!(); }
+            $(#[$meta])*
+            fn $name() -> ::std::option::Option<$crate::contract::actions::Guard<Self>> {
+                ::std::option::Option::None
+            }
+        }
+    };
     {
         $(#[$meta:meta])*
         cached $name:ident

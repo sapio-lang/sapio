@@ -25,6 +25,7 @@ struct Case {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Expected {
+    raw_taproot: Option<bool>,
     clause: Option<String>,
     ctv_count: Option<usize>,
     suggested_count: Option<usize>,
@@ -66,6 +67,15 @@ fn check(value: Value, expected: &Expected) -> Result<(), Box<dyn Error>> {
     }
     let compiled: Compiled = serde_json::from_value(value)?;
     compiled.validate()?;
+    if let Some(expected) = expected.raw_taproot {
+        assert_eq!(
+            matches!(
+                compiled.descriptor,
+                Some(sapio::contract::object::SupportedDescriptors::Taproot(_))
+            ),
+            expected
+        );
+    }
     for (actual, expected) in [
         (compiled.ctv_to_tx.len(), expected.ctv_count),
         (compiled.suggested_txs.len(), expected.suggested_count),

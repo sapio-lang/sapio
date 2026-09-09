@@ -10,6 +10,7 @@ pub mod error;
 pub use error::*;
 pub mod bind;
 pub mod descriptors;
+pub mod taproot;
 mod validation;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::contract::CompilationError;
@@ -22,16 +23,26 @@ pub use descriptors::*;
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
 use sapio_base::miniscript::*;
+use sapio_base::policy::ScriptPolicy;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::simp::CompiledObjectLT;
 use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::simp::SIMPError;
-use sapio_base::Clause;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::Arc;
+pub use taproot::{RawTaproot, RawTaprootError};
 pub use validation::{ArtifactError, ArtifactErrorKind};
+
+/// Metadata attached to a particular guard policy.
+#[derive(Serialize, Deserialize, Clone, JsonSchema, Debug, PartialEq, Eq)]
+pub struct GuardMetadata {
+    /// The complete policy source which produced the metadata.
+    pub policy: ScriptPolicy,
+    /// Distinct values per protocol, in attachment order.
+    pub protocols: BTreeMap<i64, Vec<serde_json::Value>>,
+}
 
 /// Metadata for Object, arbitrary KV set.
 #[derive(Serialize, Deserialize, Clone, JsonSchema, Debug, PartialEq, Eq, Default)]
@@ -41,8 +52,9 @@ pub struct ObjectMetadata {
     pub extra: BTreeMap<String, serde_json::Value>,
     /// SIMP: Sapio Interactive Metadata Protocol
     pub simp: BTreeMap<i64, serde_json::Value>,
-    /// Distinct SIMP values per guard and protocol, in attachment order.
-    pub simps_for_guards: BTreeMap<Clause, BTreeMap<i64, Vec<serde_json::Value>>>,
+    /// Guard records in deterministic policy order. Each protocol retains its
+    /// distinct values in attachment order.
+    pub simps_for_guards: Vec<GuardMetadata>,
 }
 impl ObjectMetadata {
     /// Is there any metadata in this field?
@@ -68,7 +80,7 @@ impl ObjectMetadata {
     pub(crate) fn add_guard_simps(
         mut self,
         all_guard_simps: BTreeMap<
-            policy::Concrete<bitcoin::XOnlyPublicKey>,
+            ScriptPolicy,
             Vec<Arc<dyn SIMPAttachableAt<sapio_base::simp::GuardLT>>>,
         >,
     ) -> Result<ObjectMetadata, CompilationError> {
@@ -77,8 +89,8 @@ impl ObjectMetadata {
                 "Contract metadata cannot prepopulate guard SIMPs".into(),
             ));
         }
-        for (clause, metadata) in all_guard_simps {
-            let protocols = self.simps_for_guards.entry(clause).or_default();
+        for (policy, metadata) in all_guard_simps {
+            let mut protocols: BTreeMap<i64, Vec<serde_json::Value>> = BTreeMap::new();
             for simp in metadata {
                 let value = simp
                     .to_json()
@@ -87,6 +99,10 @@ impl ObjectMetadata {
                 if !values.contains(&value) {
                     values.push(value);
                 }
+            }
+            if !protocols.is_empty() {
+                self.simps_for_guards
+                    .push(GuardMetadata { policy, protocols });
             }
         }
         Ok(self)
