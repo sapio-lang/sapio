@@ -27,6 +27,25 @@ jobs:
         run: rustup show
       - run: cargo test --workspace --all-features --locked
       - run: cargo test -p sapio --example payment --locked
+      - name: Install pinned Bitcoin Core
+        if: runner.os == 'Linux'
+        run: |
+          curl --fail --location --retry 3 --max-time 120 \
+            --output "$RUNNER_TEMP/bitcoin.tar.gz" \
+            https://bitcoincore.org/bin/bitcoin-core-31.1/bitcoin-31.1-x86_64-linux-gnu.tar.gz
+          echo "b80d9c3e04da78fb6f0569685673418cf686fadba9042d926d13fb87ff503f9e  $RUNNER_TEMP/bitcoin.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/bitcoin.tar.gz" -C "$RUNNER_TEMP"
+      - name: Build custom policy spend vectors
+        if: runner.os == 'Linux'
+        run: cargo build --locked -p sapio --example custom_policy_vectors
+      - name: Validate custom policy witnesses with Bitcoin Core
+        if: runner.os == 'Linux'
+        timeout-minutes: 5
+        run: >-
+          python3 contrib/check_custom_policy.py
+          "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoind"
+          "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoin-cli"
+          target/debug/examples/custom_policy_vectors
 
   quality:
     runs-on: ubuntu-24.04
