@@ -202,9 +202,13 @@ where
                     // this should always be Ok(_)
                     .derive(PathFragment::CondCompIf)
                     .expect(UNIQUE_DERIVE_PANIC_MSG);
-                match CCILWrapper(func.get_conditional_compile_if())
+                let condition = match CCILWrapper(func.get_conditional_compile_if())
                     .assemble(self_ref, &mut this_ctx)
                 {
+                    Ok(condition) => condition,
+                    Err(error) => return Some(Err(error)),
+                };
+                match condition {
                     // Throw errors
                     ConditionalCompileType::Fail(errors) => {
                         Some(Err(CompilationError::ConditionalCompilationFailed(errors)))
