@@ -5,30 +5,35 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use bitcoin::secp256k1::Secp256k1;
-use bitcoin::util::bip32::*;
-use emulator_connect::servers::hd::*;
+use bitcoin::util::bip32::{ExtendedPrivKey, ExtendedPubKey};
+use emulator_connect::servers::hd::HDOracleEmulator;
+use std::io::{Error, ErrorKind};
 
-use tokio::io::AsyncReadExt;
 #[tokio::main]
-async fn main() -> Result<(), std::io::Error> {
-    let filename = std::env::args().nth(1).expect("No Seed File Provided");
-    let mut file = tokio::fs::File::open(filename)
-        .await
-        .expect("File Not Found");
-    let mut contents = vec![];
-    file.read_to_end(&mut contents).await?;
-
+async fn main() -> Result<(), Error> {
+    let args: Vec<_> = std::env::args_os().skip(1).collect();
+    if args.len() == 1 && (args[0] == "--help" || args[0] == "-h") {
+        println!("Usage: emulator_server SEED_FILE LISTEN_ADDRESS");
+        return Ok(());
+    }
+    if args.len() != 2 {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "Usage: emulator_server SEED_FILE LISTEN_ADDRESS",
+        ));
+    }
+    let contents = tokio::fs::read(&args[0]).await?;
+    let address = args[1]
+        .to_str()
+        .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "Listen address must be UTF-8"))?;
     let root =
-        ExtendedPrivKey::new_master(bitcoin::network::constants::Network::Regtest, &contents[..])
-            .unwrap();
-    let pk_root = ExtendedPubKey::from_private(&Secp256k1::new(), &root);
-    let oracle = HDOracleEmulator::new(root, true);
-    let server = oracle.bind(
-        std::env::args()
-            .nth(2)
-            .expect("No Interface given (e.g., 127.0.0.1:8080"),
+        ExtendedPrivKey::new_master(bitcoin::Network::Regtest, &contents).map_err(Error::other)?;
+    let public = ExtendedPubKey::from_priv(&Secp256k1::new(), &root);
+    let listener = tokio::net::TcpListener::bind(address).await?;
+    println!(
+        "Running Oracle With Key: {} on {}",
+        public,
+        listener.local_addr()?
     );
-    println!("Running Oracle With Key: {}", pk_root);
-    server.await?;
-    Ok(())
+    HDOracleEmulator::new(root).serve(listener).await
 }

@@ -125,7 +125,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
      )
      (@subcommand server =>
       (about: "run an emulation server")
-      (@arg sync: --sync  "Run in Synchronous mode")
+      (@arg request_timeout_secs: --("request-timeout-secs") +takes_value "Whole-request I/O deadline in seconds (default: 30)")
+      (@arg max_connections: --("max-connections") +takes_value "Maximum admitted connections (default: 64)")
       (@arg seed: +takes_value +required {check_file} "The file containing the Seed")
       (@arg interface: +required +takes_value "The Interface to Bind")
      )
@@ -287,65 +288,58 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             _ => unreachable!(),
         },
-        Some(("emulator", sign_matches)) => {
-            let config = config(custom_config).await?;
-            let emulator: Arc<dyn CTVEmulator> = if let Some(emcfg) = &config.active.emulator_nodes
-            {
-                if emcfg.enabled {
-                    emcfg.get_emulator()?
-                } else {
-                    Arc::new(CTVAvailable)
-                }
-            } else {
-                Arc::new(CTVAvailable)
-            };
-            // TODO: is this still required to drop the emulator from a unique thread?
-            {
-                let mut emulator = emulator.clone();
-                // Drop Emulator from own thread...
-                std::thread::spawn(move || loop {
-                    if Arc::get_mut(&mut emulator).is_some() {
-                        break;
-                    }
-                });
+        Some(("emulator", sign_matches)) => match sign_matches.subcommand() {
+            Some(("sign", args)) => {
+                let emulator = configured_emulator(custom_config).await?;
+                let psbt = decode_psbt_file(args, "psbt")?;
+                let psbt = emulator.sign(psbt)?;
+                let bytes = serialize(&psbt);
+                std::fs::write(args.value_of_os("out").unwrap(), &base64::encode(bytes))?;
             }
-            match sign_matches.subcommand() {
-                Some(("sign", args)) => {
-                    let psbt = decode_psbt_file(args, "psbt")?;
-                    let psbt = emulator.sign(psbt)?;
-                    let bytes = serialize(&psbt);
-                    std::fs::write(args.value_of_os("out").unwrap(), &base64::encode(bytes))?;
-                }
-                Some(("get_key", args)) => {
-                    let psbt = decode_psbt_file(args, "psbt")?;
-                    let h = emulator.get_signer_for(psbt.extract_tx().get_ctv_hash(0))?;
-                    println!("{}", h);
-                }
-                Some(("show", args)) => {
-                    let psbt = decode_psbt_file(args, "psbt")?;
-                    println!("{:?}", psbt);
-                }
-                Some(("server", args)) => {
-                    let filename = args.value_of("seed").unwrap();
-                    let contents = tokio::fs::read(filename).await?;
+            Some(("get_key", args)) => {
+                let emulator = configured_emulator(custom_config).await?;
+                let psbt = decode_psbt_file(args, "psbt")?;
+                let h = emulator.get_signer_for(psbt.extract_tx().get_ctv_hash(0))?;
+                println!("{}", h);
+            }
+            Some(("show", args)) => {
+                let psbt = decode_psbt_file(args, "psbt")?;
+                println!("{:?}", psbt);
+            }
+            Some(("server", args)) => {
+                let config = config(custom_config).await?;
+                let filename = args.value_of("seed").unwrap();
+                let contents = tokio::fs::read(filename).await?;
 
-                    let root = ExtendedPrivKey::new_master(config.network, &contents[..]).unwrap();
-                    let pk_root = ExtendedPubKey::from_priv(&Secp256k1::new(), &root);
-                    let sync_mode = args.is_present("sync");
-                    let oracle = HDOracleEmulator::new(root, sync_mode);
-                    let interface = args.value_of("interface").unwrap();
-                    let server = oracle.bind(interface);
-                    let status = serde_json::json! {{
-                        "interface": interface,
-                        "pk": pk_root,
-                        "sync": sync_mode,
-                    }};
-                    println!("{}", serde_json::to_string_pretty(&status).unwrap());
-                    server.await?;
-                }
-                _ => unreachable!(),
+                let root = ExtendedPrivKey::new_master(config.network, &contents)?;
+                let pk_root = ExtendedPubKey::from_priv(&Secp256k1::new(), &root);
+                let timeout_secs = args
+                    .value_of("request_timeout_secs")
+                    .map(str::parse::<u64>)
+                    .transpose()?
+                    .unwrap_or(emulator_connect::DEFAULT_REQUEST_TIMEOUT.as_secs());
+                let max_connections = args
+                    .value_of("max_connections")
+                    .map(str::parse::<usize>)
+                    .transpose()?
+                    .unwrap_or(64);
+                let oracle = HDOracleEmulator::new(root).with_limits(
+                    std::time::Duration::from_secs(timeout_secs),
+                    max_connections,
+                )?;
+                let listener =
+                    tokio::net::TcpListener::bind(args.value_of("interface").unwrap()).await?;
+                let status = serde_json::json!({
+                    "interface": listener.local_addr()?,
+                    "pk": pk_root,
+                    "request_timeout_secs": timeout_secs,
+                    "max_connections": max_connections,
+                });
+                println!("{}", serde_json::to_string(&status)?);
+                oracle.serve(listener).await?;
             }
-        }
+            _ => unreachable!(),
+        },
         Some(("psbt", matches)) => match matches.subcommand() {
             Some(("finalize", args)) => {
                 let psbt_str = args.value_of("psbt");
@@ -465,6 +459,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     Ok(())
+}
+
+async fn configured_emulator(
+    custom_config: Option<&str>,
+) -> Result<Arc<dyn CTVEmulator>, Box<dyn Error>> {
+    let config = config(custom_config).await?;
+    match config.active.emulator_nodes {
+        Some(emulator) if emulator.enabled => emulator.get_emulator().await,
+        _ => Ok(Arc::new(CTVAvailable)),
+    }
 }
 
 async fn run_server_stdin() -> Result<(), Box<dyn Error>> {

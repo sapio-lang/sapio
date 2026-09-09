@@ -18,6 +18,9 @@ serde = "1.0"
 serde_derive = "1.0"
 rand = "0.8.1"
 
+[dev-dependencies]
+tokio = { version = "1", features = ["test-util"] }
+
 
 [dependencies.sapio-ctv-emulator-trait]
 path = "../emulator-trait"

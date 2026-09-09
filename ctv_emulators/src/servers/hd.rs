@@ -13,26 +13,52 @@ use bitcoin::SchnorrSig;
 use bitcoin::Script;
 use bitcoin::TxOut;
 use bitcoin::XOnlyPublicKey;
+use std::io::{Error as IoError, ErrorKind};
+use std::time::Duration;
+use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::task::JoinSet;
 
 /// hierarchical deterministic oracle emulator
 #[derive(Clone)]
 pub struct HDOracleEmulator {
     root: ExtendedPrivKey,
-    debug: bool,
+    request_timeout: Duration,
+    max_connections: usize,
 }
 
 impl HDOracleEmulator {
-    /// create a new HDOracleEmulator
+    /// Create an oracle with a 30-second request timeout and 64 connections.
     ///
-    /// if debug is set, runs in a "single threaded" mode where we can observe errors on connections rather than ignoring them.
-    pub fn new(root: ExtendedPrivKey, debug: bool) -> Self {
-        HDOracleEmulator { root, debug }
+    /// Idle connections consume a slot and must send their next complete
+    /// request within the request timeout.
+    pub fn new(root: ExtendedPrivKey) -> Self {
+        HDOracleEmulator {
+            root,
+            request_timeout: crate::DEFAULT_REQUEST_TIMEOUT,
+            max_connections: 64,
+        }
     }
-    /// binds a HDOracleEmulator to a socket interface and runs the server
+
+    /// Override the request timeout and maximum number of live connections.
     ///
-    /// This will only return when debug = false if The TcpListener fails.
-    /// When debug = true, then we join each connection one at a time and return
-    /// any errors.
+    /// Both limits must be nonzero and the timeout must fit a timer deadline.
+    /// Each timeout covers an entire request, including its response, and is
+    /// not extended by partial progress.
+    pub fn with_limits(
+        mut self,
+        request_timeout: Duration,
+        max_connections: usize,
+    ) -> Result<Self, IoError> {
+        crate::validate_request_timeout(request_timeout)?;
+        if max_connections == 0 {
+            return Err(input_err("Oracle connection limit must be nonzero"));
+        }
+        self.request_timeout = request_timeout;
+        self.max_connections = max_connections;
+        Ok(self)
+    }
+
+    /// Bind an oracle to a socket interface and run the server.
     pub async fn bind<A: ToSocketAddrs>(self, a: A) -> std::io::Result<()> {
         let listener = TcpListener::bind(a).await?;
         self.serve(listener).await
@@ -40,22 +66,38 @@ impl HDOracleEmulator {
 
     /// Serve an already bound listener, allowing callers to establish readiness
     /// and discover an automatically assigned port before starting clients.
+    ///
+    /// At capacity, new connections wait in the operating system's backlog.
+    /// Peer errors close only that connection; listener errors and unexpected
+    /// task failures stop the service. Cancelling this future aborts its active
+    /// connections rather than leaving detached signing tasks behind.
     pub async fn serve(self, listener: TcpListener) -> std::io::Result<()> {
+        let mut connections = JoinSet::new();
         loop {
-            let (mut socket, _) = listener.accept().await?;
-            {
-                let this = self.clone();
-                let j: tokio::task::JoinHandle<Result<(), std::io::Error>> =
-                    tokio::spawn(async move {
-                        loop {
-                            socket.readable().await?;
-                            this.handle(&mut socket).await?;
-                        }
-                    });
-                if self.debug {
-                    tokio::join!(j).0??;
+            tokio::select! {
+                completed = connections.join_next(), if !connections.is_empty() => {
+                    // Malformed requests, EOF and timeouts belong to the peer.
+                    // A task panic is an unexpected service failure.
+                    let _peer_result = completed.expect("A connection task is present")
+                        .map_err(IoError::other)?;
+                }
+                accepted = listener.accept(), if connections.len() < self.max_connections => {
+                    let (socket, _) = accepted?;
+                    let this = self.clone();
+                    connections.spawn(async move { this.serve_connection(socket).await });
                 }
             }
+        }
+    }
+
+    async fn serve_connection(
+        &self,
+        mut stream: impl AsyncRead + AsyncWrite + Unpin,
+    ) -> Result<(), IoError> {
+        loop {
+            tokio::time::timeout(self.request_timeout, self.handle(&mut stream))
+                .await
+                .map_err(|_| IoError::new(ErrorKind::TimedOut, "Oracle request timed out"))??;
         }
     }
     /// helper to get an EPK for the oracle.
@@ -140,7 +182,10 @@ impl HDOracleEmulator {
     /// the main server business logic.
     ///
     /// - on receiving Request::SignPSBT, signs the PSBT.
-    async fn handle(&self, t: &mut TcpStream) -> Result<(), std::io::Error> {
+    async fn handle(
+        &self,
+        t: &mut (impl AsyncRead + AsyncWrite + Unpin),
+    ) -> Result<(), std::io::Error> {
         let request = crate::wire::read_message(t).await?;
         match request {
             msgs::Request::SignPSBT(msgs::PSBT(unsigned)) => {
@@ -161,7 +206,7 @@ mod tests {
     fn rejects_psbts_without_an_input_to_sign() {
         let secp = Secp256k1::new();
         let root = ExtendedPrivKey::new_master(bitcoin::Network::Regtest, &[44; 32]).unwrap();
-        let oracle = HDOracleEmulator::new(root, false);
+        let oracle = HDOracleEmulator::new(root);
         let psbt = PartiallySignedTransaction::from_unsigned_tx(bitcoin::Transaction {
             version: 2,
             lock_time: 0,
@@ -179,7 +224,7 @@ mod tests {
     fn signing_adds_both_taproot_signature_forms_without_replacing_existing_entries() {
         let secp = Secp256k1::new();
         let root = ExtendedPrivKey::new_master(bitcoin::Network::Regtest, &[44; 32]).unwrap();
-        let oracle = HDOracleEmulator::new(root, false);
+        let oracle = HDOracleEmulator::new(root);
         let mut request = PartiallySignedTransaction::from_unsigned_tx(bitcoin::Transaction {
             version: 2,
             lock_time: 0,
@@ -228,3 +273,6 @@ mod tests {
         assert_eq!(repeated, existing);
     }
 }
+
+#[cfg(test)]
+mod lifecycle_tests;
