@@ -19,7 +19,8 @@ members = ["treepay"
           , "clause-module"
           , "clause-module-trampoline"
           , "ordinal-example"
-          , "ordinal-inscription"]
+          , "ordinal-inscription"
+          , "custom-policy"]
 
 [patch.crates-io]
 # CTV finalization and inscription correctness repairs in the owned fork.

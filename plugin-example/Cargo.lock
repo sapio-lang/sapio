@@ -297,6 +297,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sapio-wasm-custom-policy"
+version = "0.1.0"
+dependencies = [
+ "sapio",
+ "sapio-base",
+ "sapio-bitcoin",
+ "sapio-ctv-emulator-trait",
+ "sapio-wasm-plugin",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "sapio-wasm-fedpeg"
 version = "0.1.0"
 dependencies = [

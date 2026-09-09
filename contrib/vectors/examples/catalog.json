@@ -195,6 +195,17 @@
       "continuation_count": 2
     }
   },
+  "custom-policy": {
+    "wasm": "sapio_wasm_custom_policy.wasm",
+    "input": "custom-policy.json",
+    "dependencies": [],
+    "expect": {
+      "ctv_count": 1,
+      "root_output_values": [9000],
+      "root_required_input_amount": 10000,
+      "raw_taproot": true
+    }
+  },
   "ordinal-inscription": {
     "wasm": "sapio_wasm_ordinal_inscription.wasm",
     "input": "ordinal-inscription.json",
