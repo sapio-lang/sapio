@@ -93,6 +93,8 @@ Useful focused checks:
 cargo test --locked -p sapio-psbt
 cargo test --locked -p sapio-base --test ctv_hash
 cargo test --locked -p sapio --test fees --test action_names --test ordinal_allocation
+cargo test --locked -p sapio --test conditional_compilation --test guard_semantics --test macro_declarations
+cargo test --locked -p sapio --test template_semantics --test effect_names --test inscription_guards
 cargo test --locked -p sapio-wasm-plugin --features host
 cargo test --locked -p sapio_integration_tests
 cargo test --locked -p ctv_emulators --lib
@@ -225,6 +227,21 @@ referring to their cached keys; the content hashes remain unchanged:
 ```sh
 sapio-cli contract load --workspace PATH --file MODULE.wasm
 ```
+
+## Language core
+
+The [action semantics](LANGUAGE_SEMANTICS.md) describe declarations, conditional
+compilation, guard caching, metadata, effect paths and transaction deduplication.
+Unknown macro options are errors. Cached guards now take only `self`; their
+metadata still receives each attachment's context. Multi-guard conjunctions
+retain inscription effects and use valid Miniscript arity.
+
+Each action's policy is extracted before deduplicating its transaction. Compiled
+templates retain their complete alternative preconditions. Sharing a commitment
+requires identical funding requirements, metadata and child graphs; conflicts
+report the affected field and action/effect path. Reuse a common compiled child
+and metadata when intentionally returning the same transaction from multiple
+actions.
 
 ## Emulator service limits
 

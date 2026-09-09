@@ -53,6 +53,7 @@ with upstream crates would remove semantics, not complete a migration.
 | CTV finalization | Pin fork revision `04b69f69459fe3b043ca61fb649cf546d5a241b6`; establish legacy scriptSigs before native witness inputs, verify candidate scriptSigs and the completed transaction; regressions cover native WSH/Taproot with legacy inputs in either position |
 | Finalizer metadata | Validate PSBT structure and referenced non-witness output bounds; honor explicit ECDSA/Schnorr sighash types on partial and finalized signatures, permit valid non-ALL signatures when no type is declared |
 | Compiler termination | Advance duplicate-action suffixes; derive guard metadata beneath each guard branch and propagate errors; regressions compile repeated actions and a contract with two guards |
+| Language core | [Action semantics](LANGUAGE_SEMANTICS.md): strict macro options and trait interfaces, context-free cached clauses with per-attachment metadata, stable condition slots, original action authorization before transaction deduplication, conflicting binding payload errors and inscription-aware guard composition |
 | Inscriptions | Repair fork parsing, script-byte preservation, resource/key analysis and interpreter support; 51 fork inscription tests plus Sapio plugin artifact/signing and WASM checks, with checked ordinal ranges and fees |
 | Inscription node validation | Bitcoin Core 31.1 accepts five library-finalized ordinary Taproot reveals and rejects 21 invalid variants in isolated regtest checks; native CTV and Ord index/sat assignment remain separate |
 | Fees | Enforce the strongest requested minimum in virtual bytes against that template's reserved fees; reject overflow and unknown extra-input weights |
@@ -233,6 +234,11 @@ useful compiler API and improve errors before designing another syntax.
 - Define deterministic compilation: canonical inputs and effects, stable ordering,
   reproducible artifacts, and versioned semantics. Test repeated compilation and
   fixed golden examples before promising cross-platform byte identity.
+  Conditional paths now retain declared slots, guard metadata ordering no longer
+  depends on allocation addresses, and duplicate transactions retain their
+  authorization alternatives. Changes to the action factory list can still
+  change renamed action paths; arbitrary Rust callbacks can observe external
+  state. These remain explicit limits on reproducibility.
 - Write a compact semantic specification with worked examples and negative cases.
 - Evaluate a standalone DSL only against concrete authoring problems that Rust
   macros cannot solve well. Any additional frontend targets the same graph.
