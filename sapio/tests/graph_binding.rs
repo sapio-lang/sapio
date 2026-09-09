@@ -48,7 +48,7 @@ fn payment(destinations: Vec<Compiled>, path: &str) -> Compiled {
 fn leaf(label: &str) -> Compiled {
     let mut object = Compiled::from_address(
         Address::from_str("bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj").unwrap(),
-        None,
+        bitcoin::Amount::ZERO,
     );
     object.metadata.extra.insert("label".into(), label.into());
     object

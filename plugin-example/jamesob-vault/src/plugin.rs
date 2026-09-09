@@ -141,7 +141,7 @@ impl<S: State> Vault<S> {
                 .set_sequence(-1, self.timeout.into())?
                 .add_output(
                     amount.into(),
-                    &Compiled::from_address(address, None),
+                    &Compiled::from_address(address, Amount::ZERO),
                     Some(
                         [(
                             "purpose",
@@ -188,7 +188,7 @@ impl<S: State> Vault<S> {
                 .set_color("cyan".into())
                 .add_output(
                     amount.into(),
-                    &Compiled::from_address(address, None),
+                    &Compiled::from_address(address, Amount::ZERO),
                     Some(
                         [(
                             "purpose",
@@ -212,7 +212,7 @@ impl<S: State> Vault<S> {
         if let Some(Output { address, amount }) = self.cpfp.clone() {
             tmpl = tmpl.add_output(
                 amount.into(),
-                &Compiled::from_address(address, None),
+                &Compiled::from_address(address, Amount::ZERO),
                 Some([("purpose", "CPFP Anchor Output".into())].into()),
             )?;
         }
@@ -225,7 +225,7 @@ impl<S: State> Vault<S> {
             .ok_or(CompilationError::OutOfFunds)?;
         tmpl = tmpl.add_output(
             funds,
-            &Compiled::from_address(self.backup_addr.clone(), None),
+            &Compiled::from_address(self.backup_addr.clone(), Amount::ZERO),
             Some(
                 [(
                     "purpose",
@@ -251,7 +251,7 @@ impl<S: State> Vault<S> {
         if let Some(Output { address, amount }) = self.cpfp.clone() {
             tmpl = tmpl.add_output(
                 amount.into(),
-                &Compiled::from_address(address, None),
+                &Compiled::from_address(address, Amount::ZERO),
                 Some([("purpose", "CPFP Anchor Output".into())].into()),
             )?;
         }

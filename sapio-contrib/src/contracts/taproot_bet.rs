@@ -71,7 +71,11 @@ impl TapBet {
         let spendable = ctx.funds() - self.fees_per_time;
         let payout = std::cmp::min(self.amount_per_time, spendable);
         let remainder = spendable - payout;
-        let destination = Compiled::from_script(self.taproot_script.clone(), None, ctx.network)?;
+        let destination = Compiled::from_script(
+            self.taproot_script.clone(),
+            bitcoin::Amount::ZERO,
+            ctx.network,
+        )?;
         let mut builder = ctx
             .template()
             .set_label("continue_expansion".into())
@@ -83,7 +87,7 @@ impl TapBet {
             // A remainder unable to fund another fee-bearing step goes back now.
             builder = builder.add_output(
                 remainder,
-                &Compiled::from_address(self.cancel_to.clone(), None),
+                &Compiled::from_address(self.cancel_to.clone(), bitcoin::Amount::ZERO),
                 None,
             )?;
         }
@@ -103,7 +107,7 @@ impl TapBet {
             .set_sequence(0, self.cancel_timeout)?
             .add_output(
                 payout,
-                &Compiled::from_address(self.cancel_to.clone(), None),
+                &Compiled::from_address(self.cancel_to.clone(), bitcoin::Amount::ZERO),
                 None,
             )?
             .add_fees(self.fees_per_time)?

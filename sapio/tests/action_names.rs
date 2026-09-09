@@ -13,7 +13,7 @@ impl RepeatedPayment {
     fn pay(self, ctx: Context) {
         let destination = Compiled::from_address(
             Address::from_str("bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj").unwrap(),
-            None,
+            bitcoin::Amount::ZERO,
         );
         ctx.template()
             .add_output(Amount::from_sat(1_000), &destination, None)?

@@ -15,16 +15,28 @@ input unresolved. Auxiliary inputs without a mapping remain unresolved and get
 distinct placeholder outpoints that avoid explicit mappings and the contract
 input.
 
-Known contract inputs must pay the compiled contract's script. Every transaction
-must use distinct input outpoints, and known input values must sum without
-overflow. When all inputs are known, that total must cover the template's
-outputs and reserved fees. `required_input_amount_sats` separately declares the amount input zero must
-provide; known contract inputs must meet it even when other inputs are unknown.
-`max_amount_sats` remains the aggregate requirement, and the artifact rejects a
-single-input template that claims external funding. Auxiliary inputs may
-contribute to the aggregate total;
-additional funding is permitted. These checks also apply to suggested
-transactions and descendants, using generated parent transactions directly.
+Known contract inputs must pay the compiled contract's script and provide its
+`required_input_amount_sats`. This explicit contract minimum includes
+`ensure_amount` and the largest input-zero requirement across committed and
+suggested templates. It applies even to a finish-only contract with no
+templates, and even when auxiliary inputs are unknown or overfunded.
+
+Each template separately retains `required_input_amount_sats` for input zero
+and `max_amount_sats` for the aggregate requirement across all inputs.
+Every transaction must use distinct input outpoints, and known input values
+must sum without overflow. When all inputs are known, their total must cover
+the template's outputs and reserved fees. The artifact rejects a single-input
+template that claims external funding. Auxiliary inputs contribute to the
+aggregate total; additional funding is permitted and can increase fees when
+outputs are fixed.
+
+Before funding lookup, artifact validation checks that contract minima cover
+their template requirements and that parent outputs cover their children's
+minima. These checks include suggested transactions. Binding then uses generated
+parent transactions directly as descendants' funding evidence. The explicit
+integer-satoshi field replaces the old `amount_range`; see
+[funding requirements and migration](FUNDING.md) for constructor semantics,
+auxiliary contribution examples and the limits of these checks.
 
 Every known previous transaction is retained as `non_witness_utxo` in the PSBT.
 Native witness outputs also populate `witness_utxo`. This allows a downstream

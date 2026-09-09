@@ -84,12 +84,12 @@ where
         ctx.template()
             .add_output(
                 self.party_one,
-                &Compiled::from_address(self.key_p1.clone(), None),
+                &Compiled::from_address(self.key_p1.clone(), bitcoin::Amount::ZERO),
                 None,
             )?
             .add_output(
                 self.party_two,
-                &Compiled::from_address(self.key_p2.clone(), None),
+                &Compiled::from_address(self.key_p2.clone(), bitcoin::Amount::ZERO),
                 None,
             )?
             .set_lock_time(self.timeout)?
@@ -136,7 +136,7 @@ where
         ctx.template()
             .add_output(
                 self.party_one,
-                &Compiled::from_address(self.key_p1.clone(), None),
+                &Compiled::from_address(self.key_p1.clone(), bitcoin::Amount::ZERO),
                 None,
             )?
             .set_lock_time(self.timeout)?
@@ -287,7 +287,7 @@ mod tests {
     #[test]
     fn underfunded_exercise_requires_an_additional_input() {
         let compiled = underfunded().compile(context(1000)).unwrap();
-        assert_eq!(compiled.amount_range.max().as_sat(), 1000);
+        assert_eq!(compiled.required_input_amount.as_sat(), 1000);
         let strike = compiled
             .ctv_to_tx
             .values()

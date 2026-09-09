@@ -26,7 +26,7 @@ fn vault_records_fees_in_required_funding() {
     );
     let compiled = vault.compile(ctx).unwrap();
     assert_eq!(compiled.ctv_to_tx.len(), 2);
-    assert_eq!(compiled.amount_range.max(), Amount::from_sat(10000));
+    assert_eq!(compiled.required_input_amount, Amount::from_sat(10000));
     for template in compiled.ctv_to_tx.values() {
         assert_eq!(template.max, Amount::from_sat(10000));
         assert!(template.tx.output.iter().map(|o| o.value).sum::<u64>() < 10000);

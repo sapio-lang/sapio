@@ -88,10 +88,19 @@ impl BuilderState<NotAddingFees> {
             .ctx
             .derive(PathFragment::Branch(self.outputs.len() as u64))?
             .with_amount(amount)?;
+        let at = subctx.path().as_ref().clone();
+        let contract = contract.compile(subctx)?;
+        if amount < contract.required_input_amount {
+            return Err(CompilationError::UnderfundedOutput {
+                at,
+                available: amount,
+                required: contract.required_input_amount,
+            });
+        }
         let mut ret = self.spend_amount(amount)?;
         ret.outputs.push(Output {
             amount,
-            contract: contract.compile(subctx)?,
+            contract,
             added_metadata: metadata.unwrap_or_default(),
         });
         Ok(ret)

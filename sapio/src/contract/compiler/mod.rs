@@ -14,7 +14,6 @@ use crate::contract::abi::continuation::ContinuationPoint;
 use crate::contract::actions::conditional_compile::CCILWrapper;
 use crate::contract::actions::CallableAsFoF;
 use crate::contract::TxTmplIt;
-use crate::util::amountrange::AmountRange;
 use bitcoin::schnorr::TweakedPublicKey;
 use bitcoin::XOnlyPublicKey;
 use miniscript::*;
@@ -57,6 +56,7 @@ pub trait Compilable: private::ImplSeal {
 /// Implements a basic identity
 impl Compilable for Compiled {
     fn compile(&self, _ctx: Context) -> Result<Compiled, CompilationError> {
+        self.validate()?;
         Ok(self.clone())
     }
 }
@@ -68,9 +68,7 @@ impl Compilable for bitcoin::XOnlyPublicKey {
             TweakedPublicKey::dangerous_assume_tweaked(*self),
             ctx.network,
         );
-        let mut amt = AmountRange::new();
-        amt.update_range(ctx.funds());
-        Ok(Compiled::from_address(addr, Some(amt)))
+        Ok(Compiled::from_address(addr, ctx.funds()))
     }
 }
 
@@ -161,15 +159,10 @@ where
         // All other transactions
         let mut other_txns = BTreeMap::new();
 
-        // the min and max amount of funds spendable in the transactions
-        let mut amount_range = AmountRange::new();
-
-        // amount ensuring that the funds required don't get tweaked
-        // during recompilation passes
-        // TODO: Maybe do not just cloned?
-        let amount_range_ctx = ctx.derive(PathFragment::Cloned)?;
-        let ensured_amount = self.ensure_amount(amount_range_ctx)?;
-        amount_range.update_range(ensured_amount);
+        // Preserve the declared input floor independently of the templates.
+        // A finish-only contract can require funding without producing one.
+        let funding_context = ctx.derive(PathFragment::Cloned)?;
+        let mut required_input_amount = self.ensure_amount(funding_context)?;
 
         // Extract each declared action's policy before deduplicating its
         // transaction payload. Equal CTV hashes do not imply equal guards.
@@ -245,7 +238,7 @@ where
                         });
                     }
                 }
-                amount_range.update_range(template.required_input_amount);
+                required_input_amount = required_input_amount.max(template.required_input_amount);
                 if committed {
                     template.guards = policy_as_guards(conjoin_source(
                         std::iter::once(&guards).chain(template.guards.iter()),
@@ -386,16 +379,18 @@ where
             let metadata = self
                 .metadata(metadata_ctx)?
                 .add_guard_simps(all_guard_simps)?;
-            Ok(Compiled {
+            let compiled = Compiled {
                 ctv_to_tx: comitted_txns,
                 suggested_txs: other_txns,
                 continue_apis,
                 root_path,
                 address,
                 descriptor,
-                amount_range,
+                required_input_amount,
                 metadata,
-            })
+            };
+            compiled.validate()?;
+            Ok(compiled)
         }
     }
 }

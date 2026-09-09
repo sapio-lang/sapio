@@ -193,12 +193,12 @@ impl ExampleCompileIf {
         ctx.template()
             .add_output(
                 self.alice_escrow.0.try_into()?,
-                &Compiled::from_address(self.alice_escrow.1.clone(), None),
+                &Compiled::from_address(self.alice_escrow.1.clone(), bitcoin::Amount::ZERO),
                 None,
             )?
             .add_output(
                 self.bob_escrow.0.try_into()?,
-                &Compiled::from_address(self.bob_escrow.1.clone(), None),
+                &Compiled::from_address(self.bob_escrow.1.clone(), bitcoin::Amount::ZERO),
                 None,
             )?
             .set_sequence(

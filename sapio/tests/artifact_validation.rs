@@ -57,7 +57,7 @@ fn payment(destination: Compiled, extra_input: bool, path: &str) -> Compiled {
 fn leaf() -> Compiled {
     Compiled::from_address(
         Address::from_str("bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj").unwrap(),
-        None,
+        bitcoin::Amount::ZERO,
     )
 }
 

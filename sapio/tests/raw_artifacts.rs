@@ -26,8 +26,10 @@ fn artifact(key_only: bool) -> Compiled {
     let key = Keypair::from_secret_key(&secp, &SecretKey::from_slice(&[1; 32]).unwrap())
         .x_only_public_key()
         .0;
-    let destination =
-        Compiled::from_address(Address::p2tr(&secp, key, None, Network::Regtest), None);
+    let destination = Compiled::from_address(
+        Address::p2tr(&secp, key, None, Network::Regtest),
+        bitcoin::Amount::ZERO,
+    );
     let template: Template = Context::new(
         Network::Regtest,
         Amount::from_sat(1_000),
@@ -54,7 +56,7 @@ fn artifact(key_only: bool) -> Compiled {
     let raw = RawTaproot::new(key, leaves).unwrap();
     let mut object = Compiled::from_address(
         Address::from_script(&raw.script_pubkey(), Network::Regtest).unwrap(),
-        None,
+        template.required_input_amount,
     );
     object.descriptor = Some(raw.into());
     object.ctv_to_tx.insert(template.hash(), template);

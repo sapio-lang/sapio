@@ -55,12 +55,12 @@ impl Hanukkiah {
                 night: Some(night + 1),
                 ..self.clone()
             })?;
-            txn = txn.add_output(next_night.amount_range.max(), &next_night, None)?;
+            txn = txn.add_output(next_night.required_input_amount, &next_night, None)?;
         }
         for _ in 0..night {
             txn = txn.add_output(
                 self.amount_per_candle.into(),
-                &Compiled::from_address(self.recipient.clone(), None),
+                &Compiled::from_address(self.recipient.clone(), Amount::ZERO),
                 None,
             )?;
         }
@@ -155,7 +155,7 @@ impl Hanukkiah2Night {
                 self.amount_per_candle.into(),
                 &Compiled::from_address(
                     r.pop().ok_or(CompilationError::TerminateCompilation)?,
-                    None,
+                    Amount::ZERO,
                 ),
                 None,
             )?;
@@ -186,7 +186,7 @@ impl Hanukkiah2 {
                     night_time: self.night_time,
                     feerate_per_byte: self.feerate_per_byte,
                 })?;
-            txn = txn.add_output(next_night.amount_range.max(), &next_night, None)?;
+            txn = txn.add_output(next_night.required_input_amount, &next_night, None)?;
         }
         let size = txn.estimate_tx_size();
         let fees = self

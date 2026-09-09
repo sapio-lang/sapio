@@ -299,7 +299,7 @@ impl PaymentPool {
             for p in all_payments {
                 tmpl = tmpl.add_output(
                     p.amount.try_into()?,
-                    &Compiled::from_address(p.address, None),
+                    &Compiled::from_address(p.address, bitcoin::Amount::ZERO),
                     None,
                 )?;
             }

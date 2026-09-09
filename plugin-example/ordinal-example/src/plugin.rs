@@ -119,7 +119,8 @@ impl SimpleOrdinal {
                     fees: sale.fee.into(),
                     ordinals: [Ordinal(self.ordinal)].into(),
                 })?;
-                let buyer: &dyn Compilable = &Compiled::from_address(sale.purchaser, None);
+                let buyer: &dyn Compilable =
+                    &Compiled::from_address(sale.purchaser, bitcoin::Amount::ZERO);
                 return plan
                     .build_plan(
                         ctx,
@@ -147,7 +148,7 @@ impl SimpleOrdinal {
             if index != 0 {
                 t = t.add_output(Amount::from_sat(index), &self.owner, None)?;
             }
-            let buyer = Compiled::from_address(sale.purchaser, None);
+            let buyer = Compiled::from_address(sale.purchaser, bitcoin::Amount::ZERO);
             t = t.add_output(Amount::from_sat(501), &buyer, None)?;
             let remaining = t.ctx().funds();
             if remaining != Amount::ZERO {

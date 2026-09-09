@@ -44,12 +44,12 @@ impl TrustlessEscrow {
         ctx.template()
             .add_output(
                 self.alice_escrow_amount.try_into()?,
-                &Compiled::from_address(self.alice_escrow_address.clone(), None),
+                &Compiled::from_address(self.alice_escrow_address.clone(), bitcoin::Amount::ZERO),
                 None,
             )?
             .add_output(
                 self.bob_escrow_amount.try_into()?,
-                &Compiled::from_address(self.bob_escrow_address.clone(), None),
+                &Compiled::from_address(self.bob_escrow_address.clone(), bitcoin::Amount::ZERO),
                 None,
             )?
             .set_sequence(

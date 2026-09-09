@@ -30,7 +30,7 @@ impl Contract for Payment {
 fn compile_payment(funding: u64) -> Result<Compiled, Box<dyn std::error::Error>> {
     let destination: Address = "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj".parse()?;
     let contract = Payment {
-        destination: Compiled::from_address(destination, None),
+        destination: Compiled::from_address(destination, bitcoin::Amount::ZERO),
     };
     let compiled = contract.compile(Context::new(
         Network::Regtest,

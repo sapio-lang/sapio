@@ -133,7 +133,7 @@ fn check(value: Value, expected: &Expected) -> Result<(), Box<dyn Error>> {
         for template in templates {
             assert_eq!(template.required_input_amount.as_sat(), required);
         }
-        assert_eq!(compiled.amount_range.max().as_sat(), required);
+        assert_eq!(compiled.required_input_amount.as_sat(), required);
     }
     Ok(())
 }

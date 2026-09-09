@@ -36,7 +36,7 @@ fn destination() -> Compiled {
         "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj"
             .parse::<Address>()
             .unwrap(),
-        None,
+        bitcoin::Amount::ZERO,
     )
 }
 

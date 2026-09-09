@@ -6,6 +6,7 @@
 
 use super::Object;
 use bitcoin::hashes::sha256::Hash;
+use bitcoin::Amount;
 use sapio_base::effects::EffectPath;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::util::CTVHash;
@@ -41,6 +42,15 @@ pub enum ArtifactErrorKind {
     TemplateHashMismatch,
     /// An output's amount or receiving script differs from its metadata.
     OutputMismatch(usize),
+    /// A parent output cannot fund every declared transaction of its child.
+    UnderfundedChild {
+        /// The parent transaction output funding the child.
+        index: usize,
+        /// The amount committed to the parent output.
+        available: Amount,
+        /// The child's largest declared input-zero requirement.
+        required: Amount,
+    },
     /// The total output amount is not representable in satoshis.
     OutputAmountOverflow,
     /// The declared funding requirement is smaller than the output total.
@@ -48,6 +58,8 @@ pub enum ArtifactErrorKind {
     /// Input zero's requirement exceeds the aggregate, or a single-input
     /// transaction claims funding from nonexistent auxiliary inputs.
     InvalidInputAmount,
+    /// An object's input requirement is below one of its declared templates.
+    InvalidInputRequirement,
 }
 
 impl fmt::Display for ArtifactErrorKind {
@@ -75,6 +87,16 @@ impl fmt::Display for ArtifactErrorKind {
                 f,
                 "output {index} amount or script does not match its metadata"
             ),
+            Self::UnderfundedChild {
+                index,
+                available,
+                required,
+            } => write!(
+                f,
+                "output {index} provides {} sat but its child requires {} sat",
+                available.as_sat(),
+                required.as_sat()
+            ),
             Self::OutputAmountOverflow => write!(f, "output amount total overflows"),
             Self::InsufficientAmount => {
                 write!(f, "declared funding amount is below the output total")
@@ -85,6 +107,10 @@ impl fmt::Display for ArtifactErrorKind {
                     "contract input funding requirement is inconsistent with the transaction"
                 )
             }
+            Self::InvalidInputRequirement => write!(
+                f,
+                "contract input requirement is below a declared template requirement"
+            ),
         }
     }
 }
@@ -156,6 +182,14 @@ impl Object {
                     {
                         return Err(error(ArtifactErrorKind::OutputMismatch(index)));
                     }
+                    let required = info.contract.required_input_amount;
+                    if info.amount < required {
+                        return Err(error(ArtifactErrorKind::UnderfundedChild {
+                            index,
+                            available: info.amount,
+                            required,
+                        }));
+                    }
                     total = total
                         .checked_add(output.value)
                         .ok_or_else(|| error(ArtifactErrorKind::OutputAmountOverflow))?;
@@ -168,6 +202,9 @@ impl Object {
                     || (tx.input.len() == 1 && template.required_input_amount != template.max)
                 {
                     return Err(error(ArtifactErrorKind::InvalidInputAmount));
+                }
+                if object.required_input_amount < template.required_input_amount {
+                    return Err(error(ArtifactErrorKind::InvalidInputRequirement));
                 }
             }
         }
