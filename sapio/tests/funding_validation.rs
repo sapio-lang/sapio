@@ -1,12 +1,12 @@
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::{Address, Amount, Network, OutPoint, Script, Transaction, TxIn, TxOut, Txid};
-use sapio::contract::abi::object::ObjectError;
+use sapio::contract::abi::object::{ArtifactErrorKind, ObjectError};
 use sapio::contract::abi::studio::{Program, SapioStudioFormat};
 use sapio::contract::{Compilable, Compiled, Context, Contract};
 use sapio::{declare, then};
 use sapio_base::txindex::{TxIndex, TxIndexError};
-use sapio_base::Clause;
+use sapio_base::{CTVHash, Clause};
 use sapio_ctv_emulator_trait::{CTVAvailable, CTVEmulator, EmulatorError};
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
@@ -41,7 +41,7 @@ impl Contract for Payment {
 fn leaf() -> Compiled {
     Compiled::from_address(
         Address::from_str("bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj").unwrap(),
-        None,
+        bitcoin::Amount::ZERO,
     )
 }
 
@@ -77,6 +77,7 @@ fn funding(object: &Compiled, value: u64) -> Transaction {
 #[derive(Default)]
 struct Index {
     txs: RefCell<BTreeMap<Txid, Arc<Transaction>>>,
+    lookups: Cell<usize>,
     writes: Cell<usize>,
     fail_lookup: Cell<bool>,
     wrong_ack: Cell<bool>,
@@ -92,6 +93,7 @@ impl Index {
 
 impl TxIndex for Index {
     fn lookup_tx(&self, txid: &Txid) -> Result<Arc<Transaction>, TxIndexError> {
+        self.lookups.set(self.lookups.get() + 1);
         if self.fail_lookup.get() {
             return Err(TxIndexError::NetworkError(std::io::Error::other(
                 "unavailable",
@@ -324,11 +326,11 @@ fn auxiliary_contributions_do_not_inflate_contract_funding_requirements() {
     let template = object.ctv_to_tx.values().next().unwrap();
     assert_eq!(template.max.as_sat(), 1_100);
     assert_eq!(template.required_input_amount.as_sat(), 400);
-    assert_eq!(object.amount_range.max().as_sat(), 400);
+    assert_eq!(object.required_input_amount.as_sat(), 400);
     let json = serde_json::to_value(&object).unwrap();
     let roundtrip: Compiled = serde_json::from_value(json).unwrap();
     roundtrip.validate().unwrap();
-    assert_eq!(roundtrip.amount_range.max().as_sat(), 400);
+    assert_eq!(roundtrip.required_input_amount.as_sat(), 400);
 }
 
 #[test]
@@ -390,7 +392,7 @@ fn builder_checks_initial_and_cumulative_funding_even_after_spending() {
     assert!(context(1000).template().add_amount(Amount::ZERO).is_ok());
     assert!(context(u64::MAX)
         .template()
-        .spend_amount(Amount::from_sat(u64::MAX))
+        .add_output(Amount::from_sat(u64::MAX), &leaf(), None)
         .unwrap()
         .add_sequence()
         .add_amount(Amount::ONE_SAT)
@@ -400,7 +402,7 @@ fn builder_checks_initial_and_cumulative_funding_even_after_spending() {
         .add_sequence()
         .add_amount(Amount::from_sat(u64::MAX))
         .unwrap()
-        .spend_amount(Amount::from_sat(u64::MAX))
+        .add_output(Amount::from_sat(u64::MAX), &leaf(), None)
         .unwrap();
     assert!(builder.add_amount(Amount::ONE_SAT).is_err());
 
@@ -440,16 +442,36 @@ fn unresolved_inputs_remain_unsigned_and_do_not_collide_with_contract_input() {
 }
 
 #[test]
-fn rejects_underfunded_descendants_before_any_signing_or_index_writes() {
-    let child = payment(leaf(), false, 100, "child");
-    let object = payment(child, false, 0, "parent");
+fn rejects_underfunded_descendants_before_funding_lookups_or_signing() {
+    let child = payment(leaf(), false, 0, "child");
+    let mut object = payment(child, false, 0, "parent");
+    // Public artifacts can be edited after the builder checked the original
+    // payment. Keep output metadata and the transaction commitment consistent
+    // so that only the child's funding requirement is violated.
+    let (_, mut template) = object.ctv_to_tx.pop_first().unwrap();
+    template.outputs[0].amount = Amount::from_sat(999);
+    template.tx.output[0].value = 999;
+    template.ctv = template.tx.get_ctv_hash(0);
+    object.ctv_to_tx.insert(template.ctv, template);
     let tx = funding(&object, 1_000);
     let out = OutPoint::new(tx.txid(), 0);
     let index = Index::with(tx);
     let signer = Signer::default();
-    assert!(object
+    let error = object
         .bind_psbt(out, BTreeMap::new(), index.clone(), &signer)
-        .is_err());
+        .unwrap_err();
+    let ObjectError::InvalidArtifact(error) = error else {
+        panic!("unexpected error: {error}");
+    };
+    assert_eq!(
+        error.kind,
+        ArtifactErrorKind::UnderfundedChild {
+            index: 0,
+            available: Amount::from_sat(999),
+            required: Amount::from_sat(1_000),
+        }
+    );
+    assert_eq!(index.lookups.get(), 0);
     assert_eq!(signer.calls.load(Ordering::SeqCst), 0);
     assert_eq!(index.writes.get(), 0);
 }

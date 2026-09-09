@@ -40,7 +40,10 @@ impl Vault {
                 self.amount_step.try_into()?,
                 &UndoSendInternal {
                     from_contract: (self.cold_storage)(self.amount_step, cold_storage_ctx)?,
-                    to_contract: Compiled::from_address(self.hot_storage.clone(), None),
+                    to_contract: Compiled::from_address(
+                        self.hot_storage.clone(),
+                        bitcoin::Amount::ZERO,
+                    ),
                     timeout: self.mature,
                     amount: self.amount_step,
                 },
@@ -123,7 +126,7 @@ impl From<VaultAddress> for Vault {
         Vault {
             cold_storage: Rc::new({
                 let cs = v.cold_storage.clone();
-                move |_a, _ctx| Ok(Compiled::from_address(cs.clone(), None))
+                move |_a, _ctx| Ok(Compiled::from_address(cs.clone(), bitcoin::Amount::ZERO))
             }),
             hot_storage: v.hot_storage,
             n_steps: v.n_steps,

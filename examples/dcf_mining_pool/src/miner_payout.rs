@@ -7,7 +7,6 @@
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::{Address, Amount, XOnlyPublicKey};
 use sapio::contract::*;
-use sapio::util::amountrange::AmountRange;
 use sapio::*;
 use sapio_base::Clause;
 use schemars::JsonSchema;
@@ -177,15 +176,13 @@ trait PayThisThing {
 struct JustAKey(XOnlyPublicKey, Compiled);
 impl JustAKey {
     fn new(payment: &PoolShare, ctx: Context) -> Self {
-        let mut amount = AmountRange::new();
-        amount.update_range(payment.amount);
         let address = Address::p2tr(
             &Secp256k1::verification_only(),
             payment.key,
             None,
             ctx.network,
         );
-        Self(payment.key, Compiled::from_address(address, Some(amount)))
+        Self(payment.key, Compiled::from_address(address, payment.amount))
     }
 }
 impl PayThisThing for JustAKey {

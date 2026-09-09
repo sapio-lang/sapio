@@ -90,8 +90,7 @@ impl SellableNFT for SimpleNFT {
             let compiled = which_sale.call(sale_ctx.path(), &create_args)?;
             // send to this sale!
             let pays = compiled
-                .amount_range
-                .max()
+                .required_input_amount
                 .checked_sub(ctx.funds())
                 .ok_or_else(|| {
                     CompilationError::Custom("Sale must preserve the NFT's funds".into())
@@ -102,7 +101,7 @@ impl SellableNFT for SimpleNFT {
             }
             // todo: we need to cut-through the compiled contract address, but this
             // upgrade to Sapio semantics will come Soon™.
-            builder = builder.add_output(compiled.amount_range.max(), &compiled, None)?;
+            builder = builder.add_output(compiled.required_input_amount, &compiled, None)?;
 
             builder.into()
         } else {

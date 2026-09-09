@@ -75,6 +75,17 @@ pub enum CompilationError {
     },
     /// Error if a contract does not have sufficient funds available
     OutOfFunds,
+    /// A parent output cannot fund its compiled child contract.
+    UnderfundedOutput {
+        /// Output context that would receive the underfunded child.
+        at: EffectPath,
+        /// Satoshis allocated to that output.
+        available: bitcoin::Amount,
+        /// Child contract's minimum input amount.
+        required: bitcoin::Amount,
+    },
+    /// A reused compiled object violates the artifact invariants.
+    InvalidArtifact(crate::contract::object::ArtifactError),
     /// Error if a CheckSequenceVerify clause is incompatible with the sequence already set.
     /// E.g., blocks and time
     IncompatibleSequence,
@@ -142,6 +153,12 @@ pub enum CompilationError {
     Custom(Box<dyn std::error::Error>),
     /// Error in continuation argument coercion
     ContinuationCoercion(String),
+}
+
+impl From<crate::contract::object::ArtifactError> for CompilationError {
+    fn from(error: crate::contract::object::ArtifactError) -> Self {
+        Self::InvalidArtifact(error)
+    }
 }
 
 impl From<SIMPError> for CompilationError {

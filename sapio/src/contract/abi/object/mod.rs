@@ -15,10 +15,8 @@ mod validation;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::contract::CompilationError;
 use crate::template::Template;
-use crate::util::amountrange::AmountRange;
 use crate::util::extended_address::ExtendedAddress;
 use bitcoin::hashes::sha256;
-use bitcoin::util::amount::Amount;
 pub use descriptors::*;
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
@@ -150,16 +148,26 @@ pub struct Object {
         default
     )]
     pub descriptor: Option<SupportedDescriptors>,
-    /// The amount_range safe to send this object
-    pub amount_range: AmountRange,
+    /// Minimum satoshis required at this contract's input, including its
+    /// declared floor and every committed or suggested template requirement.
+    /// Auxiliary inputs fund their separately declared contributions.
+    #[serde(
+        rename = "required_input_amount_sats",
+        with = "bitcoin::util::amount::serde::as_sat"
+    )]
+    #[schemars(with = "u64")]
+    pub required_input_amount: bitcoin::Amount,
     /// metadata generated for this contract
     pub metadata: ObjectMetadata,
 }
 
 impl Object {
-    /// Creates an object from a given address. The optional AmountRange argument determines the
-    /// safe bounds the contract can receive, otherwise it is set to any.
-    pub fn from_address(address: bitcoin::Address, a: Option<AmountRange>) -> Object {
+    /// Create an address destination with an explicit minimum funding amount.
+    /// Use zero when the destination imposes no minimum of its own.
+    pub fn from_address(
+        address: bitcoin::Address,
+        required_input_amount: bitcoin::Amount,
+    ) -> Object {
         Object {
             ctv_to_tx: BTreeMap::new(),
             suggested_txs: BTreeMap::new(),
@@ -170,26 +178,20 @@ impl Object {
             )),
             address: address.into(),
             descriptor: None,
-            amount_range: a.unwrap_or_else(|| {
-                let mut a = AmountRange::new();
-                a.update_range(Amount::min_value());
-                a.update_range(Amount::from_sat(21_000_000 * 100_000_000));
-                a
-            }),
+            required_input_amount,
             metadata: Default::default(),
         }
     }
 
-    /// Creates an object from a given script. The optional AmountRange argument determines the
-    /// safe bounds the contract can receive, otherwise it is set to any.
+    /// Create a recognized script destination with an explicit funding minimum.
     pub fn from_script(
         script: bitcoin::Script,
-        a: Option<AmountRange>,
+        required_input_amount: bitcoin::Amount,
         net: bitcoin::Network,
     ) -> Result<Object, ObjectError> {
         bitcoin::Address::from_script(&script, net)
             .ok_or_else(|| ObjectError::UnknownScriptType(script.clone()))
-            .map(|m| Object::from_address(m, a))
+            .map(|m| Object::from_address(m, required_input_amount))
     }
     /// create an op_return of no more than 40 bytes
     pub fn from_op_return<'a, I: ?Sized>(data: &'a I) -> Result<Object, ObjectError>
@@ -206,14 +208,13 @@ impl Object {
             )),
             address: ExtendedAddress::make_op_return(data)?,
             descriptor: None,
-            amount_range: AmountRange::new(),
+            required_input_amount: bitcoin::Amount::ZERO,
             metadata: Default::default(),
         })
     }
 
-    /// converts a descriptor and an optional AmountRange to a Object object.
-    /// This can be used for e.g. creating raw SegWit Scripts.
-    pub fn from_descriptor<T>(d: Descriptor<T>, a: Option<AmountRange>) -> Self
+    /// Create a descriptor destination with an explicit funding minimum.
+    pub fn from_descriptor<T>(d: Descriptor<T>, required_input_amount: bitcoin::Amount) -> Self
     where
         Descriptor<T>: Into<SupportedDescriptors>,
         T: MiniscriptKey + ToPublicKey,
@@ -228,12 +229,7 @@ impl Object {
             )),
             address: d.address(bitcoin::Network::Bitcoin).unwrap().into(),
             descriptor: Some(d.into()),
-            amount_range: a.unwrap_or_else(|| {
-                let mut a = AmountRange::new();
-                a.update_range(Amount::min_value());
-                a.update_range(Amount::from_sat(21_000_000 * 100_000_000));
-                a
-            }),
+            required_input_amount,
             metadata: Default::default(),
         }
     }

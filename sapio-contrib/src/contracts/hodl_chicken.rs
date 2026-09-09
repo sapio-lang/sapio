@@ -139,10 +139,10 @@ mod tests {
 
     fn input() -> serde_json::Value {
         serde_json::json!({
-            "alice_contract": {"winner": Compiled::from_address(address(3), None),
-                               "loser": Compiled::from_address(address(4), None)},
-            "bob_contract": {"winner": Compiled::from_address(address(5), None),
-                             "loser": Compiled::from_address(address(6), None)},
+            "alice_contract": {"winner": Compiled::from_address(address(3), bitcoin::Amount::ZERO),
+                               "loser": Compiled::from_address(address(4), bitcoin::Amount::ZERO)},
+            "bob_contract": {"winner": Compiled::from_address(address(5), bitcoin::Amount::ZERO),
+                             "loser": Compiled::from_address(address(6), bitcoin::Amount::ZERO)},
             "alice_key": key(1), "bob_key": key(2),
             "alice_deposit": 1000, "bob_deposit": 1000,
             "winner_gets": 1500, "chicken_gets": 500

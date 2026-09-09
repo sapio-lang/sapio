@@ -238,7 +238,7 @@ mod tests {
             Clause::Key(key(1))
         }
         fn receive_payment(&self, _: Amount) -> Compiled {
-            Compiled::from_address(address(1), None)
+            Compiled::from_address(address(1), bitcoin::Amount::ZERO)
         }
     }
     impl apis::UserApi for User {
@@ -246,7 +246,7 @@ mod tests {
             Clause::Key(key(2))
         }
         fn receive_payment(&self, _: Amount) -> Compiled {
-            Compiled::from_address(address(2), None)
+            Compiled::from_address(address(2), bitcoin::Amount::ZERO)
         }
     }
     fn call(buying: bool, cap: u64, funds: u64) -> call::Call<'static> {

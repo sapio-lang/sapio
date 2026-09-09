@@ -64,7 +64,7 @@ async fn compiles_signs_and_finalizes_a_two_step_contract() {
                 "tb1pnt49mgrp6djyzj7ttldle9lhnhav9hh7pcaqmv9yqpfrwk4yzvasd8wc37",
             )
             .unwrap(),
-            None,
+            bitcoin::Amount::ZERO,
         ),
         amount: Amount::from_btc(1.0).unwrap(),
         timeout: 6,

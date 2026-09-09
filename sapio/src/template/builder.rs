@@ -29,6 +29,29 @@ pub struct NotAddingFees;
 pub struct AddingFees;
 /// Builder can be used to interactively put together a transaction template before
 /// finalizing into a Template.
+///
+/// Funds are debited only by adding outputs or fees; callers cannot discard an
+/// ordinal prefix without recording where those sats go:
+///
+/// ```compile_fail
+/// use bitcoin::Amount;
+/// use sapio::template::Builder;
+/// fn discard(builder: Builder) {
+///     let _ = builder.spend_amount(Amount::from_sat(1));
+/// }
+/// ```
+///
+/// Adding fees closes output construction, including when the fee is zero:
+///
+/// ```compile_fail
+/// use bitcoin::Amount;
+/// use sapio::contract::Compiled;
+/// use sapio::template::Builder;
+/// fn output_after_fees(builder: Builder, child: &Compiled) {
+///     let builder = builder.add_fees(Amount::ZERO).unwrap();
+///     let _ = builder.add_output(Amount::from_sat(1), child, None);
+/// }
+/// ```
 pub struct BuilderState<State> {
     guards: Vec<ScriptPolicy>,
     // TODO: Should be Comitted/Uncomitted if not CTV
@@ -88,10 +111,19 @@ impl BuilderState<NotAddingFees> {
             .ctx
             .derive(PathFragment::Branch(self.outputs.len() as u64))?
             .with_amount(amount)?;
+        let at = subctx.path().as_ref().clone();
+        let contract = contract.compile(subctx)?;
+        if amount < contract.required_input_amount {
+            return Err(CompilationError::UnderfundedOutput {
+                at,
+                available: amount,
+                required: contract.required_input_amount,
+            });
+        }
         let mut ret = self.spend_amount(amount)?;
         ret.outputs.push(Output {
             amount,
-            contract: contract.compile(subctx)?,
+            contract,
             added_metadata: metadata.unwrap_or_default(),
         });
         Ok(ret)
@@ -253,8 +285,8 @@ impl BuilderState<NotAddingFees> {
 }
 
 impl<T> BuilderState<T> {
-    /// reduce the amount availble in the builder's context
-    pub fn spend_amount(mut self, amount: Amount) -> Result<Self, CompilationError> {
+    /// Debit funds only while recording an output or explicit fee.
+    fn spend_amount(mut self, amount: Amount) -> Result<Self, CompilationError> {
         self.ctx = self.ctx.spend_amount(amount)?;
         Ok(self)
     }
@@ -333,50 +365,46 @@ impl<T> BuilderState<T> {
         self
     }
 
-    /// more efficient that get_tx() to estimate a tx size, not including witness
-    pub fn estimate_tx_size(&self) -> u64 {
-        let mut input_weight: u64 = 0;
-        let inputs_with_witnesses: u64 = self.sequences.len() as u64;
-        let scale_factor = 1u64;
-        for _seq in &self.sequences {
-            input_weight += scale_factor
-                * 32 + 4 + 4 + // outpoint (32+4) + nSequence
-                VarInt(0u64).len() as u64;
-            //if !input.witness.is_empty() {
-            //    inputs_with_witnesses += 1;
-            //    input_weight += VarInt(input.witness.len() as u64).len();
-            //    for elem in &input.witness {
-            //        input_weight += VarInt(elem.len() as u64).len() + elem.len();
-            //    }
-            //}
-        }
-        let mut output_size: u64 = 0;
-        for output in &self.outputs {
-            let spk = output
-                .contract
-                .descriptor
-                .as_ref()
-                .map(|d| d.script_pubkey().len() as u64);
-            output_size += 8 + // value
-                (VarInt(spk.unwrap_or(0)).len() as u64) +
-                spk.unwrap_or(0);
-        }
-        let non_input_size : u64=
-        // version:
-        4 +
-        // count varints:
-        (VarInt(self.sequences.len() as u64).len() as u64 +
-        VarInt(self.outputs.len() as u64).len() as u64)+
-        output_size +
-        // lock_time
-        4;
-        if inputs_with_witnesses == 0 {
-            non_input_size * scale_factor + input_weight
-        } else {
-            non_input_size * scale_factor + input_weight + (self.sequences.len() as u64)
-                - inputs_with_witnesses
-                + 2
-        }
+    /// Exact serialized size of the current unsigned transaction, in bytes.
+    ///
+    /// Includes every output's actual script and CompactSize length prefixes.
+    /// Inputs have empty scriptSigs and witnesses, so this excludes the SegWit
+    /// marker/flag and all future satisfaction data. It is not a fee guarantee
+    /// for the signed transaction.
+    pub fn unsigned_tx_size(&self) -> u64 {
+        let inputs = self.sequences.len() as u64;
+        let outputs = self.outputs.len() as u64;
+        let output_bytes: u64 = self
+            .outputs
+            .iter()
+            .map(|output| {
+                let script = Script::from(&output.contract.address);
+                let size = script.len() as u64;
+                8 + VarInt(size).len() as u64 + size
+            })
+            .sum();
+        // Each unsigned input has an outpoint, an empty scriptSig prefix and
+        // a sequence. Neither its placeholder outpoint nor its lock changes
+        // its encoded size.
+        4 + VarInt(inputs).len() as u64
+            + inputs * 41
+            + VarInt(outputs).len() as u64
+            + output_bytes
+            + 4
+    }
+
+    /// Size after appending an output with this script, without allocating it.
+    ///
+    /// The output value occupies eight bytes regardless of its eventual amount.
+    /// Includes a wider output-count CompactSize prefix when necessary. Like
+    /// [`Self::unsigned_tx_size`], this excludes future input satisfactions.
+    pub fn unsigned_tx_size_with_output(&self, script_pubkey: &Script) -> u64 {
+        let count = self.outputs.len() as u64;
+        let size = script_pubkey.len() as u64;
+        self.unsigned_tx_size() + VarInt(count + 1).len() as u64 - VarInt(count).len() as u64
+            + 8
+            + VarInt(size).len() as u64
+            + size
     }
 }
 

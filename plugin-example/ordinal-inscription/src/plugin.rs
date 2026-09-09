@@ -115,7 +115,11 @@ impl InscribingStep {
         }
         let tmpl = ctx.template();
         if let Some(address) = reveal.alternative {
-            tmpl.add_output(send_with, &Compiled::from_address(address, None), None)
+            tmpl.add_output(
+                send_with,
+                &Compiled::from_address(address, bitcoin::Amount::ZERO),
+                None,
+            )
         } else {
             tmpl.add_output(send_with, &self.owner, None)
         }?

@@ -278,7 +278,7 @@ impl Bind {
         let (tx, vout, funding_psbt) = if use_mock {
             let ctx = Context::new(
                 net,
-                compiled.amount_range.max(),
+                compiled.required_input_amount,
                 emulator.clone(),
                 "mock".try_into()?,
                 Arc::new(MapEffectDB::default()),
@@ -286,7 +286,7 @@ impl Bind {
             );
             let mut tx = ctx
                 .template()
-                .add_output(compiled.amount_range.max(), &compiled, None)?
+                .add_output(compiled.required_input_amount, &compiled, None)?
                 .get_tx();
             tx.input[0].previous_output = create_mock_output();
             let psbt = if outpoint.is_none() {
@@ -302,7 +302,7 @@ impl Bind {
         } else {
             let mut spends = HashMap::new();
             if let ExtendedAddress::Address(ref a) = compiled.address {
-                spends.insert(format!("{}", a), compiled.amount_range.max());
+                spends.insert(format!("{}", a), compiled.required_input_amount);
 
                 let psbt = if let Some(psbt) = use_txn {
                     psbt

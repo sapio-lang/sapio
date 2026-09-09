@@ -46,7 +46,7 @@ impl TrampolinePay {
             },
         )?;
         let mut builder = ctx.template();
-        builder = builder.add_output(contract.amount_range.max(), &contract, None)?;
+        builder = builder.add_output(contract.required_input_amount, &contract, None)?;
         builder.into()
     }
 }

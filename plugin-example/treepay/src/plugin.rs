@@ -9,7 +9,6 @@
 
 use batching_trait::{BatchingTraitVersion0_1_1, Payment};
 use sapio::contract::*;
-use sapio::util::amountrange::*;
 use sapio::*;
 use sapio_base::timelocks::AnyRelTimeLock;
 #[cfg(target_arch = "wasm32")]
@@ -83,10 +82,10 @@ impl TreePay {
             .participants
             .iter()
             .map(|payment| {
-                let mut amt = AmountRange::new();
-                amt.update_range(payment.amount);
-                let b: Box<dyn Compilable> =
-                    Box::new(Compiled::from_address(payment.address.clone(), Some(amt)));
+                let b: Box<dyn Compilable> = Box::new(Compiled::from_address(
+                    payment.address.clone(),
+                    payment.amount,
+                ));
                 (payment.amount, b)
             })
             .collect();

@@ -56,7 +56,7 @@ impl TreePay {
             for Payment { amount, address } in self.participants.iter() {
                 builder = builder.add_output(
                     (*amount).try_into()?,
-                    &Compiled::from_address(address.clone(), None),
+                    &Compiled::from_address(address.clone(), bitcoin::Amount::ZERO),
                     None,
                 )?;
             }
