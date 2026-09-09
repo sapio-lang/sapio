@@ -15,7 +15,6 @@ use sapio::*;
 use sapio_base::timelocks::AbsHeight;
 use sapio_base::Clause;
 use sapio_wasm_nft_trait::*;
-use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::plugin_handle::PluginHandle;
 use sapio_wasm_plugin::*;
 use schemars::*;
@@ -35,6 +34,7 @@ struct DutchAuctionData {
     /// what price should we stop at?
     min_price: AmountU64,
     /// how many price decreases should we do?
+    #[schemars(range(min = 1, max = 720))]
     updates: u64,
 }
 
@@ -45,30 +45,53 @@ impl DutchAuctionData {
         &self,
         start_height: AbsHeight,
     ) -> Result<Vec<(AbsHeight, AmountU64)>, CompilationError> {
-        let mut start: Amount = self.start_price.into();
-        let stop: Amount = self.min_price.into();
-        let inc = (start - stop) / self.updates;
-        let mut h: u32 = start_height.get();
-        let mut sched = vec![(start_height, self.start_price)];
-        for _ in 1..self.updates {
-            h += self.period as u32;
-            start -= inc;
-            sched.push((AbsHeight::try_from(h)?, start.into()));
+        self.validate(start_height)?;
+        let start = u64::from(self.start_price);
+        let stop = u64::from(self.min_price);
+        (0..=self.updates)
+            .map(|step| {
+                let height = start_height.get() as u64 + step * u64::from(self.period);
+                let reduction =
+                    u128::from(start - stop) * u128::from(step) / u128::from(self.updates);
+                Ok((
+                    AbsHeight::try_from(height as u32)?,
+                    (start - reduction as u64).into(),
+                ))
+            })
+            .collect()
+    }
+
+    fn validate(&self, start_height: AbsHeight) -> Result<(), CompilationError> {
+        if self.period == 0
+            || self.updates == 0
+            || self.updates > 720
+            || self.start_price < self.min_price
+        {
+            return Err(CompilationError::Custom(
+                "Auction requires period > 0, 1..=720 decreases, and start >= minimum".into(),
+            ));
         }
-        Ok(sched)
+        let end = u64::from(start_height.get()) + u64::from(self.period) * self.updates;
+        let end = u32::try_from(end)
+            .map_err(|_| CompilationError::Custom("Auction height overflows".into()))?;
+        AbsHeight::try_from(end)?;
+        Ok(())
     }
     /// derives a default auction where the price drops every 6
     /// blocks (1 time per hour), from 10x to 1x the sale price specified,
     /// spanning a month of blocks.
-    fn derive_default(main: &NFT_Sale_Trait_Version_0_1_0) -> Self {
-        DutchAuctionData {
+    fn derive_default(main: &NFT_Sale_Trait_Version_0_1_0) -> Result<Self, CompilationError> {
+        Ok(DutchAuctionData {
             // every 6 blocks
             period: 6,
-            start_price: (Amount::from(main.price) * 10u64).into(),
+            start_price: Amount::from(main.price)
+                .checked_mul(10)
+                .ok_or(CompilationError::OutOfFunds)?
+                .into(),
             min_price: main.price,
             // 144 blocks/day
             updates: 144 * 30 / 6,
-        }
+        })
     }
 }
 
@@ -91,6 +114,14 @@ enum Versions {
 }
 impl Contract for NFTDutchAuction {
     declare! {updatable<()>, Self::transfer}
+    fn ensure_amount(&self, ctx: Context) -> Result<Amount, CompilationError> {
+        self.main.data.validate()?;
+        self.extra.validate(self.main.sale_time)?;
+        ctx.funds()
+            .checked_add(self.extra.start_price.into())
+            .ok_or(CompilationError::OutOfFunds)?;
+        Ok(ctx.funds())
+    }
 }
 fn default_coerce<T>(_: T) -> Result<(), CompilationError> {
     Ok(())
@@ -98,30 +129,28 @@ fn default_coerce<T>(_: T) -> Result<(), CompilationError> {
 impl TryFrom<Versions> for NFTDutchAuction {
     type Error = CompilationError;
     fn try_from(v: Versions) -> Result<NFTDutchAuction, Self::Error> {
-        Ok(match v {
+        let auction = match v {
             Versions::NFT_Sale_Trait_Version_0_1_0(main) => {
                 // attempt to get the data from the JSON:
                 // - if extra data, must deserialize
                 //   - return any errors?
                 // - if no extra data, derive.
                 let extra = match main.extra.clone() {
-                    None => DutchAuctionData::derive_default(&main),
+                    None => DutchAuctionData::derive_default(&main)?,
                     Some(extra) => serde_json::from_str(&extra)
                         .map_err(CompilationError::DeserializationError)?,
                 };
                 NFTDutchAuction { main, extra }
             }
-            Versions::Exact(extra, main) => {
-                if extra.start_price < extra.min_price || extra.period == 0 || extra.updates == 0 {
-                    // Nonsense
-                    return Err(CompilationError::TerminateCompilation);
-                }
-                NFTDutchAuction { main, extra }
-            }
-        })
+            Versions::Exact(extra, main) => NFTDutchAuction { main, extra },
+        };
+        auction.main.data.validate()?;
+        auction.extra.validate(auction.main.sale_time)?;
+        Ok(auction)
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 REGISTER![[NFTDutchAuction, Versions], "logo.png"];
 
 impl NFTDutchAuction {
@@ -138,36 +167,31 @@ impl NFTDutchAuction {
         let mut ret = vec![];
         let schedule = self.extra.create_schedule(self.main.sale_time)?;
         let mut base_ctx = base_ctx;
-        // the main difference is we iterate over the schedule here
+        self.ensure_amount(base_ctx.derive_str(Arc::new("validate".into()))?)?;
+        let amt = base_ctx.funds();
+        let mut minting_module = self
+            .main
+            .data
+            .minting_module
+            .clone()
+            .ok_or_else(|| CompilationError::Custom("Must provide minting module".into()))?;
+        let mut mint_data = self.main.data.clone();
+        mint_data.owner = self.main.sell_to;
+        let new_ctx = base_ctx.derive_str(Arc::new("transfer".into()))?;
+        let create_args = CreateArgs {
+            context: ContextualArguments {
+                amount: amt,
+                network: base_ctx.network,
+                effects: unsafe { base_ctx.get_effects_internal() }.as_ref().clone(),
+                ordinals_info: base_ctx.get_ordinals().clone(),
+            },
+            arguments: mint_impl::Versions::Mint_NFT_Trait_Version_0_1_0(mint_data),
+        };
+        // Every price transfers the same NFT. Compile its destination once so
+        // the schedule does not consume one nested module call per price.
+        let new_nft_contract = minting_module.call(new_ctx.path(), &create_args)?;
         for (nth, sched) in schedule.iter().enumerate() {
-            let mut ctx = base_ctx.derive_num(nth as u64)?;
-            let amt = ctx.funds();
-            // first, let's get the module that should be used to 're-mint' this NFT
-            // to the new owner
-            let mut minting_module = self
-                .main
-                .data
-                .minting_module
-                .clone()
-                .ok_or(CompilationError::TerminateCompilation)?;
-            // let's make a copy of the old nft metadata..
-            let mut mint_data = self.main.data.clone();
-            // and change the owner to the buyer
-            mint_data.owner = self.main.sell_to;
-            let new_ctx = ctx.derive_str(Arc::new("transfer".into()))?;
-            // let's now compile a new 'mint' of the NFT
-            let create_args = CreateArgs {
-                context: ContextualArguments {
-                    amount: ctx.funds(),
-                    network: ctx.network,
-                    effects: unsafe { ctx.get_effects_internal() }.as_ref().clone(),
-                    ordinals_info: ctx.get_ordinals().clone(),
-                },
-                arguments: mint_impl::Versions::Mint_NFT_Trait_Version_0_1_0(mint_data),
-            };
-            let new_nft_contract = minting_module
-                .call(new_ctx.path(), &create_args)
-                .map_err(|_| CompilationError::TerminateCompilation)?;
+            let ctx = base_ctx.derive_num(nth as u64)?;
             // Now for the magic:
             // This is a transaction that creates at output 0 the new nft for the
             // person, and must add another input that pays sufficiently to pay the
@@ -178,30 +202,36 @@ impl NFTDutchAuction {
             // cleanly if the buyer identifys an output they are spending before requesting
             // a purchase.
             let price: Amount = sched.1.into();
-            let tmpl = ctx
+            let mut template = ctx
                 .template()
                 .add_output(amt, &new_nft_contract, None)?
-                .add_amount(price)
-                .add_sequence()
-                // only active at the set time
                 .set_lock_time(sched.0.into())?;
-            let t = if let Some(artist) = self.main.data.ipfs_nft.artist {
-                let artist_gets = self.main.data.compute_royalty_for_artist(price);
-                let seller_gets = price - artist_gets;
-                // Pay Sale to Seller
-                tmpl.add_output(seller_gets, &self.main.data.owner, None)?
-                    // Pay Royalty to Creator
-                    .add_output(artist_gets, &artist, None)?
+            if price != Amount::ZERO {
+                template = template.add_sequence().add_amount(price)?;
+            }
+            let artist_gets = if self.main.data.ipfs_nft.artist.is_some() {
+                self.main.data.compute_royalty_for_artist(price)?
             } else {
-                // Pay Sale to Seller
-                tmpl.add_output(
-                    Amount::from_btc(price.as_btc())?,
-                    &self.main.data.owner,
-                    None,
-                )?
+                Amount::ZERO
             };
-            ret.push(Ok(t.into()));
+            let seller_gets = price - artist_gets;
+            if seller_gets != Amount::ZERO {
+                template = template.add_output(seller_gets, &self.main.data.owner, None)?;
+            }
+            if let Some(artist) = self
+                .main
+                .data
+                .ipfs_nft
+                .artist
+                .filter(|_| artist_gets != Amount::ZERO)
+            {
+                template = template.add_output(artist_gets, &artist, None)?;
+            }
+            ret.push(Ok(template.into()));
         }
         Ok(Box::new(ret.into_iter()))
     }
 }
+
+#[cfg(test)]
+mod tests;

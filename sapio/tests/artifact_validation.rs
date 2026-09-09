@@ -112,7 +112,7 @@ fn reject_artifact(object: Compiled, expected: ArtifactErrorKind) {
 #[test]
 fn rejects_malformed_unsigned_templates_at_the_binding_boundary() {
     type Mutation = fn(&mut Template);
-    let cases: [(Mutation, ArtifactErrorKind); 11] = [
+    let cases: [(Mutation, ArtifactErrorKind); 13] = [
         (|t| t.tx.input.clear(), ArtifactErrorKind::MissingInput),
         (
             |t| t.ctv_index = 1,
@@ -154,12 +154,31 @@ fn rejects_malformed_unsigned_templates_at_the_binding_boundary() {
             |t| t.max = Amount::from_sat(999),
             ArtifactErrorKind::InsufficientAmount,
         ),
+        (
+            |t| t.required_input_amount = Amount::from_sat(1_001),
+            ArtifactErrorKind::InvalidInputAmount,
+        ),
+        (
+            |t| t.required_input_amount = Amount::from_sat(999),
+            ArtifactErrorKind::InvalidInputAmount,
+        ),
     ];
     for (mutate, expected) in cases {
         let mut object = payment(leaf(), false, "payment");
         mutate(template(&mut object));
         reject_artifact(object, expected);
     }
+}
+
+#[test]
+fn funding_requirements_are_mandatory_in_serialized_templates() {
+    let mut object = payment(leaf(), false, "payment");
+    let mut value = serde_json::to_value(template(&mut object)).unwrap();
+    value
+        .as_object_mut()
+        .unwrap()
+        .remove("required_input_amount_sats");
+    assert!(serde_json::from_value::<Template>(value).is_err());
 }
 
 #[test]

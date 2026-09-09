@@ -133,6 +133,18 @@ impl Object {
                         .map(|(hash, template)| (PathFragment::Suggested, hash, template)),
                 )
             {
+                if let Some(previous) = &funding {
+                    let available = previous.output[out.vout as usize].value;
+                    if available < template.required_input_amount.as_sat() {
+                        return Err(invalid_funding(
+                            out,
+                            format!(
+                                "contract input provides {available} sat but requires {} sat",
+                                template.required_input_amount.as_sat()
+                            ),
+                        ));
+                    }
+                }
                 let mut tx = template.tx.clone();
                 tx.input[0].previous_output = out;
                 let mut seen = BTreeSet::from([out]);

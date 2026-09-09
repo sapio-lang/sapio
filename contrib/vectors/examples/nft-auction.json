@@ -1,0 +1,42 @@
+{
+  "arguments": {
+    "Exact": [
+      {
+        "period": 6,
+        "start_price": 2000,
+        "min_price": 1000,
+        "updates": 2
+      },
+      {
+        "sell_to": "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+        "price": 2000,
+        "data": {
+          "owner": "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+          "ipfs_nft": {
+            "version": 0,
+            "cid": "bafkreig7r2tdlwqxzlwnd7aqhkkvzjqv53oyrkfnhksijkvmc6k57uqk6a",
+            "edition": 1,
+            "of_edition_count": 1,
+            "artist": "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+            "blessing": null,
+            "softlink": {
+              "url": "https://rubin.io"
+            }
+          },
+          "minting_module": {
+            "which_plugin": {
+              "HashKey": "MODULE_nft"
+            }
+          },
+          "royalty": 0.25
+        },
+        "sale_time": 100,
+        "extra": null
+      }
+    ]
+  },
+  "context": {
+    "amount": 1000,
+    "network": "Regtest"
+  }
+}

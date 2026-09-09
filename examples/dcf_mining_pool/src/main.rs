@@ -3,209 +3,90 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
-use crate::contract::Context;
-use crate::miner_payout::MiningPayout;
-use crate::miner_payout::PoolShare;
-use bitcoin::hash_types::BlockHash;
-use bitcoin::Amount;
-use bitcoin::Block;
-use bitcoin::Script;
-use bitcoin::XOnlyPublicKey as PublicKey;
-use bitcoincore_rpc_async as rpc;
-use rpc::RpcApi;
-use sapio::contract::Compilable;
-use sapio::contract::Contract;
-use sapio::*;
-use std::collections::btree_map::Entry;
-use std::collections::BTreeMap;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::RwLock;
+//! Compile a mining reward payout offline. No node, server, or broadcast is used.
+use bitcoin::secp256k1::{Keypair, Secp256k1, SecretKey};
+use bitcoin::{Amount, Network, XOnlyPublicKey};
+use miner_payout::MiningPayout;
+use sapio::contract::{Compilable, Context};
+use sapio_base::effects::EffectPath;
+use sapio_ctv_emulator_trait::CTVAvailable;
+use serde::Deserialize;
+use std::io::Read;
+use std::sync::Arc;
 
 mod miner_payout;
-struct BlockNotes {
-    block: Block,
-    key: Option<PublicKey>,
-    participated: Option<bool>,
-    reward: Amount,
-}
-impl BlockNotes {
-    fn from_block(block: Block) -> BlockNotes {
-        let mut key = None;
-        // Extract key from first OP_RETURN 123 45 67 89 <33 bytes>
-        if let Some(coinbase) = block.coinbase() {
-            for out in coinbase.output.iter() {
-                if out.script_pubkey.is_op_return() {
-                    match out.script_pubkey.as_bytes() {
-                        [106, 123, 45, 67, 89, tail @ ..] => {
-                            if tail.len() == 33 {
-                                key = PublicKey::from_slice(tail).ok();
-                                if key.is_some() {
-                                    break;
-                                }
-                            }
-                        }
-                        _ => continue,
-                    }
-                }
-            }
-        }
-        let participated = if key.is_none() { Some(false) } else { None };
-        BlockNotes {
-            block,
-            key,
-            participated,
-            reward: Amount::from_sat(0),
-        }
-    }
-}
-struct Coordinator {
-    cache: BTreeMap<BlockHash, Arc<RwLock<BlockNotes>>>,
-    client: rpc::Client,
-    ctx: dyn Fn() -> Context,
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Request {
+    miners: Vec<XOnlyPublicKey>,
+    reward_sats: u64,
+    radix: usize,
+    fee_sats_per_tx: u64,
 }
 
-impl Coordinator {
-    async fn compute_for_block(
-        &mut self,
-        tip_in: &BlockHash,
-        n: usize,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
-        let mut tip = *tip_in;
-        let mut to_scan = vec![];
-        // ensure our cache has all relevant info
-        let cache = &mut self.cache;
-        for i in 0..n {
-            let locked_note = match cache.entry(tip) {
-                Entry::Occupied(o) => o.into_mut(),
-                Entry::Vacant(v) => {
-                    let block = self.client.get_block(&tip).await?;
-                    let mut note = BlockNotes::from_block(block);
-                    if note.key.is_some() {
-                        let stats: serde_json::Value = self
-                            .client
-                            .call("getblockstats", &[serde_json::to_value(tip)?])
-                            .await?;
-                        let subsidy = stats
-                            .get("subsidy")
-                            .and_then(serde_json::Value::as_u64)
-                            .ok_or("blockstates error")?;
-                        let fee = stats
-                            .get("totalfee")
-                            .and_then(serde_json::Value::as_u64)
-                            .ok_or("blockstats error")?;
-                        note.reward = Amount::from_sat(fee + subsidy);
-                    }
-                    v.insert(Arc::new(RwLock::new(note)))
-                }
-            };
-            let note = locked_note.read().unwrap();
-            // fast response of the block has no key definitely no participating
-            if i == 0 && note.participated == Some(false) {
-                return Ok(false);
-            }
-            // get stats for these blocks...
-            if note.key.is_some() && note.participated.is_none() {
-                // scan all contendors except the first tip
-                if i > 0 {
-                    to_scan.push(locked_note.clone());
-                }
-            }
-            tip = note.block.header.prev_blockhash;
-        }
-        // scan all the parents we aren't sure about
-        // goes from oldest to newest
-        while let Some(scan) = to_scan.pop() {
-            let h = scan.read().unwrap().block.block_hash();
-            let v: Pin<Box<dyn Future<Output = _>>> = Box::pin(self.compute_for_block(&h, n));
-            v.await;
-        }
-
-        let tip = *tip_in;
-        let mut known_participants = vec![];
-        // ensure our cache has all relevant info
-        for _ in 0..n {
-            let note = self.cache[&tip].clone();
-            let note_r = note.read().unwrap();
-            if note_r.participated == Some(true) {
-                std::mem::drop(note_r);
-                known_participants.push(note);
-            }
-        }
-        let mp = MiningPool {
-            blocks: known_participants,
-            tip: self.cache[tip_in].clone(),
-        };
-        let this_ctx = (self.ctx)().with_amount(mp.tip.read().unwrap().reward)?;
-        let output = mp.compile(this_ctx)?;
-        let script: Script = output.address.into();
-
-        let mut result = false;
-        if let Some(coinbase) = mp.tip.read().unwrap().block.coinbase() {
-            for out in coinbase.output.iter() {
-                if out.script_pubkey == script && out.value == output.amount_range.max().as_sat() {
-                    result = true;
-                    break;
-                }
-            }
-        }
-        let mut tip = mp.tip.write().unwrap();
-        tip.participated = Some(result);
-        Ok(result)
-    }
-}
-
-use std::sync::Arc;
-struct MiningPool {
-    blocks: Vec<Arc<RwLock<BlockNotes>>>,
-    tip: Arc<RwLock<BlockNotes>>,
-}
-
-use sapio::contract::error::CompilationError;
-impl MiningPool {
-    #[then]
-    fn pay_miners(self, ctx: sapio::Context) {
-        let mut ctx = ctx;
-        let mut blocks = self.blocks.clone();
-        blocks.push(self.tip.clone());
-        blocks.sort_by_cached_key(|a| a.read().unwrap().block.header.block_hash());
-        let participants: Vec<PoolShare> = blocks
-            .iter()
-            .map(|note| {
-                Ok(PoolShare {
-                    amount: Amount::from_sat(0),
-                    // guaranteed if here to have a pk
-                    key: note.read().unwrap().key.unwrap(),
-                })
+fn demo() -> Request {
+    Request {
+        miners: (1..=5)
+            .map(|byte| {
+                Keypair::from_secret_key(
+                    &Secp256k1::new(),
+                    &SecretKey::from_slice(&[byte; 32]).unwrap(),
+                )
+                .x_only_public_key()
+                .0
             })
-            .collect::<Result<_, CompilationError>>()?;
-        let ctx_extra_funding: Context = ctx.derive_str(Arc::new("unlimited funding".into()))?;
-        ctx_extra_funding.add_amount(Amount::from_btc(21_000_000.0).unwrap());
-
-        let mut contract = MiningPayout {
-            /// all of the payments needing to be sent
-            participants,
-            radix: 4,
-            fee_sats_per_tx: Amount::from_sat(100),
-        };
-        let fee_estimate = contract
-            .compile(ctx.derive_str(Arc::new("FAKE".into()))?)?
-            .amount_range
-            .max();
-        let reward = self.tip.read().unwrap().reward - fee_estimate;
-        let reward_per_miner = (reward) / (blocks.len() as u64);
-
-        for reward in contract.participants.iter_mut() {
-            reward.amount = reward_per_miner;
-        }
-        ctx.template().add_output(reward, &contract, None)?.into()
+            .collect(),
+        reward_sats: 50_003,
+        radix: 4,
+        fee_sats_per_tx: 100,
     }
 }
-impl Contract for MiningPool {
-    declare! {then, Self::pay_miners}
-    declare! {non updatable}
-}
 
-fn main() {
-    loop {}
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut args = std::env::args().skip(1);
+    let request = match args.next().as_deref() {
+        None => demo(),
+        Some("--help" | "-h") => {
+            println!("dcf_mining_pool [INPUT.json|-]\nNo arguments compile a deterministic demonstration. Use - to read JSON from stdin.");
+            return Ok(());
+        }
+        Some(path) => {
+            let mut input = String::new();
+            if path == "-" {
+                std::io::stdin().read_to_string(&mut input)?;
+            } else {
+                input = std::fs::read_to_string(path)?;
+            }
+            serde_json::from_str(&input)?
+        }
+    };
+    if args.next().is_some() {
+        return Err("Expected at most one JSON input path".into());
+    }
+    let payout = MiningPayout::from_reward(
+        request.miners,
+        Amount::from_sat(request.reward_sats),
+        request.radix,
+        Amount::from_sat(request.fee_sats_per_tx),
+    )?;
+    let compiled = payout.compile(Context::new(
+        Network::Regtest,
+        payout.funding_required()?,
+        Arc::new(CTVAvailable),
+        EffectPath::try_from("mining_payout")?,
+        Arc::new(Default::default()),
+        None,
+    ))?;
+    compiled.validate()?;
+    serde_json::to_writer_pretty(
+        std::io::stdout().lock(),
+        &serde_json::json!({
+            "network": "regtest", "enforcement": "native_ctv_research",
+            "funding_satoshis": request.reward_sats,
+            "payouts": payout.participants,
+            "contract": compiled,
+        }),
+    )?;
+    Ok(())
 }

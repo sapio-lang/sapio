@@ -56,14 +56,16 @@ with upstream crates would remove semantics, not complete a migration.
 | Inscriptions | Repair fork parsing, script-byte preservation, resource/key analysis and interpreter support; 51 fork inscription tests plus Sapio plugin artifact/signing and WASM checks, with checked ordinal ranges and fees |
 | Inscription node validation | Bitcoin Core 31.1 accepts five library-finalized ordinary Taproot reveals and rejects 21 invalid variants in isolated regtest checks; native CTV and Ord index/sat assignment remain separate |
 | Fees | Enforce the strongest requested minimum in virtual bytes against that template's reserved fees; reject overflow and unknown extra-input weights |
-| Ordinal allocation | Preserve allocated/remaining range prefixes and suffixes; reject malformed and insufficient ranges |
+| Ordinal allocation | Preserve input order and range prefixes/suffixes; check target offsets, payout conservation and fees; separate original sats from external funding |
 | WASM host | Bound ABI messages, validate every memory read/write, bound string scans, propagate errors, and test hostile guests through Wasmer; register guest callbacks once with `OnceLock` |
 | WASM execution | Meter start and every guest call, charge variable-size memory/table operations, cap accessible memory and tables, disable threads, and bound nested module attempts/depth and allocator reentry |
 | WASM source cache | Limit binary sources to 128 MiB, authenticate content hashes, recompile with the current engine, preserve corruption/I/O errors and ignore legacy native caches |
+| Module schemas | Validate actual inputs and successful outputs at the common host boundary, including raw nested calls; use offline Draft 7 validation, guard reference expansion and remove the no-op interface check |
 | Emulator protocol | Bound both directions of framed JSON, discard failed streams, reject malformed PSBT maps, support prebound listeners |
 | Emulator responses | Accept complete PSBT responses containing only signature additions; preserve existing signatures and every other field, including raw HD responses, each federation participant and the WASM signing import |
 | Integration | Restore the suite to the workspace; compile, sign and finalize two contract steps and reject a modified output |
-| Developer checks | Formatting, real feature checks, native tests, all WASM example builds, CLI smoke checks, and API documentation |
+| Contract examples | [Complete inventory](EXAMPLES.md): repaired and tested library families, restored PowSwap/TapBet, 18 real WASM fixtures, both native examples and explicit research assumptions |
+| Developer checks | Formatting, feature checks, native tests, complete WASM catalog with artifact/schema/repeatability checks, CLI smoke checks, and API documentation |
 
 The [development guide](DEVELOPMENT.md) gives reproducible commands. This list is
 an implementation record, not a production-readiness claim.
@@ -145,11 +147,11 @@ This is the next release blocker, before a broad dependency migration.
   finalization ordering covers the tested native WSH/Taproot and legacy cases;
   circular P2SH commitments, additional bare descriptors and arbitrary CTV input
   combinations need their own design and execution evidence.
-- Replace the no-op `SapioJSONTrait` compatibility check. An example accepted by a
-  schema is only a compatibility probe, not a proof of schema inclusion. Specify
-  versioned interfaces and validate actual calls on both sides. Use an offline
-  validator that works in standalone WASM without browser imports; bound schema
-  work and reject unresolved references.
+- Specify the semantics and evolution of versioned module interfaces. Actual
+  inputs and successful outputs are now checked against advertised Draft 7
+  schemas at the host boundary. This does not prove behavioral compatibility or
+  schema inclusion. The offline validator rejects unresolved references and
+  excessive expansion; complete native validation work budgets remain open.
 - Extend the [guest execution limits](DEVELOPMENT.md) with service-level
   compilation deadlines, process memory and concurrency policy. Guest fuel,
   memory/table caps, nested-call bounds and authenticated source caching are
@@ -172,8 +174,9 @@ rewrite in one change.
 1. Move Clap to a maintained stable release. Preserve intentional command
    behavior with CLI tests, replace panic paths, fix exit codes and version
    reporting, and separate human diagnostics from JSON output.
-2. Replace the JSON Schema validator and align the declared schema draft across
-   the CLI and module interfaces. Exercise malformed and recursive schemas.
+2. Keep the host's JSON Schema validator and Draft 7 declarations aligned when
+   upgrading Schemars. Preserve malformed, recursive and nested-call coverage;
+   keep native validation dependencies out of standalone guests.
 3. Evaluate further WASM runtime upgrades after implementing the resource contract.
    Benchmark compile time and memory, test cache invalidation across runtime
    versions, and run real Rust modules as well as small adversarial fixtures.
@@ -190,9 +193,10 @@ transaction behavior or a documented deliberate change.
 
 ### 3. Give developers a coherent toolkit
 
-Choose a small supported contract set first: a payment tree, a delayed recovery
-vault, and a contract with a continuation. Treat the remaining examples as
-research until they meet the same standards.
+The full [example catalog](EXAMPLES.md) now has executable regression coverage.
+Choose a smaller supported release set with explicit chain enforcement and end-to-end
+spending evidence; compilation tests alone do not promote research constructions
+to supported financial products.
 
 - Provide `new`, `check`, `compile`, `inspect`, `bind`, and `finalize` workflows
   with consistent arguments, errors, exit status, and machine-readable output.

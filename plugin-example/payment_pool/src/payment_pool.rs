@@ -11,7 +11,7 @@
 use crate::sapio_base::Clause;
 
 use bitcoin::hashes::sha256;
-use bitcoin::hashes::Hash;
+use bitcoin::hashes::{Hash, HashEngine};
 use bitcoin::secp256k1::schnorr::Signature;
 use bitcoin::secp256k1::Message;
 use bitcoin::secp256k1::Secp256k1;
@@ -24,13 +24,12 @@ use sapio::contract::*;
 use sapio::util::amountrange::{AmountF64, AmountU64};
 use sapio::*;
 use sapio_contrib::contracts::treepay::{Payment, TreePay};
-use sapio_wasm_plugin::client::*;
-use sapio_wasm_plugin::*;
+#[cfg(target_arch = "wasm32")]
+use sapio_wasm_plugin::{optional_logo, REGISTER};
 use schemars::*;
 use serde::*;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
-use std::io::Write;
 use std::str::FromStr;
 
 #[derive(Deserialize, JsonSchema, Clone)]
@@ -47,6 +46,26 @@ struct PaymentPool {
 impl Contract for PaymentPool {
     declare! {then, Self::ejection}
     declare! {updatable<DoTx>, Self::do_tx}
+    declare! {finish, Self::sole_owner}
+    fn ensure_amount(&self, ctx: Context) -> Result<Amount, CompilationError> {
+        if self.members.is_empty()
+            || self
+                .members
+                .values()
+                .any(|amount| Amount::from(*amount) == Amount::ZERO)
+        {
+            return Err(CompilationError::Custom(
+                "Payment pool needs positive member balances".into(),
+            ));
+        }
+        let total = self.total()?;
+        if total != ctx.funds() {
+            return Err(CompilationError::Custom(
+                "Pool balances must equal available funds".into(),
+            ));
+        }
+        Ok(total)
+    }
 }
 /// Payment Request
 #[derive(Deserialize, JsonSchema, Serialize)]
@@ -87,13 +106,35 @@ fn default_coerce(
 
 impl PaymentPool {
     /// Sum Up all the balances
-    fn total(&self) -> Amount {
+    fn total(&self) -> Result<Amount, CompilationError> {
         self.members
             .values()
             .cloned()
             .map(Amount::from)
-            .fold(Amount::from_sat(0), |a, b| a + b)
+            .try_fold(Amount::ZERO, |a, b| {
+                a.checked_add(b).ok_or(CompilationError::OutOfFunds)
+            })
     }
+    #[guard]
+    fn sole_owner(self, _ctx: Context) {
+        if self.members.len() == 1 {
+            self.members
+                .keys()
+                .next()
+                .copied()
+                .map(Clause::Key)
+                .unwrap_or(Clause::Unsatisfiable)
+        } else {
+            Clause::Unsatisfiable
+        }
+    }
+
+    fn next_sequence(&self) -> Result<u64, CompilationError> {
+        self.sequence
+            .checked_add(1)
+            .ok_or_else(|| CompilationError::Custom("Pool sequence exhausted".into()))
+    }
+
     /// Only compile an ejection if the pool has other users in it, otherwise
     /// it's base case.
     #[compile_if]
@@ -112,15 +153,15 @@ impl PaymentPool {
         // find the middle
         let key = self.members.keys().nth(mid).expect("must be present");
         let mut pool_one: PaymentPool = self.clone();
-        pool_one.sequence += 1;
+        pool_one.sequence = self.next_sequence()?;
         let pool_two = PaymentPool {
             // removes the back half including key
             members: pool_one.members.split_off(&key),
-            sequence: self.sequence + 1,
+            sequence: self.next_sequence()?,
             sig_needed: self.sig_needed,
         };
-        let amt_one = pool_one.total();
-        let amt_two = pool_two.total();
+        let amt_one = pool_one.total()?;
+        let amt_two = pool_two.total()?;
         t.add_output(amt_one, &pool_one, None)?
             .add_output(amt_two, &pool_two, None)?
             .into()
@@ -141,8 +182,11 @@ impl PaymentPool {
         guarded_by = "[Self::all_signed]",
         coerce_args = "default_coerce"
     )]
-    fn do_tx(self, ctx: Context, update: DoTx) {
-        let _effects = unsafe { ctx.get_effects_internal() };
+    fn do_tx(self, mut ctx: Context, update: DoTx) {
+        Contract::ensure_amount(
+            self,
+            ctx.derive_str(std::sync::Arc::new("validate".into()))?,
+        )?;
         // don't allow empty updates.
         if update.payments.is_empty() {
             return empty();
@@ -153,7 +197,8 @@ impl PaymentPool {
         let secp = Secp256k1::new();
         // collect all the payments
         let mut all_payments = vec![];
-        let mut spent = Amount::from_sat(0);
+        let mut spent = Amount::ZERO;
+        let mut fees = Amount::ZERO;
         // for each payment...
         for (
             from,
@@ -169,17 +214,20 @@ impl PaymentPool {
                 .members
                 .get(from)
                 .ok_or(CompilationError::TerminateCompilation)?;
+            let total_payments = payments.values().try_fold(Amount::ZERO, |total, amount| {
+                total
+                    .checked_add((*amount).into())
+                    .ok_or(CompilationError::OutOfFunds)
+            })?;
+            let debit = total_payments
+                .checked_add((*fee).into())
+                .ok_or(CompilationError::OutOfFunds)?;
             let new_balance = Amount::from(*balance)
-                - (payments
-                    .values()
-                    .cloned()
-                    .map(Amount::from)
-                    .fold(Amount::from_sat(0), |a, b| a + b)
-                    + Amount::from(*fee));
-            // check for no underflow
-            if new_balance.as_sat() < 0 {
-                return Err(CompilationError::TerminateCompilation);
-            }
+                .checked_sub(debit)
+                .ok_or(CompilationError::OutOfFunds)?;
+            fees = fees
+                .checked_add((*fee).into())
+                .ok_or(CompilationError::OutOfFunds)?;
             // updates the balance or remove if empty
             if new_balance.as_sat() > 0 {
                 new_members.insert(from.clone(), new_balance.into());
@@ -189,7 +237,12 @@ impl PaymentPool {
 
             // collect all the payment
             for (address, amt) in payments.iter() {
-                spent += Amount::from(*amt);
+                if Amount::from(*amt) == Amount::ZERO {
+                    return Err(CompilationError::Custom("Payments must be positive".into()));
+                }
+                spent = spent
+                    .checked_add((*amt).into())
+                    .ok_or(CompilationError::OutOfFunds)?;
                 all_payments.push(Payment {
                     address: address.clone(),
                     amount: Amount::from(*amt).into(),
@@ -199,14 +252,14 @@ impl PaymentPool {
             // came from this user
             if self.sig_needed {
                 let mut hasher = sha256::Hash::engine();
-                hasher.write(&self.sequence.to_le_bytes());
-                hasher.write(&Amount::from(*fee).as_sat().to_le_bytes());
+                hasher.input(&self.sequence.to_le_bytes());
+                hasher.input(&Amount::from(*fee).as_sat().to_le_bytes());
                 for (address, amt) in payments.iter() {
-                    hasher.write(&Amount::from(*amt).as_sat().to_le_bytes());
-                    hasher.write(address.script_pubkey().as_bytes());
+                    hasher.input(&Amount::from(*amt).as_sat().to_le_bytes());
+                    hasher.input(address.script_pubkey().as_bytes());
                 }
                 let h = sha256::Hash::from_engine(hasher);
-                let m = Message::from_slice(&h.as_inner()[..]).expect("Correct Size");
+                let m = Message::from_digest_slice(&h[..]).expect("Correct Size");
                 let sig = Signature::from_str(&hex_sig)
                     .map_err(|_| CompilationError::TerminateCompilation)?;
                 let _: () = secp
@@ -214,13 +267,21 @@ impl PaymentPool {
                     .map_err(|_| CompilationError::TerminateCompilation)?;
             }
         }
+        if new_members.is_empty() && all_payments.is_empty() {
+            return Err(CompilationError::Custom(
+                "Pool update must create an output".into(),
+            ));
+        }
         // Send any leftover funds to a new pool
         let change = PaymentPool {
             members: new_members,
-            sequence: self.sequence + 1,
+            sequence: self.next_sequence()?,
             sig_needed: self.sig_needed,
         };
-        let mut tmpl = ctx.template().add_output(change.total(), &change, None)?;
+        let mut tmpl = ctx.template();
+        if !change.members.is_empty() {
+            tmpl = tmpl.add_output(change.total()?, &change, None)?;
+        }
         if all_payments.len() > 4 {
             // We'll use the contract from our last post to make the state
             // transitions more efficient!
@@ -243,7 +304,11 @@ impl PaymentPool {
                 )?;
             }
         }
-        tmpl.into()
+        tmpl.add_fees(fees)?.into()
     }
 }
+#[cfg(target_arch = "wasm32")]
 REGISTER![PaymentPool, "logo.png"];
+
+#[cfg(test)]
+mod tests;

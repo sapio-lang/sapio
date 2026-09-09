@@ -21,7 +21,6 @@ use bitcoin;
 use sapio_base::timelocks::{AbsTime, AnyAbsTimeLock, BIG_PAST_DATE, START_OF_TIME};
 
 use std::convert::TryFrom;
-use std::convert::TryInto;
 
 /// Args are some messages that can be passed to a Channel instance
 #[derive(Clone)]
@@ -44,6 +43,22 @@ struct OpenChannel {
     min_maturity: RelHeight,
 }
 impl OpenChannel {
+    fn check_resolution(update: &Update, funds: bitcoin::Amount) -> Result<(), CompilationError> {
+        let total = update
+            .resolution
+            .iter()
+            .try_fold(bitcoin::Amount::ZERO, |total, output| {
+                total
+                    .checked_add(output.amount)
+                    .ok_or(CompilationError::OutOfFunds)
+            })?;
+        if update.resolution.is_empty() || total != funds {
+            return Err(CompilationError::Custom(
+                "Channel resolution must preserve its balance".into(),
+            ));
+        }
+        Ok(())
+    }
     #[guard]
     fn signed_update(self, _ctx: Context) {
         Clause::And(vec![Clause::Key(self.alice_u), Clause::Key(self.bob_u)])
@@ -51,7 +66,11 @@ impl OpenChannel {
     #[guard]
     fn newer_sequence_check(self, _ctx: Context) {
         if let Some(prior) = self.pending_update.as_ref() {
-            AbsTime::try_from(prior.sequence.get() + 1)
+            prior
+                .sequence
+                .get()
+                .checked_add(1)
+                .and_then(|next| AbsTime::try_from(next).ok())
                 .map(Clause::from)
                 .unwrap_or(Clause::Unsatisfiable)
         } else {
@@ -64,6 +83,7 @@ impl OpenChannel {
     )]
     fn update_state(self, ctx: sapio::Context, o: Option<Update>) {
         if let Some(update) = o {
+            Self::check_resolution(&update, ctx.funds())?;
             if update.sequence > BIG_PAST_DATE {
                 Err(CompilationError::TerminateCompilation)?;
             }
@@ -71,7 +91,7 @@ impl OpenChannel {
                 .pending_update
                 .as_ref()
                 .map(|u| u.sequence)
-                .unwrap_or(1u32.try_into()?);
+                .unwrap_or(START_OF_TIME);
             if update.sequence <= prior_seq {
                 Err(CompilationError::TerminateCompilation)?;
             }
@@ -147,8 +167,18 @@ impl OpenChannel {
         guarded_by = "[Self::sign_cooperative_close]",
         coerce_args = "default_coerce"
     )]
-    fn coop_close(self, _ctx: sapio::Context, _o: Option<Update>) {
-        Ok(Box::new(std::iter::empty()))
+    fn coop_close(self, ctx: sapio::Context, update: Option<Update>) {
+        let Some(update) = update else { return empty() };
+        Self::check_resolution(&update, ctx.funds())?;
+        let mut template = ctx.template();
+        for output in update.resolution {
+            template = template.add_output(
+                output.amount,
+                &output.contract,
+                Some(output.added_metadata),
+            )?;
+        }
+        template.into()
     }
 }
 /// Helper
@@ -161,4 +191,89 @@ fn default_coerce(
 impl Contract for OpenChannel {
     declare! {updatable<Option<Update>>, Self::update_state,  Self::coop_close}
     declare! {then, Self::complete_update}
+
+    fn ensure_amount(&self, ctx: Context) -> Result<bitcoin::Amount, CompilationError> {
+        if let Some(update) = &self.pending_update {
+            Self::check_resolution(update, ctx.funds())?;
+            if update.sequence > BIG_PAST_DATE {
+                return Err(CompilationError::TerminateCompilation);
+            }
+        }
+        Ok(ctx.funds())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_helpers::{context, key};
+
+    fn channel() -> OpenChannel {
+        OpenChannel {
+            alice: key(1),
+            bob: key(2),
+            alice_u: key(3),
+            bob_u: key(4),
+            pending_update: None,
+            min_maturity: RelHeight::from(10),
+        }
+    }
+
+    fn update(sequence: u32, funds: u64) -> Update {
+        Update {
+            sequence: AbsTime::try_from(sequence).unwrap(),
+            maturity: RelHeight::from(5),
+            resolution: vec![Output {
+                amount: bitcoin::Amount::from_sat(funds),
+                contract: key(1).compile(context(funds)).unwrap(),
+                added_metadata: Default::default(),
+            }],
+        }
+    }
+
+    #[test]
+    fn first_update_and_mature_resolution_preserve_funds() {
+        let contract = channel();
+        contract.compile(context(1000)).unwrap().validate().unwrap();
+        let template = contract
+            .continue_update_state(context(1000), Some(update(START_OF_TIME.get() + 1, 1000)))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap();
+        assert_eq!(template.tx.lock_time, START_OF_TIME.get() + 1);
+        let child = &template.outputs[0].contract;
+        child.validate().unwrap();
+        let payout = child.ctv_to_tx.values().next().unwrap();
+        assert_eq!(payout.tx.input[0].sequence, 10);
+        assert_eq!(payout.tx.output[0].value, 1000);
+        assert_eq!(
+            contract.guard_signed_update(context(0)),
+            Clause::And(vec![Clause::Key(key(3)), Clause::Key(key(4))])
+        );
+    }
+
+    #[test]
+    fn stale_unbalanced_and_exhausted_updates_are_rejected() {
+        let mut contract = channel();
+        contract.pending_update = Some(update(START_OF_TIME.get() + 2, 1000));
+        assert!(contract
+            .continue_update_state(context(1000), Some(update(START_OF_TIME.get() + 2, 1000)))
+            .is_err());
+        assert!(contract
+            .continue_update_state(context(1000), Some(update(START_OF_TIME.get() + 3, 999)))
+            .is_err());
+        contract.pending_update.as_mut().unwrap().sequence = AbsTime::try_from(u32::MAX).unwrap();
+        assert_eq!(
+            contract.guard_newer_sequence_check(context(0)),
+            Clause::Unsatisfiable
+        );
+        let close = channel()
+            .continue_coop_close(context(1000), Some(update(START_OF_TIME.get() + 1, 1000)))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap();
+        assert_eq!(close.tx.output[0].value, 1000);
+    }
 }

@@ -4,26 +4,15 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-#![deny(missing_docs)]
-use bitcoin::Amount;
-use bitcoin::Script;
+//! Historical Taproot activation bet, with a finite recurring payout schedule.
+//! Cancellation is available after its timeout regardless of activation status.
+use bitcoin::{Amount, Script};
 use sapio::contract::*;
-use sapio::contract::*;
-use sapio::template::Template;
-use sapio::util::amountrange::AmountRange;
-use sapio::*;
 use sapio::*;
 use sapio_base::timelocks::AnyRelTimeLock;
-use sapio_base::Clause;
 use sapio_macros::guard;
-use sapio_wasm_plugin::client::*;
-use sapio_wasm_plugin::*;
-use schemars::*;
-use schemars::*;
-use serde::*;
-use serde::*;
-use std::convert::TryInto;
-use std::marker::PhantomData;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
 
 /// Taproot Recurring Bet.
 /// This data structure captures all the arguments required to build a contract.
@@ -34,9 +23,7 @@ pub struct TapBet {
     #[serde(with = "bitcoin::util::amount::serde::as_btc")]
     pub amount_per_time: Amount,
     /// How much in fees to pay per cycle.
-    /// TODO: In theory, this could be zero, as miners could manually add such
-    /// transactions (which they topet a reward out of) to their mempools.
-    /// TODO: Optional, make cancellation path have a different feerate
+    /// Zero is allowed; each continuation still releases a positive payout.
     #[schemars(with = "f64")]
     #[serde(with = "bitcoin::util::amount::serde::as_btc")]
     pub fees_per_time: Amount,
@@ -51,75 +38,186 @@ pub struct TapBet {
     pub cancel_to: bitcoin::Address,
 }
 
-/// This defines the interface for the TapBet Contract
-impl Contract for TapBet {
-    /// The "next steps" that can happen for an instance of a TapBet
-    /// is either to:
-    /// - stop_expansion: return the funds safely to the creator because Taproot is active
-    /// - continue_expansion: take amount_per_time of the funds and send them to a taproot address.
-    ///     > If taproot is active, the funds are safe in that key
-    ///     > If taproot is not active, a miner may steal the funds
-    declare! {then, Self::stop_expansion, Self::continue_expansion}
-    /// you can ignore this line, it is only needed for an advanced Sapio feature
-    /// and will be able to be removed when a specific rust feature stablizes.
-    declare! {non updatable}
-}
-
-/// The actual logic for each TapBet
 impl TapBet {
-    /// The waiting period is over, sample if Taproot is active
+    fn validate(&self, ctx: &Context) -> Result<(), CompilationError> {
+        let same_units = matches!(
+            (self.period, self.cancel_timeout),
+            (AnyRelTimeLock::RH(_), AnyRelTimeLock::RH(_))
+                | (AnyRelTimeLock::RT(_), AnyRelTimeLock::RT(_))
+        );
+        if self.amount_per_time.as_sat() == 0
+            || self.period.get() & 0xffff == 0
+            || !same_units
+            || self.cancel_timeout.get() <= self.period.get()
+            || !self.taproot_script.is_v1_p2tr()
+            || bitcoin::XOnlyPublicKey::from_slice(&self.taproot_script.as_bytes()[2..]).is_err()
+            || !self.cancel_to.is_valid_for_network(ctx.network)
+            || ctx.funds() <= self.fees_per_time
+        {
+            return Err(CompilationError::TerminateWith(
+                "Invalid TapBet payout, timeout, destination, or funding".into(),
+            ));
+        }
+        Ok(())
+    }
+
     #[guard]
-    fn period_over(&self, ctx: Context) {
+    fn period_over(self, _ctx: Context) {
         self.period.into()
     }
+
     #[then(guarded_by = "[Self::period_over]")]
-    fn continue_expansion(self, ctx: sapio::Context) {
-        // creates a new transaction template for the next step
-        // of this contract
-        let mut builder = ctx.template().set_label("continue_expansion".into());
-        // set the sequence validly
-        builder = builder.set_sequence(0, s.period.into())?;
-        // if we have sufficient funds, pay out to a taproot address now
-        if builder.ctx().funds() >= s.amount_per_time {
-            let mut range = AmountRange::new();
-            range.update_range(s.amount_per_time);
+    fn continue_expansion(self, ctx: Context) {
+        let spendable = ctx.funds() - self.fees_per_time;
+        let payout = std::cmp::min(self.amount_per_time, spendable);
+        let remainder = spendable - payout;
+        let destination = Compiled::from_script(self.taproot_script.clone(), None, ctx.network)?;
+        let mut builder = ctx
+            .template()
+            .set_label("continue_expansion".into())
+            .set_sequence(0, self.period)?
+            .add_output(payout, &destination, None)?;
+        if remainder > self.fees_per_time {
+            builder = builder.add_output(remainder, self, None)?;
+        } else if remainder.as_sat() > 0 {
+            // A remainder unable to fund another fee-bearing step goes back now.
             builder = builder.add_output(
-                s.amount_per_time,
-                &Compiled::from_script(s.taproot_script.clone(), Some(range), ctx.network)?,
+                remainder,
+                &Compiled::from_address(self.cancel_to.clone(), None),
                 None,
             )?;
         }
-        // if we have funds remaining, make a recursive TapBet with the same
-        // parameters.
-        if builder.ctx().funds() >= s.fees_per_time {
-            let amt = builder.ctx().funds() - s.fees_per_time;
-            if amt > Amount::from_sat(0) {
-                builder = builder.add_output(amt, s, None)?;
-            }
-        }
-        builder.into()
+        builder.add_fees(self.fees_per_time)?.into()
     }
 
-    /// The timeout period is over
     #[guard]
-    fn timeout(&self, ctx: Context) {
+    fn timeout(self, _ctx: Context) {
         self.cancel_timeout.into()
     }
+
     #[then(guarded_by = "[Self::timeout]")]
-    fn stop_expansion(self, ctx: sapio::Context) {
-        let mut builder = ctx.template().set_label("stop_expansion".into());
-        builder = builder.set_sequence(0, s.cancel_timeout.into())?;
-        // Pay out to the orginal owner
-        if builder.ctx().funds() >= s.fees_per_time {
-            let amt = builder.ctx().funds() - s.fees_per_time;
-            if amt > Amount::from_sat(0) {
-                builder = builder.add_output(
-                    amt,
-                    &Compiled::from_address(s.cancel_to.clone(), None),
-                    None,
-                )?;
-            }
+    fn stop_expansion(self, ctx: Context) {
+        let payout = ctx.funds() - self.fees_per_time;
+        ctx.template()
+            .set_label("stop_expansion".into())
+            .set_sequence(0, self.cancel_timeout)?
+            .add_output(
+                payout,
+                &Compiled::from_address(self.cancel_to.clone(), None),
+                None,
+            )?
+            .add_fees(self.fees_per_time)?
+            .into()
+    }
+}
+
+impl Contract for TapBet {
+    fn ensure_amount(&self, ctx: Context) -> Result<Amount, CompilationError> {
+        self.validate(&ctx)?;
+        Ok(ctx.funds())
+    }
+    declare! {then, Self::stop_expansion, Self::continue_expansion}
+    declare! {non updatable}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_helpers::{address, context};
+    use sapio_base::timelocks::{RelHeight, RelTime};
+    fn bet() -> TapBet {
+        TapBet {
+            amount_per_time: Amount::from_sat(1000),
+            fees_per_time: Amount::from_sat(100),
+            period: RelHeight::from(1).into(),
+            cancel_timeout: RelHeight::from(2).into(),
+            taproot_script: address(1).script_pubkey(),
+            cancel_to: address(2),
         }
-        builder.into()
+    }
+    #[test]
+    fn recurrence_pays_fees_and_terminates_with_remainder() {
+        let bet = bet();
+        let mut compiled = bet.compile(context(2350)).unwrap();
+        for (funds, payout, remainder) in [(2350, 1000, 1250), (1250, 1000, 150), (150, 50, 0)] {
+            assert_eq!(compiled.ctv_to_tx.len(), 2);
+            let next = compiled
+                .ctv_to_tx
+                .values()
+                .find(|t| t.tx.input[0].sequence == 1)
+                .unwrap();
+            let cancel = compiled
+                .ctv_to_tx
+                .values()
+                .find(|t| t.tx.input[0].sequence == 2)
+                .unwrap();
+            assert_eq!(cancel.tx.output[0].value, funds - 100);
+            assert_eq!(
+                cancel.tx.output[0].script_pubkey,
+                address(2).script_pubkey()
+            );
+            assert_eq!(next.tx.output[0].value, payout);
+            assert_eq!(next.tx.output[0].script_pubkey, address(1).script_pubkey());
+            assert_eq!(
+                next.tx.output.iter().map(|o| o.value).sum::<u64>(),
+                funds - 100
+            );
+            assert_eq!(next.max.as_sat(), funds);
+            if remainder == 0 {
+                assert_eq!(next.tx.output.len(), 1);
+                break;
+            }
+            assert_eq!(next.tx.output[1].value, remainder);
+            compiled = next.outputs[1].contract.clone();
+        }
+        let final_step = bet.compile(context(1150)).unwrap();
+        let next = final_step
+            .ctv_to_tx
+            .values()
+            .find(|t| t.tx.input[0].sequence == 1)
+            .unwrap();
+        assert_eq!(next.tx.output[1].value, 50);
+        assert_eq!(next.tx.output[1].script_pubkey, address(2).script_pubkey());
+    }
+    #[test]
+    fn zero_fees_progress_and_invalid_contracts_fail() {
+        let mut v = bet();
+        v.fees_per_time = Amount::from_sat(0);
+        assert!(v.compile(context(2000)).is_ok());
+        let mut v = bet();
+        v.amount_per_time = Amount::from_sat(0);
+        assert!(v.compile(context(2000)).is_err());
+        let mut v = bet();
+        v.cancel_timeout = v.period;
+        assert!(v.compile(context(2000)).is_err());
+        let mut v = bet();
+        v.cancel_timeout = RelTime::from(2).into();
+        assert!(v.compile(context(2000)).is_err());
+        let mut v = bet();
+        v.period = RelHeight::from(0).into();
+        assert!(v.compile(context(2000)).is_err());
+        let mut v = bet();
+        v.taproot_script = Script::new();
+        assert!(v.compile(context(2000)).is_err());
+        let mut v = bet();
+        v.taproot_script = bitcoin::blockdata::script::Builder::new()
+            .push_int(1)
+            .push_slice(&[0xff; 32])
+            .into_script();
+        assert!(v.compile(context(2000)).is_err());
+        assert!(bet().compile(context(100)).is_err());
+        let mut v = bet();
+        v.cancel_to.network = bitcoin::Network::Bitcoin;
+        assert!(v.compile(context(2000)).is_err());
+        let mut v = bet();
+        let mut signet = context(2000);
+        signet.network = bitcoin::Network::Signet;
+        v.cancel_to.network = bitcoin::Network::Testnet;
+        assert!(v.compile(signet).is_ok());
+        let json = serde_json::to_value(bet()).unwrap();
+        assert!(serde_json::from_value::<TapBet>(json)
+            .unwrap()
+            .compile(context(2000))
+            .is_ok());
     }
 }

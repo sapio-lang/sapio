@@ -197,10 +197,29 @@ impl Context {
         }
     }
 
-    /// Add funds to the context object (not typically needed)
-    pub fn add_amount(mut self, amount: Amount) -> Self {
-        self.available_funds += amount;
-        self
+    /// Add external funds whose ordinal ranges are unknown.
+    ///
+    /// Allocate all tracked input sats first. Clearing exhausted tracking at
+    /// this boundary prevents unknown inputs from acquiring invented ordinal
+    /// identities or shifting a known ordinal into the wrong output.
+    pub fn add_amount(mut self, amount: Amount) -> Result<Self, CompilationError> {
+        let available = self
+            .available_funds
+            .as_sat()
+            .checked_add(amount.as_sat())
+            .ok_or_else(|| CompilationError::TerminateWith("Available funds overflow".into()))?;
+        if amount != Amount::ZERO {
+            if let Some(ordinals) = &self.ordinals_info {
+                if self.available_funds != Amount::ZERO || !ordinals.0.is_empty() {
+                    return Err(CompilationError::OrdinalsError(
+                        "Allocate all tracked sats before adding unknown external inputs".into(),
+                    ));
+                }
+                self.ordinals_info = None;
+            }
+        }
+        self.available_funds = Amount::from_sat(available);
+        Ok(self)
     }
 
     /// Get a template builder from this context object

@@ -16,20 +16,16 @@ use std::marker::PhantomData;
 
 #[derive(JsonSchema, Serialize, Deserialize)]
 struct ExampleA {
-    // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
-    // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
-    amount: CoinAmount,
-    resolution: Compiled,
 }
 
 impl ExampleA {
     #[guard]
     fn timeout(self, _ctx: sapio::Context) {
-        Clause::Older(100)
+        Clause::And(vec![Clause::Key(self.bob), Clause::Older(100)])
     }
     #[guard(cached)]
     fn signed(self, _ctx: sapio::Context) {
@@ -43,7 +39,7 @@ impl Contract for ExampleA {
 }
 
 trait BState: JsonSchema {
-    fn get_n(_n: u8, max: u8) -> u8 {
+    fn get_n(_n: usize, max: usize) -> usize {
         max
     }
 }
@@ -53,7 +49,7 @@ impl BState for Start {}
 #[derive(JsonSchema, Serialize, Deserialize)]
 struct Finish;
 impl BState for Finish {
-    fn get_n(n: u8, _max: u8) -> u8 {
+    fn get_n(n: usize, _max: usize) -> usize {
         n
     }
 }
@@ -67,8 +63,7 @@ where
 
 #[derive(JsonSchema, Serialize, Deserialize)]
 struct ExampleB<T: BState> {
-    // TODO: Taproot Fix Encoding
-    #[schemars(with = "Vec<bitcoin::hashes::sha256::Hash>")]
+    #[schemars(with = "Vec<String>")]
     participants: Vec<bitcoin::XOnlyPublicKey>,
     threshold: u8,
     amount: CoinAmount,
@@ -80,7 +75,7 @@ impl<T: BState> ExampleB<T> {
     #[guard(cached)]
     fn all_signed(self, _ctx: Context) {
         Clause::Threshold(
-            T::get_n(self.threshold, self.participants.len() as u8) as usize,
+            T::get_n(self.threshold as usize, self.participants.len()),
             self.participants.iter().map(|k| Clause::Key(*k)).collect(),
         )
     }
@@ -112,16 +107,23 @@ where
     declare! {then, Self::begin_contest}
     declare! {finish, Self::all_signed}
     declare! {non updatable }
+
+    fn ensure_amount(&self, _ctx: Context) -> Result<bitcoin::Amount, CompilationError> {
+        if self.threshold == 0 || self.threshold as usize > self.participants.len() {
+            return Err(CompilationError::Custom(
+                "Threshold must select at least one participant".into(),
+            ));
+        }
+        Ok(self.amount.try_into()?)
+    }
 }
 
 /// Trustless Escrowing Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct ExampleCompileIf {
-    // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
-    // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
     alice_escrow: (CoinAmount, bitcoin::Address),
     bob_escrow: (CoinAmount, bitcoin::Address),
@@ -211,4 +213,99 @@ impl Contract for ExampleCompileIf {
     declare! {finish, Self::cooperate}
     declare! {then, Self::use_escrow}
     declare! {non updatable}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_helpers::{address, context, key};
+
+    fn escrow() -> ExampleCompileIf {
+        ExampleCompileIf {
+            alice: key(1),
+            bob: key(2),
+            alice_escrow: (bitcoin::Amount::from_sat(400).into(), address(1)),
+            bob_escrow: (bitcoin::Amount::from_sat(600).into(), address(2)),
+            escrow_disable: false,
+            escrow_required_no_conflict_disabled: false,
+            escrow_required_conflict_disabled: false,
+            escrow_nullable: false,
+            escrow_error: None,
+        }
+    }
+
+    #[test]
+    fn guards_and_type_state_contest_compile() {
+        let a = ExampleA {
+            alice: key(1),
+            bob: key(2),
+        };
+        assert_eq!(
+            a.guard_signed(context(0)),
+            Clause::And(vec![Clause::Key(key(1)), Clause::Key(key(2))])
+        );
+        assert_eq!(
+            a.guard_timeout(context(0)),
+            Clause::And(vec![Clause::Key(key(2)), Clause::Older(100)])
+        );
+        a.compile(context(1000)).unwrap().validate().unwrap();
+        let b = ExampleB::<Start> {
+            participants: vec![key(1), key(2)],
+            threshold: 1,
+            amount: bitcoin::Amount::from_sat(1000).into(),
+            pd: PhantomData,
+        };
+        let object = b.compile(context(1000)).unwrap();
+        object.validate().unwrap();
+        assert_eq!(
+            object.ctv_to_tx.values().next().unwrap().tx.output[0].value,
+            1000
+        );
+        assert_eq!(
+            b.guard_all_signed(context(0)),
+            Clause::Threshold(2, vec![Clause::Key(key(1)), Clause::Key(key(2))])
+        );
+    }
+
+    #[test]
+    fn thresholds_do_not_truncate_and_invalid_quorums_fail() {
+        let mut b = ExampleB::<Start> {
+            participants: vec![key(1); 256],
+            threshold: 1,
+            amount: bitcoin::Amount::from_sat(1000).into(),
+            pd: PhantomData,
+        };
+        assert!(matches!(
+            b.guard_all_signed(context(0)),
+            Clause::Threshold(256, _)
+        ));
+        b.threshold = 0;
+        assert!(b.compile(context(1000)).is_err());
+        b.threshold = 2;
+        b.participants.truncate(1);
+        assert!(b.compile(context(1000)).is_err());
+    }
+
+    #[test]
+    fn conditional_branches_enforce_disabling_required_and_error_states() {
+        let mut contract = escrow();
+        assert!(contract
+            .compile(context(1000))
+            .unwrap()
+            .ctv_to_tx
+            .is_empty());
+        contract.escrow_required_no_conflict_disabled = true;
+        assert_eq!(contract.compile(context(1000)).unwrap().ctv_to_tx.len(), 1);
+        contract.escrow_disable = true;
+        assert!(contract
+            .compile(context(1000))
+            .unwrap()
+            .ctv_to_tx
+            .is_empty());
+        contract.escrow_required_conflict_disabled = true;
+        assert!(contract.compile(context(1000)).is_err());
+        contract.escrow_disable = false;
+        contract.escrow_error = Some("explicit rejection".into());
+        assert!(contract.compile(context(1000)).is_err());
+    }
 }

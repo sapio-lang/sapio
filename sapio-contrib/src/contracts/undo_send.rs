@@ -17,10 +17,11 @@ use std::convert::TryInto;
 
 /// # Undoable Sending Contract
 /// UndoSendInternal allows funds to be sent to the to_contract only after a
-/// relative timeout. Otherwise, they can move back to the from_contract.
+/// relative timeout. Returning them to from_contract remains possible until
+/// either spending transaction confirms.
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct UndoSendInternal {
-    /// The contract to return funds to before timeout
+    /// The contract to return funds to while the undo output is unspent
     pub from_contract: Compiled,
     /// the contract to forward funds to after timeout
     pub to_contract: Compiled,
@@ -50,4 +51,37 @@ impl UndoSendInternal {
 impl Contract for UndoSendInternal {
     declare! {then, Self::undo, Self::complete}
     declare! {non updatable}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_helpers::{context, key};
+    use sapio_base::timelocks::RelHeight;
+
+    #[test]
+    fn undo_is_immediate_and_forwarding_waits_for_maturity() {
+        let contract = UndoSendInternal {
+            from_contract: key(1).compile(context(1000)).unwrap(),
+            to_contract: key(2).compile(context(1000)).unwrap(),
+            amount: bitcoin::Amount::from_sat(1000).into(),
+            timeout: RelHeight::from(12).into(),
+        };
+        let object = contract.compile(context(1000)).unwrap();
+        object.validate().unwrap();
+        assert_eq!(object.ctv_to_tx.len(), 2);
+        for template in object.ctv_to_tx.values() {
+            let expected = if template.tx.input[0].sequence == 12 {
+                &contract.to_contract
+            } else {
+                assert_eq!(template.tx.input[0].sequence, 1 << 22);
+                &contract.from_contract
+            };
+            assert_eq!(template.tx.output[0].value, 1000);
+            let actual: bitcoin::Script = template.outputs[0].contract.address.clone().into();
+            let expected: bitcoin::Script = expected.address.clone().into();
+            assert_eq!(actual, expected);
+        }
+        assert!(contract.compile(context(999)).is_err());
+    }
 }

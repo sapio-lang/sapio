@@ -19,8 +19,7 @@ use std::convert::TryInto;
 /// Pay To Public Key Sapio Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct PayToPublicKey {
-    // TODO: Taproot fix encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     key: bitcoin::XOnlyPublicKey,
 }
 
@@ -39,14 +38,11 @@ impl Contract for PayToPublicKey {
 /// Basic Escrowing Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct BasicEscrow {
-    // TODO: Taproot fix encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
-    // TODO: Taproot fix encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
-    // TODO: Taproot fix encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     escrow: bitcoin::XOnlyPublicKey,
 }
 
@@ -74,14 +70,11 @@ impl Contract for BasicEscrow {
 /// Basic Escrowing Contract, written more expressively
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct BasicEscrow2 {
-    // TODO: Taproot fix encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
-    // TODO: Taproot fix encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
-    // TODO: Taproot fix encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     escrow: bitcoin::XOnlyPublicKey,
 }
 
@@ -90,7 +83,7 @@ impl BasicEscrow2 {
     fn use_escrow(self, _ctx: Context) {
         Clause::And(vec![
             Clause::Key(self.escrow),
-            Clause::Threshold(2, vec![Clause::Key(self.alice), Clause::Key(self.bob)]),
+            Clause::Threshold(1, vec![Clause::Key(self.alice), Clause::Key(self.bob)]),
         ])
     }
     #[guard]
@@ -107,11 +100,9 @@ impl Contract for BasicEscrow2 {
 /// Trustless Escrowing Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct TrustlessEscrow {
-    // TODO: Taproot fix encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
-    // TODO: Taproot fix encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
     alice_escrow: (CoinAmount, bitcoin::Address),
     bob_escrow: (CoinAmount, bitcoin::Address),
@@ -147,4 +138,68 @@ impl Contract for TrustlessEscrow {
     declare! {finish, Self::cooperate}
     declare! {then, Self::use_escrow}
     declare! {non updatable}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_helpers::{address, context, key};
+
+    #[test]
+    fn key_and_both_escrow_spellings_compile_with_matching_authorization() {
+        let key_contract = PayToPublicKey { key: key(1) };
+        assert_eq!(key_contract.guard_with_key(context(0)), Clause::Key(key(1)));
+        key_contract
+            .compile(context(1000))
+            .unwrap()
+            .validate()
+            .unwrap();
+        let a = BasicEscrow {
+            alice: key(1),
+            bob: key(2),
+            escrow: key(3),
+        };
+        let b = BasicEscrow2 {
+            alice: key(1),
+            bob: key(2),
+            escrow: key(3),
+        };
+        a.compile(context(1000)).unwrap().validate().unwrap();
+        b.compile(context(1000)).unwrap().validate().unwrap();
+        assert_eq!(
+            b.guard_use_escrow(context(0)),
+            Clause::And(vec![
+                Clause::Key(key(3)),
+                Clause::Threshold(1, vec![Clause::Key(key(1)), Clause::Key(key(2))])
+            ])
+        );
+        assert_eq!(
+            b.guard_cooperate(context(0)),
+            Clause::And(vec![Clause::Key(key(1)), Clause::Key(key(2))])
+        );
+    }
+
+    #[test]
+    fn trustless_escrow_commits_to_both_payments_after_timeout() {
+        let contract = TrustlessEscrow {
+            alice: key(1),
+            bob: key(2),
+            alice_escrow: (bitcoin::Amount::from_sat(400).into(), address(1)),
+            bob_escrow: (bitcoin::Amount::from_sat(600).into(), address(2)),
+        };
+        let object = contract.compile(context(1000)).unwrap();
+        object.validate().unwrap();
+        let template = object.ctv_to_tx.values().next().unwrap();
+        assert_eq!(
+            template
+                .tx
+                .output
+                .iter()
+                .map(|o| o.value)
+                .collect::<Vec<_>>(),
+            vec![400, 600]
+        );
+        assert_ne!(template.tx.input[0].sequence & (1 << 22), 0);
+        assert!(contract.compile(context(999)).is_err());
+    }
 }

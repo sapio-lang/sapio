@@ -207,16 +207,6 @@ impl Request {
                 let params = call.params;
                 let mut sph = default_sph()?.await?;
 
-                let api = sph.get_api()?;
-                let schema = serde_json::to_value(api.input())?;
-                let validator = jsonschema_valid::Config::from_schema(
-                    &schema,
-                    Some(jsonschema_valid::schemas::Draft::Draft6),
-                )?;
-                if let Err(it) = validator.validate(&params) {
-                    let v: Vec<_> = it.map(|e| e.to_string()).collect();
-                    Err(RequestError(v.into()))?;
-                }
                 let create_args: CreateArgs<serde_json::Value> = serde_json::from_value(params)?;
                 let v = sph.call(&PathFragment::Root.into(), &create_args)?;
                 Ok(CommandReturn::Call(CallReturn { result: v }))

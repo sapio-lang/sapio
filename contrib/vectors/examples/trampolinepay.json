@@ -1,0 +1,26 @@
+{
+  "arguments": {
+    "handle": {
+      "which_plugin": {
+        "HashKey": "MODULE_treepay"
+      }
+    },
+    "data": {
+      "payments": [
+        {
+          "amount": 1e-05,
+          "address": "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj"
+        },
+        {
+          "amount": 2e-05,
+          "address": "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj"
+        }
+      ],
+      "feerate_per_byte": 1
+    }
+  },
+  "context": {
+    "amount": 3215,
+    "network": "Regtest"
+  }
+}

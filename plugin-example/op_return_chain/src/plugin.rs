@@ -9,8 +9,8 @@
 
 use sapio::*;
 use sapio_contrib::contracts::op_return_chain::ChainReturn;
-use sapio_wasm_plugin::client::*;
-use sapio_wasm_plugin::*;
+#[cfg(target_arch = "wasm32")]
+use sapio_wasm_plugin::{optional_logo, REGISTER};
 use schemars::*;
 use serde::*;
 
@@ -24,4 +24,5 @@ impl From<Wrapped> for ChainReturn {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 REGISTER![[ChainReturn, Wrapped], "logo.png"];

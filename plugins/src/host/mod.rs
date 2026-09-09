@@ -24,6 +24,7 @@ mod invocation;
 mod memory;
 pub mod plugin_handle;
 mod runtime;
+mod validation;
 pub mod wasm_cache;
 
 #[cfg(test)]

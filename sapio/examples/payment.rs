@@ -27,19 +27,25 @@ impl Contract for Payment {
     declare! {non updatable}
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn compile_payment(funding: u64) -> Result<Compiled, Box<dyn std::error::Error>> {
     let destination: Address = "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj".parse()?;
     let contract = Payment {
         destination: Compiled::from_address(destination, None),
     };
     let compiled = contract.compile(Context::new(
         Network::Regtest,
-        Amount::from_sat(1_500),
+        Amount::from_sat(funding),
         Arc::new(CTVAvailable),
         EffectPath::try_from("payment")?,
         Arc::new(Default::default()),
         None,
     ))?;
+    compiled.validate()?;
+    Ok(compiled)
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let compiled = compile_payment(1_500)?;
     serde_json::to_writer_pretty(
         std::io::stdout().lock(),
         &serde_json::json!({
@@ -50,4 +56,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }),
     )?;
     Ok(())
+}
+
+#[test]
+fn payment_preserves_destination_value_and_fee_reserve() {
+    let compiled = compile_payment(1_500).unwrap();
+    assert_eq!(compiled.ctv_to_tx.len(), 1);
+    let template = compiled.ctv_to_tx.values().next().unwrap();
+    assert_eq!(template.tx.input.len(), 1);
+    assert_eq!(template.tx.output.len(), 1);
+    assert_eq!(template.tx.output[0].value, 1_000);
+    let destination: Address = "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj"
+        .parse()
+        .unwrap();
+    assert_eq!(
+        template.tx.output[0].script_pubkey,
+        destination.script_pubkey()
+    );
+    assert_eq!(template.required_input_amount.as_sat(), 1_500);
+    assert!(compile_payment(1_499).is_err());
 }

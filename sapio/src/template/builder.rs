@@ -38,6 +38,8 @@ pub struct BuilderState<State> {
     version: i32,
     lock_time: Option<AnyAbsTimeLock>,
     ctx: Context,
+    initial_funding: Amount,
+    external_funding: Amount,
     fees: Amount,
     min_feerate: Option<Amount>,
     // Metadata Fields:
@@ -51,6 +53,7 @@ pub type Builder = BuilderState<NotAddingFees>;
 impl BuilderState<NotAddingFees> {
     /// Creates a new transaction template with 1 input and no outputs.
     pub fn new(ctx: Context) -> BuilderState<NotAddingFees> {
+        let initial_funding = ctx.funds();
         Self {
             guards: Vec::new(),
             sequences: vec![None],
@@ -62,6 +65,8 @@ impl BuilderState<NotAddingFees> {
             fees: Amount::from_sat(0),
             min_feerate: None,
             ctx,
+            initial_funding,
+            external_funding: Amount::ZERO,
             _pd: Default::default(),
         }
     }
@@ -92,11 +97,27 @@ impl BuilderState<NotAddingFees> {
         Ok(ret)
     }
 
-    /// adds available funds to the builder's context object.
-    /// TODO: Make guarantee there is some external input?
-    pub fn add_amount(mut self, a: Amount) -> Self {
-        self.ctx = self.ctx.add_amount(a);
-        self
+    /// Add funds contributed by auxiliary inputs. Add their sequences first.
+    /// These funds contribute to the transaction total, not input zero's
+    /// required amount. Binding verifies the actual funding inputs.
+    pub fn add_amount(mut self, a: Amount) -> Result<Self, CompilationError> {
+        if a != Amount::ZERO && self.sequences.len() == 1 {
+            return Err(CompilationError::TerminateWith(
+                "External funding requires an auxiliary input".into(),
+            ));
+        }
+        let external = self
+            .external_funding
+            .checked_add(a)
+            .ok_or(CompilationError::OutOfFunds)?;
+        // Check all inputs, including money already allocated to outputs.
+        // Checking only the remaining context would permit aggregate overflow.
+        self.initial_funding
+            .checked_add(external)
+            .ok_or(CompilationError::OutOfFunds)?;
+        self.ctx = self.ctx.add_amount(a)?;
+        self.external_funding = external;
+        Ok(self)
     }
 
     /// Adds another output. Follow with a call to
@@ -230,7 +251,7 @@ impl<T> BuilderState<T> {
     }
     /// reduce the amount availble in the builder's context, and add to the fees
     pub fn add_fees(self, amount: Amount) -> Result<BuilderState<AddingFees>, CompilationError> {
-        let mut s = BuilderState {
+        let s = BuilderState {
             _pd: Default::default(),
             guards: self.guards,
             sequences: self.sequences,
@@ -239,12 +260,17 @@ impl<T> BuilderState<T> {
             version: self.version,
             lock_time: self.lock_time,
             ctx: self.ctx,
+            initial_funding: self.initial_funding,
+            external_funding: self.external_funding,
             fees: self.fees,
             min_feerate: self.min_feerate,
             metadata: self.metadata,
         };
         let mut c = s.spend_amount(amount)?;
-        c.fees += amount;
+        c.fees = c
+            .fees
+            .checked_add(amount)
+            .ok_or(CompilationError::OutOfFunds)?;
         Ok(c)
     }
 
@@ -348,13 +374,18 @@ impl<T> BuilderState<T> {
 impl<T> From<BuilderState<T>> for Template {
     fn from(t: BuilderState<T>) -> Template {
         let tx = t.get_tx();
+        // Private builder fields and checked allocation guarantee that all
+        // outputs and fees fit within the checked aggregate input budget.
+        let max = tx.total_amount() + t.fees;
+        let required_input_amount = max.checked_sub(t.external_funding).unwrap_or(Amount::ZERO);
         Template {
             guards: t.guards,
             outputs: t.outputs,
             inputs: t.inputs,
             ctv: tx.get_ctv_hash(0),
             ctv_index: 0,
-            max: tx.total_amount() + t.fees,
+            max,
+            required_input_amount,
             min_feerate_sats_vbyte: t.min_feerate,
             tx,
             metadata_map_s2s: t.metadata,

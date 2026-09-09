@@ -8,7 +8,6 @@ members = ["sapio"
           , "plugins"
           , 'emulator-trait'
           , 'examples/*'
-          , 'sapio-trait'
           , 'sapio_macros'
           , 'sapio-psbt'
           , 'simp-pack'

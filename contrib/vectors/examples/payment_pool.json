@@ -1,0 +1,14 @@
+{
+  "arguments": {
+    "members": {
+      "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798": 1e-05,
+      "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5": 2e-05
+    },
+    "sequence": 0,
+    "sig_needed": true
+  },
+  "context": {
+    "amount": 3000,
+    "network": "Regtest"
+  }
+}

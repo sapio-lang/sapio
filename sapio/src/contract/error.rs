@@ -96,7 +96,7 @@ pub enum CompilationError {
     ModuleCouldNotGetName(ErrT),
     /// Module hit an error at runtime
     ModuleRuntimeError(ErrT),
-    /// API Check Failed, module didn't satisfy examples.
+    /// An advertised schema is invalid, or call input/output violates it.
     /// Used in Plugin interface (TODO: Wrap these types)
     ModuleFailedAPICheck(String),
     /// CompError

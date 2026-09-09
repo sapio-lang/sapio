@@ -26,6 +26,7 @@ jobs:
       - name: Install the pinned toolchain
         run: rustup show
       - run: cargo test --workspace --all-features --locked
+      - run: cargo test -p sapio --example payment --locked
 
   quality:
     runs-on: ubuntu-24.04

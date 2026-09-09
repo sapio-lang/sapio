@@ -10,9 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 use std::sync::Arc;
 /// Used to Build a Shared Path for all children of a given context.
-#[derive(
-    Serialize, Deserialize, JsonSchema, Debug, Clone, Hash, PartialEq, PartialOrd, Ord, Eq,
-)]
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, PartialOrd, Ord, Eq)]
 #[serde(try_from = "Y")]
 #[serde(into = "Y")]
 #[serde(
@@ -22,6 +20,36 @@ pub struct ReversePath<T, Y = String> {
     past: Option<Arc<ReversePath<T, Y>>>,
     this: T,
     _pd: PhantomData<Y>,
+}
+
+// Serde converts the path to Y; the linked representation is never wire JSON.
+// Schemars 0.8 does not infer this from serde's into/try_from attributes.
+impl<T, Y: JsonSchema> JsonSchema for ReversePath<T, Y> {
+    fn is_referenceable() -> bool {
+        Y::is_referenceable()
+    }
+
+    fn schema_name() -> String {
+        Y::schema_name()
+    }
+
+    fn schema_id() -> std::borrow::Cow<'static, str> {
+        Y::schema_id()
+    }
+
+    fn json_schema(generator: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        Y::json_schema(generator)
+    }
+
+    fn _schemars_private_non_optional_json_schema(
+        generator: &mut schemars::gen::SchemaGenerator,
+    ) -> schemars::schema::Schema {
+        Y::_schemars_private_non_optional_json_schema(generator)
+    }
+
+    fn _schemars_private_is_option() -> bool {
+        Y::_schemars_private_is_option()
+    }
 }
 
 /// RPI = ReversePathIterator
@@ -163,6 +191,23 @@ mod test {
             &v
         );
         Ok(())
+    }
+
+    #[test]
+    fn schema_matches_the_generic_wire_representation() {
+        use crate::effects::EffectPath;
+
+        let encoded = "\"@root/reveal/#0\"";
+        let path: EffectPath = serde_json::from_str(encoded).unwrap();
+        assert_eq!(serde_json::to_string(&path).unwrap(), encoded);
+        assert_eq!(
+            schemars::schema_for!(EffectPath),
+            schemars::schema_for!(String)
+        );
+        assert_eq!(
+            schemars::schema_for!(ReversePath<i64, Vec<i64>>),
+            schemars::schema_for!(Vec<i64>)
+        );
     }
 
     #[test]

@@ -1,6 +1,9 @@
-# Sapio Vault Example
+# Fixed NFT sale
 
-This crate can be compiled with `wasm-pack build`. The `*.wasm` artifact will
-be created in the `pkg` directory, not in `target`.
+Transfers the NFT after the sale height and splits the buyer price between owner and artist. Extra buyer funds are a separate input; the NFT value is preserved.
 
-Feel free to modify this code to experiment with creating your own Sapio plugins.
+See the [workspace guide](../README.md) for Cargo build and test commands,
+funding assumptions, and the complete executable catalog. This module has a
+[representative input](../../contrib/vectors/examples/nft-sale.json).
+
+Coverage: Catalog checks reminting, royalty outputs and lock time.

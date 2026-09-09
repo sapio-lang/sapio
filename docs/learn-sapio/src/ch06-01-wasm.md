@@ -71,15 +71,21 @@ impl Contract for C {
 }
 ```
 ### Typed Calls
- Using JSONSchemas, plugins have a basic type system that enables run-time
- checking for compatibility. Plugins can guarantee they implement particular
- interfaces faithfully. These interfaces currently only support protecting the
- call, but make no assurances about the returned value or potential errors from
- the callee's implementation of the trait.
 
-For example, suppose I want to be able to specify a provided module must
-statisfy a calling convention for batching. I define the trait
-`BatchingTraitVersion0_1_1` as follows:
+`SapioHostAPI<T, R>` resolves a module locator to a key and provides typed calls.
+Arguments `T` implement `Serialize`, `JsonSchema`, and `Clone`; results `R`
+implement `Deserialize` and `JsonSchema`. Resolving the locator makes no claim
+that every value of `T` is accepted by that module.
+
+The native host validates each actual `CreateArgs<T>` input against the module's
+advertised input schema before calling its create function. It validates each
+successful result against the advertised output schema before returning it,
+then the caller deserializes that result as `R`. Ordinary module errors remain
+errors. These checks enforce JSON constraints for that call; contract behavior
+and compatibility between whole interfaces require their own specifications.
+
+Versioned enum variants identify shared calling conventions. For example, the
+batching interface defines its arguments as follows:
 
 ```rust
 /// A payment to a specific address
@@ -102,66 +108,29 @@ pub struct BatchingTraitVersion0_1_1 {
 }
 ```
 
-I can then turn this into a SapioJSONTrait by implementing the trait and
-providing an "example" function.
-```rust
-impl SapioJSONTrait for BatchingTraitVersion0_1_1 {
-    /// required to implement
-    fn get_example_for_api_checking() -> Value {
-        #[derive(Serialize)]
-        enum Versions {
-            BatchingTraitVersion0_1_1(BatchingTraitVersion0_1_1),
-        }
-        serde_json::to_value(Versions::BatchingTraitVersion0_1_1(
-            BatchingTraitVersion0_1_1 {
-                payments: vec![],
-                feerate_per_byte: bitcoin::util::amount::Amount::from_sat(0),
-            },
-        ))
-        .unwrap()
-    }
-
-    /// optionally, this method may be overridden directly for more advanced type checking.
-    fn check_trait_implemented(api: &dyn SapioAPIHandle) -> bool {
-        Self::check_trait_implemented_inner(api).is_ok()
-    }
-}
-```
-If a contract module can receive the example, then it is considered to have
-implemented the API. We can implement the receivers for a module as follows:
+The shared interface wraps those arguments in a versioned variant:
 
 ```rust
-struct MockContract;
-/// # Different Calling Conventions to create a Treepay
-#[derive(Serialize, Deserialize, JsonSchema)]
-enum Versions {
-    /// # Base
-    Base(MockContract),
-    /// # Batching Trait API
+#[derive(Serialize, Deserialize, JsonSchema, Clone)]
+pub enum Versions {
     BatchingTraitVersion0_1_1(BatchingTraitVersion0_1_1),
 }
-impl From<BatchingTraitVersion0_1_1> for MockContract {
-    fn from(args: BatchingTraitVersion0_1_1) -> Self {
-        MockContract
-    }
-}
-impl From<Versions> for TreePay {
-    fn from(v: Versions) -> TreePay {
-        match v {
-            Versions::Base(v) => v,
-            Versions::BatchingTraitVersion0_1_1(v) => v.into(),
-        }
-    }
-}
-REGISTER![[MockContract, Versions], "logo.png"];
+
+pub type BatchingModule = ContractModule<Versions>;
 ```
 
-Now `MockContract` can be called via the `BatchingTraitVersion0_1_1` trait
-interface.
+`ContractModule<Versions>` is a `SapioHostAPI` whose result is a compiled contract.
+The serialized arguments keep the version tag:
 
-Another module in the future need only have a field
-`SapioHostAPI<BatchingTraitVersion0_1_1>`. This type verifies at deserialize
-time that the provided name or hash key implements the required interface(s).
+```json
+{"BatchingTraitVersion0_1_1":{"payments":[],"feerate_per_byte":0}}
+```
+
+The `treepay` example accepts this variant alongside its direct `TreePay` and
+`Advanced` variants. A receiver can therefore offer additional calling
+conventions while accepting the shared batching input. Its schema is checked
+against the actual call rather than compared for equality with the caller's
+schema.
 
 ### Future Work on Cross Module Calls
 
@@ -177,6 +146,3 @@ this using a centralized repo.
 - **Remote CMC:** In some cases, we may want to make a call to a remote
 server that will call a given module for us. This might be desirable if the
 server holds sensitive material that we shouldn't have.
-- **Concrete CMC:** currently, CMC's only return the `Compiled` type. Perhaps
-future `CMC` support can return arbitrary types, allowing other types of functionality
-to be packaged.

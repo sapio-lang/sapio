@@ -44,13 +44,11 @@ pub struct Staker<T: StakingState> {
     timeout: AnyRelTimeLock,
     /// # Signing Key
     /// The key that if leaked can burn funds
-    // TODO: Taproot fix encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     signing_key: XOnlyPublicKey,
     /// # Redemption Key
     /// The key that will be used to control & return the redeemed funds
-    // TODO: Taproot fix encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     redeeming_key: XOnlyPublicKey,
     /// current contract state.
     #[serde(skip, default)]
@@ -138,4 +136,52 @@ where
     declare! {then, Self::begin_redeem, Self::cheated}
     declare! {finish, Self::finish_redeem_key}
     declare! {non updatable}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_helpers::{context, key};
+    use sapio_base::timelocks::RelHeight;
+
+    #[test]
+    fn closing_preserves_the_stake_and_burn_requires_the_signing_key() {
+        let contract = Staker::<Operational> {
+            timeout: RelHeight::from(20).into(),
+            signing_key: key(1),
+            redeeming_key: key(2),
+            state: PhantomData,
+        };
+        let object = contract.compile(context(1000)).unwrap();
+        object.validate().unwrap();
+        assert_eq!(object.ctv_to_tx.len(), 2);
+        assert_eq!(contract.guard_staking_key(context(0)), Clause::Key(key(1)));
+        assert_eq!(
+            contract.guard_begin_redeem_key(context(0)),
+            Clause::Key(key(2))
+        );
+        let burn = object
+            .ctv_to_tx
+            .values()
+            .find(|t| t.tx.output[0].script_pubkey.is_op_return())
+            .unwrap();
+        assert_eq!(burn.tx.output[0].value, 1000);
+        let close = object
+            .ctv_to_tx
+            .values()
+            .find(|t| !t.tx.output[0].script_pubkey.is_op_return())
+            .unwrap();
+        assert_eq!(close.tx.output[0].value, 1000);
+        let closing = Staker::<Closing> {
+            timeout: contract.timeout,
+            signing_key: key(1),
+            redeeming_key: key(2),
+            state: PhantomData,
+        };
+        assert_eq!(
+            closing.guard_finish_redeem_key(context(0)),
+            Clause::And(vec![Clause::Key(key(2)), Clause::Older(20)])
+        );
+        assert_eq!(close.outputs[0].contract.ctv_to_tx.len(), 1);
+    }
 }

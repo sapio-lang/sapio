@@ -88,6 +88,17 @@ impl Vault {
 impl Contract for Vault {
     declare! {then, Self::step, Self::to_cold}
     declare! {non updatable}
+
+    fn ensure_amount(&self, _ctx: Context) -> Result<bitcoin::Amount, CompilationError> {
+        let step: bitcoin::Amount = self.amount_step.try_into()?;
+        if self.n_steps == 0 || step == bitcoin::Amount::ZERO {
+            return Err(CompilationError::Custom(
+                "Vault needs positive steps and payouts".into(),
+            ));
+        }
+        step.checked_mul(self.n_steps)
+            .ok_or(CompilationError::OutOfFunds)
+    }
 }
 
 #[derive(JsonSchema, Deserialize)]
@@ -149,11 +160,15 @@ pub struct VaultTree {
 impl TryFrom<VaultTree> for Vault {
     type Error = CompilationError;
     fn try_from(v: VaultTree) -> Result<Self, CompilationError> {
+        let max: bitcoin::Amount = v.max_per_address.try_into()?;
+        if max == bitcoin::Amount::ZERO || v.radix < 2 {
+            return Err(CompilationError::Custom(
+                "VaultTree needs a positive cap and radix >= 2".into(),
+            ));
+        }
         Ok(Vault {
             cold_storage: Rc::new({
                 let cs = v.cold_storage.clone();
-                let max: bitcoin::Amount = bitcoin::Amount::try_from(v.max_per_address)
-                    .map_err(|_| CompilationError::TerminateCompilation)?;
                 let rad = v.radix;
                 move |a, ctx| {
                     let mut amt: bitcoin::Amount = bitcoin::Amount::try_from(a)
@@ -168,7 +183,7 @@ impl TryFrom<VaultTree> for Vault {
                     }
                     if amt > bitcoin::Amount::from_sat(0) {
                         pmts.push(super::treepay::Payment {
-                            amount: max.into(),
+                            amount: amt.into(),
                             address: cs.clone(),
                         });
                     }
@@ -190,9 +205,64 @@ impl TryFrom<VaultTree> for Vault {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::test_helpers::{address, context};
     use sapio_base::effects::EffectPath;
     use sapio_base::plugin_args::CreateArgs;
     use sapio_ctv_emulator_trait::CTVAvailable;
+
+    fn tree(cap: u64, radix: usize, steps: u64) -> VaultTree {
+        VaultTree {
+            cold_storage: address(1),
+            hot_storage: address(2),
+            max_per_address: bitcoin::Amount::from_sat(cap).into(),
+            radix,
+            n_steps: steps,
+            amount_step: bitcoin::Amount::from_sat(1500).into(),
+            timeout: sapio_base::timelocks::RelHeight::from(5).into(),
+            mature: sapio_base::timelocks::RelHeight::from(10).into(),
+        }
+    }
+
+    #[test]
+    fn cold_tree_preserves_the_partial_final_payment() {
+        let object = Vault::try_from(tree(1000, 2, 1))
+            .unwrap()
+            .compile(context(1500))
+            .unwrap();
+        object.validate().unwrap();
+        let cold = object
+            .ctv_to_tx
+            .values()
+            .find(|t| t.tx.input[0].sequence != 5)
+            .unwrap();
+        let split = cold.outputs[0].contract.ctv_to_tx.values().next().unwrap();
+        assert_eq!(
+            split
+                .outputs
+                .iter()
+                .map(|o| o.amount.as_sat())
+                .collect::<Vec<_>>(),
+            vec![1000, 500]
+        );
+    }
+
+    #[test]
+    fn invalid_vaults_fail_without_looping() {
+        assert!(Vault::try_from(tree(0, 2, 1)).is_err());
+        assert!(Vault::try_from(tree(1000, 1, 1)).is_err());
+        assert!(Vault::try_from(tree(1000, 2, 0))
+            .unwrap()
+            .compile(context(0))
+            .is_err());
+        assert!(Vault::try_from(tree(1000, 2, 2))
+            .unwrap()
+            .compile(context(2999))
+            .is_err());
+        assert!(Vault::try_from(tree(1000, 2, u64::MAX))
+            .unwrap()
+            .compile(context(u64::MAX))
+            .is_err());
+    }
     #[derive(JsonSchema, Deserialize)]
     enum Versions {
         ForAddress(VaultAddress),

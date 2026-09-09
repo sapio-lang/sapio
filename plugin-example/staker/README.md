@@ -1,6 +1,9 @@
-# Sapio Vault Example
+# Bonded signer
 
-This crate can be compiled with `wasm-pack build`. The `*.wasm` artifact will
-be created in the `pkg` directory, not in `target`.
+Provides redemption and burn paths for a signing key. This example does not implement a complete staking protocol.
 
-Feel free to modify this code to experiment with creating your own Sapio plugins.
+See the [workspace guide](../README.md) for Cargo build and test commands,
+funding assumptions, and the complete executable catalog. This module has a
+[representative input](../../contrib/vectors/examples/staker.json).
+
+Coverage: Catalog plus library staker tests.

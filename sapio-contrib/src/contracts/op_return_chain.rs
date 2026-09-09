@@ -18,8 +18,7 @@ use serde::*;
 /// Chain of OpReturns
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ChainReturn {
-    // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     pk: bitcoin::XOnlyPublicKey,
 }
 /// Helper
@@ -43,15 +42,19 @@ impl ChainReturn {
     )]
     fn next_chain(self, ctx: sapio::Context, o: UpdateTypes) {
         let mut tmpl = ctx.template();
-        let mut pay_fees = (Amount::ZERO);
+        let mut pay_fees = Amount::ZERO;
         if let UpdateTypes::AddData { data, fees } = o {
-            pay_fees += fees.into();
+            pay_fees = fees.into();
             tmpl = tmpl.add_output(
                 Amount::from_sat(0),
                 &Compiled::from_op_return(data.as_str().as_bytes())?,
                 None,
             )?;
-            let funds = tmpl.ctx().funds();
+            let funds = tmpl
+                .ctx()
+                .funds()
+                .checked_sub(pay_fees)
+                .ok_or(CompilationError::OutOfFunds)?;
             if funds.as_sat() != 0 {
                 tmpl = tmpl.add_output(funds, self, None)?;
             }
@@ -60,7 +63,7 @@ impl ChainReturn {
             tmpl = tmpl.add_output(funds, &self.pk, None)?;
         }
 
-        tmpl.add_fees(pay_fees.into())?.into()
+        tmpl.add_fees(pay_fees)?.into()
     }
 }
 
@@ -86,4 +89,55 @@ impl StatefulArgumentsTrait for UpdateTypes {}
 
 impl Contract for ChainReturn {
     declare! {updatable<UpdateTypes>, Self::next_chain}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_helpers::{context, key};
+
+    #[test]
+    fn data_transition_reserves_fees_before_change() {
+        let contract = ChainReturn { pk: key(1) };
+        let template = contract
+            .continue_next_chain(
+                context(1000),
+                UpdateTypes::AddData {
+                    data: "hello".into(),
+                    fees: Amount::from_sat(100).into(),
+                },
+            )
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            template
+                .tx
+                .output
+                .iter()
+                .map(|o| o.value)
+                .collect::<Vec<_>>(),
+            vec![0, 900]
+        );
+        assert!(template.tx.output[0].script_pubkey.is_op_return());
+        assert_eq!(contract.guard_approved(context(0)), Clause::Key(key(1)));
+        contract.compile(context(1000)).unwrap().validate().unwrap();
+    }
+
+    #[test]
+    fn oversized_data_and_fees_fail() {
+        let contract = ChainReturn { pk: key(1) };
+        for (data, fees) in [("x".repeat(41), 0), ("x".into(), 1001)] {
+            assert!(contract
+                .continue_next_chain(
+                    context(1000),
+                    UpdateTypes::AddData {
+                        data,
+                        fees: Amount::from_sat(fees).into()
+                    }
+                )
+                .is_err());
+        }
+    }
 }

@@ -8,13 +8,14 @@
 
 //! Staker Contract
 
-use sapio_wasm_plugin::client::*;
-use sapio_wasm_plugin::*;
-use schemars::*;
-use serde::*;
+#[cfg(target_arch = "wasm32")]
+use sapio_wasm_plugin::{optional_logo, REGISTER};
 
+#[cfg(target_arch = "wasm32")]
 use sapio_contrib::contracts::staked_signer::{Operational, Staker};
 /// # Bonded Staker
+#[cfg(target_arch = "wasm32")]
 type BondedStaker = Staker<Operational>;
 
+#[cfg(target_arch = "wasm32")]
 REGISTER![BondedStaker, "logo.png"];

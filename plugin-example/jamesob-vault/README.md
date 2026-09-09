@@ -1,6 +1,9 @@
-# Sapio Vault Example
+# Vault with recovery
 
-This crate can be compiled with `wasm-pack build`. The `*.wasm` artifact will
-be created in the `pkg` directory, not in `target`.
+Provides hot/cold spending, delayed redemption and optional CPFP outputs. The fee rate is sats per 1000 weight units, using an unsigned-size estimate that excludes witness growth; fees round up.
 
-Feel free to modify this code to experiment with creating your own Sapio plugins.
+See the [workspace guide](../README.md) for Cargo build and test commands,
+funding assumptions, and the complete executable catalog. This module has a
+[representative input](../../contrib/vectors/examples/jamesob-vault.json).
+
+Coverage: Native overflow, rounding and compiled-funding tests.

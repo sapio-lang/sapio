@@ -25,12 +25,10 @@ dependencies = [
  "sapio-base",
  "sapio-bitcoin",
  "sapio-ctv-emulator-trait",
- "sapio-trait",
  "sapio-wasm-plugin",
  "schemars",
  "serde",
  "serde_derive",
- "serde_json",
 ]
 
 [[package]]
@@ -249,16 +247,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sapio-trait"
-version = "0.2.4"
-dependencies = [
- "schemars",
- "serde",
- "serde_derive",
- "serde_json",
-]
-
-[[package]]
 name = "sapio-wasm-clause"
 version = "0.1.0"
 dependencies = [
@@ -285,12 +273,10 @@ dependencies = [
  "sapio-bitcoin",
  "sapio-contrib",
  "sapio-ctv-emulator-trait",
- "sapio-trait",
  "sapio-wasm-plugin",
  "schemars",
  "serde",
  "serde_derive",
- "serde_json",
 ]
 
 [[package]]
@@ -440,7 +426,6 @@ dependencies = [
  "sapio-base",
  "sapio-bitcoin",
  "sapio-ctv-emulator-trait",
- "sapio-trait",
  "sapio-wasm-plugin",
  "schemars",
  "serde",
@@ -529,7 +514,6 @@ dependencies = [
  "sapio-base",
  "sapio-bitcoin",
  "sapio-ctv-emulator-trait",
- "sapio-trait",
  "schemars",
  "serde",
  "serde_derive",

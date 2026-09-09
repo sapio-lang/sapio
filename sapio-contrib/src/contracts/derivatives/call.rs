@@ -9,23 +9,25 @@ use super::*;
 use std::sync::Arc;
 /// A Call Option -- the buyer gains money as the price increases.
 pub struct Call<'a> {
-    /// The # of units
-    amount: Amount,
-    /// The strike with ONE_UNIT precision (bitcoin per symbol)
-    strike_x_one_unit: u64,
-    /// The max price with ONE_UNIT precision (bitcoin per symbol)
-    /// Because these are fully collateralized contracts, we can't do an
-    /// actual call.
-    max_price_x_one_unit: u64,
-    operator_api: &'a dyn apis::OperatorApi,
-    user_api: &'a dyn apis::UserApi,
-    symbol: Symbol,
+    /// Satoshi notional paid per whole oracle-price unit (PRICE_UNIT).
+    pub amount: Amount,
+    /// The strike with PRICE_UNIT precision
+    pub strike_x_one_unit: u64,
+    /// The max price with PRICE_UNIT precision
+    /// The call is capped here, with collateral covering its maximum payout.
+    pub max_price_x_one_unit: u64,
+    /// Operator keys, oracle, and payout destination.
+    pub operator_api: &'a dyn apis::OperatorApi,
+    /// Counterparty key and payout destination.
+    pub user_api: &'a dyn apis::UserApi,
+    /// Oracle price symbol.
+    pub symbol: Symbol,
     /// whether we are buying or selling the Call
-    buying: bool,
-    ctx: Context,
+    pub buying: bool,
+    /// Compilation context containing the full collateral.
+    pub ctx: Context,
 }
 
-const ONE_UNIT: u64 = 10_000;
 impl<'a> TryFrom<Call<'a>> for GenericBetArguments<'a> {
     type Error = CompilationError;
     fn try_from(mut v: Call<'a>) -> Result<Self, Self::Error> {
@@ -33,23 +35,31 @@ impl<'a> TryFrom<Call<'a>> for GenericBetArguments<'a> {
         let user = v.user_api.get_key();
         let mut outcomes = vec![];
         let strike = v.strike_x_one_unit;
-        let max_amount_bitcoin = v.amount * v.max_price_x_one_unit;
-        // Increment 1 dollar per step
+        if v.amount.as_sat() == 0 || strike > v.max_price_x_one_unit {
+            return Err(invalid("Invalid call notional or strike"));
+        }
+        let max_amount_bitcoin =
+            scaled_amount(v.amount, v.max_price_x_one_unit - strike, PRICE_UNIT)?;
+        if max_amount_bitcoin.as_sat() == 0 {
+            return Err(invalid("Option collateral rounds to zero"));
+        }
+        // Increment one whole oracle-price unit per step
         let mut strike_ctx = v.ctx.derive_str(Arc::new("strike".into()))?;
-        for price in (strike..=v.max_price_x_one_unit).step_by(ONE_UNIT as usize) {
-            let mut profit = Amount::from_sat(price) - Amount::from_sat(strike);
+        for price in price_grid(strike, v.max_price_x_one_unit)? {
+            let mut profit = scaled_amount(v.amount, price - strike, PRICE_UNIT)?;
             let mut refund = max_amount_bitcoin - profit;
-            if v.buying {
+            if !v.buying {
                 std::mem::swap(&mut profit, &mut refund);
             }
             outcomes.push((
                 price as i64,
-                strike_ctx
-                    .derive_num(price as u64)?
-                    .template()
-                    .add_output(profit, &v.user_api.receive_payment(profit), None)?
-                    .add_output(refund, &v.operator_api.receive_payment(refund), None)?
-                    .into(),
+                settlement(
+                    strike_ctx.derive_num(price)?,
+                    profit,
+                    refund,
+                    v.user_api,
+                    v.operator_api,
+                )?,
             ));
         }
         // Now that the schedule is constructed, build a contract
@@ -67,6 +77,6 @@ impl<'a> TryFrom<Call<'a>> for GenericBetArguments<'a> {
 impl<'a> TryFrom<Call<'a>> for GenericBet {
     type Error = CompilationError;
     fn try_from(v: Call<'a>) -> Result<Self, Self::Error> {
-        Ok(GenericBetArguments::try_from(v)?.into())
+        GenericBetArguments::try_from(v)?.try_into()
     }
 }

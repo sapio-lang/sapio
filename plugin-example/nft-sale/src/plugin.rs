@@ -12,7 +12,6 @@ use sapio::contract::CompilationError;
 use sapio::contract::Contract;
 use sapio::*;
 use sapio_wasm_nft_trait::*;
-use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::plugin_handle::PluginHandle;
 use sapio_wasm_plugin::*;
 use schemars::*;
@@ -32,9 +31,13 @@ enum Versions {
 impl Contract for SimpleNFTSale {
     declare! {then, Self::transfer}
     declare! {non updatable}
-}
-fn default_coerce<T>(_: T) -> Result<(), CompilationError> {
-    Ok(())
+    fn ensure_amount(&self, ctx: Context) -> Result<Amount, CompilationError> {
+        self.0.data.validate()?;
+        ctx.funds()
+            .checked_add(self.0.price.into())
+            .ok_or(CompilationError::OutOfFunds)?;
+        Ok(ctx.funds())
+    }
 }
 impl From<Versions> for SimpleNFTSale {
     fn from(v: Versions) -> SimpleNFTSale {
@@ -43,6 +46,7 @@ impl From<Versions> for SimpleNFTSale {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 REGISTER![[SimpleNFTSale, Versions], "logo.png"];
 
 impl SimpleNFTSale {
@@ -50,6 +54,7 @@ impl SimpleNFTSale {
     /// transfer exchanges the NFT for cold hard Bitcoinz
     #[then]
     fn transfer(self, mut ctx: Context) {
+        self.ensure_amount(ctx.derive_str(Arc::new("validate".into()))?)?;
         let amt = ctx.funds();
         // first, let's get the module that should be used to 're-mint' this NFT
         // to the new owner
@@ -85,27 +90,32 @@ impl SimpleNFTSale {
         // todo: change seem problematic here? with a bit of work, we could handle it
         // cleanly if the buyer identifys an output they are spending before requesting
         // a purchase.
-        if let Some(artist) = self.0.data.ipfs_nft.artist {
-            let price: Amount = self.0.price.into();
-            let artist_gets = self.0.data.compute_royalty_for_artist(price);
-            let seller_gets = price - artist_gets;
-            ctx.template()
-                .add_amount(self.0.price.into())
-                .add_output(amt, &new_nft_contract, None)?
-                .add_sequence()
-                .add_output(seller_gets, &self.0.data.owner, None)?
-                // Pay Royalty to Creator
-                .add_output(artist_gets, &artist, None)?
-                // note: what would happen if we had another output that
-                // had a percentage-of-sale royalty to some creator's key?
-                .into()
-        } else {
-            ctx.template()
-                .add_output(amt, &new_nft_contract, None)?
-                .add_amount(self.0.price.into())
-                .add_sequence()
-                .add_output(self.0.price.into(), &self.0.data.owner, None)?
-                .into()
+        let price: Amount = self.0.price.into();
+        let mut template = ctx
+            .template()
+            .add_output(amt, &new_nft_contract, None)?
+            .set_lock_time(self.0.sale_time.into())?;
+        if price != Amount::ZERO {
+            template = template.add_sequence().add_amount(price)?;
         }
+        let artist_gets = if self.0.data.ipfs_nft.artist.is_some() {
+            self.0.data.compute_royalty_for_artist(price)?
+        } else {
+            Amount::ZERO
+        };
+        let seller_gets = price - artist_gets;
+        if seller_gets != Amount::ZERO {
+            template = template.add_output(seller_gets, &self.0.data.owner, None)?;
+        }
+        if let Some(artist) = self
+            .0
+            .data
+            .ipfs_nft
+            .artist
+            .filter(|_| artist_gets != Amount::ZERO)
+        {
+            template = template.add_output(artist_gets, &artist, None)?;
+        }
+        template.into()
     }
 }

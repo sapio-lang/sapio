@@ -36,16 +36,15 @@ impl Contract for SimpleNFT {
         Ok(ObjectMetadata::default().add_simp(self.data.ipfs_nft.clone())?)
     }
     fn ensure_amount(&self, ctx: Context) -> Result<Amount, CompilationError> {
+        self.data.validate()?;
         Ok(ctx.funds())
     }
 }
 
 impl SimpleNFT {
-    /// # unspendable
-    /// what? This is just a sneaky way of making a provably unspendable branch
-    /// (since the preimage of [0u8; 32] hash can never be found). We use that to
-    /// help us embed metadata inside of our contract...
-    /// TODO: Check this is OK
+    /// Commit the metadata in a branch whose fixed public key has no known
+    /// secret key. Spending this branch requires that secret key as well as a
+    /// metadata preimage; ordinary transfers use the owner's signature.
     #[guard]
     fn metadata_commit(self, _ctx: Context) {
         Clause::And(vec![
@@ -90,13 +89,21 @@ impl SellableNFT for SimpleNFT {
             // use the sale API we passed in
             let compiled = which_sale.call(sale_ctx.path(), &create_args)?;
             // send to this sale!
-            let pays = compiled.amount_range.max() - ctx.funds();
-            let mut builder = ctx.template().add_amount(pays);
+            let pays = compiled
+                .amount_range
+                .max()
+                .checked_sub(ctx.funds())
+                .ok_or_else(|| {
+                    CompilationError::Custom("Sale must preserve the NFT's funds".into())
+                })?;
+            let mut builder = ctx.template();
+            if pays != Amount::ZERO {
+                builder = builder.add_sequence().add_amount(pays)?;
+            }
             // todo: we need to cut-through the compiled contract address, but this
             // upgrade to Sapio semantics will come Soon™.
             builder = builder.add_output(compiled.amount_range.max(), &compiled, None)?;
-            // for now, a capital H Hack.
-            builder = builder.add_sequence();
+
             builder.into()
         } else {
             // Don't do anything if we're holding!
@@ -114,6 +121,7 @@ impl TryFrom<Versions> for SimpleNFT {
     type Error = CompilationError;
     fn try_from(v: Versions) -> Result<Self, Self::Error> {
         let Versions::Mint_NFT_Trait_Version_0_1_0(mut data) = v;
+        data.validate()?;
         let this: NFTMintingModule = LookupFrom::This
             .try_into()
             .map_err(|_| CompilationError::TerminateWith("Failed to Lookup".into()))?;
@@ -139,4 +147,5 @@ impl TryFrom<Versions> for SimpleNFT {
         }
     }
 }
+#[cfg(target_arch = "wasm32")]
 REGISTER![[SimpleNFT, Versions], "logo.png"];
