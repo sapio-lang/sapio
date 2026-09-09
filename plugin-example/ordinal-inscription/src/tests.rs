@@ -7,6 +7,7 @@ use bitcoin::{Network, OutPoint, SchnorrSig, SchnorrSighashType, Transaction, Tx
 use sapio::contract::abi::object::SupportedDescriptors;
 use sapio::contract::abi::studio::SapioStudioFormat;
 use sapio::contract::Compilable;
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::effects::EffectPath;
 use sapio_base::miniscript::ord::{envelope::Envelope, Inscription};
 use sapio_base::miniscript::psbt::PsbtExt;
@@ -38,7 +39,7 @@ fn context(ranges: &[(u64, u64)]) -> Context {
     Context::new(
         Network::Regtest,
         Amount::from_sat(10_000),
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         EffectPath::try_from("inscription").unwrap(),
         Arc::new(Default::default()),
         Some(OrdinalsInfo(

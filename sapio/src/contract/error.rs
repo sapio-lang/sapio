@@ -22,6 +22,10 @@ type ErrT = Box<dyn std::error::Error>;
 /// Sapio's core error type.
 #[derive(Debug)]
 pub enum CompilationError {
+    /// An emulatable source reached script encoding before explicit lowering.
+    UnresolvedEmulation,
+    /// Public covenant lowering inputs are invalid or derivation failed.
+    Covenant(sapio_base::covenant::CovenantError),
     /// The template passed to the compiler during a continuation has and
     /// add_guard on it, which is forbidden (since continuations should not)
     /// modify the compiled script other than to add their guards.
@@ -155,6 +159,12 @@ pub enum CompilationError {
     ContinuationCoercion(String),
 }
 
+impl From<sapio_base::covenant::CovenantError> for CompilationError {
+    fn from(error: sapio_base::covenant::CovenantError) -> Self {
+        Self::Covenant(error)
+    }
+}
+
 impl From<crate::contract::object::ArtifactError> for CompilationError {
     fn from(error: crate::contract::object::ArtifactError) -> Self {
         Self::InvalidArtifact(error)
@@ -225,7 +235,10 @@ impl From<miniscript::Error> for CompilationError {
 }
 impl From<ObjectError> for CompilationError {
     fn from(e: ObjectError) -> Self {
-        CompilationError::CompiledObjectError(e)
+        match e {
+            ObjectError::InvalidArtifact(error) => Self::InvalidArtifact(error),
+            error => Self::CompiledObjectError(error),
+        }
     }
 }
 

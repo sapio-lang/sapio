@@ -79,6 +79,7 @@ impl SellableNFT for SimpleNFT {
             // create a contract from the sale API passed in
             let create_args: CreateArgs<sale_impl::Versions> = CreateArgs {
                 context: ContextualArguments {
+                    lowering: ctx.lowering_plan().clone(),
                     amount: ctx.funds(),
                     network: ctx.network,
                     effects: unsafe { ctx.get_effects_internal() }.as_ref().clone(),

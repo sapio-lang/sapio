@@ -1,8 +1,8 @@
 use bitcoin::{Address, Amount, Network};
 use sapio::contract::{Compilable, Compiled, Context, Contract};
 use sapio::{declare, then};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::effects::EffectPath;
-use sapio_ctv_emulator_trait::CTVAvailable;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -32,7 +32,7 @@ fn compiles_three_actions_with_the_same_name() {
         .compile(Context::new(
             Network::Regtest,
             Amount::from_sat(1_000),
-            Arc::new(CTVAvailable),
+            LoweringPlan::Native,
             EffectPath::try_from("repeated_payment").unwrap(),
             Arc::new(Default::default()),
             None,

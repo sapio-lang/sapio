@@ -5,6 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! arguments for passing into a sapio module
+use crate::covenant::LoweringPlan;
 use crate::effects::MapEffectDB;
 use bitcoin::Amount;
 use schemars::JsonSchema;
@@ -38,6 +39,8 @@ pub struct CreateArgs<S> {
 /// # Contextual Arguments For Creating this Contract
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct ContextualArguments {
+    /// # Explicit, deterministic covenant lowering inputs.
+    pub lowering: LoweringPlan,
     #[serde(with = "NetworkDef")]
     /// # The Network the contract should be created for.
     pub network: bitcoin::Network,
@@ -71,3 +74,20 @@ impl Ordinal {
 /// Struct to contain Ordinal Spans
 #[derive(Serialize, Deserialize, Eq, Ord, PartialEq, PartialOrd, Clone, Debug, JsonSchema)]
 pub struct OrdinalsInfo(pub Vec<(Ordinal, Ordinal)>);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compilation_arguments_require_an_explicit_lowering_plan() {
+        let mut arguments = serde_json::json!({"network": "Regtest", "amount": 1000});
+        assert!(serde_json::from_value::<ContextualArguments>(arguments.clone()).is_err());
+        arguments["lowering"] = serde_json::Value::Null;
+        assert!(serde_json::from_value::<ContextualArguments>(arguments.clone()).is_err());
+        arguments["lowering"] = serde_json::json!("Native");
+        let decoded: ContextualArguments = serde_json::from_value(arguments.clone()).unwrap();
+        assert_eq!(decoded.lowering, LoweringPlan::Native);
+        assert_eq!(serde_json::to_value(decoded).unwrap(), arguments);
+    }
+}

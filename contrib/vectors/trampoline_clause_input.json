@@ -15,6 +15,7 @@
       "effects": {}
     },
     "amount": 1,
-    "network": "Signet"
+    "network": "Signet",
+    "lowering": "Native"
   }
 }

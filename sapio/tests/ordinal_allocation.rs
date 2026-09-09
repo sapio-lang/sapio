@@ -2,10 +2,10 @@ use bitcoin::secp256k1::{Secp256k1, SecretKey};
 use bitcoin::{Amount, Network};
 use sapio::contract::{CompilationError, Context, Contract};
 use sapio::{declare, guard};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::effects::EffectPath;
 use sapio_base::plugin_args::{Ordinal, OrdinalsInfo};
 use sapio_base::Clause;
-use sapio_ctv_emulator_trait::CTVAvailable;
 use std::cell::RefCell;
 use std::sync::Arc;
 
@@ -13,7 +13,7 @@ fn context(ranges: &[(u64, u64)]) -> Context {
     Context::new(
         Network::Regtest,
         Amount::from_sat(10),
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         EffectPath::try_from("ordinals").unwrap(),
         Arc::new(Default::default()),
         Some(OrdinalsInfo(
@@ -95,7 +95,7 @@ fn adding_external_funds_rejects_overflow() {
     let ctx = Context::new(
         Network::Regtest,
         Amount::from_sat(u64::MAX),
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         EffectPath::try_from("overflow").unwrap(),
         Arc::new(Default::default()),
         None,

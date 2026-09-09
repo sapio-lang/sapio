@@ -11,10 +11,11 @@ use sapio::contract::abi::object::{
 use sapio::contract::abi::studio::SapioStudioFormat;
 use sapio::contract::{Compiled, Context};
 use sapio::template::Template;
+use sapio_base::covenant::{Ctv, LoweringPlan};
 use sapio_base::policy::{ScriptFragment, ScriptPolicy};
 use sapio_base::txindex::{TxIndex, TxIndexError};
 use sapio_base::{CTVHash, Clause};
-use sapio_ctv_emulator_trait::{CTVAvailable, CTVEmulator, EmulatorError};
+use sapio_ctv_emulator_trait::{CTVEmulator, EmulatorError};
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 use std::rc::Rc;
@@ -33,7 +34,7 @@ fn artifact(key_only: bool) -> Compiled {
     let template: Template = Context::new(
         Network::Regtest,
         Amount::from_sat(1_000),
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         "raw".try_into().unwrap(),
         Arc::new(Default::default()),
         None,
@@ -59,6 +60,10 @@ fn artifact(key_only: bool) -> Compiled {
         template.required_input_amount,
     );
     object.descriptor = Some(raw.into());
+    object
+        .covenant_requirements
+        .predicates
+        .insert(Ctv(template.hash()));
     object.ctv_to_tx.insert(template.hash(), template);
     object
 }
@@ -116,8 +121,8 @@ struct Signer {
 }
 
 impl CTVEmulator for Signer {
-    fn get_signer_for(&self, _: sha256::Hash) -> Result<Clause, EmulatorError> {
-        unreachable!("binding does not compile policies")
+    fn get_signer_for(&self, hash: sha256::Hash) -> Result<Clause, EmulatorError> {
+        Ok(Clause::TxTemplate(hash))
     }
 
     fn sign(&self, mut psbt: Psbt) -> Result<Psbt, EmulatorError> {

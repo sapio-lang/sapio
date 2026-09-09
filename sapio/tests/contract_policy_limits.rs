@@ -5,8 +5,8 @@ use sapio::contract::actions::Guard;
 use sapio::contract::object::SupportedDescriptors;
 use sapio::contract::{Compilable, CompilationError, Context, Contract};
 use sapio::{declare, guard};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::policy::{PolicyError, ScriptFragment};
-use sapio_ctv_emulator_trait::CTVAvailable;
 use std::cell::Cell;
 use std::sync::Arc;
 
@@ -47,7 +47,7 @@ fn context() -> Context {
     Context::new(
         Network::Regtest,
         Amount::ZERO,
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         "limits".try_into().unwrap(),
         Arc::new(Default::default()),
         None,

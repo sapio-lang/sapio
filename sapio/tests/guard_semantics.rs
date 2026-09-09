@@ -2,12 +2,12 @@ use bitcoin::secp256k1::{Keypair, Secp256k1, SecretKey};
 use bitcoin::{Amount, Network, XOnlyPublicKey};
 use sapio::contract::{Compilable, CompilationError, Context, Contract};
 use sapio::{continuation, declare, guard, then};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::effects::EffectPath;
 use sapio_base::miniscript::policy::Liftable;
 use sapio_base::miniscript::Descriptor;
 use sapio_base::simp::{GuardLT, SIMPAttachableAt, SIMP};
 use sapio_base::Clause;
-use sapio_ctv_emulator_trait::CTVAvailable;
 use serde_json::{json, Value};
 use std::cell::{Cell, RefCell};
 use std::sync::Arc;
@@ -181,7 +181,7 @@ fn context() -> Context {
     Context::new(
         Network::Regtest,
         Amount::from_sat(1_000),
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         EffectPath::try_from("guards").unwrap(),
         Arc::new(Default::default()),
         None,

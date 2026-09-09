@@ -73,6 +73,7 @@ impl SimpleNFTSale {
         // let's now compile a new 'mint' of the NFT
         let new_nft_args = CreateArgs {
             context: ContextualArguments {
+                lowering: ctx.lowering_plan().clone(),
                 amount: ctx.funds(),
                 network: ctx.network,
                 effects: unsafe { ctx.get_effects_internal() }.as_ref().clone(),

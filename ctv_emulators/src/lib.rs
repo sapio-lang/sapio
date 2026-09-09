@@ -11,7 +11,7 @@ use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::util::bip32::*;
 use sapio_base::covenant::hash_to_child_vec;
 use sapio_ctv_emulator_trait::Clause;
-pub use sapio_ctv_emulator_trait::{CTVAvailable, CTVEmulator, EmulatorError, NullEmulator};
+pub use sapio_ctv_emulator_trait::{CTVAvailable, CTVEmulator, EmulatorError};
 
 /// Default elapsed I/O allowance for one emulator request, including queued
 /// client calls and idle server connections. This is not a CPU execution limit.

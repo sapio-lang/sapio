@@ -5,6 +5,7 @@ use sapio::contract::abi::object::{ArtifactErrorKind, ObjectError};
 use sapio::contract::abi::studio::{Program, SapioStudioFormat};
 use sapio::contract::{Compilable, Compiled, Context, Contract};
 use sapio::{declare, then};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::txindex::{TxIndex, TxIndexError};
 use sapio_base::{CTVHash, Clause};
 use sapio_ctv_emulator_trait::{CTVAvailable, CTVEmulator, EmulatorError};
@@ -54,7 +55,7 @@ fn payment(destination: Compiled, extra_input: bool, fees: u64, path: &str) -> C
     .compile(Context::new(
         Network::Regtest,
         Amount::from_sat(if extra_input { 300 } else { 1_000 } + fees),
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         path.try_into().unwrap(),
         Arc::new(Default::default()),
         None,
@@ -124,8 +125,8 @@ struct Signer {
 }
 
 impl CTVEmulator for Signer {
-    fn get_signer_for(&self, _: sha256::Hash) -> Result<Clause, EmulatorError> {
-        unreachable!("binding does not compile signer policies")
+    fn get_signer_for(&self, hash: sha256::Hash) -> Result<Clause, EmulatorError> {
+        Ok(Clause::TxTemplate(hash))
     }
 
     fn sign(&self, mut psbt: Psbt) -> Result<Psbt, EmulatorError> {
@@ -379,7 +380,7 @@ fn builder_checks_initial_and_cumulative_funding_even_after_spending() {
         Context::new(
             Network::Regtest,
             Amount::from_sat(funds),
-            Arc::new(CTVAvailable),
+            LoweringPlan::Native,
             "funding".try_into().unwrap(),
             Arc::new(Default::default()),
             None,

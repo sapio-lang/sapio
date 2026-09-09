@@ -180,6 +180,7 @@ impl NFTDutchAuction {
         let new_ctx = base_ctx.derive_str(Arc::new("transfer".into()))?;
         let create_args = CreateArgs {
             context: ContextualArguments {
+                lowering: base_ctx.lowering_plan().clone(),
                 amount: amt,
                 network: base_ctx.network,
                 effects: unsafe { base_ctx.get_effects_internal() }.as_ref().clone(),

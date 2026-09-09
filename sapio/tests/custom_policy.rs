@@ -61,7 +61,10 @@ fn native_guards_custom_template_guards_and_covenants_survive_composition() {
         let raw = tree(&compiled);
         assert_eq!(raw.leaves().len(), 1);
         let script = &raw.leaves()[0].1;
-        let expected: BTreeSet<_> = (1..=if emulated { 4 } else { 3 }).map(key).collect();
+        let mut expected: BTreeSet<_> = (1..=3).map(key).collect();
+        if emulated {
+            expected.insert(covenant_signer(&compiled));
+        }
         assert_eq!(
             script_signers(script).into_iter().collect::<BTreeSet<_>>(),
             expected

@@ -16,16 +16,65 @@ use bitcoin::util::taproot::TaprootBuilder;
 use bitcoin::util::taproot::TaprootSpendInfo;
 use bitcoin::{OutPoint, Transaction};
 use miniscript::*;
+use sapio_base::covenant::{Ctv, LoweringPlan};
 use sapio_base::effects::{EffectPath, PathFragment};
 use sapio_base::miniscript;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::txindex::{TxIndex, TxIndexError};
+use sapio_base::Clause;
 use sapio_ctv_emulator_trait::{sign_checked, CTVEmulator};
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 use std::sync::Arc;
 
 impl Object {
+    /// Validate the graph against a signer's advertised covenant policies.
+    /// Includes explicit wrapped guards as well as generated template checks.
+    /// This does not prove signer availability or chain opcode enforcement.
+    pub fn validate_for_emulator(&self, emulator: &dyn CTVEmulator) -> Result<(), ObjectError> {
+        self.validate()?;
+        self.validate_covenant_policies(|predicate| Ok(emulator.get_signer_for(predicate.0)?))
+    }
+
+    /// Validate reused compiled children against explicit public lowering data.
+    /// This is a pure operation: it cannot resolve or contact a signer service.
+    pub fn validate_for_lowering(&self, lowering: &LoweringPlan) -> Result<(), ObjectError> {
+        self.validate()?;
+        lowering.validate()?;
+        self.validate_covenant_policies(|predicate| Ok(lowering.lower_ctv(predicate)?))
+    }
+
+    // The graph must pass structural validation before this traversal.
+    fn validate_covenant_policies(
+        &self,
+        mut actual_policy: impl FnMut(Ctv) -> Result<Clause, ObjectError>,
+    ) -> Result<(), ObjectError> {
+        let mut pending = vec![self];
+        while let Some(object) = pending.pop() {
+            let requirements = &object.covenant_requirements;
+            for predicate in &requirements.predicates {
+                let expected = requirements.lowering.lower_ctv(*predicate)?;
+                let actual = actual_policy(*predicate)?;
+                if expected != actual {
+                    return Err(ObjectError::CovenantPolicyMismatch {
+                        path: object.root_path.clone(),
+                        template: predicate.0,
+                        expected: Box::new(expected),
+                        actual: Box::new(actual),
+                    });
+                }
+            }
+            for template in object
+                .ctv_to_tx
+                .values()
+                .chain(object.suggested_txs.values())
+            {
+                pending.extend(template.outputs.iter().map(|output| &output.contract));
+            }
+        }
+        Ok(())
+    }
+
     /// bind_psbt attaches and `Object` to a specific UTXO, returning a
     /// Vector of PSBTs and transaction metadata.
     ///
@@ -86,6 +135,7 @@ impl Object {
                 });
             }
         }
+        self.validate_covenant_policies(|predicate| Ok(emulator.get_signer_for(predicate.0)?))?;
         // Prepare the complete graph before signing or inserting generated transactions.
         // Descendants use the actual generated parent, not a second index lookup.
         let mut prepared = Vec::new();

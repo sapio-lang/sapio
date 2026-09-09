@@ -15,8 +15,21 @@ use sapio_ctv_emulator_trait::EmulatorError;
 /// Error types that can arise when constructing an Object
 #[derive(Debug)]
 pub enum ObjectError {
+    /// Public covenant lowering inputs or key derivation failed.
+    Covenant(sapio_base::covenant::CovenantError),
     /// An artifact violates the transaction binding invariants.
     InvalidArtifact(super::ArtifactError),
+    /// The selected emulator differs from the policy used at compilation.
+    CovenantPolicyMismatch {
+        /// The contract whose covenant policy differs.
+        path: sapio_base::serialization_helpers::SArc<sapio_base::effects::EffectPath>,
+        /// The committed transaction template.
+        template: bitcoin::hashes::sha256::Hash,
+        /// The clause derived from the recorded public inputs.
+        expected: Box<sapio_base::Clause>,
+        /// The clause advertised by the selected signer or public plan.
+        actual: Box<sapio_base::Clause>,
+    },
     /// An auxiliary-input mapping does not match its template.
     InvalidInputMapping {
         /// The template whose input mapping is invalid.
@@ -55,12 +68,18 @@ pub enum ObjectError {
 impl std::error::Error for ObjectError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
+            Self::Covenant(error) => Some(error),
             Self::InvalidArtifact(error) => Some(error),
             Self::Psbt(error) => Some(error),
             Self::TxIndex(error) => Some(error),
             Self::Emulator(error) => Some(error),
             _ => None,
         }
+    }
+}
+impl From<sapio_base::covenant::CovenantError> for ObjectError {
+    fn from(error: sapio_base::covenant::CovenantError) -> Self {
+        Self::Covenant(error)
     }
 }
 impl From<super::ArtifactError> for ObjectError {
@@ -104,7 +123,13 @@ impl From<miniscript::Error> for ObjectError {
 impl std::fmt::Display for ObjectError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::Covenant(error) => error.fmt(f),
             Self::InvalidArtifact(error) => error.fmt(f),
+            Self::CovenantPolicyMismatch { path, template, expected, actual } => write!(
+                f,
+                "covenant policy mismatch for contract {} template {template}: expected {expected}, selected {actual}",
+                String::from(path.0.as_ref().clone()),
+            ),
             Self::InvalidInputMapping { template, reason } => {
                 write!(f, "invalid input mapping for template {template}: {reason}")
             }

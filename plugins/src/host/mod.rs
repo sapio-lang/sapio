@@ -7,12 +7,8 @@
 //! host interface for modules
 
 pub use crate::plugin_handle::PluginHandle;
-use bitcoin::hashes::sha256;
-use bitcoin::hashes::Hash;
-use bitcoin::util::psbt::PartiallySignedTransaction;
 pub use plugin_handle::WasmPluginHandle;
 use sapio_base::plugin_args::CreateArgs;
-use sapio_ctv_emulator_trait::{sign_checked, CTVEmulator};
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::PathBuf;
@@ -46,8 +42,6 @@ pub struct HostEnvironmentInner {
     pub module_map: BTreeMap<Vec<u8>, [u8; 32]>,
     /// which network the contract is being built for
     pub net: bitcoin::Network,
-    /// an emulator plugin for CTV functionality
-    pub emulator: Arc<dyn CTVEmulator>,
     /// reference to the environment's memory space
     pub memory: Option<Memory>,
     /// reference to allocation creation function
@@ -208,6 +202,11 @@ mod exports {
             let arguments: CreateArgs<serde_json::Value> =
                 serde_json::from_slice(&read_buffer(&memory, json, json_len as u32 as usize)?)
                     .map_err(runtime_error)?;
+            arguments
+                .context
+                .lowering
+                .validate()
+                .map_err(runtime_error)?;
             let path: EffectPath =
                 serde_json::from_slice(&read_buffer(&memory, path, path_len as u32 as usize)?)
                     .map_err(runtime_error)?;
@@ -221,7 +220,6 @@ mod exports {
         let result = (|| -> Result<serde_json::Value, String> {
             let mut plugin = WasmPluginHandle::<serde_json::Value>::new_with_budget(
                 env.path.clone(),
-                &env.emulator,
                 SyncModuleLocator::Key(wasmer_cache::Hash::new(key_bytes)),
                 env.net,
                 Some(env.module_map.clone()),
@@ -265,36 +263,5 @@ mod exports {
         let mut stderr = std::io::stderr().lock();
         stderr.write_all(&bytes).map_err(runtime_error)?;
         stderr.write_all(b"\n").map_err(runtime_error)
-    }
-
-    /// Get the clause the emulator will satisfy for a template hash.
-    pub fn sapio_v1_wasm_plugin_ctv_emulator_signer_for(
-        mut env: HostEnvironment,
-        hash: i32,
-    ) -> Result<i32, RuntimeError> {
-        let (env, mut store) = env.data_and_store_mut();
-        let mut bytes = [0; 32];
-        bytes.copy_from_slice(&read_buffer(&guest_memory(env, &store)?, hash, 32)?);
-        let clause = env
-            .emulator
-            .get_signer_for(sha256::Hash::from_inner(bytes))
-            .map_err(runtime_error)?;
-        let value = serde_json::to_string(&clause).map_err(runtime_error)?;
-        return_string(env, &mut store, &value)
-    }
-
-    /// Ask the emulator to sign a PSBT supplied by the guest.
-    pub fn sapio_v1_wasm_plugin_ctv_emulator_sign(
-        mut env: HostEnvironment,
-        psbt: i32,
-        len: u32,
-    ) -> Result<i32, RuntimeError> {
-        let (env, mut store) = env.data_and_store_mut();
-        let bytes = read_buffer(&guest_memory(env, &store)?, psbt, len as usize)?;
-        let psbt: PartiallySignedTransaction =
-            serde_json::from_slice(&bytes).map_err(runtime_error)?;
-        let signed = sign_checked(env.emulator.as_ref(), psbt).map_err(runtime_error)?;
-        let value = serde_json::to_string(&signed).map_err(runtime_error)?;
-        return_string(env, &mut store, &value)
     }
 }

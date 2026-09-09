@@ -1,13 +1,13 @@
 use super::*;
 use sapio::contract::Compilable;
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::effects::EffectPath;
-use sapio_ctv_emulator_trait::CTVAvailable;
 use std::sync::Arc;
 fn context(amount: u64) -> Context {
     Context::new(
         bitcoin::Network::Regtest,
         Amount::from_sat(amount),
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         EffectPath::try_from("example").unwrap(),
         Arc::new(Default::default()),
         Some(sapio_base::plugin_args::OrdinalsInfo(vec![(

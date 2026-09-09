@@ -216,6 +216,7 @@ pub fn hash_to_child_vec(hash: sha256::Hash) -> Vec<ChildNumber> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::policy::{PolicyCompiler, ScriptPolicy};
     use bitcoin::util::bip32::{ChainCode, ExtendedPrivKey, Fingerprint};
     use bitcoin::Network;
     use serde_json::json;
@@ -447,15 +448,21 @@ mod tests {
             restored.lower_ctv(predicate()).unwrap()
         );
 
-        let wrapped = Emulatable(predicate());
-        let serialized = serde_json::to_value(wrapped).unwrap();
-        assert_eq!(serialized, json!(predicate().0.to_string()));
+        let source = Emulatable(predicate()).compile_policy().unwrap();
+        assert_eq!(source, ScriptPolicy::Emulatable(Emulatable(predicate())));
+        let serialized = serde_json::to_value(&source).unwrap();
+        assert_eq!(serialized, json!({"Emulatable": predicate().0.to_string()}));
         assert_eq!(
-            serde_json::from_value::<Emulatable<Ctv>>(serialized).unwrap(),
-            wrapped
+            serde_json::from_value::<ScriptPolicy>(serialized).unwrap(),
+            source
         );
+        assert_ne!(
+            source,
+            Clause::TxTemplate(predicate().0).compile_policy().unwrap()
+        );
+        // Both are usable by the guest's schema generation without a host runtime.
         serde_json::to_value(schemars::schema_for!(LoweringPlan)).unwrap();
-        serde_json::to_value(schemars::schema_for!(Emulatable<Ctv>)).unwrap();
+        serde_json::to_value(schemars::schema_for!(ScriptPolicy)).unwrap();
     }
 
     #[test]
@@ -466,7 +473,7 @@ mod tests {
             }}))
             .is_err()
         );
-        assert!(serde_json::from_value::<Emulatable<Ctv>>(json!("00")).is_err());
+        assert!(serde_json::from_value::<ScriptPolicy>(json!({"Emulatable": "00"})).is_err());
         assert!(
             serde_json::from_value::<LoweringPlan>(json!({"CtvEmulation": {
                 "signers": [public_root(1).to_string()], "threshold": 1, "endpoint": "hidden"

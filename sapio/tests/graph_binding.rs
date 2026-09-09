@@ -5,6 +5,7 @@ use sapio::contract::abi::continuation::ContinuationPoint;
 use sapio::contract::abi::studio::{Program, SapioStudioFormat};
 use sapio::contract::{Compilable, Compiled, Context, Contract};
 use sapio::{declare, then};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::txindex::TxIndexLogger;
 use sapio_ctv_emulator_trait::CTVAvailable;
@@ -37,7 +38,7 @@ fn payment(destinations: Vec<Compiled>, path: &str) -> Compiled {
         .compile(Context::new(
             Network::Regtest,
             amount,
-            Arc::new(CTVAvailable),
+            LoweringPlan::Native,
             path.try_into().unwrap(),
             Arc::new(Default::default()),
             None,
@@ -132,6 +133,7 @@ fn reused_contract_paths_preserve_both_bound_spending_branches() {
 fn suggested_and_enforced_transitions_have_distinct_binding_paths() {
     let mut object = payment(vec![leaf("destination")], "parent");
     object.suggested_txs = object.ctv_to_tx.clone();
+
     let program = bind(&object);
     assert_eq!(program.program.len(), 3);
     let root = program.program.get(&object.root_path).unwrap();

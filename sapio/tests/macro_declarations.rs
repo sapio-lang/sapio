@@ -2,16 +2,16 @@ use bitcoin::secp256k1::{Keypair, Secp256k1, SecretKey};
 use bitcoin::{Amount, Network, XOnlyPublicKey};
 use sapio::contract::actions::{ConditionalCompileType, Guard};
 use sapio::contract::{Compilable, CompilationError, Context, Contract, TxTmplIt};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::effects::EffectPath;
 use sapio_base::Clause;
-use sapio_ctv_emulator_trait::CTVAvailable;
 use std::sync::Arc;
 
 fn context() -> Context {
     Context::new(
         Network::Regtest,
         Amount::from_sat(1_000),
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         EffectPath::try_from("macro_declarations").unwrap(),
         Arc::new(Default::default()),
         None,

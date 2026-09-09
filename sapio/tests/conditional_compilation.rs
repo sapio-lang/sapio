@@ -5,8 +5,8 @@ use sapio::contract::actions::{
     ThenFuncAsFinishOrFunc, ThenFuncTypeTag,
 };
 use sapio::contract::{empty, Compilable, CompilationError, Context, DynamicContract, TxTmplIt};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::Clause;
-use sapio_ctv_emulator_trait::CTVAvailable;
 use std::cell::{Cell, RefCell};
 use std::collections::LinkedList;
 use std::sync::Arc;
@@ -125,7 +125,7 @@ fn context() -> Context {
     Context::new(
         Network::Regtest,
         Amount::from_sat(1000),
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         "conditional".try_into().unwrap(),
         Arc::new(Default::default()),
         None,

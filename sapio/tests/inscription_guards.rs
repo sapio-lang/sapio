@@ -6,8 +6,8 @@ use sapio::contract::{Compilable, Context, Contract};
 use sapio::miniscript::ord::{envelope::Envelope, Inscription};
 use sapio::miniscript::Descriptor;
 use sapio::{declare, guard, then};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::Clause;
-use sapio_ctv_emulator_trait::CTVAvailable;
 use std::sync::Arc;
 
 fn inscription(body: &[u8]) -> Inscription {
@@ -30,7 +30,7 @@ fn context() -> Context {
     Context::new(
         Network::Regtest,
         Amount::from_sat(1_000),
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         "inscriptions".try_into().unwrap(),
         Arc::new(Default::default()),
         None,

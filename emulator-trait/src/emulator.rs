@@ -9,7 +9,6 @@ use bitcoin::hashes::sha256;
 use bitcoin::util::psbt::PartiallySignedTransaction;
 pub use sapio_base::Clause;
 use std::fmt;
-use std::sync::Arc;
 /// Errors that an emulator might throw
 #[derive(Debug)]
 pub enum EmulatorError {
@@ -49,7 +48,10 @@ impl From<bitcoin::util::bip32::Error> for EmulatorError {
 /// is stubbed out with.
 pub trait CTVEmulator: Sync + Send {
     /// For a given transaction hash, gets the corresponding Clause that the
-    /// Emulator would satisfy.
+    /// Emulator would satisfy. This must be deterministic for the backend's
+    /// configuration. Binding compares it against the artifact's public
+    /// lowering plan before funding or signing. Compilation never calls this
+    /// method. Endpoints and transport settings must not change the policy.
     fn get_signer_for(&self, h: sha256::Hash) -> Result<Clause, EmulatorError>;
     /// Returns the complete PSBT with the emulator's signatures added, if any.
     /// Existing signatures and all other fields must remain unchanged.
@@ -117,10 +119,6 @@ pub fn validate_signing_response(
     }
     Ok(())
 }
-
-/// A wrapper for an optional internal emulator trait object. If no emulator is
-/// provided, then it defaults to using actual CheckTemplateVerify Clauses.
-pub type NullEmulator = Arc<dyn CTVEmulator>;
 
 /// a type tag that can be tossed inside an Arc to get CTV
 pub struct CTVAvailable;

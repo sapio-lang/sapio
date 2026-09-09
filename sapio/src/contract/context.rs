@@ -16,7 +16,7 @@ use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
 pub use sapio_base::effects::{EffectDB, MapEffectDB};
 
-use sapio_ctv_emulator_trait::CTVEmulator;
+use sapio_base::covenant::LoweringPlan;
 use std::convert::TryInto;
 
 use std::collections::HashSet;
@@ -27,7 +27,7 @@ use std::sync::Arc;
 pub struct Context {
     /* TODO: Add Context Fields! */
     available_funds: Amount,
-    emulator: Arc<dyn CTVEmulator>,
+    lowering: LoweringPlan,
     /// which network is the contract building for?
     pub network: Network,
     /// TODO: reversed linked list of ARCs to better de-duplicate memory.
@@ -75,14 +75,14 @@ impl Context {
     pub fn new(
         network: Network,
         available_funds: Amount,
-        emulator: Arc<dyn CTVEmulator>,
+        lowering: LoweringPlan,
         path: EffectPath,
         effects: Arc<MapEffectDB>,
         ordinals_info: Option<OrdinalsInfo>,
     ) -> Self {
         Context {
             available_funds,
-            emulator,
+            lowering,
             network,
             // TODO: Should return Option Self if path is not length > 0
             path: Arc::new(path),
@@ -126,7 +126,7 @@ impl Context {
             let new_path = EffectPath::push(Some(self.path.clone()), path);
             Ok(Context {
                 available_funds: self.available_funds,
-                emulator: self.emulator.clone(),
+                lowering: self.lowering.clone(),
                 path: new_path,
                 network: self.network,
                 already_derived: Default::default(),
@@ -140,12 +140,10 @@ impl Context {
         self.available_funds
     }
 
-    /// use the context's emulator to get a emulated (or not) clause
-    pub fn ctv_emulator(
-        &self,
-        b: bitcoin::hashes::sha256::Hash,
-    ) -> Result<sapio_base::Clause, CompilationError> {
-        Ok(self.emulator.get_signer_for(b)?)
+    /// Public, immutable policy-lowering inputs shared by nested compilation.
+    /// Signer connections and host runtime state are not compiler inputs.
+    pub fn lowering_plan(&self) -> &LoweringPlan {
+        &self.lowering
     }
 
     /// Compile the compilable item with this context.

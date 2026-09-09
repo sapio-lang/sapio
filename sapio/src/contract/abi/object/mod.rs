@@ -10,6 +10,7 @@ pub mod error;
 pub use error::*;
 pub mod bind;
 pub mod descriptors;
+mod enforcement;
 pub mod taproot;
 mod validation;
 use crate::contract::abi::continuation::ContinuationPoint;
@@ -18,6 +19,7 @@ use crate::template::Template;
 use crate::util::extended_address::ExtendedAddress;
 use bitcoin::hashes::sha256;
 pub use descriptors::*;
+use sapio_base::covenant::{Ctv, LoweringPlan};
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
 use sapio_base::miniscript::*;
@@ -28,7 +30,7 @@ use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::simp::SIMPError;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 pub use taproot::{RawTaproot, RawTaprootError};
 pub use validation::{ArtifactError, ArtifactErrorKind};
@@ -107,11 +109,33 @@ impl ObjectMetadata {
     }
 }
 
+/// Explicit predicates resolved using public, deterministic lowering inputs.
+/// These records include wrapped finish and continuation guards, not only
+/// automatically generated CTV predicates on committed templates.
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
+pub struct CovenantRequirements {
+    /// Public compilation inputs; contains no signer transport or host callback.
+    pub lowering: LoweringPlan,
+    /// Every wrapped predicate resolved while compiling this contract.
+    pub predicates: BTreeSet<Ctv>,
+}
+
+impl Default for CovenantRequirements {
+    fn default() -> Self {
+        Self {
+            lowering: LoweringPlan::Native,
+            predicates: BTreeSet::new(),
+        }
+    }
+}
+
 /// Object holds a contract's complete context required post-compilation
 /// Public fields and deserialization can produce inconsistent objects. Call
 /// [`Object::validate`] before using an artifact; binding performs this check.
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 pub struct Object {
+    /// Reproducible covenant lowering and the predicates it resolved.
+    pub covenant_requirements: CovenantRequirements,
     /// CTV-protected templates, deduplicated only when their binding payloads
     /// agree. Each stored template retains all alternative preconditions.
     #[serde(
@@ -169,6 +193,7 @@ impl Object {
         required_input_amount: bitcoin::Amount,
     ) -> Object {
         Object {
+            covenant_requirements: CovenantRequirements::default(),
             ctv_to_tx: BTreeMap::new(),
             suggested_txs: BTreeMap::new(),
             continue_apis: Default::default(),
@@ -199,6 +224,7 @@ impl Object {
         &'a [u8]: From<&'a I>,
     {
         Ok(Object {
+            covenant_requirements: CovenantRequirements::default(),
             ctv_to_tx: BTreeMap::new(),
             suggested_txs: BTreeMap::new(),
             continue_apis: Default::default(),
@@ -220,6 +246,7 @@ impl Object {
         T: MiniscriptKey + ToPublicKey,
     {
         Object {
+            covenant_requirements: CovenantRequirements::default(),
             ctv_to_tx: BTreeMap::new(),
             suggested_txs: BTreeMap::new(),
             continue_apis: Default::default(),

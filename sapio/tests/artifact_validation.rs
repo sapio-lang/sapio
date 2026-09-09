@@ -6,6 +6,7 @@ use sapio::contract::abi::studio::SapioStudioFormat;
 use sapio::contract::{Compilable, Compiled, Context, Contract};
 use sapio::template::Template;
 use sapio::{declare, then};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::txindex::{TxIndex, TxIndexError, TxIndexLogger};
 use sapio_base::util::CTVHash;
 use sapio_base::Clause;
@@ -46,7 +47,7 @@ fn payment(destination: Compiled, extra_input: bool, path: &str) -> Compiled {
     .compile(Context::new(
         Network::Regtest,
         Amount::from_sat(1_000),
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         path.try_into().unwrap(),
         Arc::new(Default::default()),
         None,
@@ -223,6 +224,7 @@ fn checks_nested_and_suggested_templates_before_any_side_effect() {
 
     let mut object = payment(leaf(), false, "suggested");
     object.suggested_txs = std::mem::take(&mut object.ctv_to_tx);
+
     object
         .suggested_txs
         .values_mut()

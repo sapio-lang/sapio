@@ -160,7 +160,7 @@ impl<'a, T> CCILWrapper<'a, T> {
 mod tests {
     use super::*;
     use bitcoin::{Amount, Network};
-    use sapio_ctv_emulator_trait::CTVAvailable;
+    use sapio_base::LoweringPlan;
     use std::cell::Cell;
     use std::sync::Arc;
 
@@ -168,7 +168,7 @@ mod tests {
         Context::new(
             Network::Regtest,
             Amount::ZERO,
-            Arc::new(CTVAvailable),
+            LoweringPlan::Native,
             "conditions".try_into().unwrap(),
             Arc::new(Default::default()),
             None,

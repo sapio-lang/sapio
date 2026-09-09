@@ -3,8 +3,8 @@
 use bitcoin::{Address, Amount, Network};
 use sapio::contract::{Compilable, Compiled, Context, Contract};
 use sapio::{declare, then};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::effects::EffectPath;
-use sapio_ctv_emulator_trait::CTVAvailable;
 use std::sync::Arc;
 
 struct Payment {
@@ -35,7 +35,7 @@ fn compile_payment(funding: u64) -> Result<Compiled, Box<dyn std::error::Error>>
     let compiled = contract.compile(Context::new(
         Network::Regtest,
         Amount::from_sat(funding),
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         EffectPath::try_from("payment")?,
         Arc::new(Default::default()),
         None,

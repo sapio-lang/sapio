@@ -2,15 +2,11 @@ use super::CallSchema;
 use crate::host::plugin_handle::SyncModuleLocator;
 use crate::host::{PluginHandle, WasmPluginHandle};
 use crate::{ContextualArguments, CreateArgs};
-use bitcoin::hashes::sha256;
-use bitcoin::util::psbt::PartiallySignedTransaction;
 use sapio::contract::CompilationError;
 use sapio_base::effects::EffectPath;
-use sapio_ctv_emulator_trait::{CTVEmulator, Clause, EmulatorError};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
 
 struct FixtureCache(PathBuf);
 
@@ -26,11 +22,9 @@ impl FixtureCache {
         Self(path)
     }
 
-    fn load<O>(&self, source: &str, counter: &Arc<CreateCounter>) -> WasmPluginHandle<O> {
-        let emulator: Arc<dyn CTVEmulator> = counter.clone();
+    fn load<O>(&self, source: &str) -> WasmPluginHandle<O> {
         WasmPluginHandle::new(
             self.0.clone(),
-            &emulator,
             SyncModuleLocator::Bytes(wasmer::wat2wasm(source.as_bytes()).unwrap().into_owned()),
             bitcoin::Network::Regtest,
             None,
@@ -45,27 +39,8 @@ impl Drop for FixtureCache {
     }
 }
 
-#[derive(Default)]
-struct CreateCounter(AtomicUsize);
-
-impl CreateCounter {
-    fn calls(&self) -> usize {
-        self.0.load(Ordering::Relaxed)
-    }
-}
-
-impl CTVEmulator for CreateCounter {
-    fn get_signer_for(&self, hash: sha256::Hash) -> Result<Clause, EmulatorError> {
-        self.0.fetch_add(1, Ordering::Relaxed);
-        Ok(Clause::TxTemplate(hash))
-    }
-
-    fn sign(
-        &self,
-        psbt: PartiallySignedTransaction,
-    ) -> Result<PartiallySignedTransaction, EmulatorError> {
-        Ok(psbt)
-    }
+fn calls<O: for<'a> serde::Deserialize<'a>>(plugin: &mut WasmPluginHandle<O>) -> usize {
+    plugin.get_logo().unwrap().parse().unwrap()
 }
 
 fn escaped(bytes: &[u8]) -> String {
@@ -77,10 +52,9 @@ fn module(api: &Value, response: &Value, extra: &str, name: &str) -> String {
     let response = escaped(&serde_json::to_vec(response).unwrap());
     format!(
         r#"(module
-      (import "env" "sapio_v1_wasm_plugin_ctv_emulator_signer_for"
-        (func $mark_create (param i32) (result i32)))
       (import "env" "sapio_v1_wasm_plugin_create_contract"
         (func $nested_create (param i32 i32 i32 i32 i32) (result i32)))
+      (global $calls (mut i32) (i32.const 0))
       (memory (export "memory") 1)
       (data (i32.const 8) "ready\00")
       (data (i32.const 1024) "{api}\00")
@@ -91,9 +65,10 @@ fn module(api: &Value, response: &Value, extra: &str, name: &str) -> String {
       (func (export "sapio_v1_wasm_plugin_client_get_create_arguments")
         (result i32) i32.const 1024)
       (func (export "sapio_v1_wasm_plugin_client_get_name") (result i32) {name})
-      (func (export "sapio_v1_wasm_plugin_client_get_logo") (result i32) i32.const 8)
+      (func (export "sapio_v1_wasm_plugin_client_get_logo") (result i32)
+        i32.const 512 global.get $calls i32.const 48 i32.add i32.store8 i32.const 512)
       (func (export "sapio_v1_wasm_plugin_client_create") (param i32 i32) (result i32)
-        i32.const 128 call $mark_create drop i32.const 4096)
+        global.get $calls i32.const 1 i32.add global.set $calls i32.const 4096)
       (func (export "sapio_v1_wasm_plugin_entry_point"))
       {extra}
     )"#
@@ -110,10 +85,11 @@ fn api(arguments: Value, returns: Value) -> Value {
                 "arguments": arguments,
                 "context": {
                     "type": "object",
-                    "required": ["amount", "network"],
+                    "required": ["amount", "network", "lowering"],
                     "properties": {
                         "amount": {"type": "integer", "minimum": 1000},
-                        "network": {"const": "Regtest"}
+                        "network": {"const": "Regtest"},
+                        "lowering": {"const": "Native"}
                     }
                 }
             }
@@ -134,6 +110,7 @@ fn request(arguments: Value) -> CreateArgs<Value> {
     CreateArgs {
         arguments,
         context: ContextualArguments {
+            lowering: sapio_base::covenant::LoweringPlan::Native,
             network: bitcoin::Network::Regtest,
             amount: bitcoin::Amount::from_sat(1000),
             effects: Default::default(),
@@ -260,14 +237,13 @@ fn recursive_local_references_validate_finite_objects() {
 #[test]
 fn actual_arguments_and_context_are_checked_before_guest_create() {
     let cache = FixtureCache::new();
-    let counter = Arc::new(CreateCounter::default());
     let source = module(
         &api(quantity_schema(), json!({"type": "integer"})),
         &json!({"Ok": 7}),
         "",
         "i32.const 8",
     );
-    let mut plugin = cache.load::<Value>(&source, &counter);
+    let mut plugin = cache.load::<Value>(&source);
     let mut low_amount = request(json!({"quantity": 1}));
     low_amount.context.amount = bitcoin::Amount::from_sat(999);
     let mut wrong_network = request(json!({"quantity": 1}));
@@ -278,7 +254,11 @@ fn actual_arguments_and_context_are_checked_before_guest_create() {
         wrong_network,
     ] {
         assert_schema_error(plugin.call(&path(), &invalid).unwrap_err(), "Input");
-        assert_eq!(counter.calls(), 0, "invalid input must not invoke create");
+        assert_eq!(
+            calls(&mut plugin),
+            0,
+            "invalid input must not invoke create"
+        );
     }
     assert_eq!(
         plugin
@@ -286,76 +266,156 @@ fn actual_arguments_and_context_are_checked_before_guest_create() {
             .unwrap(),
         json!(7)
     );
-    assert_eq!(counter.calls(), 1);
+    assert_eq!(calls(&mut plugin), 1);
+}
+
+#[test]
+fn permissive_module_schemas_cannot_accept_invalid_lowering_plans() {
+    use sapio_base::covenant::{CovenantError, LoweringPlan};
+
+    let cache = FixtureCache::new();
+    let source = module(
+        &json!({"arguments": {}, "returns": {}}),
+        &json!({"Ok": 7}),
+        "",
+        "i32.const 8",
+    );
+    let mut plugin = cache.load::<Value>(&source);
+    let key = "tpubD6NzVbkrYhZ4Wf398td3H8YhWBsXx9Sxa4W3cQWkNW3N3DHSNB2qtPoUMXrA6JNaPxodQfRpoZNE5tGM9iZ4xfUEFRJEJvfs8W5paUagYCE"
+        .parse().unwrap();
+    for lowering in [
+        LoweringPlan::CtvEmulation {
+            signers: vec![],
+            threshold: 1,
+        },
+        LoweringPlan::CtvEmulation {
+            signers: vec![key, key],
+            threshold: 1,
+        },
+    ] {
+        let mut input = request(json!({}));
+        input.context.lowering = lowering;
+        assert!(matches!(
+            plugin.call(&path(), &input),
+            Err(CompilationError::Covenant(
+                CovenantError::InvalidThreshold { .. } | CovenantError::DuplicateSigner { .. }
+            ))
+        ));
+        assert_eq!(
+            calls(&mut plugin),
+            0,
+            "invalid public inputs must not invoke create"
+        );
+    }
+    assert_eq!(plugin.call(&path(), &request(json!({}))).unwrap(), json!(7));
+    assert_eq!(calls(&mut plugin), 1);
+}
+
+#[test]
+fn raw_nested_calls_validate_lowering_before_loading_the_child() {
+    use sapio_base::covenant::LoweringPlan;
+
+    let cache = FixtureCache::new();
+    let mut input = request(json!({}));
+    input.context.lowering = LoweringPlan::CtvEmulation {
+        signers: vec![],
+        threshold: 1,
+    };
+    let path = serde_json::to_vec(&path()).unwrap();
+    let arguments = serde_json::to_vec(&input).unwrap();
+    let extra = format!(
+        r#"(data (i32.const 8192) "{}") (data (i32.const 12288) "{}")"#,
+        escaped(&path),
+        escaped(&arguments),
+    );
+    let call = format!(
+        "i32.const 8192 i32.const {} i32.const 64 i32.const 12288 i32.const {} call $nested_create",
+        path.len(),
+        arguments.len()
+    );
+    // The zero key is absent from the cache. Lowering must fail before even
+    // trying to load it, and this metadata callback bypasses the typed call API.
+    let source = module(
+        &json!({"arguments": {}, "returns": {}}),
+        &json!({"Ok": 7}),
+        &extra,
+        &call,
+    );
+    let error = cache.load::<Value>(&source).get_name().unwrap_err();
+    assert!(
+        error.to_string().contains("CTV signer threshold"),
+        "{error}"
+    );
 }
 
 #[test]
 fn actual_calls_preserve_advertised_large_integer_bounds() {
     let cache = FixtureCache::new();
-    let counter = Arc::new(CreateCounter::default());
     let boundary = 9_007_199_254_740_993u64;
     let mut arguments = quantity_schema();
     arguments["properties"]["quantity"]["minimum"] = json!(boundary);
     let api = api(arguments, json!({"type": "integer", "minimum": boundary}));
     let source = module(&api, &json!({"Ok": boundary}), "", "i32.const 8");
-    let mut plugin = cache.load::<Value>(&source, &counter);
+    let mut plugin = cache.load::<Value>(&source);
     assert_schema_error(
         plugin
             .call(&path(), &request(json!({"quantity": boundary - 1})))
             .unwrap_err(),
         "Input",
     );
-    assert_eq!(counter.calls(), 0);
+    assert_eq!(calls(&mut plugin), 0);
     assert_eq!(
         plugin
             .call(&path(), &request(json!({"quantity": boundary})))
             .unwrap(),
         json!(boundary),
     );
-    assert_eq!(counter.calls(), 1);
+    assert_eq!(calls(&mut plugin), 1);
 
     let source = module(&api, &json!({"Ok": boundary - 1}), "", "i32.const 8");
-    let mut plugin = cache.load::<Value>(&source, &counter);
+    let mut plugin = cache.load::<Value>(&source);
     assert_schema_error(
         plugin
             .call(&path(), &request(json!({"quantity": boundary})))
             .unwrap_err(),
         "Output",
     );
-    assert_eq!(counter.calls(), 2);
+    assert_eq!(calls(&mut plugin), 1);
 }
 
 #[test]
 fn successful_output_is_checked_before_the_call_returns() {
     let cache = FixtureCache::new();
-    let counter = Arc::new(CreateCounter::default());
     let source = module(
         &api(quantity_schema(), json!({"type": "integer"})),
         &json!({"Ok": "wrong output"}),
         "",
         "i32.const 8",
     );
-    let mut plugin = cache.load::<Value>(&source, &counter);
+    let mut plugin = cache.load::<Value>(&source);
     assert_schema_error(
         plugin
             .call(&path(), &request(json!({"quantity": 1})))
             .unwrap_err(),
         "Output",
     );
-    assert_eq!(counter.calls(), 1, "output rejection follows guest create");
+    assert_eq!(
+        calls(&mut plugin),
+        1,
+        "output rejection follows guest create"
+    );
 }
 
 #[test]
 fn ordinary_module_errors_are_preserved() {
     let cache = FixtureCache::new();
-    let counter = Arc::new(CreateCounter::default());
     let source = module(
         &api(quantity_schema(), json!({"type": "integer"})),
         &json!({"Err": "business rule declined"}),
         "",
         "i32.const 8",
     );
-    let mut plugin = cache.load::<Value>(&source, &counter);
+    let mut plugin = cache.load::<Value>(&source);
     match plugin
         .call(&path(), &request(json!({"quantity": 1})))
         .unwrap_err()
@@ -365,31 +425,29 @@ fn ordinary_module_errors_are_preserved() {
         }
         other => panic!("expected the ordinary module error, got {other}"),
     }
-    assert_eq!(counter.calls(), 1);
+    assert_eq!(calls(&mut plugin), 1);
 }
 
 #[test]
 fn schema_acceptance_still_requires_the_callers_result_type() {
     let cache = FixtureCache::new();
-    let counter = Arc::new(CreateCounter::default());
     let source = module(
         &api(quantity_schema(), json!({"type": "integer"})),
         &json!({"Ok": 7}),
         "",
         "i32.const 8",
     );
-    let mut plugin = cache.load::<String>(&source, &counter);
+    let mut plugin = cache.load::<String>(&source);
     assert!(matches!(
         plugin.call(&path(), &request(json!({"quantity": 1}))),
         Err(CompilationError::DeserializationError(_))
     ));
-    assert_eq!(counter.calls(), 1);
+    assert_eq!(calls(&mut plugin), 1);
 }
 
 #[test]
 fn receiver_can_accept_a_shared_version_and_additional_variants() {
     let cache = FixtureCache::new();
-    let counter = Arc::new(CreateCounter::default());
     let arguments = json!({"oneOf": [
         {"type": "object", "required": ["BatchingTraitVersion0_1_1"], "additionalProperties": false,
          "properties": {"BatchingTraitVersion0_1_1": {"type": "object", "required": ["payments", "feerate_per_byte"],
@@ -403,37 +461,44 @@ fn receiver_can_accept_a_shared_version_and_additional_variants() {
         "",
         "i32.const 8",
     );
-    let mut plugin = cache.load::<Value>(&source, &counter);
+    let mut plugin = cache.load::<Value>(&source);
     for arguments in [
         json!({"BatchingTraitVersion0_1_1": {"payments": [], "feerate_per_byte": 0}}),
         json!({"Direct": 3}),
     ] {
         assert_eq!(plugin.call(&path(), &request(arguments)).unwrap(), json!(7));
     }
-    assert_eq!(counter.calls(), 2);
+    assert_eq!(calls(&mut plugin), 2);
 }
 
 #[test]
 fn raw_nested_create_import_enforces_the_childs_input_and_output_schemas() {
     let cache = FixtureCache::new();
-    for (arguments, output, error_side, expected_calls) in [
-        (json!({"quantity": "bad"}), json!(7), Some("Input"), 0),
+    for (arguments, output, error_side) in [
+        (json!({"quantity": "bad"}), json!(7), Some("Input")),
         (
             json!({"quantity": 1}),
             json!("wrong output"),
             Some("Output"),
-            1,
         ),
-        (json!({"quantity": 1}), json!(7), None, 1),
+        (json!({"quantity": 1}), json!(7), None),
     ] {
-        let counter = Arc::new(CreateCounter::default());
         let child = module(
             &api(quantity_schema(), json!({"type": "integer"})),
             &json!({"Ok": output}),
             "",
             "i32.const 8",
         );
-        let key = cache.load::<Value>(&child, &counter).id();
+        let child = if error_side == Some("Input") {
+            // A bad argument must be rejected before this adversarial create runs.
+            child.replace(
+                "global.get $calls i32.const 1 i32.add global.set $calls i32.const 4096",
+                "unreachable",
+            )
+        } else {
+            child
+        };
+        let key = cache.load::<Value>(&child).id();
         let key = escaped(&hex::decode(key.to_string()).unwrap());
         let path = serde_json::to_vec(&path()).unwrap();
         let arguments = serde_json::to_vec(&request(arguments)).unwrap();
@@ -454,7 +519,7 @@ fn raw_nested_create_import_enforces_the_childs_input_and_output_schemas() {
             &extra,
             &call,
         );
-        let mut parent = cache.load::<Value>(&parent, &counter);
+        let mut parent = cache.load::<Value>(&parent);
         let result: Result<Value, String> =
             serde_json::from_str(&parent.get_name().unwrap()).unwrap();
         match error_side {
@@ -463,6 +528,5 @@ fn raw_nested_create_import_enforces_the_childs_input_and_output_schemas() {
                 .contains(&format!("{side} JSON does not satisfy"))),
             None => assert_eq!(result.unwrap(), json!(7)),
         }
-        assert_eq!(counter.calls(), expected_calls);
     }
 }

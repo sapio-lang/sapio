@@ -1,5 +1,8 @@
 #![allow(dead_code)]
 
+#[path = "covenant.rs"]
+mod covenant;
+
 use bitcoin::blockdata::opcodes::all;
 use bitcoin::blockdata::script::{Builder, Instruction};
 use bitcoin::hashes::sha256;
@@ -12,9 +15,11 @@ use bitcoin::{Script, XOnlyPublicKey};
 use sapio::contract::abi::object::{RawTaproot, SupportedDescriptors};
 use sapio::contract::{Compilable, Compiled, Context, Contract};
 use sapio::{declare, guard, then};
+use sapio_base::covenant::Ctv;
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::policy::{PolicyCompiler, PolicyError, ScriptFragment, ScriptPolicy};
 use sapio_base::Clause;
-use sapio_ctv_emulator_trait::{CTVAvailable, CTVEmulator, EmulatorError};
+use sapio_ctv_emulator_trait::{CTVEmulator, EmulatorError};
 use std::sync::Arc;
 
 pub fn keypair(byte: u8) -> Keypair {
@@ -50,8 +55,8 @@ impl PolicyCompiler for ArithmeticSigner {
 pub struct Emulated;
 
 impl CTVEmulator for Emulated {
-    fn get_signer_for(&self, _: sha256::Hash) -> Result<Clause, EmulatorError> {
-        Ok(Clause::Key(key(4)))
+    fn get_signer_for(&self, hash: sha256::Hash) -> Result<Clause, EmulatorError> {
+        Ok(covenant::plan(4).lower_ctv(Ctv(hash)).unwrap())
     }
 
     fn sign(&self, psbt: Psbt) -> Result<Psbt, EmulatorError> {
@@ -66,9 +71,9 @@ pub fn context(emulated: bool) -> Context {
         Network::Regtest,
         Amount::from_sat(10_000),
         if emulated {
-            Arc::new(Emulated)
+            covenant::plan(4)
         } else {
-            Arc::new(CTVAvailable)
+            LoweringPlan::Native
         },
         "custom".try_into().unwrap(),
         Arc::new(Default::default()),
@@ -195,6 +200,10 @@ pub fn script_signers(script: &Script) -> Vec<XOnlyPublicKey> {
         .collect()
 }
 
+pub fn covenant_signer(compiled: &Compiled) -> XOnlyPublicKey {
+    covenant::key(4, *compiled.ctv_to_tx.keys().next().unwrap())
+}
+
 /// Construct the backend's witness explicitly; the Miniscript finalizer does
 /// not support this arithmetic fragment. Bitcoin Core is the execution oracle.
 pub fn signed_spend(
@@ -222,12 +231,21 @@ pub fn signed_spend(
         .into_iter()
         .rev()
         .map(|public_key| {
-            let owner = (1..=4).find(|owner| key(*owner) == public_key).unwrap();
+            let owner = (1..=3)
+                .find(|owner| key(*owner) == public_key)
+                .unwrap_or_else(|| {
+                    assert_eq!(public_key, covenant_signer(compiled));
+                    4
+                });
             if missing == Some(owner) {
                 vec![]
             } else {
-                let signer = if wrong_owner && owner == 1 { 8 } else { owner };
-                secp.sign_schnorr_no_aux_rand(&message, &keypair(signer))
+                let signer = if owner == 4 {
+                    covenant::keypair(4, *compiled.ctv_to_tx.keys().next().unwrap())
+                } else {
+                    keypair(if wrong_owner && owner == 1 { 8 } else { owner })
+                };
+                secp.sign_schnorr_no_aux_rand(&message, &signer)
                     .as_ref()
                     .to_vec()
             }

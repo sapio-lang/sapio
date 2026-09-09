@@ -37,6 +37,7 @@ impl TrampolinePay {
             &ctx.derive_str(Arc::new("plugin_trampoline".into()))?.path(),
             &CreateArgs {
                 context: ContextualArguments {
+                    lowering: ctx.lowering_plan().clone(),
                     amount: ctx.funds(),
                     network: ctx.network,
                     effects: unsafe { ctx.get_effects_internal() }.as_ref().clone(),

@@ -1,8 +1,8 @@
 use bitcoin::{Address, Amount, Network};
 use sapio::contract::{Compilable, CompilationError, Compiled, Context, Contract};
 use sapio::{declare, then};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::effects::EffectPath;
-use sapio_ctv_emulator_trait::CTVAvailable;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -46,7 +46,7 @@ fn compile(fee: u64, rates: Vec<u64>, extra_input: bool) -> Result<Compiled, Com
     .compile(Context::new(
         Network::Regtest,
         Amount::from_sat(10_000),
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         EffectPath::try_from("payment").unwrap(),
         Arc::new(Default::default()),
         None,

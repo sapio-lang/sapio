@@ -7,12 +7,10 @@
 //! Wraps the external API with friendly methods
 use super::*;
 
-pub mod emulator;
 pub mod handle;
 pub mod lookup;
 pub mod util;
 
-pub use emulator::*;
 pub use handle::*;
 pub use lookup::*;
 pub use util::*;
