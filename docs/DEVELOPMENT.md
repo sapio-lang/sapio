@@ -53,7 +53,7 @@ bash contrib/sapio_wasm.sh
 ```
 
 This requires Python 3. The catalog checks that every workspace guest has a
-fixture, compiles all 18 modules with their actual schemas, validates complete
+fixture, compiles all 19 modules with their actual schemas, validates complete
 artifacts, checks payment/timing expectations, compares fresh-instance results,
 and rejects malformed arguments. The two shared interface crates are inventoried
 separately. A CLI smoke test additionally covers cross-module calls, a 521-byte
@@ -76,6 +76,9 @@ five valid transactions are accepted and 21 invalid variants are rejected.
 These ordinary Taproot checks run in the fork repository and do not require a
 node for Sapio's commands above. The [fork's validation guide][fork-inscriptions]
 provides the fixture build and isolated regtest commands.
+Sapio also has [custom-policy node checks](POLICY_BACKENDS.md#node-validation):
+two valid composed Taproot spends and ten invalid variants, with their own
+fixture exporter and isolated Core driver. The Ubuntu native CI job runs them.
 
 For a faster native compiler example:
 
@@ -95,6 +98,7 @@ cargo test --locked -p sapio-base --test ctv_hash
 cargo test --locked -p sapio --test fees --test action_names --test ordinal_allocation
 cargo test --locked -p sapio --test conditional_compilation --test guard_semantics --test macro_declarations
 cargo test --locked -p sapio --test template_semantics --test effect_names --test inscription_guards
+cargo test --locked -p sapio --test custom_policy --test raw_artifacts --test contract_policy_limits
 cargo test --locked -p sapio-wasm-plugin --features host
 cargo test --locked -p sapio_integration_tests
 cargo test --locked -p ctv_emulators --lib
@@ -242,6 +246,18 @@ requires identical funding requirements, metadata and child graphs; conflicts
 report the affected field and action/effect path. Reuse a common compiled child
 and metadata when intentionally returning the same transaction from multiple
 actions.
+
+Custom languages implement `PolicyCompiler` and use `#[guard(policy)]` or
+`Builder::add_policy`. The [policy backend guide](POLICY_BACKENDS.md) describes
+ordered script composition, lowering budgets, checked Taproot artifacts,
+external witness construction and the artifact schema migration. Opaque scripts
+have no inferred satisfaction-weight bound; a requested minimum feerate is an
+error for these contracts.
+
+Native policies are validated before simplification. Fixed transaction templates
+are checked against their known CLTV, CSV and CTV requirements. Taproot keys and
+identical complete scripts are selected deterministically; raw fragment and
+inscription order within a script remain significant.
 
 ## Emulator service limits
 

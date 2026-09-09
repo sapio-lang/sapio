@@ -54,6 +54,8 @@ with upstream crates would remove semantics, not complete a migration.
 | Finalizer metadata | Validate PSBT structure and referenced non-witness output bounds; honor explicit ECDSA/Schnorr sighash types on partial and finalized signatures, permit valid non-ALL signatures when no type is declared |
 | Compiler termination | Advance duplicate-action suffixes; derive guard metadata beneath each guard branch and propagate errors; regressions compile repeated actions and a contract with two guards |
 | Language core | [Action semantics](LANGUAGE_SEMANTICS.md): strict macro options and trait interfaces, context-free cached clauses with per-attachment metadata, stable condition slots, original action authorization before transaction deduplication, conflicting binding payload errors and inscription-aware guard composition |
+| Policy lowering | Validate source before simplification, reject fixed templates incompatible with known native CLTV/CSV/CTV requirements, and canonicalize bare-key selection and identical leaf scripts |
+| Custom policy languages | [PolicyCompiler API](POLICY_BACKENDS.md), checked ordered raw fragments, bounded expansion, reconstructed Taproot spending proofs, a real WASM guest and explicit external-finalization diagnostics; carries forward PR #269 |
 | Inscriptions | Repair fork parsing, script-byte preservation, resource/key analysis and interpreter support; 51 fork inscription tests plus Sapio plugin artifact/signing and WASM checks, with checked ordinal ranges and fees |
 | Inscription node validation | Bitcoin Core 31.1 accepts five library-finalized ordinary Taproot reveals and rejects 21 invalid variants in isolated regtest checks; native CTV and Ord index/sat assignment remain separate |
 | Fees | Enforce the strongest requested minimum in virtual bytes against that template's reserved fees; reject overflow and unknown extra-input weights |
@@ -66,7 +68,7 @@ with upstream crates would remove semantics, not complete a migration.
 | Emulator responses | Accept complete PSBT responses containing only signature additions; preserve existing signatures and every other field, including raw HD responses, each federation participant and the WASM signing import |
 | Emulator lifecycle | Bound each peer exchange and the async wait for CLI peer resolution; cap admitted server connections; discard incomplete exchanges, isolate peer errors and cancel owned connection tasks on shutdown |
 | Integration | Restore the suite to the workspace; compile, sign and finalize two contract steps and reject a modified output |
-| Contract examples | [Complete inventory](EXAMPLES.md): repaired and tested library families, restored PowSwap/TapBet, 18 real WASM fixtures, both native examples and explicit research assumptions |
+| Contract examples | [Complete inventory](EXAMPLES.md): repaired and tested library families, restored PowSwap/TapBet, 19 real WASM fixtures, both native examples and explicit research assumptions |
 | Developer checks | Formatting, feature checks, native tests, complete WASM catalog with artifact/schema/repeatability checks, CLI smoke checks, and API documentation |
 
 The [development guide](DEVELOPMENT.md) gives reproducible commands. This list is
