@@ -18,7 +18,7 @@ use std::convert::TryFrom;
 
 /// A type that handles (gracefully) the fact that certain widely used
 /// output types do not have an address
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum ExtendedAddress {
     /// A regular standard address type
@@ -47,7 +47,7 @@ impl ExtendedAddress {
 }
 
 /// Internal type for processing OpReturn through serde
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 #[serde(try_from = "Script")]
 #[serde(into = "Script")]
 pub struct OpReturn(Script);

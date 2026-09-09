@@ -61,7 +61,7 @@ impl<const N: usize> From<[(&str, serde_json::Value); N]> for OutputMeta {
 
 /// An Output is not a literal Bitcoin Output, but contains data needed to construct one, and
 /// metadata for linking & ABI building
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 pub struct Output {
     /// the amount of sats being sent to this contract
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]

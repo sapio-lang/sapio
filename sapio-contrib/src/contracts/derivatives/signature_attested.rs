@@ -16,7 +16,7 @@ use sapio::contract::*;
 use sapio::template::Template;
 use sapio::*;
 use sapio_base::Clause;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 /// Supplies an authenticated signing key for an event outcome.
 pub trait OutcomeOracle {
@@ -69,7 +69,7 @@ impl SignatureAttested {
     #[then]
     fn payout(self, mut ctx: Context) {
         let funds = ctx.funds();
-        let mut settlements = BTreeMap::new();
+        let mut settlements = vec![];
         for point in 0..=self.points {
             let keys = self
                 .oracles
@@ -89,31 +89,16 @@ impl SignatureAttested {
             let payouts = allocate(funds, &weights)?;
             let guard =
                 Clause::Threshold(self.oracles.0, keys.into_iter().map(Clause::Key).collect());
-            let mut builder = ctx.derive_num(point)?.template().add_guard(guard.clone());
+            let mut builder = ctx.derive_num(point)?.template().add_guard(guard);
             for (party, amount) in self.parties.iter().zip(payouts) {
                 if amount.as_sat() > 0 {
                     builder = builder.add_output(amount, party, None)?;
                 }
             }
             let template: Template = builder.into();
-            // Equal payout transactions have one CTV hash. Preserve every oracle
-            // authorization before the compiler deduplicates those transactions.
-            settlements
-                .entry(template.hash())
-                .and_modify(|existing: &mut Template| {
-                    if !existing.guards.contains(&guard) {
-                        existing.guards.push(guard.clone());
-                    }
-                })
-                .or_insert(template);
+            settlements.push(Ok(template));
         }
-        Ok(Box::new(settlements.into_values().map(|mut template| {
-            if template.guards.len() > 1 {
-                let alternatives = std::mem::take(&mut template.guards);
-                template.guards.push(Clause::Threshold(1, alternatives));
-            }
-            Ok(template)
-        })))
+        Ok(Box::new(settlements.into_iter()))
     }
 }
 impl Contract for SignatureAttested {
@@ -286,7 +271,12 @@ mod tests {
                 })
                 .collect(),
         );
-        assert_eq!(template.guards, vec![expected]);
+        use sapio_base::miniscript::policy::Liftable;
+        assert_eq!(template.guards.len(), 1);
+        let actual = template.guards[0].lift().unwrap();
+        let expected = expected.lift().unwrap();
+        assert!(actual.clone().entails(expected.clone()).unwrap());
+        assert!(expected.entails(actual).unwrap());
         let descriptor = serde_json::to_string(&compiled.descriptor).unwrap();
         for point in 0..=2 {
             for oracle in [10, 20] {

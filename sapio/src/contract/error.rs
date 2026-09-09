@@ -42,6 +42,15 @@ pub enum CompilationError {
     PathFragmentError(ValidFragmentError),
     /// Error when a `ThenFunc` returns no Templates.
     MissingTemplates,
+    /// The same commitment was returned with incompatible binding data.
+    ConflictingTemplate {
+        /// Commitment shared by the two templates.
+        hash: bitcoin::hashes::sha256::Hash,
+        /// Action/effect path at which the conflict was found.
+        at: EffectPath,
+        /// Binding field that differs.
+        field: &'static str,
+    },
     /// Error if a Policy is empty
     EmptyPolicy,
     /// Error if a contract does not have sufficient funds available
