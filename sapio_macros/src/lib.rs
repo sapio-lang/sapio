@@ -29,6 +29,11 @@ pub fn compile_if(args: TokenStream, input: TokenStream) -> TokenStream {
 /// `#[guard(cached)]` instead accepts only `self`: a cached clause cannot depend
 /// on its invocation context. `simps = "Some(Self::metadata)"` optionally supplies
 /// a metadata callback, evaluated with the context of each guard attachment.
+///
+/// `#[guard(policy)]` accepts an explicit return type implementing
+/// `sapio::sapio_base::policy::PolicyCompiler`. Its translation errors propagate
+/// through contract compilation. Combine it with `cached` for context-free
+/// policies evaluated once per compilation: `#[guard(policy, cached)]`.
 #[proc_macro_attribute]
 pub fn guard(args: TokenStream, input: TokenStream) -> TokenStream {
     expand_attribute(Action::Guard, args, input)
@@ -91,6 +96,7 @@ fn expand(action: Action, args: AttributeArgs, mut input: ItemFn) -> syn::Result
 
     let Options {
         cached,
+        policy,
         guarded_by,
         compile_if,
         coerce_args,
@@ -108,13 +114,36 @@ fn expand(action: Action, args: AttributeArgs, mut input: ItemFn) -> syn::Result
             }
         },
         Action::Guard => {
-            let variant = if cached { quote!(Cache) } else { quote!(Fresh) };
+            let (variant, callback) = if policy {
+                if cached {
+                    (
+                        quote!(CachedPolicy),
+                        quote!(|this| {
+                            ::sapio::sapio_base::policy::PolicyCompiler::compile_policy(&Self::#helper(this))
+                                .map_err(::sapio::contract::CompilationError::from)
+                        }),
+                    )
+                } else {
+                    (
+                        quote!(FreshPolicy),
+                        quote!(|this, ctx| {
+                            ::sapio::sapio_base::policy::PolicyCompiler::compile_policy(&Self::#helper(this, ctx))
+                                .map_err(::sapio::contract::CompilationError::from)
+                        }),
+                    )
+                }
+            } else {
+                (
+                    if cached { quote!(Cache) } else { quote!(Fresh) },
+                    quote!(Self::#helper),
+                )
+            };
             quote! {
                 #(#attrs)*
                 #[doc = "Guard action declaration."]
                 #vis fn #name() -> ::std::option::Option<::sapio::contract::actions::Guard<Self>> {
                     ::std::option::Option::Some(
-                        ::sapio::contract::actions::Guard::#variant(Self::#helper, #simps)
+                        ::sapio::contract::actions::Guard::#variant(#callback, #simps)
                     )
                 }
             }

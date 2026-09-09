@@ -6,6 +6,7 @@
 
 //! Wrapper for supported descriptor types
 
+use super::RawTaproot;
 pub use crate::contract::abi::studio::*;
 use bitcoin::PublicKey;
 use bitcoin::Script;
@@ -22,6 +23,10 @@ pub enum SupportedDescriptors {
     Pk(Descriptor<PublicKey>),
     /// # Taproot Descriptors
     XOnly(Descriptor<XOnlyPublicKey>),
+    /// # Checked raw Taproot scripts
+    /// Spending data for scripts whose witness requirements are not described
+    /// by Miniscript. This representation carries no satisfaction-weight bound.
+    Taproot(RawTaproot),
 }
 
 impl From<Descriptor<PublicKey>> for SupportedDescriptors {
@@ -34,12 +39,18 @@ impl From<Descriptor<XOnlyPublicKey>> for SupportedDescriptors {
         SupportedDescriptors::XOnly(x)
     }
 }
+impl From<RawTaproot> for SupportedDescriptors {
+    fn from(tree: RawTaproot) -> Self {
+        SupportedDescriptors::Taproot(tree)
+    }
+}
 impl SupportedDescriptors {
     /// Regardless of descriptor type, get the output script
     pub fn script_pubkey(&self) -> Script {
         match self {
             SupportedDescriptors::Pk(p) => p.script_pubkey(),
             SupportedDescriptors::XOnly(x) => x.script_pubkey(),
+            SupportedDescriptors::Taproot(tree) => tree.script_pubkey(),
         }
     }
 }

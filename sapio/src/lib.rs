@@ -14,6 +14,8 @@ pub mod template;
 pub mod util;
 pub use contract::Context;
 pub use sapio_base;
+/// Policy compiler interfaces and checked script fragments.
+pub use sapio_base::policy;
 pub use sapio_macros;
 pub use sapio_macros::*;
 pub use schemars;

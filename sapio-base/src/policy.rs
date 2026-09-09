@@ -21,8 +21,10 @@ use std::fmt;
 /// Immutable policy source accepted by Sapio's script lowering stage.
 ///
 /// Miniscript clauses remain source policies until their enclosing branch is
-/// assembled. A timelock or hashlock need not be independently safe before it
-/// is combined with the branch's authorization and transaction commitment.
+/// assembled. Adjacent native predicates compile as one run, so a timelock
+/// or hashlock can share its run's authorization or transaction commitment.
+/// Raw fragments separate runs; each native run must independently pass the
+/// Miniscript compiler's safety checks.
 /// Validation and resource limits still apply during lowering, including to
 /// policies produced by a custom [`PolicyCompiler`].
 #[derive(
@@ -79,6 +81,15 @@ impl PolicyCompiler for ScriptPolicy {
 impl PolicyCompiler for ScriptFragment {
     fn compile_policy(&self) -> Result<ScriptPolicy, PolicyError> {
         Ok(ScriptPolicy::Script(self.clone()))
+    }
+}
+
+impl<P: PolicyCompiler, E: fmt::Display> PolicyCompiler for Result<P, E> {
+    fn compile_policy(&self) -> Result<ScriptPolicy, PolicyError> {
+        match self {
+            Ok(policy) => policy.compile_policy(),
+            Err(error) => Err(PolicyError::Backend(error.to_string())),
+        }
     }
 }
 

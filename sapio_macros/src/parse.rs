@@ -2,7 +2,7 @@ use proc_macro2::Span;
 use std::collections::BTreeSet;
 use syn::{
     parse_quote, spanned::Spanned, AttributeArgs, Expr, ExprArray, FnArg, Lit, LitStr, Meta,
-    NestedMeta, Signature,
+    NestedMeta, ReturnType, Signature,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -25,7 +25,7 @@ impl Action {
 
     fn accepts(self, name: &str) -> bool {
         match name {
-            "cached" => self == Self::Guard,
+            "cached" | "policy" => self == Self::Guard,
             "guarded_by" | "compile_if" => matches!(self, Self::Then | Self::Continuation),
             "coerce_args" | "web_api" => self == Self::Continuation,
             "simps" => matches!(self, Self::Guard | Self::Continuation),
@@ -36,6 +36,7 @@ impl Action {
 
 pub(crate) struct Options {
     pub cached: bool,
+    pub policy: bool,
     pub guarded_by: ExprArray,
     pub compile_if: ExprArray,
     pub coerce_args: Option<Expr>,
@@ -47,6 +48,7 @@ impl Options {
     pub(crate) fn parse(action: Action, args: AttributeArgs, span: Span) -> syn::Result<Self> {
         let mut options = Self {
             cached: false,
+            policy: false,
             guarded_by: parse_quote!([]),
             compile_if: parse_quote!([]),
             coerce_args: None,
@@ -75,7 +77,7 @@ impl Options {
                 ));
             }
             match name.as_str() {
-                "cached" | "web_api" => {
+                "cached" | "policy" | "web_api" => {
                     if !matches!(meta, Meta::Path(_)) {
                         return Err(syn::Error::new_spanned(
                             meta,
@@ -84,6 +86,8 @@ impl Options {
                     }
                     if name == "cached" {
                         options.cached = true;
+                    } else if name == "policy" {
+                        options.policy = true;
                     } else {
                         options.web_api = true;
                     }
@@ -162,6 +166,12 @@ pub(crate) fn validate_signature(
         return Err(syn::Error::new_spanned(
             variadic,
             "contract actions cannot be variadic",
+        ));
+    }
+    if options.policy && matches!(sig.output, ReturnType::Default) {
+        return Err(syn::Error::new_spanned(
+            &sig.ident,
+            "a policy guard requires an explicit return type implementing PolicyCompiler",
         ));
     }
     let count = if options.cached {

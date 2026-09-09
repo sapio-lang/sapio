@@ -213,7 +213,13 @@ fn policies_and_metadata_use_their_declared_lifetimes_and_contexts() {
         ];
         assert_eq!(*recorded.borrow(), paths);
         assert_eq!(
-            compiled.metadata.simps_for_guards[&Clause::Key(key)][&PROTOCOL],
+            compiled
+                .metadata
+                .simps_for_guards
+                .iter()
+                .find(|record| record.policy == Clause::Key(key).into())
+                .unwrap()
+                .protocols[&PROTOCOL],
             paths
                 .into_iter()
                 .map(|path| json!({"path": path}))
@@ -236,7 +242,13 @@ fn equal_json_annotations_deduplicate_without_losing_distinct_values() {
     let compiled = contract.compile(context()).unwrap();
     for key in [contract.cached_key, contract.fresh_key] {
         assert_eq!(
-            compiled.metadata.simps_for_guards[&Clause::Key(key)][&PROTOCOL],
+            compiled
+                .metadata
+                .simps_for_guards
+                .iter()
+                .find(|record| record.policy == Clause::Key(key).into())
+                .unwrap()
+                .protocols[&PROTOCOL],
             vec![json!("first"), json!("second")]
         );
     }

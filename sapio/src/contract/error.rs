@@ -53,6 +53,19 @@ pub enum CompilationError {
     },
     /// Error if a Policy is empty
     EmptyPolicy,
+    /// A custom policy compiler or script boundary rejected its input.
+    Policy(sapio_base::policy::PolicyError),
+    /// Policy expansion exceeded a documented compilation limit.
+    PolicyLimit {
+        /// The bounded resource.
+        resource: &'static str,
+        /// Maximum permitted count.
+        limit: usize,
+    },
+    /// A raw policy has no proven satisfaction weight for a fee guarantee.
+    UnknownSatisfactionWeight,
+    /// Invalid raw Taproot spending data.
+    RawTaproot(crate::contract::object::RawTaprootError),
     /// No authorization satisfies this action's fixed transaction fields.
     ImpossibleTemplate {
         /// Commitment of the incompatible transaction.
@@ -134,6 +147,18 @@ pub enum CompilationError {
 impl From<SIMPError> for CompilationError {
     fn from(e: SIMPError) -> CompilationError {
         CompilationError::SIMPError(e)
+    }
+}
+
+impl From<sapio_base::policy::PolicyError> for CompilationError {
+    fn from(error: sapio_base::policy::PolicyError) -> Self {
+        Self::Policy(error)
+    }
+}
+
+impl From<crate::contract::object::RawTaprootError> for CompilationError {
+    fn from(error: crate::contract::object::RawTaprootError) -> Self {
+        Self::RawTaproot(error)
     }
 }
 impl From<ValidFragmentError> for CompilationError {

@@ -12,7 +12,7 @@ use crate::contract::actions::ConditionallyCompileIfList;
 use crate::contract::actions::GuardList;
 use crate::contract::actions::{FinishOrFunc, WebAPIDisabled};
 use crate::template::Template;
-use sapio_base::Clause;
+use sapio_base::policy::ScriptPolicy;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -67,9 +67,12 @@ impl<'a, ContractSelf, StatefulArgs> From<ThenFunc<'a, ContractSelf>>
     }
 }
 
-fn ctv_clause_extractor(t: &Template, ctx: &Context) -> Result<Option<Clause>, CompilationError> {
-    let covenant = ctx.ctv_emulator(t.hash())?;
-    Ok(Some(crate::contract::compiler::conjoin_guards(
+fn ctv_clause_extractor(
+    t: &Template,
+    ctx: &Context,
+) -> Result<Option<ScriptPolicy>, CompilationError> {
+    let covenant = ScriptPolicy::from(ctx.ctv_emulator(t.hash())?);
+    Ok(Some(crate::contract::compiler::conjoin_source(
         t.guards.iter().chain(std::iter::once(&covenant)),
     )))
 }

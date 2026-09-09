@@ -150,10 +150,7 @@ fn conjunction_keeps_effect_order_and_nonadjacent_duplicates() {
     let template = compiled.ctv_to_tx.values().next().unwrap();
     assert_eq!(
         template.guards,
-        vec![Clause::Threshold(
-            3,
-            vec![effect(b"z"), effect(b"a"), effect(b"z")]
-        )]
+        vec![Clause::Threshold(3, vec![effect(b"z"), effect(b"a"), effect(b"z")]).into()]
     );
     let mut inscriptions = encoded_inscriptions(&compiled);
     // Miniscript chooses the final instruction order while compiling the

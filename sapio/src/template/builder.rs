@@ -14,12 +14,12 @@ use bitcoin::util::amount::Amount;
 use bitcoin::Witness;
 use bitcoin::{Script, VarInt};
 use sapio_base::effects::PathFragment;
+use sapio_base::policy::ScriptPolicy;
 use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::simp::TemplateInputLT;
 use sapio_base::simp::TemplateLT;
 use sapio_base::timelocks::*;
 use sapio_base::CTVHash;
-use sapio_base::Clause;
 use std::convert::TryFrom;
 use std::marker::PhantomData;
 
@@ -30,7 +30,7 @@ pub struct AddingFees;
 /// Builder can be used to interactively put together a transaction template before
 /// finalizing into a Template.
 pub struct BuilderState<State> {
-    guards: Vec<Clause>,
+    guards: Vec<ScriptPolicy>,
     // TODO: Should be Comitted/Uncomitted if not CTV
     sequences: Vec<Option<AnyRelTimeLock>>,
     outputs: Vec<Output>,
@@ -237,9 +237,18 @@ impl BuilderState<NotAddingFees> {
     /// which ends up being computed as:
     /// And(And(Top Guard, And(add_guard(1),..., add_guard(n))), CTV)
     /// n.b. not to be used with a continuation!
-    pub fn add_guard(mut self, guard: Clause) -> Self {
-        self.guards.push(guard);
+    pub fn add_guard(mut self, guard: impl Into<ScriptPolicy>) -> Self {
+        self.guards.push(guard.into());
         self
+    }
+
+    /// Compile another policy language as an additional template precondition.
+    /// Backend errors propagate before the template can be returned.
+    pub fn add_policy(
+        self,
+        policy: &impl sapio_base::policy::PolicyCompiler,
+    ) -> Result<Self, CompilationError> {
+        Ok(self.add_guard(policy.compile_policy()?))
     }
 }
 

@@ -123,7 +123,11 @@ fn duplicate_transactions_preserve_every_authorization_and_its_action_guard() {
         };
         let compiled_policy = descriptor.lift().unwrap();
         assert_eq!(template.guards.len(), 1);
-        let stored_guards = template.guards[0].lift().unwrap();
+        let sapio_base::policy::ScriptPolicy::Miniscript(stored_guards) = &template.guards[0]
+        else {
+            panic!()
+        };
+        let stored_guards = stored_guards.lift().unwrap();
         for mask in 0..16 {
             let authorized = mask & 1 != 0 || mask & 6 == 6;
             assert_eq!(accepts(&stored_guards, mask, template.hash()), authorized);
@@ -214,7 +218,7 @@ impl Suggested {
     fn update(self, ctx: Context, _args: ()) {
         let first = payment(ctx, &[])?;
         let mut second = first.clone();
-        second.guards.push(Clause::Key(key(2)));
+        second.guards.push(Clause::Key(key(2)).into());
         Ok(Box::new([Ok(first), Ok(second)].into_iter()))
     }
 }

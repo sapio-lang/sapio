@@ -8,11 +8,11 @@
 use crate::contract::error::CompilationError;
 use bitcoin::hashes::sha256;
 use bitcoin::util::amount::Amount;
+use sapio_base::policy::ScriptPolicy;
 use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::simp::SIMPError;
 use sapio_base::simp::TemplateInputLT;
 use sapio_base::simp::TemplateLT;
-use sapio_base::Clause;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -117,7 +117,7 @@ pub struct Template {
     /// compilation, these include the action guards; duplicate transactions
     /// retain their complete alternative authorizations here.
     #[serde(rename = "additional_preconditions")]
-    pub guards: Vec<Clause>,
+    pub guards: Vec<ScriptPolicy>,
     /// the precomputed template hash for this Template
     #[serde(rename = "precomputed_template_hash")]
     pub ctv: sha256::Hash,
