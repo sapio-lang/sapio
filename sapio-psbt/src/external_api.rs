@@ -64,7 +64,7 @@ pub fn finalize_psbt_format_api(
                     .collect();
                 for leaf in unsupported {
                     errors.push(format!(
-                        "Input {index}: unsupported custom tapscript leaf {leaf}; an external satisfier is required"
+                        "Input {index}: unsupported custom tapscript leaf {leaf}; spending this leaf requires an external satisfier"
                     ));
                 }
             }

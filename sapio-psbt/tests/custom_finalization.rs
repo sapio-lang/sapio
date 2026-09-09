@@ -124,7 +124,7 @@ fn unsupported_custom_leaf_keeps_its_script_proof_and_valid_partial_signature() 
     assert_eq!(restored, original);
     let leaf = TapLeafHash::from_script(&raw, LeafVersion::TapScript);
     assert!(errors.contains(&format!(
-        "Input 0: unsupported custom tapscript leaf {leaf}; an external satisfier is required"
+        "Input 0: unsupported custom tapscript leaf {leaf}; spending this leaf requires an external satisfier"
     )));
 }
 
