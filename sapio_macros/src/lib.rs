@@ -1,314 +1,190 @@
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+// Copyright Judica, Inc 2021
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+//  License, v. 2.0. If a copy of the MPL was not distributed with this
+//  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
-use core::ops::Index;
+//! Attribute macros for Sapio contract actions.
+
 use proc_macro::TokenStream;
+use proc_macro2::TokenStream as Tokens;
 use quote::{format_ident, quote};
-use std::str::FromStr;
-use syn::Lit;
-use syn::{parse_macro_input, AttributeArgs, ItemFn, Meta, NestedMeta};
-/// The compile_if macro is used to define a `ConditionallyCompileIf`.
-/// formats for calling are:
-/// ```ignore
-/// #[compile_if]
-/// fn name(self, ctx: Context) {
-///     /*ConditionallyCompileType*/
-/// }
-/// ```
+use syn::{
+    ext::IdentExt, parse_macro_input, parse_quote, AttributeArgs, FnArg, ItemFn, ReturnType,
+};
+
+mod parse;
+use parse::{Action, Options};
+
+/// Declare a conditional-compilation action with `(self, ctx: Context)`.
+///
+/// The body returns `ConditionalCompileType`. No options are accepted.
 #[proc_macro_attribute]
 pub fn compile_if(args: TokenStream, input: TokenStream) -> TokenStream {
-    let _args = parse_macro_input!(args as AttributeArgs);
-    let input = parse_macro_input!(input as ItemFn);
-    if input.sig.inputs.len() != 2 {
-        panic!("Too may Arguments to function");
-    }
-    let context_arg = input.sig.inputs.index(1);
-    let name = input.sig.ident;
-    let compile_if_name = format_ident!("compile_if_{}", name);
-    let block = input.block;
-    proc_macro::TokenStream::from(quote! {
-        fn #compile_if_name(&self, #context_arg) -> sapio::contract::actions::ConditionalCompileType
-        #block
-        fn #name() -> Option<sapio::contract::actions::ConditionallyCompileIf<Self>> {
-            Some(sapio::contract::actions::ConditionallyCompileIf::Fresh(Self::#compile_if_name))
-        }
-    })
+    expand_attribute(Action::CompileIf, args, input)
 }
 
-/// The guard macro is used to define a `Guard`. Guards may be cached or uncached.
-/// formats for calling are:
-/// ```ignore
-/// #[guard(
-///     /// optional, if desired to only be invoked once
-///     cached
-/// )]
-/// fn name(self, ctx) {
-///     /*Clause*/
-/// }
-/// ```
+/// Declare a guard with `(self, ctx: Context)` and a `Clause` body.
+///
+/// `#[guard(cached)]` instead accepts only `self`: a cached clause cannot depend
+/// on its invocation context. `simps = "Some(Self::metadata)"` optionally supplies
+/// a metadata callback, evaluated with the context of each guard attachment.
 #[proc_macro_attribute]
 pub fn guard(args: TokenStream, input: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(args as AttributeArgs);
-    let input = parse_macro_input!(input as ItemFn);
-    if input.sig.inputs.len() != 2 {
-        panic!("Too may Arguments to function");
-    }
-    let context_arg = input.sig.inputs.index(1);
-    let name = input.sig.ident;
-    let guard_name = format_ident!("guard_{}", name);
-    let block = input.block;
-    let mut ty = format_ident!("Fresh");
-    let simp_gen_f = simp_at(&args).unwrap_or(TokenStream::from_str("None").unwrap().into());
-    for arg in args {
-        match arg {
-            NestedMeta::Meta(Meta::NameValue(v)) if v.path.is_ident("cached") => {
-                ty = format_ident!("Cached");
-            }
-            _ => {}
-        }
-    }
-    proc_macro::TokenStream::from(quote! {
-        fn #guard_name(&self, #context_arg) -> sapio::sapio_base::Clause
-        #block
-        fn  #name() -> Option<sapio::contract::actions::Guard<Self>> {
-            Some(sapio::contract::actions::Guard::#ty(Self::#guard_name, #simp_gen_f))
-        }
-    })
+    expand_attribute(Action::Guard, args, input)
 }
 
-fn get_arrays(args: &Vec<NestedMeta>) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) {
-    let mut compile_if_array = None;
-    let mut guarded_by_array = None;
-    for arg in args {
-        match (&compile_if_array, &guarded_by_array, arg) {
-            (_, None, NestedMeta::Meta(Meta::NameValue(v))) if v.path.is_ident("guarded_by") => {
-                match &v.lit {
-                    Lit::Str(l) => {
-                        guarded_by_array = Some(l.parse().expect("Token Stream Parsing"));
-                    }
-                    _ => panic!("Improperly Formatted {:?}", v),
-                }
-            }
-            (_, Some(_), NestedMeta::Meta(Meta::NameValue(v))) if v.path.is_ident("guarded_by") => {
-                panic!("Repeated guarded_by arguments");
-            }
-            (None, _, NestedMeta::Meta(Meta::NameValue(v))) if v.path.is_ident("compile_if") => {
-                match &v.lit {
-                    Lit::Str(l) => {
-                        compile_if_array = Some(l.parse().expect("Token Stream Parsing"))
-                    }
-                    _ => panic!("Improperly Formatted {:?}", v),
-                }
-            }
-            (Some(_), _, NestedMeta::Meta(Meta::NameValue(v))) if v.path.is_ident("compile_if") => {
-                panic!("Repeated compile_if arguments");
-            }
-            _v => {}
-        }
-    }
-    (
-        compile_if_array.unwrap_or(quote! {[]}),
-        guarded_by_array.unwrap_or(quote! {[]}),
-    )
-}
-
-/// The then macro is used to define a `ThenFunction`.
-/// formats for calling are:
-/// ```ignore
-/// /// A Conditional + Guarded CTV Function
-/// #[then(
-///     /// optional: only compile these branches if these compile_if statements permit
-///     compile_if= "[compile_if_1, ... compile_if_n]",
-///     /// optional: protect these branches with the conjunction (and) of these clauses
-///     guarded_by= "[guard_1, ... guard_n]"
-/// )]
-/// fn name(self, ctx) {
-///     /*Result<Box<Iterator<TransactionTemplate>>>*/
-/// }
-/// ```
+/// Declare a CTV action with `(self, ctx: Context)` and a `TxTmplIt` body.
+///
+/// Optional `guarded_by = "[Self::guard]"` and
+/// `compile_if = "[Self::condition]"` arrays supply guard and condition factories.
+/// Unknown or repeated options are errors, including misspelled guard names.
 #[proc_macro_attribute]
 pub fn then(args: TokenStream, input: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(args as AttributeArgs);
-    let input = parse_macro_input!(input as ItemFn);
-    if input.sig.inputs.len() != 2 {
-        panic!("Too may Arguments to function");
-    }
-    let context_arg = input.sig.inputs.index(1);
-    let name = input.sig.ident;
-    let then_fn_name = format_ident!("then_{}", name);
-    let block = input.block;
-    let (cia, gba) = get_arrays(&args);
-    proc_macro::TokenStream::from(quote! {
-            /// (missing docs fix)
-            fn #name<'a>() -> Option<sapio::contract::actions::ThenFuncAsFinishOrFunc<'a, Self, <Self as sapio::contract::Contract>::StatefulArguments>>{
-                Some(sapio::contract::actions::ThenFunc{
-                    guard: &#gba,
-                    conditional_compile_if: &#cia,
-                    func: Self::#then_fn_name,
-                    name: std::sync::Arc::new(std::stringify!(#name).into()),
-                }.into())
-            }
-            /// (missing docs fix)
-            fn #then_fn_name(&self, #context_arg, _: sapio::contract::actions::ThenFuncTypeTag) -> sapio::contract::TxTmplIt
-            #block
-    })
+    expand_attribute(Action::Then, args, input)
 }
 
-fn web_api(args: &Vec<NestedMeta>) -> proc_macro2::TokenStream {
-    for arg in args {
-        match arg {
-            NestedMeta::Meta(Meta::Path(v)) if v.is_ident("web_api") => {
-                return quote! { sapio::contract::actions::WebAPIEnabled};
-            }
-            _ => continue,
-        }
-    }
-    quote! { sapio::contract::actions::WebAPIDisabled}
-}
-fn coerce_args(args: &Vec<NestedMeta>) -> proc_macro2::TokenStream {
-    for arg in args {
-        match arg {
-            NestedMeta::Meta(Meta::NameValue(v)) if v.path.is_ident("coerce_args") => {
-                match &v.lit {
-                    Lit::Str(l) => {
-                        return l.parse().expect("Token Stream Parsing");
-                    }
-                    _ => panic!("Improperly Formatted {:?}", v),
-                }
-            }
-            _ => continue,
-        }
-    }
-    panic!("No Coerce Arguments found");
-}
-fn simp_at(args: &Vec<NestedMeta>) -> Option<proc_macro2::TokenStream> {
-    for arg in args {
-        match arg {
-            NestedMeta::Meta(Meta::NameValue(v)) if v.path.is_ident("simps") => match &v.lit {
-                Lit::Str(l) => {
-                    return Some(l.parse().expect("Token Stream Parsing"));
-                }
-                _ => panic!("Improperly Formatted {:?}", v),
-            },
-            _ => continue,
-        }
-    }
-    None
-}
-
-fn web_api_schema(
-    args: &Vec<NestedMeta>,
-    name: &syn::Ident,
-    typ: &syn::FnArg,
-) -> proc_macro2::TokenStream {
-    if let syn::FnArg::Typed(v) = typ {
-        let ty = &v.ty;
-        for arg in args {
-            match arg {
-                NestedMeta::Meta(Meta::Path(v)) if v.is_ident("web_api") => {
-                    return quote! {
-                    const #name : Option<&'static dyn Fn() -> std::sync::Arc<serde_json::Value>> =
-                        Some(&|| sapio::contract::macros::get_schema_for::<#ty>());
-                    };
-                }
-                _ => continue,
-            }
-        }
-    } else {
-        panic!("Wrong type: {:?}", typ);
-    }
-    quote! {
-        const #name : Option<&'static dyn Fn() -> std::sync::Arc<serde_json::Value>> = None;
-    }
-}
+/// Declare a continuation with `(self, ctx: Context, args: SpecificArgs)`.
 ///
-///
-/// The `continuation` macro generates a static `fn() -> Option<FinishOrFunc>` method for a given impl.
-///
-/// There are a few variants of how you can create a `continuation`.
-///
-/// ```ignore
-/// struct UpdateType;
-/// /// Helper
-/// fn default_coerce(
-///     k: <T as Contract>::StatefulArguments,
-/// ) -> Result<UpdateType, CompilationError> {
-///     Ok(k)
-/// }
-/// impl MyContract {
-///     fn simp_gen(&self, ctx:Context)
-/// -> Result<Vec<Box<dyn SIMPAttachableAt<ContinuationPointLT>>>, CompilationError> {}
-///
-///     /// A Guarded CTV Function
-///     #[continuation(
-///         /// required: guards for the miniscript clauses required
-///         guarded_by = "[Self::guard_1,... Self::guard_n]",
-///         /// optional: Conditional compilation
-///         compile_if = "[Self::compile_if_1, ... Self::compile_if_n]",
-///         ///  optional: Enables compiling this for a json callable continuation
-///         web_api,
-///         /// helper for coercing args for json api, could be arbitrary
-///         coerce_args = "default_coerce",
-///         /// simps
-///         simps = "simp_gen",
-///     )]
-///     fn name(self, ctx:Context, o:UpdateType) {
-///         /*Result<Box<Iterator<TransactionTemplate>>>*/
-///     }
-/// }
-/// /// Null Implementation
-/// decl_finish!(name);
-/// ```
+/// `coerce_args = "Self::coerce"` is required. Optional `guarded_by` and
+/// `compile_if` arrays work as on `then`; `web_api` enables JSON calls and
+/// `simps = "Some(Self::metadata)"` supplies continuation metadata.
 #[proc_macro_attribute]
 pub fn continuation(args: TokenStream, input: TokenStream) -> TokenStream {
+    expand_attribute(Action::Continuation, args, input)
+}
+
+fn expand_attribute(action: Action, args: TokenStream, input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(args as AttributeArgs);
     let input = parse_macro_input!(input as ItemFn);
-    let name = input.sig.ident;
-    let continue_name = format_ident!("continue_{}", name);
-    let block = input.block;
-    if input.sig.inputs.len() != 3 {
-        panic!("Too may Arguments to function");
-    }
-    let arg_type = input
-        .sig
-        .inputs
-        .last()
-        .expect("Must have at least one argument");
-    let context_arg = input.sig.inputs.index(1);
-    let (cia, gba) = get_arrays(&args);
-    let web_api_type = web_api(&args);
-    let continue_schema_for_name =
-        format_ident!("CONTINUE_SCHEMA_FOR_{}", name.to_string().to_uppercase());
-    let web_api_schema_s = web_api_schema(&args, &continue_schema_for_name, arg_type);
-    let coerce_args_f = coerce_args(&args);
-    let simp_gen_f = simp_at(&args).unwrap_or(TokenStream::from_str("None").unwrap().into());
-    proc_macro::TokenStream::from(quote! {
-            #web_api_schema_s
-            /// (missing docs fix)
-            fn #continue_name(&self, #context_arg, #arg_type) -> sapio::contract::TxTmplIt
-            #block
-            /// (missing docs fix)
-            fn #name<'a>() -> Option<Box<dyn
-                sapio::contract::actions::CallableAsFoF<Self, <Self as sapio::contract::Contract>::StatefulArguments>>>
-            {
-                let f : sapio::contract::actions::FinishOrFunc<_, _, _, #web_api_type>= sapio::contract::actions::FinishOrFunc{
-                    simp_gen: #simp_gen_f,
-                    coerce_args: #coerce_args_f,
-                    guard: &#gba,
-                    conditional_compile_if: &#cia,
-                    func: Self::#continue_name,
-                    schema: Self::#continue_schema_for_name.map(|f|f()),
-                    name: std::sync::Arc::new(std::stringify!(#name).into()),
-                    f: std::default::Default::default(),
-                    returned_txtmpls_modify_guards: false,
-                    extract_clause_from_txtmpl: sapio::contract::actions::default_extract_clause_from_txtmpl
-                };
-                Some(Box::new(f))
-            }
-    })
+    expand(action, args, input)
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
 }
+
+fn expand(action: Action, args: AttributeArgs, mut input: ItemFn) -> syn::Result<Tokens> {
+    let options = Options::parse(action, args, input.sig.ident.span())?;
+    parse::validate_signature(action, &options, &input.sig)?;
+    let name = input.sig.ident.clone();
+    let action_name = name.unraw().to_string();
+    let attrs = input.attrs.clone();
+    let vis = input.vis.clone();
+    let helper = format_ident!("{}_{}", action.helper_prefix(), name);
+    input.sig.ident = helper.clone();
+    // The authoring syntax permits `self` as shorthand for the shared receiver
+    // required by action callbacks. Other receiver forms are validated above.
+    if let Some(FnArg::Receiver(receiver)) = input.sig.inputs.first_mut() {
+        receiver.reference = Some((Default::default(), None));
+    }
+    if matches!(input.sig.output, ReturnType::Default) {
+        input.sig.output = match action {
+            Action::CompileIf => {
+                parse_quote!(-> ::sapio::contract::actions::ConditionalCompileType)
+            }
+            Action::Guard => parse_quote!(-> ::sapio::sapio_base::Clause),
+            Action::Then | Action::Continuation => parse_quote!(-> ::sapio::contract::TxTmplIt),
+        };
+    }
+    input
+        .attrs
+        .push(parse_quote!(#[doc = "Implementation of the contract action."]));
+
+    let Options {
+        cached,
+        guarded_by,
+        compile_if,
+        coerce_args,
+        simps,
+        web_api,
+    } = options;
+    let factory = match action {
+        Action::CompileIf => quote! {
+            #(#attrs)*
+            #[doc = "Conditional-compilation action declaration."]
+            #vis fn #name() -> ::std::option::Option<::sapio::contract::actions::ConditionallyCompileIf<Self>> {
+                ::std::option::Option::Some(
+                    ::sapio::contract::actions::ConditionallyCompileIf::Fresh(Self::#helper)
+                )
+            }
+        },
+        Action::Guard => {
+            let variant = if cached { quote!(Cache) } else { quote!(Fresh) };
+            quote! {
+                #(#attrs)*
+                #[doc = "Guard action declaration."]
+                #vis fn #name() -> ::std::option::Option<::sapio::contract::actions::Guard<Self>> {
+                    ::std::option::Option::Some(
+                        ::sapio::contract::actions::Guard::#variant(Self::#helper, #simps)
+                    )
+                }
+            }
+        }
+        Action::Then => {
+            input
+                .sig
+                .inputs
+                .push(parse_quote!(_: ::sapio::contract::actions::ThenFuncTypeTag));
+            quote! {
+                #(#attrs)*
+                #[doc = "CTV action declaration."]
+                #vis fn #name<'a>() -> ::std::option::Option<::sapio::contract::actions::ThenFuncAsFinishOrFunc<'a, Self, <Self as ::sapio::contract::Contract>::StatefulArguments>> {
+                    ::std::option::Option::Some(::sapio::contract::actions::ThenFunc {
+                        guard: &#guarded_by,
+                        conditional_compile_if: &#compile_if,
+                        func: Self::#helper,
+                        name: ::std::sync::Arc::new(#action_name.into()),
+                    }.into())
+                }
+            }
+        }
+        Action::Continuation => {
+            let schema_helper = format_ident!("__sapio_schema_for_{}", name);
+            let FnArg::Typed(argument) = &input.sig.inputs[2] else {
+                unreachable!("validated continuation argument")
+            };
+            let ty = &argument.ty;
+            let (web_api_type, schema) = if web_api {
+                (
+                    quote!(::sapio::contract::actions::WebAPIEnabled),
+                    quote!(::std::option::Option::Some(::sapio::contract::macros::get_schema_for::<#ty>())),
+                )
+            } else {
+                (
+                    quote!(::sapio::contract::actions::WebAPIDisabled),
+                    quote!(::std::option::Option::None),
+                )
+            };
+            quote! {
+                #(#attrs)*
+                #[doc = "JSON schema for the continuation's specific arguments."]
+                #vis fn #schema_helper() -> ::sapio::contract::macros::ContinuationSchema {
+                    #schema
+                }
+                #(#attrs)*
+                #[doc = "Continuation action declaration."]
+                #vis fn #name<'a>() -> ::std::option::Option<::std::boxed::Box<dyn
+                    ::sapio::contract::actions::CallableAsFoF<Self, <Self as ::sapio::contract::Contract>::StatefulArguments>>>
+                {
+                    let action: ::sapio::contract::actions::FinishOrFunc<_, _, _, #web_api_type> =
+                        ::sapio::contract::actions::FinishOrFunc {
+                            simp_gen: #simps,
+                            coerce_args: #coerce_args,
+                            guard: &#guarded_by,
+                            conditional_compile_if: &#compile_if,
+                            func: Self::#helper,
+                            schema: Self::#schema_helper(),
+                            name: ::std::sync::Arc::new(#action_name.into()),
+                            f: ::std::default::Default::default(),
+                            returned_txtmpls_modify_guards: false,
+                            extract_clause_from_txtmpl: ::sapio::contract::actions::default_extract_clause_from_txtmpl,
+                        };
+                    ::std::option::Option::Some(::std::boxed::Box::new(action))
+                }
+            }
+        }
+    };
+    Ok(quote!(#input #factory))
+}
+
+#[cfg(test)]
+mod tests;

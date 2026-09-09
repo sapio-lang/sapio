@@ -42,7 +42,7 @@ pub struct ObjectMetadata {
     pub extra: BTreeMap<String, serde_json::Value>,
     /// SIMP: Sapio Interactive Metadata Protocol
     pub simp: BTreeMap<i64, serde_json::Value>,
-    /// SIMPs for guards
+    /// Distinct SIMP values per guard and protocol, in attachment order.
     pub simps_for_guards: BTreeMap<Clause, BTreeMap<i64, Vec<serde_json::Value>>>,
 }
 impl ObjectMetadata {
@@ -73,31 +73,24 @@ impl ObjectMetadata {
             Vec<Arc<dyn SIMPAttachableAt<sapio_base::simp::GuardLT>>>,
         >,
     ) -> Result<ObjectMetadata, CompilationError> {
-        if self.simps_for_guards.is_empty() {
-            self.simps_for_guards = all_guard_simps
-                .into_iter()
-                .map(|(k, v)| {
-                    Ok((
-                        k,
-                        v.into_iter().fold(
-                            Ok(Default::default()),
-                            |ra: Result<BTreeMap<_, Vec<Value>>, CompilationError>, b| {
-                                let mut a = ra?;
-                                a.entry(b.get_protocol_number()).or_default().push(
-                                    b.to_json().map_err(CompilationError::SerializationError)?,
-                                );
-                                Ok(a)
-                            },
-                        )?,
-                    ))
-                })
-                .collect::<Result<_, CompilationError>>()?;
-            Ok(self)
-        } else {
-            Err(Err(CompilationError::Custom(
-                "Failed to add guard simps".into(),
-            ))?)
+        if !self.simps_for_guards.is_empty() {
+            return Err(CompilationError::Custom(
+                "Contract metadata cannot prepopulate guard SIMPs".into(),
+            ));
         }
+        for (clause, metadata) in all_guard_simps {
+            let protocols = self.simps_for_guards.entry(clause).or_default();
+            for simp in metadata {
+                let value = simp
+                    .to_json()
+                    .map_err(CompilationError::SerializationError)?;
+                let values = protocols.entry(simp.get_protocol_number()).or_default();
+                if !values.contains(&value) {
+                    values.push(value);
+                }
+            }
+        }
+        Ok(self)
     }
 }
 

@@ -68,13 +68,8 @@ impl<'a, ContractSelf, StatefulArgs> From<ThenFunc<'a, ContractSelf>>
 }
 
 fn ctv_clause_extractor(t: &Template, ctx: &Context) -> Result<Option<Clause>, CompilationError> {
-    let h = t.hash();
-    if t.guards.is_empty() {
-        ctx.ctv_emulator(h)
-    } else {
-        let mut g = t.guards.clone();
-        g.push(ctx.ctv_emulator(h)?);
-        Ok(Clause::And(g))
-    }
-    .map(Some)
+    let covenant = ctx.ctv_emulator(t.hash())?;
+    Ok(Some(crate::contract::compiler::conjoin_guards(
+        t.guards.iter().chain(std::iter::once(&covenant)),
+    )))
 }

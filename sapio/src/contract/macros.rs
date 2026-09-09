@@ -5,6 +5,34 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! macros for making defining Sapio contracts less verbose.
+//!
+//! Action options are checked at the declaration. A typo cannot silently omit
+//! an authorization guard:
+//! ```compile_fail
+//! use sapio::{Context, contract::Contract};
+//! struct Payment;
+//! impl Payment {
+//!     #[sapio::then(guarded_byy = "[Self::signed]")]
+//!     fn pay(self, _ctx: Context) { sapio::contract::empty() }
+//! }
+//! impl Contract for Payment { sapio::declare! {non updatable} }
+//! ```
+//! Cached clauses have no invocation context:
+//! ```compile_fail
+//! struct Payment;
+//! impl Payment {
+//!     #[sapio::guard(cached)]
+//!     fn signed(self, _ctx: sapio::Context) { sapio::sapio_base::Clause::Trivial }
+//! }
+//! ```
+//! Explicit return types are checked rather than discarded:
+//! ```compile_fail
+//! struct Payment;
+//! impl Payment {
+//!     #[sapio::guard]
+//!     fn signed(self, _ctx: sapio::Context) -> bool { sapio::sapio_base::Clause::Trivial }
+//! }
+//! ```
 
 use core::any::TypeId;
 pub use paste::paste;
@@ -28,7 +56,7 @@ macro_rules! declare {
     {then $(,$a:expr)*} => {
         /// binds the list of `ThenFunc`'s to this impl.
         /// Any fn() which returns None is ignored (useful for type-level state machines)
-        const THEN_FNS: &'static [fn() -> Option<$crate::contract::actions::ThenFuncAsFinishOrFunc<'static, Self, Self::StatefulArguments>>] = &[$($a,)*];
+        const THEN_FNS: &'static [fn() -> ::std::option::Option<$crate::contract::actions::ThenFuncAsFinishOrFunc<'static, Self, Self::StatefulArguments>>] = &[$($a,)*];
     };
     [state $i:ty]  => {
         type StatefulArguments = $i;
@@ -41,11 +69,11 @@ macro_rules! declare {
     {updatable<$($i:ty)?> $(,$a:expr)*} => {
         /// binds the list of `FinishOrFunc`'s to this impl.
         /// Any fn() which returns None is ignored (useful for type-level state machines)
-        const FINISH_OR_FUNCS: &'static [fn() -> Option<Box<dyn $crate::contract::actions::CallableAsFoF<Self, Self::StatefulArguments>>>] = &[$($a,)*];
-        declare![state $($i)?];
+        const FINISH_OR_FUNCS: &'static [fn() -> ::std::option::Option<::std::boxed::Box<dyn $crate::contract::actions::CallableAsFoF<Self, Self::StatefulArguments>>>] = &[$($a,)*];
+        $crate::declare![state $($i)?];
     };
     {non updatable} => {
-        declare![state ()];
+        $crate::declare![state ()];
     };
     {finish $(,$a:expr)*} => {
         /// binds the list of `Gurard`'s to this impl as unlocking conditions.
@@ -53,24 +81,14 @@ macro_rules! declare {
         /// sufficient to unlock funds, a `Guard` should not be bound if it is
         /// intended to be used with a `ThenFunc`.
         /// Any fn() which returns None is ignored (useful for type-level state machines)
-        const FINISH_FNS: &'static [fn() -> Option<$crate::contract::actions::Guard<Self>>] = &[$($a,)*];
+        const FINISH_FNS: &'static [fn() -> ::std::option::Option<$crate::contract::actions::Guard<Self>>] = &[$($a,)*];
     };
 
 
 }
 
-/// The then macro is used to define a `ThenFunc`
-/// formats for calling are:
-/// ```ignore
-/// /// A Guarded CTV Function
-/// then!(guarded_by: [guard_1, ... guard_n] fn name(self, ctx) {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
-/// /// A Conditional CTV Function
-/// then!(compile_if: [compile_if_1, ... compile_if_n] fn name(self, ctx) {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
-/// /// An Unguarded CTV Function
-/// then!(fn name(self, ctx) {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
-/// /// Null Implementation
-/// then!(name);
-/// ```
+/// Declare an optional CTV action in a contract interface: `decl_then! { name }`.
+/// Its default factory returns `None`; implement it with `#[then]` to enable it.
 #[macro_export]
 macro_rules! decl_then {
     {
@@ -86,7 +104,7 @@ macro_rules! decl_then {
                 unimplemented!();
             }
             $(#[$meta])*
-            fn $name<'a>() -> Option<$crate::contract::actions::ThenFuncAsFinishOrFunc<'a, Self, <Self as sapio::contract::Contract>::StatefulArguments>> {None}
+            fn $name<'a>() -> ::std::option::Option<$crate::contract::actions::ThenFuncAsFinishOrFunc<'a, Self, <Self as $crate::contract::Contract>::StatefulArguments>> {::std::option::Option::None}
         }
     };
 }
@@ -112,17 +130,26 @@ pub fn get_schema_for<T: schemars::JsonSchema + 'static + Sized>() -> Arc<Value>
         .clone()
 }
 
-/// Internal Helper for finish! macro, not to be used directly.
+/// The optional JSON schema of a continuation's specific argument type.
+pub type ContinuationSchema = Option<Arc<Value>>;
+
+/// Internal schema declaration helper for `decl_continuation!`.
 #[macro_export]
 macro_rules! web_api {
-    {$name:ident,$type:ty,{}} => {
+    {$(#[$meta:meta])* $name:ident,$type:ty,{}} => {
         $crate::contract::macros::paste!{
-            const [<CONTINUE_SCHEMA_FOR_ $name:upper >] : Option<&'static dyn Fn() -> std::sync::Arc<serde_json::Value>> = Some(&|| $crate::contract::macros::get_schema_for::<$type>());
+            $(#[$meta])*
+            fn [<__sapio_schema_for_ $name>]() -> $crate::contract::macros::ContinuationSchema {
+                ::std::option::Option::Some($crate::contract::macros::get_schema_for::<$type>())
+            }
         }
     };
-    {$name:ident,$type:ty} => {
+    {$(#[$meta:meta])* $name:ident,$type:ty} => {
         $crate::contract::macros::paste!{
-            const [<CONTINUE_SCHEMA_FOR_ $name:upper >] : Option<&'static dyn Fn() -> std::sync::Arc<serde_json::Value>> = None;
+            $(#[$meta])*
+            fn [<__sapio_schema_for_ $name>]() -> $crate::contract::macros::ContinuationSchema {
+                ::std::option::Option::None
+            }
         }
     }
 }
@@ -140,17 +167,10 @@ macro_rules! is_web_api_type {
         $crate::contract::actions::WebAPIDisabled
     };
 }
-/// The finish macro is used to define a `FinishFunc` or a `FinishOrFunc`
-/// formats for calling are:
-/// ```ignore
-/// /// A Guarded CTV Function
-/// finish!(guarded_by: [guard_1, ... guard_n] fn name(self, ctx, o) {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
-/// /// A Conditional CTV Function
-/// finish!(compile_if: [compile_if_1, ... compile_if_n] guarded_by: [guard_1, ..., guard_n] fn name(self, ctx, o) {/*Result<Box<Iterator<TransactionTemplate>>>*/} );
-/// /// Null Implementation
-/// finish!(name);
-/// ```
-/// Unlike a `then!`, `finish!` must always have guards.
+/// Declare an optional continuation in a contract interface:
+/// `decl_continuation! { name<SpecificArgs> }`.
+/// Add `<web={}>` before the name to declare its JSON schema as well.
+/// Its default factory returns `None`; implement it with `#[continuation]`.
 #[macro_export]
 macro_rules! decl_continuation {
     {
@@ -159,7 +179,7 @@ macro_rules! decl_continuation {
         $name:ident<$arg_type:ty>
     } => {
         $crate::contract::macros::paste!{
-            $crate::contract::macros::web_api!($name,$arg_type$(,$web_enable)*);
+            $crate::contract::macros::web_api!($(#[$meta])* $name,$arg_type$(,$web_enable)*);
             $(#[$meta])*
             fn [<continue_ $name>](&self, _ctx:$crate::contract::Context, _o: $arg_type)-> $crate::contract::TxTmplIt
             {
@@ -167,24 +187,36 @@ macro_rules! decl_continuation {
             }
             $(#[$meta])*
             fn $name<'a>() ->
-            Option<Box<dyn
+            ::std::option::Option<::std::boxed::Box<dyn
             $crate::contract::actions::CallableAsFoF<Self, <Self as $crate::contract::Contract>::StatefulArguments>>>
             {
-                None
+                ::std::option::Option::None
             }
         }
     };
 }
 
-/// The guard macro is used to define a `Guard`. Guards may be cached or uncached.
-/// formats for calling are:
-/// ```ignore
-/// guard!(fn name(self, ctx) {/*Clause*/})
-/// /// The guard should only be invoked once
-/// guard!(cached fn name(self, ctx) {/*Clause*/})
-/// ```
+/// Declare an optional guard in a contract interface: `decl_guard! { name }`.
+/// Use `decl_guard! { cached name }` for a context-free cached clause.
+/// Implement these with `#[guard] fn name(self, ctx: Context)` and
+/// `#[guard(cached)] fn name(self)` respectively.
 #[macro_export]
 macro_rules! decl_guard {
+    {
+        $(#[$meta:meta])*
+        cached $name:ident
+    } => {
+        $crate::contract::macros::paste! {
+            $(#[$meta])*
+            fn [<guard_ $name>](&self) -> $crate::sapio_base::Clause {
+                unimplemented!();
+            }
+            $(#[$meta])*
+            fn $name() -> ::std::option::Option<$crate::contract::actions::Guard<Self>> {
+                ::std::option::Option::None
+            }
+        }
+    };
     {
         $(#[$meta:meta])*
         $name:ident} => {
@@ -194,8 +226,8 @@ macro_rules! decl_guard {
                     unimplemented!();
                 }
                 $(#[$meta])*
-                fn $name() -> Option<$crate::contract::actions::Guard<Self>> {
-                    None
+                fn $name() -> ::std::option::Option<$crate::contract::actions::Guard<Self>> {
+                    ::std::option::Option::None
                 }
             }
      };
@@ -210,12 +242,12 @@ macro_rules! decl_compile_if {
     } => {
             $crate::contract::macros::paste!{
                 $(#[$meta])*
-                fn [<compile_if $name>](&self, _ctx: $crate::contract::Context) -> $crate::contract::actions::ConditionalCompileType {
+                fn [<compile_if_ $name>](&self, _ctx: $crate::contract::Context) -> $crate::contract::actions::ConditionalCompileType {
                     unimplemented!()
                 }
                 $(#[$meta])*
-                fn $name() -> Option<$crate::contract::actions::ConditionallyCompileIf<Self>> {
-                    None
+                fn $name() -> ::std::option::Option<$crate::contract::actions::ConditionallyCompileIf<Self>> {
+                    ::std::option::Option::None
                 }
             }
      };

@@ -296,10 +296,6 @@ where
                 all_guard_simps.entry(pol).or_default().append(&mut simps)
             }
         }
-        for guard_simps in all_guard_simps.values_mut() {
-            guard_simps.sort_by_key(|k| k as *const _ as usize);
-            guard_simps.dedup_by(|a, b| std::ptr::eq(a, b))
-        }
 
         let branches: Vec<Miniscript<XOnlyPublicKey, Tap>> = {
             let mut finish_fns_ctx = ctx.derive(PathFragment::FinishFn)?;
@@ -319,7 +315,13 @@ where
                 .collect::<Result<Vec<_>, _>>()?;
             let all_g = guards
                 .into_iter()
-                .map(|(policy, _m)| optimizer_flatten_and_compile(policy))
+                .map(|(policy, mut simps)| {
+                    all_guard_simps
+                        .entry(policy.clone())
+                        .or_default()
+                        .append(&mut simps);
+                    optimizer_flatten_and_compile(policy)
+                })
                 .collect::<Result<Vec<_>, _>>()?;
 
             all_g
@@ -376,6 +378,38 @@ where
                 metadata,
             })
         }
+    }
+}
+
+pub(crate) fn conjoin_guards<'a>(guards: impl Iterator<Item = &'a Clause>) -> Clause {
+    fn contains_inscription(guard: &Clause) -> bool {
+        match guard {
+            Clause::Inscribe(..) => true,
+            Clause::And(guards) | Clause::Threshold(_, guards) => {
+                guards.iter().any(contains_inscription)
+            }
+            Clause::Or(guards) => guards.iter().any(|(_, guard)| contains_inscription(guard)),
+            _ => false,
+        }
+    }
+
+    let mut combined = vec![];
+    for guard in guards {
+        if *guard == Clause::Unsatisfiable {
+            return Clause::Unsatisfiable;
+        }
+        // Inscription envelopes are script effects. Neither their order nor
+        // their multiplicity follows Boolean idempotence, including when they
+        // occur below another policy node.
+        if *guard != Clause::Trivial && (contains_inscription(guard) || !combined.contains(guard)) {
+            combined.push(guard.clone());
+        }
+    }
+    match combined.len() {
+        0 => Clause::Trivial,
+        1 => combined.pop().unwrap(),
+        2 => Clause::And(combined),
+        count => Clause::Threshold(count, combined),
     }
 }
 
