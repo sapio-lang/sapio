@@ -27,7 +27,9 @@ use sapio_base::Clause;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 mod cache;
+mod feasibility;
 mod util;
+mod validation;
 use cache::*;
 use util::*;
 /// Grants the compiler access to effects at the current compilation path.
@@ -222,9 +224,24 @@ where
             let mut template_clauses = vec![];
             for template in compute_all_effects(effect_context, self_ref, action.as_ref())? {
                 let mut template = template?;
+                for guard in &template.guards {
+                    validation::validate_policy(guard)?;
+                }
                 // This also rejects forbidden guards on every suggested
                 // template, including duplicates of an earlier valid template.
                 let clause = (action.get_extract_clause_from_txtmpl())(&template, &ctx)?;
+                if let Some(clause) = &clause {
+                    validation::validate_policy(clause)?;
+                    if committed
+                        && (!feasibility::miniscript_policy_possible(&guards, &template.tx, 0)
+                            || !feasibility::miniscript_policy_possible(clause, &template.tx, 0))
+                    {
+                        return Err(CompilationError::ImpossibleTemplate {
+                            hash: template.hash(),
+                            at: effect_path.as_ref().clone(),
+                        });
+                    }
+                }
                 amount_range.update_range(template.required_input_amount);
                 if committed {
                     template.guards = policy_as_guards(conjoin_guards(

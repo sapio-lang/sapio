@@ -49,6 +49,7 @@ impl<T> GuardCache<T> {
             CacheEntry::Cached(clause, simps) => (clause.clone(), simps),
             CacheEntry::Fresh(policy, simps) => (policy(t, ctx), simps),
         };
+        super::validation::validate_policy(&clause)?;
         let metadata = match simps {
             Some(generate) => generate(t, simp_ctx)?,
             None => vec![],

@@ -53,6 +53,13 @@ pub enum CompilationError {
     },
     /// Error if a Policy is empty
     EmptyPolicy,
+    /// No authorization satisfies this action's fixed transaction fields.
+    ImpossibleTemplate {
+        /// Commitment of the incompatible transaction.
+        hash: bitcoin::hashes::sha256::Hash,
+        /// Action/effect path that returned the transaction.
+        at: EffectPath,
+    },
     /// Error if a contract does not have sufficient funds available
     OutOfFunds,
     /// Error if a CheckSequenceVerify clause is incompatible with the sequence already set.
