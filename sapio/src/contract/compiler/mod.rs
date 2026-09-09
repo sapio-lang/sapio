@@ -210,7 +210,7 @@ where
                 action.get_guard(),
                 &mut guard_clauses,
             )?;
-            let committed = action.get_returned_txtmpls_modify_guards();
+            let committed = action.template_kind() == super::actions::TemplateKind::Covenant;
             let effect_context = action_context.derive(if committed {
                 PathFragment::Next
             } else {
@@ -225,7 +225,16 @@ where
                 }
                 // This also rejects forbidden guards on every suggested
                 // template, including duplicates of an earlier valid template.
-                let clause = (action.get_extract_clause_from_txtmpl())(&template, &ctx)?;
+                let clause = if committed {
+                    let covenant = ScriptPolicy::from(ctx.ctv_emulator(template.hash())?);
+                    Some(conjoin_source(
+                        template.guards.iter().chain(std::iter::once(&covenant)),
+                    ))
+                } else if template.guards.is_empty() {
+                    None
+                } else {
+                    return Err(CompilationError::AdditionalGuardsNotAllowedHere);
+                };
                 if let Some(clause) = &clause {
                     script::validate_source(clause)?;
                     if committed

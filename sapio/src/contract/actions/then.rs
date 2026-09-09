@@ -11,8 +11,6 @@ use super::TxTmplIt;
 use crate::contract::actions::ConditionallyCompileIfList;
 use crate::contract::actions::GuardList;
 use crate::contract::actions::{FinishOrFunc, WebAPIDisabled};
-use crate::template::Template;
-use sapio_base::policy::ScriptPolicy;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
@@ -59,20 +57,9 @@ impl<'a, ContractSelf, StatefulArgs> From<ThenFunc<'a, ContractSelf>>
             coerce_args: ThenFuncTypeTag::coerce_args,
             schema: None,
             f: PhantomData::default(),
-            returned_txtmpls_modify_guards: true,
-            extract_clause_from_txtmpl: ctv_clause_extractor,
+            template_kind: super::TemplateKind::Covenant,
             // TODO: Maybe Then should be able to get simps?
             simp_gen: None,
         }
     }
-}
-
-fn ctv_clause_extractor(
-    t: &Template,
-    ctx: &Context,
-) -> Result<Option<ScriptPolicy>, CompilationError> {
-    let covenant = ScriptPolicy::from(ctx.ctv_emulator(t.hash())?);
-    Ok(Some(crate::contract::compiler::conjoin_source(
-        t.guards.iter().chain(std::iter::once(&covenant)),
-    )))
 }
