@@ -99,6 +99,7 @@ cargo test --locked -p sapio --test fees --test action_names --test ordinal_allo
 cargo test --locked -p sapio --test conditional_compilation --test guard_semantics --test macro_declarations
 cargo test --locked -p sapio --test template_semantics --test effect_names --test inscription_guards
 cargo test --locked -p sapio --test custom_policy --test raw_artifacts --test contract_policy_limits
+cargo test --locked -p sapio --test child_funding --test template_size --test ordinal_allocation
 cargo test --locked -p sapio-wasm-plugin --features host
 cargo test --locked -p sapio_integration_tests
 cargo test --locked -p ctv_emulators --lib
@@ -258,6 +259,31 @@ Native policies are validated before simplification. Fixed transaction templates
 are checked against their known CLTV, CSV and CTV requirements. Taproot keys and
 identical complete scripts are selected deterministically; raw fragment and
 inscription order within a script remain significant.
+
+## Template funding and size
+
+Compiled contracts expose `required_input_amount`, serialized as integer
+`required_input_amount_sats`. It covers the `ensure_amount` floor and all
+committed and suggested template requirements. The builder rejects underfunded
+child outputs; compilation validates fresh and reused artifacts; binding checks
+the explicit minimum even for finish-only contracts. The
+[funding guide](FUNDING.md) explains auxiliary contributions and migration from
+`amount_range`. Address and descriptor constructors now take an explicit
+`Amount` minimum; use `Amount::ZERO` for an unrestricted destination.
+
+A builder debits funds only when recording an output or explicit fee. Calling
+`add_fees`, including with zero, closes output construction. Repeated calls add
+to the recorded fees. `Context` remains a lower-level construction API; the
+builder's accounting assumes its supplied context accurately describes the
+input and any tracked ordinal ranges.
+
+`unsigned_tx_size()` returns exact current serialized bytes, including every
+output's actual script and CompactSize prefixes. `unsigned_tx_size_with_output`
+includes a prospective output and any growth of the output-count prefix. Both
+exclude the SegWit marker/flag and future scriptSig/witness data. They replace
+`estimate_tx_size`, which omitted descriptorless scripts and counted a
+nonexistent witness marker. The Hanukkiah and James vault examples now reserve
+fees from complete unsigned sizes; this still does not bound signed fees.
 
 ## Emulator service limits
 

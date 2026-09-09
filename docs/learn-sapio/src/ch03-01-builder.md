@@ -66,5 +66,5 @@ ordinals are tracked, allocate all known sats to outputs before introducing
 unknown auxiliary funds. Binding checks the actual funding inputs.
 
 Sapio currently places the contract's UTXO at input zero. The CTV commitment
-includes this index. See the [builder API](../../../sapio/src/template/builder.rs)
+includes this index. See the [builder implementation](https://github.com/sapio-lang/sapio/blob/master/sapio/src/template/builder.rs)
 for the complete set of operations.
