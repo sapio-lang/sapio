@@ -29,6 +29,29 @@ pub struct NotAddingFees;
 pub struct AddingFees;
 /// Builder can be used to interactively put together a transaction template before
 /// finalizing into a Template.
+///
+/// Funds are debited only by adding outputs or fees; callers cannot discard an
+/// ordinal prefix without recording where those sats go:
+///
+/// ```compile_fail
+/// use bitcoin::Amount;
+/// use sapio::template::Builder;
+/// fn discard(builder: Builder) {
+///     let _ = builder.spend_amount(Amount::from_sat(1));
+/// }
+/// ```
+///
+/// Adding fees closes output construction, including when the fee is zero:
+///
+/// ```compile_fail
+/// use bitcoin::Amount;
+/// use sapio::contract::Compiled;
+/// use sapio::template::Builder;
+/// fn output_after_fees(builder: Builder, child: &Compiled) {
+///     let builder = builder.add_fees(Amount::ZERO).unwrap();
+///     let _ = builder.add_output(Amount::from_sat(1), child, None);
+/// }
+/// ```
 pub struct BuilderState<State> {
     guards: Vec<ScriptPolicy>,
     // TODO: Should be Comitted/Uncomitted if not CTV
@@ -262,8 +285,8 @@ impl BuilderState<NotAddingFees> {
 }
 
 impl<T> BuilderState<T> {
-    /// reduce the amount availble in the builder's context
-    pub fn spend_amount(mut self, amount: Amount) -> Result<Self, CompilationError> {
+    /// Debit funds only while recording an output or explicit fee.
+    fn spend_amount(mut self, amount: Amount) -> Result<Self, CompilationError> {
         self.ctx = self.ctx.spend_amount(amount)?;
         Ok(self)
     }
