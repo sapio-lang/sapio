@@ -63,6 +63,7 @@ with upstream crates would remove semantics, not complete a migration.
 | Module schemas | Validate actual inputs and successful outputs at the common host boundary, including raw nested calls; use offline Draft 7 validation, guard reference expansion and remove the no-op interface check |
 | Emulator protocol | Bound both directions of framed JSON, discard failed streams, reject malformed PSBT maps, support prebound listeners |
 | Emulator responses | Accept complete PSBT responses containing only signature additions; preserve existing signatures and every other field, including raw HD responses, each federation participant and the WASM signing import |
+| Emulator lifecycle | Bound each peer exchange and the async wait for CLI peer resolution; cap admitted server connections; discard incomplete exchanges, isolate peer errors and cancel owned connection tasks on shutdown |
 | Integration | Restore the suite to the workspace; compile, sign and finalize two contract steps and reject a modified output |
 | Contract examples | [Complete inventory](EXAMPLES.md): repaired and tested library families, restored PowSwap/TapBet, 18 real WASM fixtures, both native examples and explicit research assumptions |
 | Developer checks | Formatting, feature checks, native tests, complete WASM catalog with artifact/schema/repeatability checks, CLI smoke checks, and API documentation |
@@ -118,7 +119,7 @@ Define backend capability information before adding another covenant primitive:
 | Mode | Required claim in an artifact | Required validation |
 | --- | --- | --- |
 | Native CTV research | Exact opcode semantics and intended chain/deployment | Reference hash vectors and execution against a node implementing those semantics |
-| Signer-emulated covenant | Signer identities, threshold, authorization policy and availability assumptions | Allowed transitions sign and finalize; forbidden transitions fail |
+| Signer-emulated covenant | Signer identities, threshold, structural signing rule and availability assumptions | Allowed transitions sign and finalize; forbidden transitions fail |
 | Future primitive | Precisely named capability and assumptions | Its own lowering tests and execution evidence |
 
 The current CLI does not yet enforce this artifact-level distinction. A release
@@ -155,10 +156,17 @@ This is the next release blocker, before a broad dependency migration.
 - Extend the [guest execution limits](DEVELOPMENT.md) with service-level
   compilation deadlines, process memory and concurrency policy. Guest fuel,
   memory/table caps, nested-call bounds and authenticated source caching are
-  enforced; native compilation, schema work and emulator I/O still need their
-  own bounds. Benchmark real contracts before changing the fixed allowances.
-- Review emulator request timeouts, concurrency, authentication and authorization.
-  A signature service reachable over TCP is not automatically a safe oracle.
+  enforced. Emulator I/O now has elapsed request deadlines and bounded admitted
+  connections; native compilation, schema work and cryptography still need
+  CPU and process-memory budgets. Benchmark real contracts before changing
+  the fixed allowances.
+- Establish deployment and backend policy for emulator services, including key
+  custody, availability and operator admission controls. The existing HD signing
+  rule derives a key from the transaction's input-zero CTV hash and signs with
+  `SIGHASH_ALL`; its covenant restriction is structural and does not depend on
+  authenticating a requester. The [service limits](DEVELOPMENT.md#emulator-service-limits)
+  bound I/O waiting and admitted connections, without establishing a hard CPU
+  limit or proving a public deployment's availability.
 
 Acceptance: malformed inputs fail with attributable errors; adversarial guest execution
 traps at the documented bounds; the hash, script, signing and finalization

@@ -40,8 +40,8 @@ Run the native suite, feature checks, Clippy and API documentation build:
 bash contrib/test.sh
 ```
 
-The network integration test binds only to `127.0.0.1` on an automatically chosen
-port. A sandbox must permit loopback sockets to run it. No Bitcoin node or remote
+The network tests bind only to `127.0.0.1` on automatically chosen ports.
+A sandbox must permit loopback sockets to run them. No Bitcoin node or remote
 emulator is required. Clippy currently reports warnings from older code; removing
 that debt is a separate milestone, not a claim that this checkout is warning-free.
 
@@ -95,6 +95,7 @@ cargo test --locked -p sapio-base --test ctv_hash
 cargo test --locked -p sapio --test fees --test action_names --test ordinal_allocation
 cargo test --locked -p sapio-wasm-plugin --features host
 cargo test --locked -p sapio_integration_tests
+cargo test --locked -p ctv_emulators --lib
 cargo test --locked --manifest-path plugin-example/Cargo.toml --workspace
 cargo fmt --all -- --check
 cargo fmt --manifest-path plugin-example/Cargo.toml --all -- --check
@@ -146,7 +147,8 @@ Invalid pointers, lengths, JSON and UTF-8 return errors or trap the guest call.
 Plugin callbacks and metadata are registered together exactly once, without
 mutable global function pointers.
 Diagnostic logs go to stderr. Emulator protocol JSON frames are bounded to one
-million bytes, and failed connections are discarded before another request.
+million bytes; [emulator service limits](#emulator-service-limits) cover request
+I/O and admitted connections.
 
 The native host validates every actual call against the module's advertised
 JSON Schemas, including calls made through raw nested-module imports. It checks
@@ -203,7 +205,8 @@ only checked signature additions, just like native signing.
 
 These are guest execution limits, not a wall-clock deadline or a process memory
 limit. Native compilation, host serialization/schema work and emulator I/O are
-outside instruction metering. Wasmer may reserve substantially more virtual
+outside instruction metering. Emulator I/O has its own request deadlines below.
+Wasmer may reserve substantially more virtual
 address space than the accessible linear-memory limit. Evaluate those costs
 before exposing compilation as a service.
 
@@ -222,6 +225,41 @@ referring to their cached keys; the content hashes remain unchanged:
 ```sh
 sapio-cli contract load --workspace PATH --file MODULE.wasm
 ```
+
+## Emulator service limits
+
+Each HD client signing exchange has a 30-second elapsed allowance by default,
+including its wait for the connection mutex, connection setup, complete framing
+and response validation. The socket is cached only after a complete response
+passes the signature-additions check. Timeout, cancellation during an exchange
+or an invalid response drops that socket; the next request reconnects. A queued
+request that times out does not disturb the preceding request's connection.
+
+The CLI's `emulator_nodes.request_timeout_secs` configures that allowance and a
+separate deadline for awaiting resolution of the whole peer configuration; it
+defaults to 30 seconds. System resolver work can continue after this async wait
+times out and delay runtime shutdown. Direct library users configure exchanges with
+`HDOracleEmulatorConnection::with_request_timeout` and must bound the
+constructor's DNS resolution themselves. A federation applies the deadline to
+each peer in its sequential signing loop. N peers can therefore consume N times
+the configured request allowance across their exchanges.
+
+`HDOracleEmulator::new(root)` admits at most 64 live connections with a 30-second
+request allowance. `with_limits(request_timeout, max_connections)` overrides
+both values. At capacity the listener stops accepting; the operating system's
+backlog wait is outside the server deadline. For an admitted connection, each
+deadline covers idle time, the complete header/body and the response write.
+Dripping bytes cannot extend it; completing a response starts the next request's
+allowance. Peer errors close only their connection. The listener owns and reaps
+its connection tasks, and cancelling it aborts the active tasks.
+
+These I/O deadlines cannot preempt synchronous signing, JSON parsing or response
+validation. Native CPU budgets, process memory and deployment-level admission
+policy remain separate work. The tests use paused time for stalled frames,
+trickled responses, queue waits and blocked writes, plus loopback sockets for
+reconnection, server admission and cancellation. See the
+[emulator guide](../ctv_emulators/README.md) for the structural signing rule and
+configuration.
 
 ## Artifact boundaries
 
