@@ -21,7 +21,7 @@ pub struct Hanukkiah {
     recipient: bitcoin::Address,
     /// Amount of Coin per Candle
     amount_per_candle: AmountF64,
-    /// feerate
+    /// Satoshis per unsigned transaction byte; witness costs are not included.
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
     #[schemars(with = "u64")]
     feerate_per_byte: Amount,
@@ -64,7 +64,7 @@ impl Hanukkiah {
                 None,
             )?;
         }
-        let size = txn.estimate_tx_size();
+        let size = txn.unsigned_tx_size();
         let fees = self
             .feerate_per_byte
             .checked_mul(size)
@@ -85,7 +85,7 @@ pub struct Hanukkiah2 {
     recipient: Recipients,
     /// Amount of Coin per Candle
     amount_per_candle: AmountF64,
-    /// feerate
+    /// Satoshis per unsigned transaction byte; witness costs are not included.
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
     #[schemars(with = "u64")]
     feerate_per_byte: Amount,
@@ -130,7 +130,7 @@ struct Hanukkiah2Night {
     recipients: Vec<bitcoin::Address>,
     /// Amount of Coin per Candle
     amount_per_candle: AmountF64,
-    /// feerate
+    /// Satoshis per unsigned transaction byte; witness costs are not included.
     #[serde(with = "bitcoin::util::amount::serde::as_sat")]
     #[schemars(with = "u64")]
     feerate_per_byte: Amount,
@@ -160,7 +160,7 @@ impl Hanukkiah2Night {
                 None,
             )?;
         }
-        let size = txn.estimate_tx_size();
+        let size = txn.unsigned_tx_size();
         let fees = self
             .feerate_per_byte
             .checked_mul(size)
@@ -188,7 +188,7 @@ impl Hanukkiah2 {
                 })?;
             txn = txn.add_output(next_night.required_input_amount, &next_night, None)?;
         }
-        let size = txn.estimate_tx_size();
+        let size = txn.unsigned_tx_size();
         let fees = self
             .feerate_per_byte
             .checked_mul(size)
@@ -211,12 +211,25 @@ mod tests {
     use super::*;
     use crate::test_helpers::{address, context};
 
+    fn assert_unsigned_fee(template: &sapio::template::Template, rate: Amount) {
+        assert!(template
+            .tx
+            .input
+            .iter()
+            .all(|input| input.script_sig.is_empty() && input.witness.is_empty()));
+        let bytes = bitcoin::consensus::serialize(&template.tx).len() as u64;
+        assert_eq!(
+            template.max - template.total_amount(),
+            rate.checked_mul(bytes).unwrap()
+        );
+    }
+
     #[test]
     fn chained_candles_cover_eight_nights_and_account_for_fees() {
         let contract = Hanukkiah {
             recipient: address(1),
             amount_per_candle: Amount::from_sat(1000).into(),
-            feerate_per_byte: Amount::from_sat(1),
+            feerate_per_byte: Amount::from_sat(7),
             night_time: AbsTime::try_from(500_000_001).unwrap(),
             night: None,
         };
@@ -226,7 +239,7 @@ mod tests {
         for night in 1..=8 {
             let template = current.ctv_to_tx.values().next().unwrap();
             assert_eq!(template.tx.lock_time, 500_000_001 + 86400 * (night - 1));
-            assert!(template.max > template.total_amount());
+            assert_unsigned_fee(template, contract.feerate_per_byte);
             let candles = template
                 .outputs
                 .iter()
@@ -250,13 +263,21 @@ mod tests {
         let contract = Hanukkiah2 {
             recipient: recipients,
             amount_per_candle: Amount::from_sat(1000).into(),
-            feerate_per_byte: Amount::from_sat(1),
+            feerate_per_byte: Amount::from_sat(3),
             night_time: AbsTime::try_from(500_000_001).unwrap(),
         };
         let object = contract.compile(context(100_000)).unwrap();
         object.validate().unwrap();
-        let nights = &object.ctv_to_tx.values().next().unwrap().outputs;
+        let creation = object.ctv_to_tx.values().next().unwrap();
+        assert_unsigned_fee(creation, contract.feerate_per_byte);
+        let nights = &creation.outputs;
         assert_eq!(nights.len(), 8);
+        for night in nights {
+            assert_unsigned_fee(
+                night.contract.ctv_to_tx.values().next().unwrap(),
+                contract.feerate_per_byte,
+            );
+        }
         assert_eq!(
             nights
                 .iter()

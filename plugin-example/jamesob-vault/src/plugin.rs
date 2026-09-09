@@ -94,7 +94,7 @@ struct Vault<S: State> {
     backup_addr: bitcoin::Address,
     /// # Default Fee
     /// Fee rate in satoshis per 1000 weight units.
-    /// The unsigned size estimate is charged at four weight units per byte;
+    /// The unsigned transaction size is charged at four weight units per byte;
     /// signature and witness growth are not included.
     default_feerate: AmountU64,
     /// # CPFP Config
@@ -216,7 +216,7 @@ impl<S: State> Vault<S> {
                 Some([("purpose", "CPFP Anchor Output".into())].into()),
             )?;
         }
-        let size = tmpl.estimate_tx_size() + 8 + self.backup_addr.script_pubkey().len() as u64;
+        let size = tmpl.unsigned_tx_size_with_output(&self.backup_addr.script_pubkey());
         let fees = estimated_fee(self.default_feerate, size)?;
         let funds = tmpl
             .ctx()
@@ -255,7 +255,14 @@ impl<S: State> Vault<S> {
                 Some([("purpose", "CPFP Anchor Output".into())].into()),
             )?;
         }
-        let size = tmpl.estimate_tx_size() + 8 + 35 /* 1 byte len, 1 byte version, 1 byte len, 32 bytes data*/;
+        // Redeeming compiles to a 34-byte P2TR output. Its commitment changes
+        // with the funding amount, but its serialized size does not.
+        let redeem_script = bitcoin::Script::new_v1_p2tr(
+            &bitcoin::secp256k1::Secp256k1::verification_only(),
+            self.hot_key.to_x_only_pub(),
+            None,
+        );
+        let size = tmpl.unsigned_tx_size_with_output(&redeem_script);
         let fees = estimated_fee(self.default_feerate, size)?;
         let funds = tmpl
             .ctx()
