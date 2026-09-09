@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-0af50bbf.js";
+            window.path_to_searchindex_js = "searchindex-3b445493.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-efed9c80.js"></script>
@@ -184,20 +184,35 @@
 miniscript logic.</p>
 <p>These guards can either be used standalone as unlocking conditions or as a
 requirement on a <code>continuation</code> or <code>then</code> function.</p>
-<p>If a <code>guard</code> is marked as cached, the compiler will make an effort to only
-invoke the <code>guard</code> once during compilation. This is helpful in contexts
-where a <code>guard</code> might be expensive to call, e.g. if it is programmed to
-retrieve a <code>Clause</code> from a remote server. It is not guaranteed that the
-<code>guard</code> is only invoked once.</p>
+<p>An ordinary guard receives the context of each attachment. Use it when the
+policy depends on the current path or other compilation context.</p>
+<p>A cached guard is evaluated once per guard declaration during a contract’s
+compilation. It receives only <code>self</code>, so it cannot accidentally reuse the first
+attachment’s context at a different path. Each compilation starts a new cache;
+compiling the same contract again evaluates the cached policy again.</p>
 <h2 id="guard-macro"><a class="header" href="#guard-macro">guard macro</a></h2>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>#[guard(
-    /// optional: if the compiler should attempt to only call this guard one time (not guaranteed)
-    cached)]
-fn name(self, ctx: Context) {/*Clause*/}
-decl_guard!{name};
+</span>#[guard]
+fn contextual(self, ctx: Context) {
+    // Compute a Clause using this attachment's context.
+}
+
+#[guard(cached)]
+fn signed(self) {
+    Clause::Key(self.owner)
+}
 <span class="boring">}</span></code></pre>
+<p>These methods belong inside the contract’s implementation. Trait interfaces
+can declare their corresponding optional methods with
+<code>decl_guard! { contextual }</code> and <code>decl_guard! { cached signed }</code>.</p>
+<p>Guard metadata remains contextual even when the policy is cached. A
+<code>simps = "Some(Self::metadata)"</code> callback receives its own <code>Context</code> for every
+attachment, including standalone finish guards. Its errors abort compilation.
+The compiled artifact groups annotations by guard clause and protocol number,
+preserving distinct JSON values in attachment order and removing equal values.
+Metadata from different attachment paths therefore remains visible without
+duplicating identical annotations.</p>
 
                     </main>
 
