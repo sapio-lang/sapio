@@ -16,7 +16,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Multiple Types of Allowed Descriptor
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 pub enum SupportedDescriptors {
     /// # ECDSA Descriptors
     Pk(Descriptor<PublicKey>),

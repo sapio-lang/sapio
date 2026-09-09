@@ -135,20 +135,6 @@ impl Context {
             })
         }
     }
-    /// Method is unsafe, but may (provably!) be only called from within
-    /// compiler.rs where the `InternalCompilerTag` may be generated.
-    pub(crate) fn internal_clone(&self, _i: InternalCompilerTag) -> Self {
-        Context {
-            available_funds: self.available_funds,
-            emulator: self.emulator.clone(),
-            path: self.path.clone(),
-            network: self.network,
-            already_derived: self.already_derived.clone(),
-            effects: self.effects.clone(),
-            ordinals_info: self.ordinals_info.clone(),
-        }
-    }
-
     /// return the available funds
     pub fn funds(&self) -> Amount {
         self.available_funds

@@ -15,24 +15,22 @@ use sapio_base::{
     simp::{GuardLT, SIMPAttachableAt},
     Clause,
 };
-/// A Guard is a function which generates some condition that must be met to unlock a script.
-/// If bool = true, the computation of the guard is cached, which is useful if e.g. Guard
-/// must contact a remote server or it should be the same across calls *for a given contract
-/// instance*.
+/// A spending condition, evaluated freshly or cached during one compilation.
+///
+/// Cached policies depend on contract data alone. Contextual metadata is
+/// evaluated at every attachment, independently of whether the policy is cached.
 pub enum Guard<ContractSelf> {
-    /// Cache Variant should only be called one time per contract and the result saved
-    Cache(
-        fn(&ContractSelf, Context) -> Clause,
-        Option<SimpGen<ContractSelf>>,
-    ),
-    /// Fresh Variant may be called repeatedly
+    /// Evaluate the policy once per guard declaration during this compilation.
+    /// The policy cannot observe an attachment's path, effects or available funds.
+    Cache(fn(&ContractSelf) -> Clause, Option<SimpGen<ContractSelf>>),
+    /// Evaluate the policy with the context of each attachment.
     Fresh(
         fn(&ContractSelf, Context) -> Clause,
         Option<SimpGen<ContractSelf>>,
     ),
 }
 
-/// A Function that can be used to generate metadata for a Guard
+/// Generate guard metadata at its actual attachment context on every use.
 pub type SimpGen<ContractSelf> =
     fn(
         cself: &ContractSelf,

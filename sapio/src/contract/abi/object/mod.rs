@@ -29,7 +29,6 @@ use sapio_base::simp::SIMPError;
 use sapio_base::Clause;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 pub use validation::{ArtifactError, ArtifactErrorKind};
@@ -42,7 +41,7 @@ pub struct ObjectMetadata {
     pub extra: BTreeMap<String, serde_json::Value>,
     /// SIMP: Sapio Interactive Metadata Protocol
     pub simp: BTreeMap<i64, serde_json::Value>,
-    /// SIMPs for guards
+    /// Distinct SIMP values per guard and protocol, in attachment order.
     pub simps_for_guards: BTreeMap<Clause, BTreeMap<i64, Vec<serde_json::Value>>>,
 }
 impl ObjectMetadata {
@@ -73,41 +72,34 @@ impl ObjectMetadata {
             Vec<Arc<dyn SIMPAttachableAt<sapio_base::simp::GuardLT>>>,
         >,
     ) -> Result<ObjectMetadata, CompilationError> {
-        if self.simps_for_guards.is_empty() {
-            self.simps_for_guards = all_guard_simps
-                .into_iter()
-                .map(|(k, v)| {
-                    Ok((
-                        k,
-                        v.into_iter().fold(
-                            Ok(Default::default()),
-                            |ra: Result<BTreeMap<_, Vec<Value>>, CompilationError>, b| {
-                                let mut a = ra?;
-                                a.entry(b.get_protocol_number()).or_default().push(
-                                    b.to_json().map_err(CompilationError::SerializationError)?,
-                                );
-                                Ok(a)
-                            },
-                        )?,
-                    ))
-                })
-                .collect::<Result<_, CompilationError>>()?;
-            Ok(self)
-        } else {
-            Err(Err(CompilationError::Custom(
-                "Failed to add guard simps".into(),
-            ))?)
+        if !self.simps_for_guards.is_empty() {
+            return Err(CompilationError::Custom(
+                "Contract metadata cannot prepopulate guard SIMPs".into(),
+            ));
         }
+        for (clause, metadata) in all_guard_simps {
+            let protocols = self.simps_for_guards.entry(clause).or_default();
+            for simp in metadata {
+                let value = simp
+                    .to_json()
+                    .map_err(CompilationError::SerializationError)?;
+                let values = protocols.entry(simp.get_protocol_number()).or_default();
+                if !values.contains(&value) {
+                    values.push(value);
+                }
+            }
+        }
+        Ok(self)
     }
 }
 
 /// Object holds a contract's complete context required post-compilation
 /// Public fields and deserialization can produce inconsistent objects. Call
 /// [`Object::validate`] before using an artifact; binding performs this check.
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 pub struct Object {
-    /// a map of template hashes to the corresponding template, that in the
-    /// policy are CTV protected
+    /// CTV-protected templates, deduplicated only when their binding payloads
+    /// agree. Each stored template retains all alternative preconditions.
     #[serde(
         rename = "template_hash_to_template_map",
         skip_serializing_if = "BTreeMap::is_empty",

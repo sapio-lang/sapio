@@ -30,7 +30,7 @@ mod cache;
 mod util;
 use cache::*;
 use util::*;
-/// Used to prevent unintended callers to internal_clone.
+/// Grants the compiler access to effects at the current compilation path.
 pub struct InternalCompilerTag {
     _secret: (),
 }
@@ -76,12 +76,26 @@ enum Nullable {
     No,
 }
 
-const UNIQUE_DERIVE_PANIC_MSG: &str = "Must be a valid derivation or internal invariant not held";
 fn compute_all_effects<C, A: Default>(
     mut top_effect_ctx: Context,
     self_ref: &C,
     func: &dyn CallableAsFoF<C, A>,
 ) -> TxTmplIt {
+    // Reject malformed names before any continuation callback can observe an
+    // effect path that would change meaning when serialized.
+    if func.web_api() {
+        for (name, _) in top_effect_ctx
+            .get_effects(InternalCompilerTag { _secret: () })
+            .get_value(top_effect_ctx.path())
+        {
+            if !matches!(
+                PathFragment::try_from(name.clone())?,
+                PathFragment::Named(_)
+            ) {
+                return Err(CompilationError::InvalidPathName);
+            }
+        }
+    }
     let default_applied_effect_ctx = top_effect_ctx.derive(PathFragment::DefaultEffect)?;
     let def = func.call(self_ref, default_applied_effect_ctx, Default::default())?;
     if !func.web_api() {
@@ -95,9 +109,7 @@ fn compute_all_effects<C, A: Default>(
         // operating with the effects passed in through the Context Object.
         .try_fold(def, |a, (k, arg)| -> TxTmplIt {
             let v = a;
-            let c = applied_effects_ctx
-                .derive(PathFragment::Named(SArc(k.clone())))
-                .expect(UNIQUE_DERIVE_PANIC_MSG);
+            let c = applied_effects_ctx.derive_str(k.clone())?;
             let w = func.call_json(self_ref, c, arg.clone())?;
             Ok(Box::new(v.chain(w)))
         });
@@ -128,22 +140,6 @@ impl Renamer {
     }
 }
 
-#[derive(Default)]
-struct ContinueAPIs {
-    inner: BTreeMap<SArc<EffectPath>, ContinuationPoint>,
-}
-
-type ContinueAPIEntry = Option<(SArc<EffectPath>, ContinuationPoint)>;
-
-impl Extend<ContinueAPIEntry> for ContinueAPIs {
-    fn extend<T>(&mut self, iter: T)
-    where
-        T: IntoIterator<Item = ContinueAPIEntry>,
-    {
-        self.inner.extend(iter.into_iter().flatten())
-    }
-}
-
 impl<'a, T> Compilable for T
 where
     T: AnyContract + 'a,
@@ -171,159 +167,118 @@ where
         let ensured_amount = self.ensure_amount(amount_range_ctx)?;
         amount_range.update_range(ensured_amount);
 
-        // The code for then_fns and finish_or_fns is very similar, differing
-        // only in that then_fns have a CTV enforcing the contract and
-        // finish_or_fns do not. We can lazily chain iterators to process them
-        // in a row.
-        //
-        // we need a unique context for each.
+        // Extract each declared action's policy before deduplicating its
+        // transaction payload. Equal CTV hashes do not imply equal guards.
         let mut action_ctx = ctx.derive(PathFragment::Action)?;
         let mut renamer = Renamer::new();
-        let all_values = self
-            .then_fns()
+        let mut continue_apis = BTreeMap::new();
+        let mut action_branches = vec![];
+        let mut all_guard_simps: BTreeMap<Clause, GuardSimps> = BTreeMap::new();
+        let then_fns = self.then_fns();
+        let finish_or_fns = self.finish_or_fns();
+        let actions = then_fns
             .iter()
-            .filter_map(|func| func())
-            // We currently need to allocate for the the Callable as a
-            // trait object since it only exists temporarily.
-            // TODO: Without allocations?
-            .map(|x| -> Box<dyn CallableAsFoF<_, _>> { Box::new(x) })
-            .chain(self.finish_or_fns().iter().filter_map(|func| func()))
-            .map(|mut x| {
-                let new_name = Arc::new(renamer.get_name(x.get_name().as_ref()));
-                x.rename(new_name.clone());
-                let name = PathFragment::Named(SArc(new_name));
-                let f_ctx = action_ctx.derive(name).expect(UNIQUE_DERIVE_PANIC_MSG);
-                (f_ctx, x)
-            })
-            // flat_map will discard any
-            // skippable / never branches here
-            .flat_map(|(mut f_ctx, func)| {
-                let mut this_ctx = f_ctx
-                    // this should always be Ok(_)
-                    .derive(PathFragment::CondCompIf)
-                    .expect(UNIQUE_DERIVE_PANIC_MSG);
-                match CCILWrapper(func.get_conditional_compile_if())
-                    .assemble(self_ref, &mut this_ctx)
-                {
-                    // Throw errors
-                    ConditionalCompileType::Fail(errors) => {
-                        Some(Err(CompilationError::ConditionalCompilationFailed(errors)))
-                    }
-                    // Non nullable
-                    ConditionalCompileType::Required | ConditionalCompileType::NoConstraint => {
-                        Some(Ok((f_ctx, func, Nullable::No)))
-                    }
-                    // Nullable
-                    ConditionalCompileType::Nullable => Some(Ok((f_ctx, func, Nullable::Yes))),
-                    // Drop these
-                    ConditionalCompileType::Skippable | ConditionalCompileType::Never => None,
+            .filter_map(|factory| factory())
+            .map(|action| -> Box<dyn CallableAsFoF<_, _>> { Box::new(action) })
+            .chain(finish_or_fns.iter().filter_map(|factory| factory()));
+        for mut action in actions {
+            // Validate the source name before renaming: reserved fragments must
+            // never acquire a different meaning after a JSON round trip.
+            let original_name: PathFragment = action.get_name().clone().try_into()?;
+            if !matches!(original_name, PathFragment::Named(_)) {
+                return Err(CompilationError::InvalidPathName);
+            }
+            let name = Arc::new(renamer.get_name(action.get_name()));
+            action.rename(name.clone());
+            let mut action_context = action_ctx.derive_str(name)?;
+            let mut condition_context = action_context.derive(PathFragment::CondCompIf)?;
+            let nullability = match CCILWrapper(action.get_conditional_compile_if())
+                .assemble(self_ref, &mut condition_context)?
+            {
+                ConditionalCompileType::Fail(errors) => {
+                    return Err(CompilationError::ConditionalCompilationFailed(errors));
                 }
-            })
-            .map(|r| {
-                let (mut f_ctx, func, nullability) = r?;
-                let gctx = f_ctx.derive(PathFragment::Guard)?;
-                let simp_ctx = f_ctx.derive(PathFragment::Metadata)?;
-                // TODO: Suggested path frag?
-                let (guards, guard_metadata) =
-                    create_guards(self_ref, gctx, func.get_guard(), &mut guard_clauses)?;
-                let effect_ctx = f_ctx.derive(if func.get_returned_txtmpls_modify_guards() {
-                    PathFragment::Next
-                } else {
-                    PathFragment::Suggested
-                })?;
-                let effect_path = effect_ctx.path().clone();
-                let transactions = compute_all_effects(effect_ctx, self_ref, func.as_ref());
-                // If no guards and not CTV, then nothing gets added (not
-                // interpreted as Trivial True)
-                //   - If CTV and no guards, just CTV added.
-                //   - If CTV and guards, CTV & guards added.
-                // it would be an error if any of r_txtmpls is an error
-                // instead of just an empty iterator.
-                let txtmpl_clauses = transactions?
-                    .map(|r_txtmpl| {
-                        let txtmpl = r_txtmpl?;
-                        let h = txtmpl.hash();
-                        amount_range.update_range(txtmpl.required_input_amount);
-                        // Add the addition guards to these clauses
-                        let txtmpl = if func.get_returned_txtmpls_modify_guards() {
-                            &mut comitted_txns
-                        } else {
-                            &mut other_txns
-                        }
-                        .entry(h)
-                        .or_insert(txtmpl);
-
-                        let extractor = func.get_extract_clause_from_txtmpl();
-                        (extractor)(txtmpl, &ctx)
-                    })
-                    // Drop None values
-                    .filter_map(|s| s.transpose())
-                    // Forces any error to abort the whole thing
-                    .collect::<Result<Vec<Clause>, CompilationError>>()?;
-
-                // N.B. the order of the matches below is significant
-                Ok(if func.get_returned_txtmpls_modify_guards() {
-                    let r = (
-                        None,
-                        combine_txtmpls(nullability, txtmpl_clauses, guards)?,
-                        guard_metadata,
-                    );
-                    r
-                } else {
-                    let mut cp =
-                        ContinuationPoint::at(func.get_schema().clone(), effect_path.clone());
-                    for simp in func.gen_simps(self_ref, simp_ctx)? {
-                        cp = cp.add_simp(simp.as_ref())?;
-                    }
-                    let v = optimizer_flatten_and_compile(guards)?;
-                    (Some((SArc(effect_path), cp)), v, guard_metadata)
-                })
-            })
-            .collect::<Result<Vec<(_, Vec<Miniscript<XOnlyPublicKey, Tap>>, _)>, CompilationError>>(
+                ConditionalCompileType::Required | ConditionalCompileType::NoConstraint => {
+                    Nullable::No
+                }
+                ConditionalCompileType::Nullable => Nullable::Yes,
+                ConditionalCompileType::Skippable | ConditionalCompileType::Never => continue,
+            };
+            let guard_context = action_context.derive(PathFragment::Guard)?;
+            let metadata_context = action_context.derive(PathFragment::Metadata)?;
+            let (guards, guard_metadata) = create_guards(
+                self_ref,
+                guard_context,
+                action.get_guard(),
+                &mut guard_clauses,
             )?;
-
-        let mut continue_apis = ContinueAPIs::default();
-        let mut clause_accumulator = vec![];
-        let mut all_guard_simps: BTreeMap<Clause, GuardSimps> = Default::default();
-        for (v, b, c) in all_values {
-            continue_apis.extend(std::iter::once(v));
-            clause_accumulator.push(b);
-            for (pol, mut simps) in c {
-                all_guard_simps.entry(pol).or_default().append(&mut simps)
+            let committed = action.get_returned_txtmpls_modify_guards();
+            let effect_context = action_context.derive(if committed {
+                PathFragment::Next
+            } else {
+                PathFragment::Suggested
+            })?;
+            let effect_path = effect_context.path().clone();
+            let mut template_clauses = vec![];
+            for template in compute_all_effects(effect_context, self_ref, action.as_ref())? {
+                let mut template = template?;
+                // This also rejects forbidden guards on every suggested
+                // template, including duplicates of an earlier valid template.
+                let clause = (action.get_extract_clause_from_txtmpl())(&template, &ctx)?;
+                amount_range.update_range(template.required_input_amount);
+                if committed {
+                    template.guards = policy_as_guards(conjoin_guards(
+                        std::iter::once(&guards).chain(template.guards.iter()),
+                    ));
+                }
+                insert_template(
+                    if committed {
+                        &mut comitted_txns
+                    } else {
+                        &mut other_txns
+                    },
+                    template,
+                    &effect_path,
+                )?;
+                if let Some(clause) = clause {
+                    template_clauses.push(clause);
+                }
+            }
+            action_branches.extend(if committed {
+                combine_txtmpls(nullability, template_clauses, guards)?
+            } else {
+                let mut continuation =
+                    ContinuationPoint::at(action.get_schema().clone(), effect_path.clone());
+                for simp in action.gen_simps(self_ref, metadata_context)? {
+                    continuation = continuation.add_simp(simp.as_ref())?;
+                }
+                continue_apis.insert(SArc(effect_path), continuation);
+                optimizer_flatten_and_compile(guards)?
+            });
+            for (policy, mut simps) in guard_metadata {
+                all_guard_simps
+                    .entry(policy)
+                    .or_default()
+                    .append(&mut simps);
             }
         }
-        for guard_simps in all_guard_simps.values_mut() {
-            guard_simps.sort_by_key(|k| k as *const _ as usize);
-            guard_simps.dedup_by(|a, b| std::ptr::eq(a, b))
+
+        let mut finish_context = ctx.derive(PathFragment::FinishFn)?;
+        let mut branches = vec![];
+        for (index, factory) in self.finish_fns().iter().enumerate() {
+            let mut guard_context = finish_context.derive_num(index as u64)?;
+            let metadata_context = guard_context.derive(PathFragment::Metadata)?;
+            if let Some((policy, mut simps)) =
+                guard_clauses.get(self_ref, *factory, guard_context, metadata_context)?
+            {
+                all_guard_simps
+                    .entry(policy.clone())
+                    .or_default()
+                    .append(&mut simps);
+                branches.extend(optimizer_flatten_and_compile(policy)?);
+            }
         }
-
-        let branches: Vec<Miniscript<XOnlyPublicKey, Tap>> = {
-            let mut finish_fns_ctx = ctx.derive(PathFragment::FinishFn)?;
-            // Compute all finish_functions at this level, caching if requested.
-            let guards = self
-                .finish_fns()
-                .iter()
-                // note that this zip with would loop forever if there were to be a bug here
-                .zip((0..).filter_map(|i| {
-                    let mut new = finish_fns_ctx.derive(PathFragment::Branch(i as u64)).ok()?;
-                    let simp = new.derive(PathFragment::Metadata).ok()?;
-                    Some((new, simp))
-                }))
-                .filter_map(|(func, (c, simp_c))| {
-                    guard_clauses.get(self_ref, *func, c, simp_c).transpose()
-                })
-                .collect::<Result<Vec<_>, _>>()?;
-            let all_g = guards
-                .into_iter()
-                .map(|(policy, _m)| optimizer_flatten_and_compile(policy))
-                .collect::<Result<Vec<_>, _>>()?;
-
-            all_g
-                .into_iter()
-                .chain(clause_accumulator.into_iter())
-                .flatten()
-                .collect()
-        };
+        branches.extend(action_branches);
         // TODO: Pick a better branch that is guaranteed to work!
         let some_key = pick_key_from_miniscripts(branches.iter());
         // Don't remove the key from the scripts in case it was bogus
@@ -364,7 +319,7 @@ where
             Ok(Compiled {
                 ctv_to_tx: comitted_txns,
                 suggested_txs: other_txns,
-                continue_apis: continue_apis.inner,
+                continue_apis,
                 root_path,
                 address,
                 descriptor,
@@ -373,6 +328,99 @@ where
             })
         }
     }
+}
+
+pub(crate) fn conjoin_guards<'a>(guards: impl Iterator<Item = &'a Clause>) -> Clause {
+    fn contains_inscription(guard: &Clause) -> bool {
+        match guard {
+            Clause::Inscribe(..) => true,
+            Clause::And(guards) | Clause::Threshold(_, guards) => {
+                guards.iter().any(contains_inscription)
+            }
+            Clause::Or(guards) => guards.iter().any(|(_, guard)| contains_inscription(guard)),
+            _ => false,
+        }
+    }
+
+    let mut combined = vec![];
+    for guard in guards {
+        if *guard == Clause::Unsatisfiable {
+            return Clause::Unsatisfiable;
+        }
+        // Inscription envelopes are script effects. Neither their order nor
+        // their multiplicity follows Boolean idempotence, including when they
+        // occur below another policy node.
+        if *guard != Clause::Trivial && (contains_inscription(guard) || !combined.contains(guard)) {
+            combined.push(guard.clone());
+        }
+    }
+    match combined.len() {
+        0 => Clause::Trivial,
+        1 => combined.pop().unwrap(),
+        2 => Clause::And(combined),
+        count => Clause::Threshold(count, combined),
+    }
+}
+
+fn policy_as_guards(policy: Clause) -> Vec<Clause> {
+    if policy == Clause::Trivial {
+        vec![]
+    } else {
+        vec![policy]
+    }
+}
+
+fn insert_template(
+    templates: &mut BTreeMap<bitcoin::hashes::sha256::Hash, crate::template::Template>,
+    template: crate::template::Template,
+    path: &EffectPath,
+) -> Result<(), CompilationError> {
+    use std::collections::btree_map::Entry;
+    let hash = template.hash();
+    match templates.entry(hash) {
+        Entry::Vacant(entry) => {
+            entry.insert(template);
+        }
+        Entry::Occupied(mut entry) => {
+            let existing = entry.get_mut();
+            // A CTV hash commits to transaction fields, not funding budgets,
+            // metadata or child continuation paths. None may be chosen by
+            // whichever action happens to be visited first.
+            macro_rules! same {
+                ($($field:ident),+ $(,)?) => { $(
+                    if existing.$field != template.$field {
+                        return Err(CompilationError::ConflictingTemplate {
+                            hash, at: path.clone(), field: stringify!($field),
+                        });
+                    }
+                )+ };
+            }
+            same!(
+                ctv_index,
+                tx,
+                max,
+                required_input_amount,
+                min_feerate_sats_vbyte,
+                metadata_map_s2s,
+                inputs,
+                outputs
+            );
+            let alternatives = optimizer_flatten_policy(conjoin_guards(existing.guards.iter()))
+                .into_iter()
+                .chain(optimizer_flatten_policy(conjoin_guards(
+                    template.guards.iter(),
+                )))
+                .collect::<BTreeSet<_>>();
+            existing.guards = if alternatives.contains(&Clause::Trivial) {
+                vec![]
+            } else if alternatives.len() == 1 {
+                alternatives.into_iter().collect()
+            } else {
+                vec![Clause::Threshold(1, alternatives.into_iter().collect())]
+            };
+        }
+    }
+    Ok(())
 }
 
 fn optimizer_flatten_and_compile(

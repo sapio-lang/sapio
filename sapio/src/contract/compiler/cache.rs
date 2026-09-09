@@ -6,7 +6,6 @@
 
 //! Caches for guards
 use super::Context;
-use super::InternalCompilerTag;
 use crate::contract::actions::Guard;
 use crate::contract::actions::SimpGen;
 use crate::contract::CompilationError;
@@ -19,7 +18,7 @@ use std::sync::Arc;
 
 pub type GuardSimps = Vec<Arc<dyn SIMPAttachableAt<GuardLT>>>;
 pub(crate) enum CacheEntry<T> {
-    Cached(Clause, GuardSimps),
+    Cached(Clause, Option<SimpGen<T>>),
     Fresh(fn(&T, Context) -> Clause, Option<SimpGen<T>>),
 }
 
@@ -34,21 +33,6 @@ impl<T> GuardCache<T> {
             cache: BTreeMap::new(),
         }
     }
-    pub(crate) fn create_entry(
-        g: Option<Guard<T>>,
-        t: &T,
-        ctx: Context,
-        simp_ctx: Context,
-    ) -> Result<Option<CacheEntry<T>>, CompilationError> {
-        match g {
-            Some(Guard::Cache(f, Some(simp_gen))) => {
-                Ok(Some(CacheEntry::Cached(f(t, ctx), simp_gen(t, simp_ctx)?)))
-            }
-            Some(Guard::Cache(f, None)) => Ok(Some(CacheEntry::Cached(f(t, ctx), vec![]))),
-            Some(Guard::Fresh(f, simp_gen)) => Ok(Some(CacheEntry::Fresh(f, simp_gen))),
-            None => Ok(None),
-        }
-    }
     pub(crate) fn get(
         &mut self,
         t: &T,
@@ -56,31 +40,20 @@ impl<T> GuardCache<T> {
         ctx: Context,
         simp_ctx: Context,
     ) -> Result<Option<(Clause, GuardSimps)>, CompilationError> {
-        let mut entry = self.cache.entry(f as usize);
-        let r = match entry {
-            std::collections::btree_map::Entry::Vacant(v) => {
-                let ent = Self::create_entry(
-                    f(),
-                    t,
-                    ctx.internal_clone(InternalCompilerTag { _secret: () }),
-                    simp_ctx.internal_clone(InternalCompilerTag { _secret: () }),
-                )?;
-
-                v.insert(ent)
-            }
-            std::collections::btree_map::Entry::Occupied(ref mut o) => o.get_mut(),
+        let entry = self.cache.entry(f as usize).or_insert_with(|| match f()? {
+            Guard::Cache(policy, simps) => Some(CacheEntry::Cached(policy(t), simps)),
+            Guard::Fresh(policy, simps) => Some(CacheEntry::Fresh(policy, simps)),
+        });
+        let Some(entry) = entry else { return Ok(None) };
+        let (clause, simps) = match entry {
+            CacheEntry::Cached(clause, simps) => (clause.clone(), simps),
+            CacheEntry::Fresh(policy, simps) => (policy(t, ctx), simps),
         };
-        match r {
-            Some(CacheEntry::Cached(s, v)) => Ok(Some((s.clone(), v.to_vec()))),
-            Some(CacheEntry::Fresh(f, s)) => Ok(Some((
-                f(t, ctx),
-                match s {
-                    Some(f2) => f2(t, simp_ctx)?,
-                    None => vec![],
-                },
-            ))),
-            None => Ok(None),
-        }
+        let metadata = match simps {
+            Some(generate) => generate(t, simp_ctx)?,
+            None => vec![],
+        };
+        Ok(Some((clause, metadata)))
     }
 }
 
@@ -100,17 +73,5 @@ pub(crate) fn create_guards<T>(
         })
         .filter_map(Result::transpose)
         .collect::<Result<Vec<_>, _>>()?;
-    let mut clauses: Vec<_> = v
-        .iter()
-        .map(|x| &x.0)
-        .filter(|x| **x != Clause::Trivial)
-        .cloned()
-        .collect(); // no point in using any Trivials
-    if clauses.is_empty() {
-        Ok((Clause::Trivial, v))
-    } else if clauses.len() == 1 {
-        Ok((clauses.pop().unwrap(), v))
-    } else {
-        Ok((Clause::And(clauses), v))
-    }
+    Ok((super::conjoin_guards(v.iter().map(|x| &x.0)), v))
 }

@@ -56,7 +56,7 @@ mod tests {
     fn cooperative_close_requires_both_keys_and_conserves_value() {
         let contract = channel();
         assert_eq!(
-            contract.guard_signed(context(1000)),
+            contract.guard_signed(),
             Clause::And(vec![Clause::Key(key(1)), Clause::Key(key(2))])
         );
         let update = |a, b| {
@@ -248,7 +248,7 @@ where
         Clause::Older(100)
     }
     #[guard(cached)]
-    fn signed(self, _ctx: Context) {
+    fn signed(self) {
         Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
     }
 

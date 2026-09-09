@@ -111,9 +111,11 @@ impl TemplateMetadata {
 
 /// Template holds the data needed to construct a Transaction for CTV Purposes, along with relevant
 /// metadata
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 pub struct Template {
-    /// additional restrictions placed on this template
+    /// Additional restrictions on a builder's template. After contract
+    /// compilation, these include the action guards; duplicate transactions
+    /// retain their complete alternative authorizations here.
     #[serde(rename = "additional_preconditions")]
     pub guards: Vec<Clause>,
     /// the precomputed template hash for this Template

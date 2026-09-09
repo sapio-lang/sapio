@@ -28,7 +28,7 @@ impl ExampleA {
         Clause::And(vec![Clause::Key(self.bob), Clause::Older(100)])
     }
     #[guard(cached)]
-    fn signed(self, _ctx: sapio::Context) {
+    fn signed(self) {
         Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
     }
 }
@@ -73,7 +73,7 @@ struct ExampleB<T: BState> {
 
 impl<T: BState> ExampleB<T> {
     #[guard(cached)]
-    fn all_signed(self, _ctx: Context) {
+    fn all_signed(self) {
         Clause::Threshold(
             T::get_n(self.threshold as usize, self.participants.len()),
             self.participants.iter().map(|k| Clause::Key(*k)).collect(),
@@ -241,7 +241,7 @@ mod tests {
             bob: key(2),
         };
         assert_eq!(
-            a.guard_signed(context(0)),
+            a.guard_signed(),
             Clause::And(vec![Clause::Key(key(1)), Clause::Key(key(2))])
         );
         assert_eq!(
@@ -262,7 +262,7 @@ mod tests {
             1000
         );
         assert_eq!(
-            b.guard_all_signed(context(0)),
+            b.guard_all_signed(),
             Clause::Threshold(2, vec![Clause::Key(key(1)), Clause::Key(key(2))])
         );
     }
@@ -275,10 +275,7 @@ mod tests {
             amount: bitcoin::Amount::from_sat(1000).into(),
             pd: PhantomData,
         };
-        assert!(matches!(
-            b.guard_all_signed(context(0)),
-            Clause::Threshold(256, _)
-        ));
+        assert!(matches!(b.guard_all_signed(), Clause::Threshold(256, _)));
         b.threshold = 0;
         assert!(b.compile(context(1000)).is_err());
         b.threshold = 2;

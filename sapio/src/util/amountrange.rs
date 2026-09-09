@@ -66,7 +66,7 @@ impl From<AmountU64> for u64 {
 }
 /// `AmountRange` makes it simple to track and update the range of allowed values
 /// for a contract to receive.
-#[derive(Serialize, Deserialize, JsonSchema, Clone, Copy, Debug)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AmountRange {
     #[serde(rename = "min_btc", skip_serializing_if = "Option::is_none", default)]
     min: Option<AmountF64>,
