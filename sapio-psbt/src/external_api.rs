@@ -5,8 +5,11 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 use crate::{validate_psbt, PSBTValidationError};
 use bitcoin::consensus::serialize;
+use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
 use miniscript::psbt::PsbtExt;
+use miniscript::{Miniscript, Tap};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 
 use bitcoin::secp256k1::Secp256k1;
 
@@ -29,6 +32,9 @@ pub enum PSBTApi {
 
 /// Finalize a structurally valid PSBT, retaining incomplete signing results.
 /// Malformed transaction and metadata fields return a validation error.
+/// A custom tapscript leaf does not prevent using another satisfiable leaf.
+/// If finalization fails, unsupported leaves are identified in the returned
+/// diagnostics and their PSBT data remains available to an external satisfier.
 pub fn finalize_psbt_format_api(
     psbt: PartiallySignedTransaction,
 ) -> Result<PSBTApi, PSBTValidationError> {
@@ -44,7 +50,24 @@ pub fn finalize_psbt_format_api(
             }
         })
         .unwrap_or_else(|(psbt, errors)| {
-            let errors: Vec<_> = errors.iter().map(|e| format!("{:?}", e)).collect();
+            let mut errors: Vec<_> = errors.iter().map(|e| format!("{:?}", e)).collect();
+            for (index, input) in psbt.inputs.iter().enumerate() {
+                let unsupported: BTreeSet<_> = input
+                    .tap_scripts
+                    .values()
+                    .filter(|(script, version)| {
+                        *version == LeafVersion::TapScript
+                            && Miniscript::<bitcoin::XOnlyPublicKey, Tap>::parse_insane(script)
+                                .is_err()
+                    })
+                    .map(|(script, version)| TapLeafHash::from_script(script, *version))
+                    .collect();
+                for leaf in unsupported {
+                    errors.push(format!(
+                        "Input {index}: unsupported custom tapscript leaf {leaf}; an external satisfier is required"
+                    ));
+                }
+            }
             let encoded_psbt = base64::encode(serialize(&psbt));
             PSBTApi::NotFinished {
                 completed: false,
