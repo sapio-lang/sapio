@@ -26,12 +26,12 @@ A Sapio Config file (on linux at `~/.config/sapio-cli/config.json`) is a valid J
         "CookieFile": "/home/<user>/.bitcoin/regtest/.cookie"
       }
     },
-    "emulator_nodes": {
-      "enabled": true,
+    "covenant": {
+      "mode": "signer_emulation",
       "emulators": [
         [
           "tpubD6NzVbkrYhZ4Wf398td3H8YhWBsXx9Sxa4W3cQWkNW3N3DHSNB2qtPoUMXrA6JNaPxodQfRpoZNE5tGM9iZ4xfUEFRJEJvfs8W5paUagYCE",
-          "ctv.d31373.org:8367"
+          "127.0.0.1:8367"
         ]
       ],
       "threshold": 1,
@@ -44,17 +44,63 @@ A Sapio Config file (on linux at `~/.config/sapio-cli/config.json`) is a valid J
 }
 ```
 
-It will be populated automatically on startup if no config exists with
-default values. Only one network may be active at a time, but each network
-can have a defined configuration.
+Run `sapio-cli configure wizard --write` to create a configuration. The wizard
+requires an explicit covenant mode. Only one network may be active at a time,
+but each network can have a defined configuration.
 
 The command line may be used to specify a different configuration.
 
-The emulator_nodes parameter, when enabled, uses a remote server to emulate
-CheckTemplateVerify-like functionality. You can replace emulators with your
-own servers (which can be started via the CLI), and you can set up emulation
-to work with an arbitrary M of N of your choice. Note that this may create
-issues with script lengths. You can read more about the emulator in [ctv_emulators](../ctv_emulators/README.md).
+Every network configuration and Studio request context must include `covenant`.
+This selects runtime binding and signing assumptions. The `signer_emulation`
+mode relies on the configured signers' security and availability. Replace the
+example public key and address with your own signer's values. Multiple peers support a
+threshold policy; see [CTV emulators](../ctv_emulators/README.md).
+
+For research on a chain assumed to enforce native CTV, select explicitly:
+
+```json
+{"covenant": {"mode": "native_ctv_research"}}
+```
+
+This is an operator assumption, not node capability detection. Sapio does not
+infer enforcement from a network name. Ordinary `signer_emulation` rejects known
+spending scripts containing native CTV before funding or binding, including native checks
+written directly in guards or raw policies. Binding also checks that the
+configured backend reproduces the policies derived from the artifact's recorded
+covenant requirements; changing
+signer keys or thresholds requires recompilation.
+
+Contracts combining signer-emulated templates with direct native CTV guards can
+use `signer_emulation_with_native_ctv_research`. It takes the same `emulators`,
+`threshold` and `request_timeout_secs` fields as signer mode and derives the same
+signer policies. It additionally records the operator's explicit native CTV
+assumption, permitting those mixed scripts at the funding boundary. It does not
+replace signer checks with native CTV or relax the recorded-policy comparison.
+
+This configuration migration is mandatory. Replace `emulator_nodes` in network
+configurations and `emulator` in Studio contexts with the tagged `covenant` field.
+Remove `enabled`; missing, null and legacy-only settings fail instead of choosing
+native CTV implicitly. A signer configuration or connection error never switches
+modes.
+
+Compilation uses the mandatory `context.lowering` in the create arguments,
+independently of these runtime settings:
+
+```json
+{"arguments": {}, "context": {"network": "Regtest", "amount": 1000, "lowering": "Native"}}
+```
+
+For emulation, set `lowering` to
+`{"CtvEmulation":{"signers":["<extended public key>"],"threshold":1}}`.
+Only explicitly emulatable predicates follow this plan; direct native clauses
+and raw scripts retain their meaning. The public roots and threshold determine
+the compiled policy without DNS, connections or signer callbacks. Nested modules
+receive the same explicit plan. Creating contracts and inspecting module metadata
+never resolve runtime signer settings. At binding, the configured signer must
+reproduce the policies selected by the recorded plan.
+
+Old create requests lacking `context.lowering` fail decoding. Rebuild old WASM
+plugins: compilation hosts no longer expose the signer-policy or signing imports.
 
 `request_timeout_secs` defaults to 30. Resolving the complete peer list has one
 deadline; each peer signing request has a separate deadline covering the wait

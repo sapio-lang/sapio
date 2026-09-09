@@ -207,12 +207,15 @@ Nested calls reserve an attempt before loading a module, including failed
 lookups. Dropping a child does not restore attempts. A new top-level handle or
 `fresh_clone()` receives independent fuel, memory and nested-call allowances;
 ordinary calls on an existing handle do not reset them. Allocating host callbacks
-cannot recursively reenter the guest allocator. The WASM signing import accepts
-only checked signature additions, just like native signing.
+cannot recursively reenter the guest allocator. Compilation receives an explicit
+public `LoweringPlan` through `context.lowering`. The WASM host exposes no signer
+selection or PSBT-signing imports; guests derive supported covenant policies
+locally from those public inputs. See [covenant lowering](ENFORCEMENT.md).
 
 These are guest execution limits, not a wall-clock deadline or a process memory
-limit. Native compilation, host serialization/schema work and emulator I/O are
-outside instruction metering. Emulator I/O has its own request deadlines below.
+limit. Native compilation and host serialization/schema work are outside
+instruction metering. Signer I/O occurs separately during binding and signing,
+with its own request deadlines below.
 Wasmer may reserve substantially more virtual
 address space than the accessible linear-memory limit. Evaluate those costs
 before exposing compilation as a service.
@@ -294,7 +297,7 @@ passes the signature-additions check. Timeout, cancellation during an exchange
 or an invalid response drops that socket; the next request reconnects. A queued
 request that times out does not disturb the preceding request's connection.
 
-The CLI's `emulator_nodes.request_timeout_secs` configures that allowance and a
+The CLI's `covenant.request_timeout_secs` configures that allowance and a
 separate deadline for awaiting resolution of the whole peer configuration; it
 defaults to 30 seconds. System resolver work can continue after this async wait
 times out and delay runtime shutdown. Direct library users configure exchanges with

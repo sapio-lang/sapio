@@ -6,6 +6,8 @@ lowering, even when several transitions produce the same transaction.
 Native Miniscript clauses and custom policy backends share those action rules;
 see [policy backends](POLICY_BACKENDS.md) for the extension API, raw-script
 obligations, compilation budgets and artifact schema changes.
+The [enforcement assumptions](ENFORCEMENT.md) describe explicit emulatable
+predicates, public lowering inputs, signer compatibility and CLI deployment modes.
 
 ## Declarations
 
@@ -31,6 +33,10 @@ For a CTV action with action guard `A`, a returned template with additional guar
 ```text
 A AND T AND covenant(template_hash)
 ```
+
+Here `covenant(hash)` resolves `Emulatable(Ctv(hash))` with the public
+`LoweringPlan` supplied as a compilation input. It does not call a signer or
+consult the host runtime.
 
 Every action contributes its own condition before transaction storage is
 deduplicated. If Alice can authorize a transaction directly, while Bob needs
@@ -60,6 +66,20 @@ For a shared transaction it records their complete alternative conditions in
 canonical policy order. The committed descriptor or raw Taproot tree remains the
 authority for spending.
 
+The action API uses `TemplateKind::Covenant` or `TemplateKind::Suggested`.
+Committed templates contribute an explicit CTV wrapper; suggestions do not
+create an automatic covenant. This shared action representation replaces the
+old Boolean and clause-extraction callback without compatibility aliases.
+
+`Emulatable(Ctv(hash))` can also be returned by a policy guard, including a
+finish guard with no templates. Its `PolicyCompiler` implementation preserves
+the wrapper as `ScriptPolicy::Emulatable`. The compiler then resolves it from
+`Context`'s serialized `LoweringPlan` and collects its predicate in
+`Object.covenant_requirements` alongside that plan. Native
+`Clause::TxTemplate` and raw scripts are never automatically rewritten.
+The wrapper currently supports CTV only; arbitrary program evaluators remain
+future work. See [the enforcement boundary](ENFORCEMENT.md).
+
 ## Source validity and possible transitions
 
 Native policy nodes are validated before simplification or alternative
@@ -83,7 +103,8 @@ or complete satisfiability, and it does not infer the meaning of raw scripts.
 A CTV hash does not commit to funding budgets, metadata or child continuation
 paths. Two templates can share a stored transaction only when their complete
 binding payloads agree: transaction, commitment index, funding/fee requirements,
-input metadata, template metadata and output contract graphs. A disagreement
+input metadata, template metadata and output contract graphs, including the
+children's recorded lowering requirements. A disagreement
 returns `ConflictingTemplate` with the hash, action/effect path and differing
 field. Authorizations may differ and are combined as alternatives.
 

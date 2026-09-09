@@ -6,19 +6,28 @@ provides some tools to enable similar functionality today by emulating
 BIP-119 with signatures.
 
 
-## The Default Emulator
+## Compilation inputs and runtime signers
 
-Sapio CTV Emulators defines implementations of a local emulator that can be
-used by sapio compiler library users. To use such an emulator, a user can
-generate a seed and create a contract. After creating the contract and
-binding it to a specific UTXO, a user should be able to delete the seed,
-ensuring that only the compiled logic may be used. Alternatively, they can
-retain the seed and promise not to improperly use it.
+Compilation takes a public `LoweringPlan` containing either `Native` or
+`CtvEmulation { signers, threshold }`. The signer entries are extended public
+keys. Only explicit `Emulatable(Ctv(hash))` predicates follow that plan;
+ordinary native CTV clauses and raw scripts retain their meaning. Transaction
+actions add an emulatable CTV predicate automatically.
+
+Module arguments must include `context.lowering`. Nested modules receive the
+same explicit inputs, and compilation does not connect to a signer or ask a
+host to choose a policy. WASM compilation hosts expose no signing capability.
+
+The CTV emulator implementations provide runtime signing services. Binding
+checks that the configured runtime signer reproduces the policies selected by
+the artifact's recorded public inputs. Keeping the seed requires trusting its
+custodian; deleting it requires collecting every signature that will be needed
+first. Public lowering inputs alone do not establish availability or key deletion.
 
 
 This crate also defines logic for servers that want to offer emulator
-services to remote compilers. This is convenient since the emulator server
-must be kept secure, so an organization may want it to be more tightly
+services to binding and signing clients. This is convenient since the emulator
+server must be kept secure, so an organization may want it to be more tightly
 safeguarded.
 
 The emulator definitions include wrapper types that compose individual
@@ -27,15 +36,9 @@ for circumstances where a contract is between e.g. 2 parties and both
 have an emulator server. Then the contract can be "immutable" unless
 both collude.
 
-To aid in experimentation, Judica, Inc operates a public emulator server for
-regtest.
-
-```json
-[
-    "tpubD6NzVbkrYhZ4Wf398td3H8YhWBsXx9Sxa4W3cQWkNW3N3DHSNB2qtPoUMXrA6JNaPxodQfRpoZNE5tGM9iZ4xfUEFRJEJvfs8W5paUagYCE",
-    "ctv.d31373.org:8367"
-]
-```
+Configure your own runtime signers separately from the compilation inputs.
+The CLI requires an explicit signer or native research mode; a missing or
+disabled emulator configuration no longer selects native CTV implicitly.
 
 ### How it works
 
@@ -91,12 +94,11 @@ interoperability with existing tools seemed to be the best path.
 
 ## Customizing Emulator Trait
 
-This emulator trait crate is a base that exports a trait definition and some
-helper structs that are needed across the sapio ecosystem.
-
-Defining the trait in its own crate allows us to use trait objects in our
-compiler internals without needing to have the compiler directly depend on
-e.g. networking primitives.
+The emulator trait belongs to binding and signing. `get_signer_for` advertises
+the runtime's policy for compatibility checks, and `sign` supplies signatures.
+Compilation derives policies locally from `LoweringPlan` and never invokes
+this trait. A custom implementation does not add support for arbitrary
+encumbrance programs; those require their own defined evaluator and protocol.
 
 As a user of the Sapio library, you can define your own custom emulator logic
 but that's out of scope of this book.

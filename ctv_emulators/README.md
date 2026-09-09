@@ -20,7 +20,7 @@ the next call connects again. A request that times out while queued leaves the
 previous request's socket alone.
 
 `HDOracleEmulatorConnection::with_request_timeout` changes this allowance. The
-CLI's `emulator_nodes.request_timeout_secs` defaults to 30 and also supplies a
+CLI's `covenant.request_timeout_secs` defaults to 30 and also supplies a
 separate deadline for awaiting resolution of the complete peer configuration.
 Blocking system resolver work can continue after that deadline and delay runtime
 shutdown. Library callers
