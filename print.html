@@ -38,7 +38,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-3b445493.js";
+            window.path_to_searchindex_js = "searchindex-3ae5aa73.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-efed9c80.js"></script>
@@ -520,60 +520,68 @@ malleability.</p>
 benefit from this foundational work.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="template-builder"><a class="header" href="#template-builder">Template Builder</a></h1>
-<p>The Template builder is one of the most important parts of a Sapio contract.
-It is how you define and build a transaction step.</p>
-<p>It’s also an area of active work to improve the UX of, to enable building new
-kinds of smart contracts more easily, supporting more advanced constructs.</p>
-<p>The below code demonstrates how to use the template builder. See the
-<a href="https://docs.rs/sapio/0.1.2/sapio/template/builder/struct.Builder.html">docs</a>
-for more details!</p>
+<p>The template builder defines a transaction step. Each output receives part of
+the available funding and its own compilation context. Reserve fees explicitly
+after adding all outputs.</p>
+<p>This contract pays 1,000 sats, returns the remaining funds as change, and reserves
+100 sats for fees:</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>struct X;
-impl X {
-    #[then]
-    fn example(self, ctx: Context) {
-        /// create a new template with the current context
-        /// and set lock time to height 100
-        let mut tmpl = ctx.template().set_lock_time(AbsHeight::from(100).into())?;
-        let h = vec![(String::from("Metadata"), String::from("IS_COOL"))].into_iter().collect();
-        /// Add an output
-        /// make sure to assign to update after initial assignment, otherwise tmpl is consumed completely...
-        /// Note: What happens when X creates an X (infinite loop)
-        tmpl = tmpl.add_output(bitcoin::Amount::from_sat(1000), &amp;X, Some(h))?;
-        /// mark some funds unavailable (e.g. fees)
-        tmpl = tmpl.spend_amount(bitcoin::Amount::from_sat(0xFEE))?;
-        /// note that tmpl has it's own clone of ctx, which we should be
-        /// careful to use instead of the passed in ctx, which is immutable
-        if tmpl.ctx().funds() &lt; bitcoin::Amount::from_sat(100000) {
-            return Err(CompilationError::TerminateCompilation);
-        }
-        /// certain metadata is inteded to be "non-proprietary" and has dedicated setters
-        tmpl = tmpl.set_label("Example!".into());
-        /// adds a new _input_ and sets it sequence to relheight 1 block.
-        tmpl = tmpl.add_sequence().set_sequence(-1, RelHeight::from(1))?;
-        /// add some additional funds (i.e. from the input we just added)
-        tmpl = tmpl.add_amount(Bitcoin::from_sats(10000));
-        /// Send the remaining funds to this output
-        tmpl = tmpl.add_output(tmpl.ctx().funds(), &amp;X, None)?;
-        let feeling_lazy = true;
-        if feeling_lazy {
-            /// This finishes the builder and turns it into the correct result type
-            tmpl.into()
-        } else {
-            /// equivalently, but more verbosely
-            Ok(Box::new(std::iter::once(Template::from(tmpl))))
-        }
-    }
-    }
-impl Contract for X {
-    /*...*/
+</span>use bitcoin::{Amount, XOnlyPublicKey};
+use sapio::contract::{CompilationError, Contract};
+use sapio::{declare, then, Context};
+
+struct Payment {
+    recipient: XOnlyPublicKey,
+    change: XOnlyPublicKey,
 }
 
+impl Payment {
+    #[then]
+    fn pay(self, ctx: Context) {
+        let fee = Amount::from_sat(100);
+        let mut tmpl = ctx
+            .template()
+            .set_label("Payment".into())
+            .add_output(Amount::from_sat(1_000), &amp;self.recipient, None)?;
+
+        let change = tmpl
+            .ctx()
+            .funds()
+            .checked_sub(fee)
+            .ok_or(CompilationError::OutOfFunds)?;
+        if change != Amount::ZERO {
+            tmpl = tmpl.add_output(change, &amp;self.change, None)?;
+        }
+
+        tmpl.add_fees(fee)?.into()
+    }
+}
+
+impl Contract for Payment {
+    declare! {then, Self::pay}
+    declare! {non updatable}
+}
 <span class="boring">}</span></code></pre>
-<p>The Sapio model currently expects that all contracts UTXO spends are located
-in the first input. The CTV hash commits to this, so it cannot be modified at
-this time (but future work might allow changing this).</p>
+<p>Builder methods consume the previous builder and return the updated one.
+<code>ctx().funds()</code> reports the remaining construction budget. Emitted outputs and
+explicitly reserved fees determine the template’s minimum funding requirement;
+an unused budget is not a fee reservation.</p>
+<p><code>add_output</code> passes the output’s amount to the receiving contract. When ordinal
+ranges are known, outputs receive consecutive prefixes in transaction input
+order. Debiting the builder without creating an output would shift those
+ordinal assignments, so direct <code>spend_amount</code> access is private.</p>
+<p><code>add_fees</code> records the fee and changes the builder’s state. That state allows
+additional fee reservations within the remaining budget, but cannot add more
+outputs or auxiliary funds. This keeps fees after all outputs. Complete
+metadata, guards, input sequences and change outputs before reserving fees.</p>
+<p>Auxiliary input contributions use <code>add_sequence().add_amount(amount)?</code>; these
+funds are separate from the contract input’s required contribution. When input
+ordinals are tracked, allocate all known sats to outputs before introducing
+unknown auxiliary funds. Binding checks the actual funding inputs.</p>
+<p>Sapio currently places the contract’s UTXO at input zero. The CTV commitment
+includes this index. See the <a href="https://github.com/sapio-lang/sapio/blob/master/sapio/src/template/builder.rs">builder implementation</a>
+for the complete set of operations.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="time-locks"><a class="header" href="#time-locks">Time Locks</a></h1>
 <p>Sapio provides some utilities for working with both relative and absolute timelocks. See <a href="https://docs.rs/sapio-base/0.1.0/sapio_base/timelocks/index.html">the sapio-base docs</a> for more details.</p>
