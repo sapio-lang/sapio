@@ -1,8 +1,12 @@
 //! Versioned native cryptography, charged to the calling instance's fuel.
 
-use crate::{CRYPTO_NAMESPACE, MAX_DERIVATION_CHILDREN, MAX_SHA256_BYTES};
+use crate::{
+    CRYPTO_NAMESPACE, CRYPTO_NAMESPACE_V2, MAX_DERIVATION_CHILDREN, MAX_SCHNORR_MESSAGE_BYTES,
+    MAX_SHA256_BYTES,
+};
 use bitcoin::hashes::{sha256, Hash, HashEngine};
-use bitcoin::secp256k1::{schnorr, Message, Secp256k1, VerifyOnly, XOnlyPublicKey};
+use bitcoin::secp256k1::ffi::{self, CPtr};
+use bitcoin::secp256k1::{schnorr, Message, Parity, Scalar, Secp256k1, VerifyOnly, XOnlyPublicKey};
 use bitcoin::util::bip32::{ChildNumber, ExtendedPubKey};
 use std::sync::OnceLock;
 use wasmer::{
@@ -20,6 +24,12 @@ pub const BIP32_BASE_FUEL: u64 = 500;
 pub const BIP32_CHILD_FUEL: u64 = 50_000;
 /// Fixed v1 cost for each Schnorr verification, including invalid data.
 pub const SCHNORR_VERIFY_FUEL: u64 = 50_000;
+/// Fixed v2 cost for each raw-message Schnorr verification.
+pub const SCHNORR_VERIFY_V2_BASE_FUEL: u64 = 50_000;
+/// Additional v2 cost for each raw message byte verified.
+pub const SCHNORR_VERIFY_V2_BYTE_FUEL: u64 = 2;
+/// Fixed v2 cost for each x-only key tweak check, including invalid data.
+pub const XONLY_TWEAK_CHECK_FUEL: u64 = 50_000;
 
 /// Crypto imports are unusable until bound to their instantiated guest.
 #[derive(Default)]
@@ -61,6 +71,29 @@ pub fn add_crypto_imports(
         CRYPTO_NAMESPACE,
         "schnorr_verify",
         Function::new_typed_with_env(store, &env, schnorr_verify_import),
+    );
+    env
+}
+
+/// Add the unchanged v1 imports and two v2 verification imports.
+///
+/// Both namespaces share one environment and the instance's existing fuel
+/// globals. Bind the returned environment once using [`bind_crypto`]. Hosts
+/// must select this extension explicitly; [`add_crypto_imports`] stays v1-only.
+pub fn add_crypto_imports_v2(
+    store: &mut Store,
+    imports: &mut Imports,
+) -> FunctionEnv<CryptoEnvironment> {
+    let env = add_crypto_imports(store, imports);
+    imports.define(
+        CRYPTO_NAMESPACE_V2,
+        "schnorr_verify",
+        Function::new_typed_with_env(store, &env, schnorr_verify_v2_import),
+    );
+    imports.define(
+        CRYPTO_NAMESPACE_V2,
+        "xonly_tweak_check",
+        Function::new_typed_with_env(store, &env, xonly_tweak_check_import),
     );
     env
 }
@@ -250,5 +283,82 @@ fn schnorr_verify_import(
     ))
 }
 
+fn schnorr_verify_v2_import(
+    mut env: FunctionEnvMut<'_, CryptoEnvironment>,
+    message: u32,
+    length: u32,
+    key: u32,
+    signature: u32,
+) -> Result<i32, RuntimeError> {
+    let bound = BoundCrypto::from_env(&env)?;
+    bound.charge(
+        &mut env,
+        SCHNORR_VERIFY_V2_BASE_FUEL + SCHNORR_VERIFY_V2_BYTE_FUEL * u64::from(length),
+    )?;
+    if length > MAX_SCHNORR_MESSAGE_BYTES {
+        return Err(error("WASM Schnorr message exceeds 1 MiB"));
+    }
+    let memory = bound.memory.view(&env);
+    check_range(&memory, message, length)?;
+    let key = read::<32>(&memory, key)?;
+    let signature = read::<64>(&memory, signature)?;
+    let Ok(key) = XOnlyPublicKey::from_slice(&key) else {
+        return Ok(0);
+    };
+    let mut bytes = vec![0; length as usize];
+    memory.read(u64::from(message), &mut bytes).map_err(error)?;
+    // SAFETY: the context and parsed key are initialized libsecp256k1 objects;
+    // signature contains exactly 64 bytes, and bytes lives for this synchronous
+    // call with the stated length (including zero). The C API accepts raw
+    // messages; the pinned safe Rust wrapper only accepts 32-byte Message.
+    // Prehashing here would change BIP340/CSFS verification semantics.
+    let valid = unsafe {
+        ffi::secp256k1_schnorrsig_verify(
+            secp().ctx().as_ptr(),
+            signature.as_ptr(),
+            bytes.as_ptr(),
+            bytes.len(),
+            key.as_c_ptr(),
+        )
+    };
+    Ok(i32::from(valid == 1))
+}
+
+fn xonly_tweak_check_import(
+    mut env: FunctionEnvMut<'_, CryptoEnvironment>,
+    original: u32,
+    tweak: u32,
+    tweaked: u32,
+    parity: u32,
+) -> Result<i32, RuntimeError> {
+    let bound = BoundCrypto::from_env(&env)?;
+    bound.charge(&mut env, XONLY_TWEAK_CHECK_FUEL)?;
+    let memory = bound.memory.view(&env);
+    let original = read::<32>(&memory, original)?;
+    let tweak = read::<32>(&memory, tweak)?;
+    let tweaked = read::<32>(&memory, tweaked)?;
+    let parity = match parity {
+        0 => Parity::Even,
+        1 => Parity::Odd,
+        _ => return Ok(0),
+    };
+    let (Ok(original), Ok(tweaked), Ok(tweak)) = (
+        XOnlyPublicKey::from_slice(&original),
+        XOnlyPublicKey::from_slice(&tweaked),
+        Scalar::from_be_bytes(tweak),
+    ) else {
+        return Ok(0);
+    };
+    Ok(i32::from(original.tweak_add_check(
+        secp(),
+        &tweaked,
+        parity,
+        tweak,
+    )))
+}
+
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod tests_v2;
