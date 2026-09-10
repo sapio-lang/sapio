@@ -1,6 +1,7 @@
 use bitcoin::blockdata::opcodes::all::{OP_CHECKSIG, OP_CODESEPARATOR};
 use bitcoin::blockdata::script::Builder;
 use bitcoin::consensus::{deserialize, serialize};
+use bitcoin::hashes::hex::FromHex;
 use bitcoin::secp256k1::{Message, Secp256k1};
 use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey};
 use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
@@ -434,4 +435,184 @@ fn annex_ctv_uses_all_final_scriptsigs_and_rechecks_completed_inputs() {
         finalize(wrong_template.clone(), &secp).unwrap_err().0,
         wrong_template
     );
+}
+
+fn rejects_explicit_default_sighash_byte(scriptpath: bool) {
+    let secp = Secp256k1::new();
+    let (psbt, _) = signed(scriptpath, SchnorrSighashType::Default);
+    let mut finalized = finalize(psbt, &secp).unwrap();
+    let mut stack = finalized.inputs[0]
+        .final_script_witness
+        .as_ref()
+        .unwrap()
+        .to_vec();
+    assert_eq!(stack[0].len(), 64);
+    stack[0].push(0);
+    finalized.inputs[0].final_script_witness = Some(Witness::from_vec(stack));
+    assert!(
+        finalize(finalized, &secp).is_err(),
+        "65-byte default Schnorr encoding is invalid under BIP341"
+    );
+}
+
+#[test]
+fn regression_annex_keypath_rejects_explicit_default_sighash_byte() {
+    rejects_explicit_default_sighash_byte(false);
+}
+
+#[test]
+fn regression_annex_scriptpath_rejects_explicit_default_sighash_byte() {
+    rejects_explicit_default_sighash_byte(true);
+}
+
+#[test]
+fn regression_signing_key_rejects_reserved_sighash_type() {
+    let (keys, mut psbt, _) = fixture(None, 1);
+    let original = psbt.clone();
+    assert!(keys
+        .sign_psbt_mut(&mut psbt, &Secp256k1::new(), SchnorrSighashType::Reserved)
+        .is_err());
+    assert_eq!(psbt, original);
+}
+
+#[test]
+fn regression_annex_finalizer_rejects_reserved_sighash_type() {
+    let secp = Secp256k1::new();
+    let (_, mut psbt, _) = fixture(None, 1);
+    // Freeze the invalid 0xff digest and its otherwise valid signature so this
+    // regression does not need a signer or hash encoder to accept Reserved.
+    let signature = bitcoin::secp256k1::schnorr::Signature::from_str(
+        "897989d9c0b11ea72e6415fe10c6909649969f1cd3cccfbc377fb4b554c7a60f817be3ad7e54f57bb43758b990f22d4c047b329b3dbb9d750f23f03c97b36981",
+    ).unwrap();
+    let message = Message::from_digest_slice(
+        &Vec::<u8>::from_hex("93e6e5f8a448da7955f7c556178922844bb0dc3947ff19a7b27ab401a257cbdf")
+            .unwrap(),
+    )
+    .unwrap();
+    let output_key = bitcoin::XOnlyPublicKey::from_slice(
+        &psbt.inputs[0].witness_utxo.as_ref().unwrap().script_pubkey[2..],
+    )
+    .unwrap();
+    secp.verify_schnorr(&signature, &message, &output_key)
+        .unwrap();
+    let signature = bitcoin::SchnorrSig {
+        sig: signature,
+        hash_ty: SchnorrSighashType::Reserved,
+    };
+    psbt.inputs[0].tap_key_sig = Some(signature);
+    assert_eq!(finalize(psbt.clone(), &secp).unwrap_err().0, psbt);
+    psbt.inputs[0].tap_key_sig = None;
+    psbt.inputs[0].final_script_witness = Some(Witness::from_vec(vec![
+        signature.to_vec(),
+        vec![0x50, 1, 2, 3],
+    ]));
+    assert_eq!(finalize(psbt.clone(), &secp).unwrap_err().0, psbt);
+}
+
+#[test]
+fn regression_annex_control_block_commits_to_exact_witness_script_bytes() {
+    use bitcoin::blockdata::opcodes::all::{OP_NUMEQUAL, OP_NUMEQUALVERIFY, OP_VERIFY};
+    let secp = Secp256k1::new();
+    let (keys, _, _) = fixture(None, 1);
+    let keypair = keys.0[0].to_keypair(&secp);
+    let key = keypair.x_only_public_key().0;
+    let canonical = miniscript::Miniscript::<bitcoin::XOnlyPublicKey, miniscript::Tap>::from_str(
+        &format!("tv:multi_a(1,{key})"),
+    )
+    .unwrap()
+    .encode();
+    let mut bytes = canonical.to_bytes();
+    let verify_index = bytes.len() - 2;
+    assert_eq!(bytes[verify_index], OP_NUMEQUALVERIFY.into_u8());
+    bytes.splice(
+        verify_index..verify_index + 1,
+        [OP_NUMEQUAL.into_u8(), OP_VERIFY.into_u8()],
+    );
+    let raw = Script::from(bytes);
+    assert_ne!(raw, canonical);
+    assert_eq!(
+        miniscript::Miniscript::<bitcoin::XOnlyPublicKey, miniscript::Tap>::parse_insane(&raw)
+            .unwrap()
+            .encode(),
+        canonical
+    );
+    let (_, mut psbt, _) = fixture(Some(canonical), 1);
+    let control = psbt.inputs[0].tap_scripts.keys().next().unwrap().clone();
+    let utxos = [psbt.inputs[0].witness_utxo.clone().unwrap()];
+    let output_key = bitcoin::XOnlyPublicKey::from_slice(&utxos[0].script_pubkey[2..]).unwrap();
+    assert!(!control.verify_taproot_commitment(&secp, output_key, &raw));
+    let annex = vec![0x50, 1, 2, 3];
+    let hash = SighashCache::new(&psbt.unsigned_tx)
+        .taproot_signature_hash(
+            0,
+            &Prevouts::All(&utxos),
+            Some(Annex::new(&annex).unwrap()),
+            Some((
+                TapLeafHash::from_script(&raw, LeafVersion::TapScript),
+                u32::MAX,
+            )),
+            SchnorrSighashType::All,
+        )
+        .unwrap();
+    let signature = bitcoin::SchnorrSig {
+        sig: secp
+            .sign_schnorr_no_aux_rand(&Message::from_digest_slice(&hash[..]).unwrap(), &keypair),
+        hash_ty: SchnorrSighashType::All,
+    };
+    psbt.inputs[0].final_script_witness = Some(Witness::from_vec(vec![
+        signature.to_vec(),
+        raw.into_bytes(),
+        control.serialize(),
+        annex,
+    ]));
+    assert_eq!(finalize(psbt.clone(), &secp).unwrap_err().0, psbt);
+}
+
+fn completed_timelock_psbt(lock: &str, version: i32, lock_time: u32, sequence: u32) -> Psbt {
+    let secp = Secp256k1::new();
+    let (keys, _, _) = fixture(None, 1);
+    let key = keys.0[0].to_keypair(&secp).x_only_public_key().0;
+    let script = miniscript::Miniscript::<bitcoin::XOnlyPublicKey, miniscript::Tap>::from_str(
+        &format!("and_v(v:{lock},pk({key}))"),
+    )
+    .unwrap()
+    .encode();
+    let (_, mut psbt, _) = fixture(Some(script.clone()), 1);
+    psbt.unsigned_tx.version = version;
+    psbt.unsigned_tx.lock_time = lock_time;
+    psbt.unsigned_tx.input[0].sequence = sequence;
+    keys.sign_psbt_mut(&mut psbt, &secp, SchnorrSighashType::All)
+        .unwrap();
+    let input = &mut psbt.inputs[0];
+    let signature = input.tap_script_sigs.values().next().unwrap().to_vec();
+    let control = input.tap_scripts.keys().next().unwrap().serialize();
+    input.tap_key_sig = None;
+    input.tap_script_sigs.clear();
+    input.final_script_witness = Some(Witness::from_vec(vec![
+        signature,
+        script.into_bytes(),
+        control,
+        vec![0x50, 1, 2, 3],
+    ]));
+    psbt
+}
+
+#[test]
+fn regression_completed_annex_csv_checks_version_disable_and_units() {
+    let secp = Secp256k1::new();
+    assert!(finalize(completed_timelock_psbt("older(1)", 2, 0, 1), &secp).is_ok());
+    for (version, sequence) in [(1, 1), (2, 0x8000_0001), (2, 0x0040_0001)] {
+        let psbt = completed_timelock_psbt("older(1)", version, 0, sequence);
+        assert_eq!(finalize(psbt.clone(), &secp).unwrap_err().0, psbt);
+    }
+}
+
+#[test]
+fn regression_completed_annex_cltv_checks_final_sequence_and_units() {
+    let secp = Secp256k1::new();
+    assert!(finalize(completed_timelock_psbt("after(100)", 2, 100, 0), &secp).is_ok());
+    for (lock_time, sequence) in [(100, u32::MAX), (500_000_100, 0)] {
+        let psbt = completed_timelock_psbt("after(100)", 2, lock_time, sequence);
+        assert_eq!(finalize(psbt.clone(), &secp).unwrap_err().0, psbt);
+    }
 }

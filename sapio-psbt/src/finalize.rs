@@ -11,9 +11,9 @@ use bitcoin::secp256k1::{Message, Secp256k1, Verification};
 use bitcoin::util::sighash::{Annex, Prevouts, SighashCache};
 use bitcoin::util::taproot::{ControlBlock, LeafVersion, TapLeafHash};
 use bitcoin::{Script, TxOut, Witness, XOnlyPublicKey};
-use miniscript::interpreter::{Interpreter, KeySigPair};
+use miniscript::interpreter::{Interpreter, KeySigPair, SatisfiedConstraint};
 use miniscript::psbt::{InputError, PsbtExt, PsbtInputSatisfier};
-use miniscript::{Miniscript, Tap};
+use miniscript::{Miniscript, Satisfier, Tap};
 use sapio_base::util::CTVHash;
 
 /// A finalization failure, retaining the input index when applicable.
@@ -279,6 +279,16 @@ fn verify_annex<C: Verification>(
             return Err(input_error(index, "unsupported Taproot leaf version"));
         }
         let script = Script::from(stack[stack.len() - 2].clone());
+        let output_key = XOnlyPublicKey::from_slice(&utxos[index].script_pubkey[2..])
+            .map_err(|_| input_error(index, "invalid Taproot output key"))?;
+        // The interpreter reconstructs Miniscript before checking its proof.
+        // Authenticate the actual witness bytes before that normalization.
+        if !control.verify_taproot_commitment(secp, output_key, &script) {
+            return Err(input_error(
+                index,
+                "Taproot control block does not commit to witness script",
+            ));
+        }
         if script.instructions().any(|instruction| match instruction {
             Ok(Instruction::Op(opcode)) => opcode == OP_CODESEPARATOR,
             Err(_) => true,
@@ -327,8 +337,32 @@ fn verify_annex<C: Verification>(
         let message = Message::from_digest_slice(&hash[..]).expect("32-byte signature hash");
         secp.verify_schnorr(&signature.sig, &message, key).is_ok()
     });
+    let satisfier = PsbtInputSatisfier::new(psbt, index);
     for result in interpreter.iter_custom(verify) {
-        result.map_err(|error| miniscript_error(index, InputError::Interpreter(error)))?;
+        let constraint =
+            result.map_err(|error| miniscript_error(index, InputError::Interpreter(error)))?;
+        // The interpreter compares abstract lock values. Completed witnesses
+        // must also obey the transaction's version, sequence flags and units.
+        let error = match constraint {
+            SatisfiedConstraint::RelativeTimeLock { time }
+                if !<PsbtInputSatisfier as Satisfier<XOnlyPublicKey>>::check_older(
+                    &satisfier, time,
+                ) =>
+            {
+                Some(miniscript::interpreter::Error::RelativeLocktimeNotMet(time))
+            }
+            SatisfiedConstraint::AbsoluteTimeLock { time }
+                if !<PsbtInputSatisfier as Satisfier<XOnlyPublicKey>>::check_after(
+                    &satisfier, time,
+                ) =>
+            {
+                Some(miniscript::interpreter::Error::AbsoluteLocktimeNotMet(time))
+            }
+            _ => None,
+        };
+        if let Some(error) = error {
+            return Err(miniscript_error(index, InputError::Interpreter(error)));
+        }
     }
     Ok(())
 }

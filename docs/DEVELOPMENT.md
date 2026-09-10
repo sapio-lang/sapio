@@ -7,18 +7,22 @@ commit `Cargo.lock`; use `--locked` for builds and tests. The supported compiler
 minimum is the tested pinned version. Upgrade the compiler and lockfiles in
 reviewed commits rather than regenerating dependencies in CI.
 
-The native and compiler-plugin workspaces pin the repaired `sapio-miniscript` Git source at
-`04b69f69459fe3b043ca61fb649cf546d5a241b6`. Keep that revision aligned when updating
-the dependency. The registry release at historical revision
+The native and compiler-plugin workspaces pin the repaired `sapio-miniscript`
+Git source at `04b69f69459fe3b043ca61fb649cf546d5a241b6` and `sapio-bitcoin` at
+`16c1b0059ecb420eaed089da28f8d24f99e36cf8`. Keep both revisions aligned between
+workspaces when updating dependencies. The Bitcoin repair rejects noncanonical
+Taproot signature encodings and reserved sighash values. The Miniscript
+registry release at historical revision
 `3f23950459f3424ccfeecc0bb14579ec2aec9820` does not contain these correctness
 repairs. The [repair record](CTV_FORK_AUDIT.md) documents the covered behavior and
 remaining limits.
 
 Cargo reads `[patch]` only from the top-level workspace. An external application
-or plugin workspace using Sapio must copy the same `[patch.crates-io]` entry from
+or plugin workspace using Sapio must copy both `[patch.crates-io]` entries from
 this repository's `Cargo.toml`; the patch does not propagate through library
 dependencies. See [Cargo's patch rules][cargo-patch]. Publishing supported Sapio
-crates requires a repaired Miniscript release and updated dependency requirements.
+crates requires repaired Bitcoin and Miniscript releases and updated dependency
+requirements.
 
 A native C compiler is required for secp256k1. The WASM build additionally needs
 LLVM Clang with the `wasm32` target. Apple's system Clang does not provide that
@@ -101,8 +105,10 @@ program source metadata, compiled artifact and three locally finalized spends.
 It uses synthetic funding and a published disposable oracle key; it performs
 no wallet activity or broadcasting. Its tests also exercise the TCP protocol.
 
-The dependency-free `evaluators/` workspace contains the compiled CTV and
-flexible-payment WASM programs. Normal builds use their checked-in artifacts.
+The dependency-free `evaluators/` workspace contains the compiled CTV,
+flexible-payment, TemplateHash and template-authorization WASM programs, plus
+the reusable typed [covenant fragment SDK](COVENANT_FRAGMENTS.md). Normal builds
+use their checked-in artifacts.
 Run `bash evaluators/build.sh --check` to rebuild with pinned settings and
 verify exact bytes, or `--write` after an intentional source change. Changed
 bytes change program identities and derived keys. The [WASM evaluator
