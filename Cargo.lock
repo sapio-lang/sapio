@@ -2053,6 +2053,7 @@ version = "0.2.4"
 dependencies = [
  "sapio-bitcoin",
  "sapio-miniscript",
+ "sapio-wasm",
  "schemars",
  "serde",
  "serde_derive",
@@ -2187,6 +2188,7 @@ dependencies = [
 name = "sapio-wasm"
 version = "0.2.4"
 dependencies = [
+ "sapio-bitcoin",
  "wasmer",
  "wasmer-middlewares",
  "wasmer-types",

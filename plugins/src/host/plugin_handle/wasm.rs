@@ -372,7 +372,7 @@ impl<Output> WasmPluginHandle<Output> {
         };
     }
         // grab data and a new store_mut
-        let import_object = create_imports!(
+        let mut import_object = create_imports!(
             store,
             host_env,
             sapio_v1_wasm_plugin_debug_log_string,
@@ -382,7 +382,9 @@ impl<Output> WasmPluginHandle<Output> {
             sapio_v1_wasm_plugin_get_logo,
             sapio_v1_wasm_plugin_lookup_module_name
         );
+        let crypto = sapio_wasm::host::add_crypto_imports(&mut store, &mut import_object);
         let instance = Instance::new(&mut store, &module, &import_object)?;
+        sapio_wasm::host::bind_crypto(&crypto, &mut store, &instance)?;
         let mut env_mut = host_env.into_mut(&mut store);
         // change to a FunctionEnvMut
         let (data_mut, mut store_mut) = env_mut.data_and_store_mut();

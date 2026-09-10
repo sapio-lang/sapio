@@ -8,7 +8,6 @@
 
 use crate::Clause;
 use bitcoin::hashes::{sha256, Hash};
-use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::bip32::{self, ChildNumber, ExtendedPubKey};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -170,15 +169,13 @@ impl LoweringPlan {
         match self {
             Self::Native => Ok(Clause::TxTemplate(hash)),
             Self::CtvEmulation { signers, threshold } => {
-                let secp = Secp256k1::verification_only();
                 let path = hash_to_child_vec(hash);
                 let mut clauses = signers
                     .iter()
                     .enumerate()
                     .map(|(index, signer)| {
-                        signer
-                            .derive_pub(&secp, &path)
-                            .map(|child| Clause::Key(child.to_x_only_pub()))
+                        crate::crypto::derive_public_key(signer, &path)
+                            .map(Clause::Key)
                             .map_err(|source| CovenantError::Derivation { index, source })
                     })
                     .collect::<Result<Vec<_>, _>>()?;
@@ -217,6 +214,7 @@ pub fn hash_to_child_vec(hash: sha256::Hash) -> Vec<ChildNumber> {
 mod tests {
     use super::*;
     use crate::policy::{PolicyCompiler, ScriptPolicy};
+    use bitcoin::secp256k1::Secp256k1;
     use bitcoin::util::bip32::{ChainCode, ExtendedPrivKey, Fingerprint};
     use bitcoin::Network;
     use serde_json::json;

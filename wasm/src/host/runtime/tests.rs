@@ -2,6 +2,84 @@ use super::*;
 use wasmer::{imports, CompileError, Instance, Module, Value};
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints};
 
+#[test]
+fn evaluator_failed_growth_traps_before_guest_observation() {
+    for evaluator in [false, true] {
+        let mut store = if evaluator {
+            new_evaluator_store()
+        } else {
+            new_store()
+        };
+        let module = Module::new(
+            &store,
+            r#"(module
+            (memory 1 2)
+            (table 1 2 funcref)
+            (func (export "memory") (result i32)
+                i32.const 1 memory.grow)
+            (func (export "table") (result i32)
+                ref.null func i32.const 1 table.grow))"#,
+        )
+        .unwrap();
+        let instance = Instance::new(&mut store, &module, &imports! {}).unwrap();
+        for name in ["memory", "table"] {
+            let grow = instance
+                .exports
+                .get_typed_function::<(), i32>(&store, name)
+                .unwrap();
+            assert_eq!(grow.call(&mut store).unwrap(), 1);
+            if evaluator {
+                assert!(grow.call(&mut store).is_err());
+                assert!(matches!(
+                    get_remaining_points(&mut store, &instance),
+                    MeteringPoints::Remaining(_)
+                ));
+            } else {
+                assert_eq!(grow.call(&mut store).unwrap(), -1);
+            }
+        }
+    }
+}
+
+#[test]
+fn evaluator_arithmetic_nans_are_canonical_and_simd_is_disabled() {
+    let mut store = new_evaluator_store();
+    let module = Module::new(
+        &store,
+        r#"(module
+        (func (export "f32") (result i32)
+            f32.const -1 f32.sqrt i32.reinterpret_f32)
+        (func (export "f64") (result i64)
+            f64.const -1 f64.sqrt i64.reinterpret_f64))"#,
+    )
+    .unwrap();
+    let instance = Instance::new(&mut store, &module, &imports! {}).unwrap();
+    assert_eq!(
+        instance
+            .exports
+            .get_typed_function::<(), i32>(&store, "f32")
+            .unwrap()
+            .call(&mut store)
+            .unwrap(),
+        0x7fc0_0000
+    );
+    assert_eq!(
+        instance
+            .exports
+            .get_typed_function::<(), i64>(&store, "f64")
+            .unwrap()
+            .call(&mut store)
+            .unwrap(),
+        0x7ff8_0000_0000_0000
+    );
+    let store = new_evaluator_store();
+    assert!(Module::new(
+        &store,
+        "(module (func (result v128) v128.const i32x4 0 0 0 0))"
+    )
+    .is_err());
+}
+
 fn instance(source: &str, fuel: u64) -> (Store, Instance) {
     let mut store = store_with_fuel(fuel);
     let module = Module::new(&store, source).unwrap();

@@ -20,18 +20,39 @@ pub fn new_store() -> Store {
     store_with_fuel(INSTANCE_FUEL)
 }
 
+/// Fresh evaluator engine with canonical NaNs, no SIMD, and failed-growth traps.
+///
+/// The caller must reject WASM start sections and unwanted imports before
+/// instantiation; this store supplies execution and resource limits.
+pub fn new_evaluator_store() -> Store {
+    configured_store(INSTANCE_FUEL, true)
+}
+
+/// Fresh compiler engine with the specified nonrenewable instance budget.
 pub fn store_with_fuel(fuel: u64) -> Store {
+    configured_store(fuel, false)
+}
+
+fn configured_store(fuel: u64, evaluator: bool) -> Store {
     // Metering carries module-specific global indexes. Each compiler is used
     // for one module; fresh instances may safely share that compiled module.
     let mut compiler = Cranelift::default();
     // Contracts are short-lived; avoid optimizing the large Rust runtime on
     // every source load before executing the small requested compilation.
     compiler.opt_level(CraneliftOptLevel::None);
+    compiler.canonicalize_nans(evaluator);
     compiler.push_middleware(Arc::new(Metering::new(fuel, |_| 1)));
-    compiler.push_middleware(Arc::new(ResourceLimits::default()));
+    compiler.push_middleware(Arc::new(ResourceLimits {
+        trap_failed_growth: evaluator,
+        ..ResourceLimits::default()
+    }));
     let mut features = Features::new();
     // Atomic waits can block inside native runtime code without spending fuel.
     features.threads(false).memory64(false).multi_memory(false);
+    if evaluator {
+        features.simd(false);
+        features.relaxed_simd = false;
+    }
     let mut engine = EngineBuilder::new(compiler)
         .set_features(Some(features))
         .engine();
@@ -49,6 +70,7 @@ struct FuelGlobals {
 #[derive(Debug, Default)]
 struct ResourceLimits {
     globals: OnceLock<FuelGlobals>,
+    trap_failed_growth: bool,
 }
 
 fn limit_error(message: &str) -> MiddlewareError {
@@ -106,14 +128,18 @@ impl ModuleMiddleware for ResourceLimits {
     }
 
     fn generate_function_middleware(&self, _: LocalFunctionIndex) -> Box<dyn FunctionMiddleware> {
-        Box::new(BulkMetering(
-            *self.globals.get().expect("module limits initialized"),
-        ))
+        Box::new(BulkMetering {
+            globals: *self.globals.get().expect("module limits initialized"),
+            trap_failed_growth: self.trap_failed_growth,
+        })
     }
 }
 
 #[derive(Debug)]
-struct BulkMetering(FuelGlobals);
+struct BulkMetering {
+    globals: FuelGlobals,
+    trap_failed_growth: bool,
+}
 
 impl FunctionMiddleware for BulkMetering {
     fn feed<'a>(
@@ -122,6 +148,7 @@ impl FunctionMiddleware for BulkMetering {
         state: &mut MiddlewareReaderState<'a>,
     ) -> Result<(), MiddlewareError> {
         use Operator::*;
+        let growing = matches!(operator, MemoryGrow { .. } | TableGrow { .. });
         let unit = match operator {
             MemoryCopy { .. } | MemoryFill { .. } | MemoryInit { .. } => 1,
             MemoryGrow { .. } => 65_536,
@@ -135,7 +162,7 @@ impl FunctionMiddleware for BulkMetering {
             remaining,
             exhausted,
             count,
-        } = self.0;
+        } = self.globals;
         // Each bulk operation's top operand is its unsigned i32 count. Save
         // and restore it without a guest call between, then charge in i64 so
         // even u32::MAX pages cannot overflow. Charge before touching memory.
@@ -184,6 +211,30 @@ impl FunctionMiddleware for BulkMetering {
             },
         ]);
         state.push_operator(operator);
+        if self.trap_failed_growth && growing {
+            // Evaluators must never predicate on ambient allocation failure.
+            // Trap before the guest can observe grow's -1 result, including
+            // failures against the declared maximum. A successful grow still
+            // returns the previous size. The saved count is no longer needed.
+            state.extend([
+                GlobalSet {
+                    global_index: count,
+                },
+                GlobalGet {
+                    global_index: count,
+                },
+                I32Const { value: -1 },
+                I32Eq,
+                If {
+                    blockty: BlockType::Empty,
+                },
+                Unreachable,
+                End,
+                GlobalGet {
+                    global_index: count,
+                },
+            ]);
+        }
         Ok(())
     }
 }

@@ -12,6 +12,7 @@ use bitcoin::XOnlyPublicKey;
 pub use miniscript;
 pub use util::CTVHash;
 pub mod covenant;
+mod crypto;
 pub mod plugin_args;
 pub mod policy;
 pub mod program;

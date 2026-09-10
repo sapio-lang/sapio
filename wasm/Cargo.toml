@@ -9,9 +9,10 @@ description = "Shared deterministic WASM execution and guest bindings for Sapio"
 
 [features]
 default = []
-host = ["dep:wasmer", "dep:wasmer-middlewares", "dep:wasmer-types"]
+host = ["dep:bitcoin", "dep:wasmer", "dep:wasmer-middlewares", "dep:wasmer-types"]
 
 [dependencies]
+bitcoin = { package = "sapio-bitcoin", version = "0.28.0", optional = true }
 wasmer = { version = "6.1.0", optional = true }
 wasmer-middlewares = { version = "=6.1.0", optional = true }
 wasmer-types = { version = "=6.1.0", optional = true }
