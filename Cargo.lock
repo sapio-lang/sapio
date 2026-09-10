@@ -2146,6 +2146,7 @@ name = "sapio-psbt"
 version = "0.2.4"
 dependencies = [
  "base64",
+ "sapio-base",
  "sapio-bitcoin",
  "sapio-miniscript",
  "serde",
