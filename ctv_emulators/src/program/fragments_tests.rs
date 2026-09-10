@@ -412,7 +412,9 @@ fn templatehash_wasm_runs_every_official_bip446_case() {
             .map(|output| deserialize(&Vec::<u8>::from_hex(output).unwrap()).unwrap())
             .collect();
         let prevouts: Vec<_> = outputs.iter().collect();
-        let mut script_witness = transaction.input[vector.input_index as usize].witness.to_vec();
+        let mut script_witness = transaction.input[vector.input_index as usize]
+            .witness
+            .to_vec();
         if script_witness.last().unwrap().first() == Some(&0x50) {
             script_witness.pop();
         }

@@ -20,7 +20,9 @@ fn template_hash_matches_all_official_bip446_cases() {
     for vector in vectors {
         let transaction: Transaction =
             deserialize(&Vec::<u8>::from_hex(&vector.spending_tx).unwrap()).unwrap();
-        let mut script_witness = transaction.input[vector.input_index as usize].witness.to_vec();
+        let mut script_witness = transaction.input[vector.input_index as usize]
+            .witness
+            .to_vec();
         if script_witness.last().unwrap().first() == Some(&0x50) {
             script_witness.pop();
         }

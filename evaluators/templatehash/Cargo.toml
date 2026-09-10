@@ -10,4 +10,3 @@ crate-type = ["cdylib"]
 
 [dependencies]
 sapio-covenant-fragments = { path = "../fragments" }
-

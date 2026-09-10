@@ -215,10 +215,11 @@ for the WASM path and preserve the complete program metadata.
 
 ## Building and verifying the distributed programs
 
-`evaluators/` contains dependency-free Rust sources for CTV and the registered
-flexible-payment evaluator. Its pinned toolchain and build settings produce
-small `no_std` artifacts with names and debug sections stripped. Verify exact
-bytes with:
+`evaluators/` contains dependency-free Rust sources for CTV, the registered
+flexible-payment evaluator, TemplateHash and template authorization, plus the
+reusable typed [covenant fragment SDK](COVENANT_FRAGMENTS.md). Its pinned
+toolchain and build settings produce small `no_std` artifacts with names and
+debug sections stripped. Verify exact bytes for all four programs with:
 
 ```sh
 bash evaluators/build.sh --check
