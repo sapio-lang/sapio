@@ -1,8 +1,8 @@
 use super::*;
 use bitcoin::secp256k1::{Keypair, SecretKey};
 use bitcoin::{Network, Script};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::effects::EffectPath;
-use sapio_ctv_emulator_trait::CTVAvailable;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -23,7 +23,7 @@ fn context(sats: u64) -> Context {
     Context::new(
         Network::Regtest,
         Amount::from_sat(sats),
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         EffectPath::try_from("mining").unwrap(),
         Arc::new(Default::default()),
         None,

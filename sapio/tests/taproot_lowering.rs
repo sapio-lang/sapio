@@ -8,13 +8,13 @@ use bitcoin::{Script, Transaction, TxIn, TxOut, XOnlyPublicKey};
 use sapio::contract::abi::object::{Object, SupportedDescriptors};
 use sapio::contract::actions::Guard;
 use sapio::contract::{Compilable, Context, DynamicContract};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::miniscript::descriptor::Tr;
 use sapio_base::miniscript::ord::{envelope::Envelope, Inscription};
 use sapio_base::miniscript::psbt::{interpreter_check, PsbtExt};
 use sapio_base::miniscript::{Descriptor, DescriptorTrait};
 use sapio_base::util::CTVHash;
 use sapio_base::Clause;
-use sapio_ctv_emulator_trait::CTVAvailable;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -47,7 +47,7 @@ fn compile(clauses: [Clause; 3], order: &[usize]) -> Object {
         .compile(Context::new(
             Network::Regtest,
             Amount::from_sat(10_000),
-            Arc::new(CTVAvailable),
+            LoweringPlan::Native,
             "lowering".try_into().unwrap(),
             Arc::new(Default::default()),
             None,

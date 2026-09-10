@@ -29,7 +29,6 @@ use clap::clap_app;
 use clap::ArgMatches;
 use config::*;
 use emulator_connect::servers::hd::HDOracleEmulator;
-use emulator_connect::CTVAvailable;
 use emulator_connect::CTVEmulator;
 use sapio::contract::Compiled;
 use sapio_base::util::CTVHash;
@@ -378,7 +377,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 p
             };
             let network = config.network;
-            let emulator_args = config.active.emulator_nodes;
+            let covenant = config.active.covenant;
             let plugin_map = config.active.plugin_map.map(|x| {
                 x.into_iter()
                     .map(|(x, y)| (x.into_bytes(), y.into()))
@@ -396,7 +395,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     );
                 Ok(Common {
                     path: module_path(args),
-                    emulator: emulator_args,
+                    covenant,
                     module_locator,
                     net: network,
                     plugin_map,
@@ -465,10 +464,7 @@ async fn configured_emulator(
     custom_config: Option<&str>,
 ) -> Result<Arc<dyn CTVEmulator>, Box<dyn Error>> {
     let config = config(custom_config).await?;
-    match config.active.emulator_nodes {
-        Some(emulator) if emulator.enabled => emulator.get_emulator().await,
-        _ => Ok(Arc::new(CTVAvailable)),
-    }
+    config.active.covenant.get_emulator().await
 }
 
 async fn run_server_stdin() -> Result<(), Box<dyn Error>> {

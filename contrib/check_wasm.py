@@ -17,8 +17,8 @@ vectors = ROOT / "contrib" / "vectors"
 REQUEST_TIMEOUT_SECONDS = 180
 
 with tempfile.TemporaryDirectory(prefix="sapio-wasm-") as workspace:
-    def request(command, module=None, parameters=None, extra_args=()):
-        args = [str(cli), "--config", str(vectors / "basic_config.json"),
+    def request(command, module=None, parameters=None, extra_args=(), config=None):
+        args = [str(cli), "--config", str(config or vectors / "basic_config.json"),
                 "contract", command]
         if module is not None:
             args.extend(["--workspace", workspace, "--file", str(modules / module)])
@@ -41,6 +41,22 @@ with tempfile.TemporaryDirectory(prefix="sapio-wasm-") as workspace:
     direct = request("create", "sapio_wasm_clause.wasm", parameters)["Call"]["result"]
     assert direct == expected, (direct, expected)
 
+    # Public lowering inputs completely determine compilation. Runtime signer
+    # settings are irrelevant, including peers that could not be resolved.
+    binding_config = json.loads((vectors / "basic_config.json").read_text())
+    binding_config["regtest"]["covenant"] = {
+        "mode": "signer_emulation",
+        "emulators": [],
+        "threshold": 0,
+        "request_timeout_secs": 0,
+    }
+    unused_signers = Path(workspace) / "unused-signers.json"
+    unused_signers.write_text(json.dumps(binding_config))
+    unchanged = request("create", "sapio_wasm_clause.wasm", parameters,
+                        config=unused_signers)["Call"]["result"]
+    assert unchanged == direct
+    request("api", "sapio_wasm_clause.wasm", config=unused_signers)
+
     key = request("load", "sapio_wasm_clause.wasm")["Load"]["key"]
     parameters = json.loads(
         (vectors / "trampoline_clause_input.json").read_text().replace("TEMPLATE_ARG_A", key)
@@ -60,6 +76,7 @@ with tempfile.TemporaryDirectory(prefix="sapio-wasm-") as workspace:
         "context": {
             "amount": 10_000,
             "network": "Regtest",
+            "lowering": "Native",
             "ordinals_info": [[0, 10_000]],
         },
     }

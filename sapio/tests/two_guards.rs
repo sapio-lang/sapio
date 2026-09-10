@@ -3,10 +3,10 @@ use bitcoin::{Amount, Network, XOnlyPublicKey};
 use sapio::contract::abi::object::SupportedDescriptors;
 use sapio::contract::{Compilable, Context, Contract};
 use sapio::{declare, guard, then};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::effects::EffectPath;
 use sapio_base::miniscript::{ForEach, ForEachKey};
 use sapio_base::Clause;
-use sapio_ctv_emulator_trait::CTVAvailable;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -55,7 +55,7 @@ fn compiles_both_guards_with_distinct_metadata_paths() {
         .compile(Context::new(
             Network::Regtest,
             Amount::from_sat(1_000),
-            Arc::new(CTVAvailable),
+            LoweringPlan::Native,
             EffectPath::try_from("two_guards").unwrap(),
             Arc::new(Default::default()),
             None,

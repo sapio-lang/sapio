@@ -26,6 +26,10 @@ pub struct ArtifactError {
 /// Invariants required to bind a compiled artifact to transaction inputs.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ArtifactErrorKind {
+    /// Every committed template must record the injected covenant policy.
+    MissingCovenant,
+    /// Public lowering inputs cannot be used to resolve covenant predicates.
+    InvalidCovenantLowering(String),
     /// The descriptor and advertised address describe different scripts.
     DescriptorMismatch,
     /// Binding requires a contract input at index zero.
@@ -65,6 +69,10 @@ pub enum ArtifactErrorKind {
 impl fmt::Display for ArtifactErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::MissingCovenant => write!(f, "committed template has no covenant policy"),
+            Self::InvalidCovenantLowering(reason) => {
+                write!(f, "invalid covenant lowering: {reason}")
+            }
             Self::DescriptorMismatch => write!(f, "descriptor does not match the address script"),
             Self::MissingInput => write!(f, "missing contract input zero"),
             Self::UnsupportedInputIndex(index) => {
@@ -145,12 +153,32 @@ impl Object {
                 template,
                 kind,
             };
+            object
+                .covenant_requirements
+                .lowering
+                .validate()
+                .map_err(|e| {
+                    error(
+                        None,
+                        ArtifactErrorKind::InvalidCovenantLowering(e.to_string()),
+                    )
+                })?;
             if let Some(descriptor) = &object.descriptor {
                 if descriptor.script_pubkey() != bitcoin::Script::from(&object.address) {
                     return Err(error(None, ArtifactErrorKind::DescriptorMismatch));
                 }
             }
-            for (key, template) in object.ctv_to_tx.iter().chain(&object.suggested_txs) {
+            for (committed, key, template) in object
+                .ctv_to_tx
+                .iter()
+                .map(|(key, template)| (true, key, template))
+                .chain(
+                    object
+                        .suggested_txs
+                        .iter()
+                        .map(|(key, template)| (false, key, template)),
+                )
+            {
                 let error = |kind| error(Some(*key), kind);
                 let tx = &template.tx;
                 if tx.input.is_empty() {
@@ -205,6 +233,14 @@ impl Object {
                 }
                 if object.required_input_amount < template.required_input_amount {
                     return Err(error(ArtifactErrorKind::InvalidInputRequirement));
+                }
+                if committed
+                    && !object
+                        .covenant_requirements
+                        .predicates
+                        .contains(&sapio_base::covenant::Ctv(*key))
+                {
+                    return Err(error(ArtifactErrorKind::MissingCovenant));
                 }
             }
         }

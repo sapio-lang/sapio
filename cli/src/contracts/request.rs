@@ -6,14 +6,13 @@
 use bitcoin::{consensus::deserialize, psbt::PartiallySignedTransaction, OutPoint};
 use bitcoincore_rpc_async as rpc;
 use bitcoincore_rpc_async::RpcApi;
-use emulator_connect::{CTVAvailable, CTVEmulator};
+use emulator_connect::CTVEmulator;
 use sapio::{
     contract::{
         object::{LinkedPSBT, ObjectMetadata, Program, SapioStudioObject},
         Compiled,
     },
     template::{OutputMeta, TemplateMetadata},
-    util::extended_address::ExtendedAddress,
     Context,
 };
 use sapio_base::{
@@ -38,12 +37,13 @@ use std::{
     sync::Arc,
 };
 
-use crate::{config::EmulatorConfig, util::create_mock_output};
+use crate::{config::CovenantConfig, util::create_mock_output};
 
 #[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct Common {
     pub path: PathBuf,
-    pub emulator: Option<EmulatorConfig>,
+    pub covenant: CovenantConfig,
     pub module_locator: Option<ModuleLocator>,
     #[schemars(with = "String")]
     pub net: bitcoin::Network,
@@ -148,18 +148,6 @@ impl Error for RequestError {}
 
 type ResultT<T> = Result<T, Box<dyn Error>>;
 impl Request {
-    async fn get_emulator(&self) -> ResultT<Arc<dyn CTVEmulator>> {
-        let emulator: Arc<dyn CTVEmulator> = if let Some(emcfg) = &self.context.emulator {
-            if emcfg.enabled {
-                emcfg.get_emulator().await?
-            } else {
-                Arc::new(CTVAvailable)
-            }
-        } else {
-            Arc::new(CTVAvailable)
-        };
-        Ok(emulator)
-    }
     pub async fn handle(self) -> Response {
         let v = self.handle_inner().await.map_err(|e| -> RequestError {
             e.downcast::<RequestError>()
@@ -169,12 +157,12 @@ impl Request {
         Response { result: v }
     }
     pub async fn handle_inner(self) -> ResultT<CommandReturn> {
-        let emulator = self.get_emulator().await?;
         // create the future to get the sph,
         // but do not await it since not all calls will use it.
         let Request { context, command } = self;
         let Common {
             path,
+            covenant,
             module_locator,
             net,
             plugin_map,
@@ -183,7 +171,6 @@ impl Request {
         let default_sph = || -> Result<_, &'static str> {
             Ok(WasmPluginHandle::<Value>::new_async(
                 &path,
-                &emulator,
                 module_locator.ok_or("Expected to have exactly one of key or file")?,
                 net,
                 plugin_map.clone(),
@@ -191,12 +178,8 @@ impl Request {
         };
         match command {
             Command::List(_list) => {
-                let mut plugins = WasmPluginHandle::<Value>::load_all_keys(
-                    &path,
-                    emulator.clone(),
-                    context.net,
-                    plugin_map,
-                )?;
+                let mut plugins =
+                    WasmPluginHandle::<Value>::load_all_keys(&path, context.net, plugin_map)?;
                 let m = plugins
                     .iter_mut()
                     .map(|p| p.get_name().map(|name| (p.id().to_string(), name)))
@@ -211,7 +194,12 @@ impl Request {
                 let v = sph.call(&PathFragment::Root.into(), &create_args)?;
                 Ok(CommandReturn::Call(CallReturn { result: v }))
             }
-            Command::Bind(bind) => Ok(CommandReturn::Bind(bind.call(net, emulator).await?)),
+            Command::Bind(bind) => {
+                let emulator = covenant.get_emulator().await?;
+                Ok(CommandReturn::Bind(
+                    bind.call(net, emulator, &covenant).await?,
+                ))
+            }
             Command::Api(_api) => {
                 let mut sph = default_sph()?.await?;
                 Ok(CommandReturn::Api(ApiReturn {
@@ -254,6 +242,7 @@ impl Bind {
         self,
         net: bitcoin::Network,
         emulator: Arc<dyn CTVEmulator>,
+        covenant: &CovenantConfig,
     ) -> Result<BindReturn, Box<dyn Error>> {
         let Bind {
             client_url,
@@ -265,7 +254,13 @@ impl Bind {
             outpoint,
             ordinals_info,
         } = self;
-        compiled.validate()?;
+        compiled.validate_for_emulator(emulator.as_ref())?;
+        if !covenant.allows_native_ctv() && compiled.requires_native_ctv() {
+            return Err(Box::new(RequestError(
+                "Artifact requires native CTV; signer_emulation does not establish native CTV enforcement. Select a mode explicitly including native_ctv_research only when the target chain is assumed to enforce it."
+                    .into(),
+            )));
+        }
         let use_txn = use_txn
             .map(|buf| base64::decode(buf.as_bytes()))
             .transpose()?
@@ -279,7 +274,7 @@ impl Bind {
             let ctx = Context::new(
                 net,
                 compiled.required_input_amount,
-                emulator.clone(),
+                compiled.covenant_requirements.lowering.clone(),
                 "mock".try_into()?,
                 Arc::new(MapEffectDB::default()),
                 ordinals_info,
@@ -301,7 +296,8 @@ impl Bind {
             (res, outpoint.vout, None)
         } else {
             let mut spends = HashMap::new();
-            if let ExtendedAddress::Address(ref a) = compiled.address {
+            let script = bitcoin::Script::from(&compiled.address);
+            if let Some(a) = bitcoin::Address::from_script(&script, net) {
                 spends.insert(format!("{}", a), compiled.required_input_amount);
 
                 let psbt = if let Some(psbt) = use_txn {
@@ -312,7 +308,7 @@ impl Bind {
                         .await?;
                     deserialize(&base64::decode(&res.psbt)?)?
                 };
-                let vout = funding_output(&psbt, &a.script_pubkey())?;
+                let vout = funding_output(&psbt, &script)?;
                 // Final scriptSigs can change the TXID. Bind the extracted
                 // transaction while retaining the complete PSBT for signing.
                 (psbt.clone().extract_tx(), vout, Some(psbt))

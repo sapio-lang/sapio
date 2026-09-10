@@ -12,7 +12,7 @@ use bitcoincore_rpc_async as rpc;
 use directories::BaseDirs;
 use emulator_connect::connections::federated::FederatedEmulatorConnection;
 use emulator_connect::connections::hd::HDOracleEmulatorConnection;
-use emulator_connect::CTVEmulator;
+use emulator_connect::{CTVAvailable, CTVEmulator};
 use schemars::JsonSchema;
 use serde::*;
 use std::collections::BTreeMap;
@@ -26,14 +26,11 @@ use tokio::io::BufReader;
 #[cfg(test)]
 mod tests;
 
-/// EmulatorConfig is used to determine how this sapio-cli instance should stub
-/// out CTV. Emulators are specified by EPK and interface address. Threshold
-/// should be <= emulators.len().
+/// Runtime signer peers used for binding and signing already compiled policies.
+/// Public compilation inputs are supplied separately in `context.lowering`.
 #[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct EmulatorConfig {
-    /// if the emulator should be used or not. We tag explicitly for convenience
-    /// in the config file format.
-    pub enabled: bool,
     /// list of emulators to use & how to contact them
     #[schemars(with = "Vec<(String, String)>")]
     pub emulators: Vec<(ExtendedPubKey, String)>,
@@ -45,6 +42,39 @@ pub struct EmulatorConfig {
     pub request_timeout_secs: u64,
 }
 
+/// Runtime covenant enforcement assumption used for binding and signing.
+/// Selecting native CTV does not detect or establish a node's consensus rules.
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+#[serde(tag = "mode", rename_all = "snake_case", deny_unknown_fields)]
+pub enum CovenantConfig {
+    /// Bind scripts on a research chain assumed by the operator to enforce native CTV.
+    NativeCtvResearch {},
+    /// Use configured signers to satisfy previously lowered CTV policies.
+    SignerEmulation(EmulatorConfig),
+    /// Use signer emulation while also assuming native CTV for direct script checks.
+    SignerEmulationWithNativeCtvResearch(EmulatorConfig),
+}
+
+impl CovenantConfig {
+    /// Resolve the explicitly selected backend; errors never select another mode.
+    pub async fn get_emulator(&self) -> Result<Arc<dyn CTVEmulator>, Box<dyn std::error::Error>> {
+        match self {
+            Self::NativeCtvResearch {} => Ok(Arc::new(CTVAvailable)),
+            Self::SignerEmulation(config) | Self::SignerEmulationWithNativeCtvResearch(config) => {
+                config.get_emulator().await
+            }
+        }
+    }
+
+    /// Whether the operator explicitly assumes native CTV enforcement on the chain.
+    pub fn allows_native_ctv(&self) -> bool {
+        matches!(
+            self,
+            Self::NativeCtvResearch {} | Self::SignerEmulationWithNativeCtvResearch(_)
+        )
+    }
+}
+
 fn default_request_timeout_secs() -> u64 {
     emulator_connect::DEFAULT_REQUEST_TIMEOUT.as_secs()
 }
@@ -54,11 +84,11 @@ impl EmulatorConfig {
     /// Waiting for resolution has one deadline across the whole configuration.
     /// The system's blocking DNS work can outlive this wait and delay shutdown.
     pub async fn get_emulator(&self) -> Result<Arc<dyn CTVEmulator>, Box<dyn std::error::Error>> {
-        if self.threshold == 0 || usize::from(self.threshold) > self.emulators.len() {
-            return Err(
-                "Emulator threshold must be positive and no greater than the peer count".into(),
-            );
+        sapio_base::covenant::LoweringPlan::CtvEmulation {
+            signers: self.emulators.iter().map(|(key, _)| *key).collect(),
+            threshold: self.threshold,
         }
+        .validate()?;
         let timeout = Duration::from_secs(self.request_timeout_secs);
         let deadline = tokio::time::Instant::now()
             .checked_add(timeout)
@@ -152,13 +182,14 @@ pub struct Node {
 /// A configuration for any network (regtest, main, signet, testnet)
 /// Only one config may set active = true at a time.
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct NetworkConfig {
     /// if this is the active config
     pub active: bool,
     /// the node to connect to
     pub api_node: Node,
-    /// the emulator to use, if any
-    pub emulator_nodes: Option<EmulatorConfig>,
+    /// The operator's explicit covenant enforcement choice.
+    pub covenant: CovenantConfig,
     /// mapping of name:module hash for translation during compilation
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub plugin_map: Option<BTreeMap<String, WasmerCacheHash>>,
@@ -433,20 +464,15 @@ impl ConfigVerifier {
             rpc::Auth::UserPass(username, password)
         };
 
+        let covenant = covenant_wizard(&mut lines).await?;
         println!("Configuration Complete!");
-        println!("To configure Emulators/ Plugin Maps please edit manually if desired.");
+        println!("To configure plugin maps, edit the configuration manually.");
         println!("Your Configuration:");
 
         let active = NetworkConfig {
             active: true,
-            api_node: Node{url, auth},
-            emulator_nodes: Some(EmulatorConfig{
-                enabled: false,
-                threshold: 1u8,
-                request_timeout_secs: default_request_timeout_secs(),
-                emulators: vec![(ExtendedPubKey::from_str("tpubD6NzVbkrYhZ4Wf398td3H8YhWBsXx9Sxa4W3cQWkNW3N3DHSNB2qtPoUMXrA6JNaPxodQfRpoZNE5tGM9iZ4xfUEFRJEJvfs8W5paUagYCE").unwrap(),
-                    "example.please.change.this.before.using:8367".into())],
-            }),
+            api_node: Node { url, auth },
+            covenant,
             plugin_map: None,
         };
         let cv: ConfigVerifier = Config { network, active }.into();
@@ -476,32 +502,70 @@ impl fmt::Display for ConfigError {
 
 impl std::error::Error for ConfigError {}
 
-impl std::default::Default for ConfigVerifier {
-    fn default() -> Self {
-        let mut b = BaseDirs::new()
-            .expect("Could Not Determine a Base Directory")
-            .home_dir()
-            .to_path_buf();
-        b.push(".bitcoin");
-        b.push("regtest");
-        b.push(".cookie");
-        let regtest = NetworkConfig {
-            active: true,
-            api_node: Node{url: "http://127.0.0.1:18443".into(), auth: rpc::Auth::CookieFile(b)},
-            emulator_nodes: Some(EmulatorConfig{
-                enabled: true,
-                threshold: 1u8,
-                request_timeout_secs: default_request_timeout_secs(),
-                emulators: vec![(ExtendedPubKey::from_str("tpubD6NzVbkrYhZ4Wf398td3H8YhWBsXx9Sxa4W3cQWkNW3N3DHSNB2qtPoUMXrA6JNaPxodQfRpoZNE5tGM9iZ4xfUEFRJEJvfs8W5paUagYCE").unwrap(),
-                    "ctv.d31373.org:8367".into())],
-            }),
-            plugin_map: None,
-        };
-        ConfigVerifier {
-            main: None,
-            testnet: None,
-            signet: None,
-            regtest: Some(regtest),
+async fn covenant_wizard<R: tokio::io::AsyncBufRead + Unpin>(
+    lines: &mut tokio::io::Lines<R>,
+) -> Result<CovenantConfig, Box<dyn std::error::Error>> {
+    let native_ctv_research = loop {
+        println!("Covenant mode (native_ctv_research / signer_emulation / signer_emulation_with_native_ctv_research):");
+        println!(
+            "native_ctv_research assumes your chain enforces CTV; Sapio does not detect this."
+        );
+        println!("signer_emulation relies on the configured signers' security and availability.");
+        println!("signer_emulation_with_native_ctv_research combines both assumptions for mixed scripts.");
+        let line = lines.next_line().await?.ok_or("Missing covenant mode")?;
+        match line.trim() {
+            "native_ctv_research" => return Ok(CovenantConfig::NativeCtvResearch {}),
+            "signer_emulation" => break false,
+            "signer_emulation_with_native_ctv_research" => break true,
+            _ => println!("Choose one of the three explicit covenant modes."),
         }
+    };
+
+    let mut emulators = Vec::new();
+    loop {
+        println!("Signer extended public key (blank to finish after adding a signer):");
+        let line = lines
+            .next_line()
+            .await?
+            .ok_or("Missing signer public key")?;
+        let key = line.trim();
+        if key.is_empty() && !emulators.is_empty() {
+            break;
+        }
+        let key = match ExtendedPubKey::from_str(key) {
+            Ok(key) => key,
+            Err(error) => {
+                println!("Invalid extended public key: {error}");
+                continue;
+            }
+        };
+        let address = loop {
+            println!("Signer address (host:port):");
+            let line = lines.next_line().await?.ok_or("Missing signer address")?;
+            if !line.trim().is_empty() {
+                break line.trim().to_owned();
+            }
+        };
+        emulators.push((key, address));
     }
+    let threshold = loop {
+        println!("Required signer threshold (1..={}):", emulators.len());
+        let line = lines.next_line().await?.ok_or("Missing signer threshold")?;
+        match line.trim().parse::<u8>() {
+            Ok(threshold) if threshold > 0 && usize::from(threshold) <= emulators.len() => {
+                break threshold;
+            }
+            _ => println!("Threshold must be positive and no greater than the signer count."),
+        }
+    };
+    let config = EmulatorConfig {
+        emulators,
+        threshold,
+        request_timeout_secs: default_request_timeout_secs(),
+    };
+    Ok(if native_ctv_research {
+        CovenantConfig::SignerEmulationWithNativeCtvResearch(config)
+    } else {
+        CovenantConfig::SignerEmulation(config)
+    })
 }

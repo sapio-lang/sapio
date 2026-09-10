@@ -1,4 +1,5 @@
 use super::*;
+use sapio_base::covenant::LoweringPlan;
 #[test]
 fn fee_rounds_up_and_rejects_unrepresentable_total() {
     assert_eq!(estimated_fee(1.into(), 1).unwrap().as_sat(), 1);
@@ -9,7 +10,6 @@ fn fee_rounds_up_and_rejects_unrepresentable_total() {
 #[test]
 fn vault_records_fees_in_required_funding() {
     use sapio_base::effects::EffectPath;
-    use sapio_ctv_emulator_trait::CTVAvailable;
     use std::sync::Arc;
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
         "../../../contrib/vectors/examples/jamesob-vault.json"
@@ -30,7 +30,7 @@ fn vault_records_fees_in_required_funding() {
             let ctx = Context::new(
                 bitcoin::Network::Regtest,
                 Amount::from_sat(10000),
-                Arc::new(CTVAvailable),
+                LoweringPlan::Native,
                 EffectPath::try_from("vault").unwrap(),
                 Arc::new(Default::default()),
                 None,

@@ -74,21 +74,34 @@ async fn compiles_signs_and_finalizes_a_two_step_contract() {
         amount: Amount::from_btc(1.0).unwrap(),
         timeout: 4,
     };
-    let connecter =
-        HDOracleEmulatorConnection::new(address, pk_root, None, Arc::new(Secp256k1::new()))
-            .await
-            .unwrap();
-    let rc_conn: Arc<dyn CTVEmulator> = Arc::new(connecter);
+    // Public lowering data suffices to compile the whole graph before a
+    // runtime signer connection exists.
     let compiled = contract
         .compile(Context::new(
             bitcoin::Network::Regtest,
             Amount::from_btc(1.0).unwrap(),
-            rc_conn.clone(),
+            sapio_base::covenant::LoweringPlan::CtvEmulation {
+                signers: vec![pk_root],
+                threshold: 1,
+            },
             EffectPath::try_from("integration_test").unwrap(),
             Arc::new(Default::default()),
             None,
         ))
         .unwrap();
+    let connecter =
+        HDOracleEmulatorConnection::new(address, pk_root, None, Arc::new(Secp256k1::new()))
+            .await
+            .unwrap();
+    let rc_conn: Arc<dyn CTVEmulator> = Arc::new(connecter);
+    let offline =
+        HDOracleEmulatorConnection::new("127.0.0.1:0", pk_root, None, Arc::new(Secp256k1::new()))
+            .await
+            .unwrap();
+    // Changing an endpoint neither changes nor participates in the compiled
+    // policies. Checking the same public roots needs no connection to port 0.
+    compiled.validate_for_emulator(&offline).unwrap();
+    compiled.validate_for_emulator(rc_conn.as_ref()).unwrap();
     let txindex: Rc<dyn TxIndex> = Rc::new(TxIndexLogger::new());
     let tx = bitcoin::Transaction {
         version: 2,

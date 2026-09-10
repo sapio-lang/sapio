@@ -2,7 +2,7 @@ use super::*;
 use crate::contract::Compiled;
 use bitcoin::{Address, Network};
 use sapio_base::effects::EffectPath;
-use sapio_ctv_emulator_trait::CTVAvailable;
+use sapio_base::LoweringPlan;
 use std::sync::Arc;
 
 fn info(ranges: &[(u64, u64)]) -> OrdinalsInfo {
@@ -25,7 +25,7 @@ fn context(ranges: OrdinalsInfo) -> Context {
     Context::new(
         Network::Regtest,
         ranges.total().unwrap(),
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         EffectPath::try_from("plan").unwrap(),
         Arc::new(Default::default()),
         Some(ranges),
@@ -195,7 +195,7 @@ fn executing_a_plan_rejects_malformed_actual_ranges_and_amounts() {
         let ctx = Context::new(
             Network::Regtest,
             Amount::from_sat(1000),
-            Arc::new(CTVAvailable),
+            LoweringPlan::Native,
             EffectPath::try_from("plan").unwrap(),
             Arc::new(Default::default()),
             Some(actual),

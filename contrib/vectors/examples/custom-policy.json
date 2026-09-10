@@ -5,6 +5,7 @@
   },
   "context": {
     "amount": 10000,
-    "network": "Regtest"
+    "network": "Regtest",
+    "lowering": "Native"
   }
 }

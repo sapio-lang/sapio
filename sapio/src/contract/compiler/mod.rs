@@ -13,10 +13,12 @@ use super::Context;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::contract::actions::conditional_compile::CCILWrapper;
 use crate::contract::actions::CallableAsFoF;
+use crate::contract::object::CovenantRequirements;
 use crate::contract::TxTmplIt;
 use bitcoin::schnorr::TweakedPublicKey;
 use bitcoin::XOnlyPublicKey;
 use miniscript::*;
+use sapio_base::covenant::{Ctv, Emulatable};
 use sapio_base::effects::EffectDB;
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
@@ -55,8 +57,8 @@ pub trait Compilable: private::ImplSeal {
 
 /// Implements a basic identity
 impl Compilable for Compiled {
-    fn compile(&self, _ctx: Context) -> Result<Compiled, CompilationError> {
-        self.validate()?;
+    fn compile(&self, ctx: Context) -> Result<Compiled, CompilationError> {
+        self.validate_for_lowering(ctx.lowering_plan())?;
         Ok(self.clone())
     }
 }
@@ -64,6 +66,7 @@ impl Compilable for Compiled {
 impl Compilable for bitcoin::XOnlyPublicKey {
     // TODO: Taproot; make infallible API
     fn compile(&self, ctx: Context) -> Result<Compiled, CompilationError> {
+        ctx.lowering_plan().validate()?;
         let addr = bitcoin::Address::p2tr_tweaked(
             TweakedPublicKey::dangerous_assume_tweaked(*self),
             ctx.network,
@@ -150,6 +153,11 @@ where
     /// The main Compilation Logic for a Contract.
     /// TODO: Better Document Semantics
     fn compile(&self, mut ctx: Context) -> Result<Compiled, CompilationError> {
+        ctx.lowering_plan().validate()?;
+        let mut covenant_requirements = CovenantRequirements {
+            lowering: ctx.lowering_plan().clone(),
+            predicates: BTreeSet::new(),
+        };
         let self_ref = self.get_inner_ref();
         let mut guard_clauses = GuardCache::new();
 
@@ -210,7 +218,8 @@ where
                 action.get_guard(),
                 &mut guard_clauses,
             )?;
-            let committed = action.get_returned_txtmpls_modify_guards();
+            let resolved_guards = script::resolve_emulation(&guards, &mut covenant_requirements)?;
+            let committed = action.template_kind() == super::actions::TemplateKind::Covenant;
             let effect_context = action_context.derive(if committed {
                 PathFragment::Next
             } else {
@@ -225,11 +234,25 @@ where
                 }
                 // This also rejects forbidden guards on every suggested
                 // template, including duplicates of an earlier valid template.
-                let clause = (action.get_extract_clause_from_txtmpl())(&template, &ctx)?;
+                let clause = if committed {
+                    let source = ScriptPolicy::from(Emulatable(Ctv(template.hash())));
+                    Some(script::resolve_emulation(
+                        &conjoin_source(template.guards.iter().chain(std::iter::once(&source))),
+                        &mut covenant_requirements,
+                    )?)
+                } else if template.guards.is_empty() {
+                    None
+                } else {
+                    return Err(CompilationError::AdditionalGuardsNotAllowedHere);
+                };
                 if let Some(clause) = &clause {
                     script::validate_source(clause)?;
                     if committed
                         && (!source_policy_possible(&guards, &template.tx)
+                            || template
+                                .guards
+                                .iter()
+                                .any(|guard| !source_policy_possible(guard, &template.tx))
                             || !source_policy_possible(clause, &template.tx))
                     {
                         return Err(CompilationError::ImpossibleTemplate {
@@ -259,7 +282,9 @@ where
                         append_branches(
                             &mut branches,
                             &mut branch_bytes,
-                            compile_branches(conjoin_source([&guards, &clause].into_iter()))?,
+                            compile_branches(conjoin_source(
+                                [&resolved_guards, &clause].into_iter(),
+                            ))?,
                         )?;
                     }
                 }
@@ -275,7 +300,11 @@ where
                     continuation = continuation.add_simp(simp.as_ref())?;
                 }
                 continue_apis.insert(SArc(effect_path), continuation);
-                append_branches(&mut branches, &mut branch_bytes, compile_branches(guards)?)?;
+                append_branches(
+                    &mut branches,
+                    &mut branch_bytes,
+                    compile_branches(resolved_guards)?,
+                )?;
             }
             for (policy, mut simps) in guard_metadata {
                 all_guard_simps
@@ -296,6 +325,7 @@ where
                     .entry(policy.clone())
                     .or_default()
                     .append(&mut simps);
+                let policy = script::resolve_emulation(&policy, &mut covenant_requirements)?;
                 append_branches(&mut branches, &mut branch_bytes, compile_branches(policy)?)?;
             }
         }
@@ -380,6 +410,7 @@ where
                 .metadata(metadata_ctx)?
                 .add_guard_simps(all_guard_simps)?;
             let compiled = Compiled {
+                covenant_requirements,
                 ctv_to_tx: comitted_txns,
                 suggested_txs: other_txns,
                 continue_apis,
@@ -469,6 +500,10 @@ fn source_policy_possible(policy: &ScriptPolicy, tx: &bitcoin::Transaction) -> b
     match policy {
         ScriptPolicy::Miniscript(clause) => feasibility::miniscript_policy_possible(clause, tx, 0),
         ScriptPolicy::Script(_) => true,
+        // Signer lowering does not make a false covenant predicate possible.
+        ScriptPolicy::Emulatable(predicate) => {
+            feasibility::miniscript_policy_possible(&Clause::TxTemplate(predicate.0 .0), tx, 0)
+        }
         ScriptPolicy::And(children) => children.iter().all(|p| source_policy_possible(p, tx)),
         ScriptPolicy::Or(children) => children.iter().any(|p| source_policy_possible(p, tx)),
     }

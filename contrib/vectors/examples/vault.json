@@ -17,6 +17,7 @@
   },
   "context": {
     "amount": 2000,
-    "network": "Regtest"
+    "network": "Regtest",
+    "lowering": "Native"
   }
 }

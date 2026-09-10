@@ -1,9 +1,40 @@
 # Binding contracts to funding
 
 `Object::bind_psbt` turns a compiled contract and an input outpoint into a
-`Program` of PSBTs. Binding checks the complete artifact and input mappings,
-prepares and checks funding throughout the graph, checks every signer response,
+`Program` of PSBTs. Binding checks the complete artifact, selected covenant
+policy and input mappings, prepares and checks funding throughout the graph,
+checks every signer response,
 and then adds the resulting transactions to the transaction index.
+
+## Covenant policy checks
+
+Each object records its public `LoweringPlan` and the set of CTV predicates
+resolved from explicit wrappers. This includes finish guards and continuation
+guards, as well as automatic checks on committed templates.
+`Object::validate_for_emulator` compares the policies derived from those records
+against the selected signer's advertised policies throughout the graph,
+including descendants of suggestions. Binding performs this check before
+funding lookup, signing or index insertion.
+
+Compiled-object reuse instead calls `Object::validate_for_lowering` with the
+new context's public plan. That check cannot contact a signer. Compilation
+inputs carry an explicit `context.lowering`; signer transport is selected only
+when binding or signing, and cannot rewrite the compiled artifact.
+
+Separately, the CLI requires an explicit `native_ctv_research`, `signer_emulation` or
+`signer_emulation_with_native_ctv_research` mode and checks backend equality
+before wallet activity. Ordinary signer emulation rejects known native CTV
+instructions, including instructions in finish guards, raw scripts and
+descendant contracts. The combined mode permits these mixed policies while
+retaining exact signer-policy checks. Its native research selection is an
+operator assumption, not automatic chain-activation detection; optional native
+branches count even if a particular spend will not use them.
+
+Policy equality does not establish operator identity, signer availability,
+future continuation behavior or a proof that arbitrary artifact metadata
+matches its spending script. Address-only outputs reveal no script to scan.
+See [enforcement assumptions](ENFORCEMENT.md) for the exact boundaries and
+artifact/API migration.
 
 ## Funding checks
 
@@ -100,4 +131,5 @@ These changes do not solve descendant rebinding for legacy inputs whose
 scriptSigs change transaction IDs during finalization, or establish native CTV
 enforcement on a particular chain. The supported signing/finalization domain
 and remaining release boundaries are recorded in [the fork audit](CTV_FORK_AUDIT.md)
-and [the modernization plan](MODERNIZATION.md).
+and [the modernization plan](MODERNIZATION.md). Backend equality and the CLI's
+explicit native assumption are described in [enforcement assumptions](ENFORCEMENT.md).

@@ -41,6 +41,7 @@ impl Callable for Wrapper {
     fn call(&self, ctx: Context) -> Result<Clause, CompilationError> {
         let create_args: CreateArgs<GetClause> = CreateArgs {
             context: ContextualArguments {
+                lowering: ctx.lowering_plan().clone(),
                 amount: ctx.funds(),
                 network: ctx.network,
                 effects: unsafe { ctx.get_effects_internal() }.as_ref().clone(),

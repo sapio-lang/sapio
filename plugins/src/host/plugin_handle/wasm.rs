@@ -15,15 +15,61 @@ use crate::plugin_handle::PluginHandle;
 use crate::API;
 use sapio::contract::CompilationError;
 use sapio_base::effects::EffectPath;
-use sapio_ctv_emulator_trait::CTVEmulator;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::fmt;
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use tokio::io::AsyncReadExt;
-use wasmer::{FunctionEnv, TypedFunction};
+use wasmer::{AsStoreMut, FunctionEnv, RuntimeError, TypedFunction};
+use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints};
+
+#[derive(Debug)]
+struct FuelExhausted {
+    module: WASMCacheID,
+    export: &'static str,
+    limit: u64,
+    source: RuntimeError,
+}
+
+impl fmt::Display for FuelExhausted {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "WASM module {} exhausted its {} fuel points during {}",
+            self.module, self.limit, self.export,
+        )
+    }
+}
+
+impl Error for FuelExhausted {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(&self.source)
+    }
+}
+
+fn export_error(
+    store: &mut impl AsStoreMut,
+    instance: &Instance,
+    module: WASMCacheID,
+    export: &'static str,
+    source: RuntimeError,
+) -> Box<dyn Error> {
+    // Metering's injected globals establish exhaustion. A generic unreachable
+    // or stack trap must retain its original diagnosis while fuel remains.
+    if get_remaining_points(store, instance) == MeteringPoints::Exhausted {
+        Box::new(FuelExhausted {
+            module,
+            export,
+            limit: crate::host::runtime::INSTANCE_FUEL,
+            source,
+        })
+    } else {
+        source.into()
+    }
+}
 
 /// Helper to resolve modules
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -117,7 +163,6 @@ impl<T> WasmPluginHandle<T> {
             env.this,
             Some(env.module_map.clone()),
             self.net,
-            &env.emulator,
             self.module.clone(),
             self.key,
             InvocationBudget::new(),
@@ -125,11 +170,19 @@ impl<T> WasmPluginHandle<T> {
     }
 }
 impl<Output> WasmPluginHandle<Output> {
+    fn export_error(&mut self, export: &'static str, error: RuntimeError) -> Box<dyn Error> {
+        export_error(&mut self.store, &self._instance, self.key, export, error)
+    }
+
     fn api_json(&mut self) -> Result<Vec<u8>, CompilationError> {
         let p = self
             .sapio_v1_wasm_plugin_client_get_create_arguments
             .call(&mut self.store)
-            .map_err(|e| CompilationError::ModuleCouldNotGetAPI(e.into()))?;
+            .map_err(|error| {
+                CompilationError::ModuleCouldNotGetAPI(
+                    self.export_error("sapio_v1_wasm_plugin_client_get_create_arguments", error),
+                )
+            })?;
         let bytes = self.read_to_vec(p)?;
         self.forget(p)?;
         Ok(bytes)
@@ -143,7 +196,6 @@ impl<Output> WasmPluginHandle<Output> {
     /// load all the cached keys as plugins upfront.
     pub fn load_all_keys<I: Into<PathBuf> + Clone>(
         path: I,
-        emulator: NullEmulator,
         net: bitcoin::Network,
         plugin_map: Option<BTreeMap<Vec<u8>, [u8; 32]>>,
     ) -> Result<Vec<Self>, Box<dyn Error>> {
@@ -151,7 +203,6 @@ impl<Output> WasmPluginHandle<Output> {
         for key in get_all_keys_from_fs(path.clone())? {
             let wph = Self::new(
                 path.clone(),
-                &emulator,
                 SyncModuleLocator::Key(WASMCacheID::from_str(&key)?),
                 net,
                 plugin_map.clone(),
@@ -164,32 +215,23 @@ impl<Output> WasmPluginHandle<Output> {
     /// Create a new module using async module resolution
     pub async fn new_async<I: Into<PathBuf> + Clone>(
         path: I,
-        emulator: &Arc<dyn CTVEmulator>,
         module_locator: ModuleLocator,
         net: bitcoin::Network,
         plugin_map: Option<BTreeMap<Vec<u8>, [u8; 32]>>,
     ) -> Result<Self, Box<dyn Error>> {
-        Self::new(
-            path,
-            emulator,
-            module_locator.locate().await?,
-            net,
-            plugin_map,
-        )
+        Self::new(path, module_locator.locate().await?, net, plugin_map)
     }
     /// Create an plugin handle. Only one of key or file should be set, and one
     /// should be set.
     /// TODO: Revert to async?
     pub fn new<I: Into<PathBuf> + Clone>(
         path: I,
-        emulator: &Arc<dyn CTVEmulator>,
         module_locator: SyncModuleLocator,
         net: bitcoin::Network,
         plugin_map: Option<BTreeMap<Vec<u8>, [u8; 32]>>,
     ) -> Result<Self, Box<dyn Error>> {
         Self::new_with_budget(
             path,
-            emulator,
             module_locator,
             net,
             plugin_map,
@@ -199,7 +241,6 @@ impl<Output> WasmPluginHandle<Output> {
 
     pub(in crate::host) fn new_with_budget<I: Into<PathBuf> + Clone>(
         path: I,
-        emulator: &Arc<dyn CTVEmulator>,
         module_locator: SyncModuleLocator,
         net: bitcoin::Network,
         plugin_map: Option<BTreeMap<Vec<u8>, [u8; 32]>>,
@@ -217,7 +258,6 @@ impl<Output> WasmPluginHandle<Output> {
             this,
             plugin_map,
             net,
-            emulator,
             module,
             key,
             invocation_budget,
@@ -228,7 +268,12 @@ impl<Output> WasmPluginHandle<Output> {
     pub fn forget(&mut self, p: i32) -> Result<(), CompilationError> {
         self.sapio_v1_wasm_plugin_client_drop_allocation
             .call(&mut self.store, p)
-            .map_err(|e| CompilationError::ModuleCouldNotDeallocate(p, e.into()))
+            .map_err(|error| {
+                CompilationError::ModuleCouldNotDeallocate(
+                    p,
+                    self.export_error("sapio_v1_wasm_plugin_client_drop_allocation", error),
+                )
+            })
     }
 
     /// create an allocation
@@ -237,7 +282,12 @@ impl<Output> WasmPluginHandle<Output> {
             .map_err(|error| CompilationError::ModuleRuntimeError(error.into()))?;
         self.sapio_v1_wasm_plugin_client_allocate_bytes
             .call(&mut self.store, len)
-            .map_err(|e| CompilationError::ModuleCouldNotAllocateError(len, e.into()))
+            .map_err(|error| {
+                CompilationError::ModuleCouldNotAllocateError(
+                    len,
+                    self.export_error("sapio_v1_wasm_plugin_client_allocate_bytes", error),
+                )
+            })
     }
 
     /// pass a string to the WASM plugin
@@ -288,7 +338,6 @@ impl<Output> WasmPluginHandle<Output> {
         this: [u8; 32],
         plugin_map: Option<BTreeMap<Vec<u8>, [u8; 32]>>,
         net: bitcoin::Network,
-        emulator: &Arc<dyn CTVEmulator>,
         module: Module,
         key: WASMCacheID,
         invocation_budget: InvocationBudget,
@@ -302,7 +351,6 @@ impl<Output> WasmPluginHandle<Output> {
                 this,
                 module_map: plugin_map.unwrap_or_default(),
                 net,
-                emulator: emulator.clone(),
                 memory: None,
                 sapio_v1_wasm_plugin_client_get_create_arguments: None,
                 sapio_v1_wasm_plugin_client_get_name: None,
@@ -327,8 +375,6 @@ impl<Output> WasmPluginHandle<Output> {
         let import_object = create_imports!(
             store,
             host_env,
-            sapio_v1_wasm_plugin_ctv_emulator_signer_for,
-            sapio_v1_wasm_plugin_ctv_emulator_sign,
             sapio_v1_wasm_plugin_debug_log_string,
             sapio_v1_wasm_plugin_create_contract,
             sapio_v1_wasm_plugin_get_api,
@@ -365,7 +411,16 @@ impl<Output> WasmPluginHandle<Output> {
             .sapio_v1_wasm_plugin_entry_point
             .as_ref()
             .ok_or("No Init Function Specified")?
-            .call(&mut store_mut)?;
+            .call(&mut store_mut)
+            .map_err(|error| {
+                export_error(
+                    &mut store_mut,
+                    &instance,
+                    key,
+                    "sapio_v1_wasm_plugin_entry_point",
+                    error,
+                )
+            })?;
 
         macro_rules! create_handle_exports {
         ($store:ident,  $instance:ident $(,$names:ident)*) =>
@@ -426,6 +481,7 @@ where
         path: &EffectPath,
         c: &Self::Input,
     ) -> Result<Self::Output, CompilationError> {
+        c.context.lowering.validate()?;
         let schema = crate::host::validation::CallSchema::from_json(&self.api_json()?)?;
         let arguments = serde_json::to_value(c).map_err(CompilationError::SerializationError)?;
         schema.validate_input(&arguments)?;
@@ -438,8 +494,12 @@ where
         let create_func = { &self.sapio_v1_wasm_plugin_client_create };
         let result_ptr = create_func
             .call(&mut self.store, path_ptr, args_ptr)
-            .map_err(|e| {
-                CompilationError::ModuleCouldNotCreateContract(path.clone(), c.clone(), e.into())
+            .map_err(|error| {
+                CompilationError::ModuleCouldNotCreateContract(
+                    path.clone(),
+                    c.clone(),
+                    self.export_error("sapio_v1_wasm_plugin_client_create", error),
+                )
             })?;
         let buf = self.read_to_vec(result_ptr)?;
         self.forget(result_ptr)?;
@@ -457,7 +517,11 @@ where
         let p = self
             .sapio_v1_wasm_plugin_client_get_name
             .call(&mut self.store)
-            .map_err(|e| CompilationError::ModuleCouldNotGetName(e.into()))?;
+            .map_err(|error| {
+                CompilationError::ModuleCouldNotGetName(
+                    self.export_error("sapio_v1_wasm_plugin_client_get_name", error),
+                )
+            })?;
         let v = self.read_to_vec(p)?;
         self.forget(p)?;
         String::from_utf8(v)
@@ -469,7 +533,11 @@ where
         let p = self
             .sapio_v1_wasm_plugin_client_get_logo
             .call(&mut self.store)
-            .map_err(|e| CompilationError::ModuleCouldNotGetLogo(e.into()))?;
+            .map_err(|error| {
+                CompilationError::ModuleCouldNotGetLogo(
+                    self.export_error("sapio_v1_wasm_plugin_client_get_logo", error),
+                )
+            })?;
         let v = self.read_to_vec(p)?;
         self.forget(p)?;
         String::from_utf8(v)
@@ -480,8 +548,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sapio_ctv_emulator_trait::CTVAvailable;
-    use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints};
 
     fn plugin(
         name_body: &str,
@@ -496,8 +562,8 @@ mod tests {
             r#"(module
                 (import "env" "sapio_v1_wasm_plugin_debug_log_string"
                     (func $log (param i32 i32)))
-                (import "env" "sapio_v1_wasm_plugin_ctv_emulator_sign"
-                    (func $sign (param i32 i32) (result i32)))
+                (import "env" "sapio_v1_wasm_plugin_get_api"
+                    (func $api (param i32) (result i32)))
                 (import "env" "sapio_v1_wasm_plugin_lookup_module_name"
                     (func $lookup (param i32 i32 i32 i32)))
                 (memory (export "memory") 1)
@@ -523,14 +589,12 @@ mod tests {
     fn load_plugin(source: &str) -> Result<WasmPluginHandle<serde_json::Value>, Box<dyn Error>> {
         let store = crate::host::runtime::new_store();
         let module = Module::new(&store, source.as_bytes())?;
-        let emulator: Arc<dyn CTVEmulator> = Arc::new(CTVAvailable);
         WasmPluginHandle::setup_plugin_inner(
             store,
             PathBuf::from("."),
             [0; 32],
             None,
             bitcoin::Network::Regtest,
-            &emulator,
             module,
             WASMCacheID::generate(source.as_bytes()),
             InvocationBudget::new(),
@@ -567,13 +631,15 @@ mod tests {
             "{error}"
         );
 
-        let error = load_plugin(&spinning_export("entry_point", ""))
+        let source = spinning_export("entry_point", "");
+        let error = load_plugin(&source)
             .err()
             .expect("infinite entrypoint must trap");
-        assert!(
-            error.downcast_ref::<wasmer::RuntimeError>().is_some(),
-            "{error}"
-        );
+        let exhausted = error.downcast_ref::<FuelExhausted>().expect("fuel error");
+        assert_eq!(exhausted.module, WASMCacheID::generate(source.as_bytes()));
+        assert_eq!(exhausted.export, "sapio_v1_wasm_plugin_entry_point");
+        assert_eq!(exhausted.limit, crate::host::runtime::INSTANCE_FUEL);
+        assert!(exhausted.source().unwrap().is::<RuntimeError>());
     }
 
     #[test]
@@ -581,6 +647,7 @@ mod tests {
         let arguments = CreateArgs {
             arguments: serde_json::Value::Null,
             context: crate::ContextualArguments {
+                lowering: sapio_base::covenant::LoweringPlan::Native,
                 network: bitcoin::Network::Regtest,
                 amount: bitcoin::Amount::from_sat(0),
                 effects: Default::default(),
@@ -597,23 +664,57 @@ mod tests {
             ("client_drop_allocation", "(param i32)"),
         ] {
             let mut plugin = load_plugin(&spinning_export(export, signature)).unwrap();
-            let failed = match export {
-                "client_get_name" => plugin.get_name().is_err(),
-                "client_get_logo" => plugin.get_logo().is_err(),
-                "client_get_create_arguments" => plugin.get_api().is_err(),
-                "client_create" => plugin.call(&path, &arguments).is_err(),
-                "client_allocate_bytes" => plugin.pass_string("guest input").is_err(),
+            let error = match export {
+                "client_get_name" => plugin.get_name().err(),
+                "client_get_logo" => plugin.get_logo().err(),
+                "client_get_create_arguments" => plugin.get_api().err(),
+                "client_create" => plugin.call(&path, &arguments).err(),
+                "client_allocate_bytes" => plugin.pass_string("guest input").err(),
                 // Retrieval invokes cleanup after reading a valid result.
-                "client_drop_allocation" => plugin.get_name().is_err(),
+                "client_drop_allocation" => plugin.get_name().err(),
                 _ => unreachable!(),
+            }
+            .expect("infinite exported function must trap");
+            let source = match &error {
+                CompilationError::ModuleCouldNotGetName(error)
+                | CompilationError::ModuleCouldNotGetLogo(error)
+                | CompilationError::ModuleCouldNotGetAPI(error)
+                | CompilationError::ModuleCouldNotDeallocate(_, error)
+                | CompilationError::ModuleCouldNotAllocateError(_, error)
+                | CompilationError::ModuleCouldNotCreateContract(_, _, error) => error,
+                _ => panic!("unexpected error: {error}"),
             };
-            assert!(failed, "{export} must trap");
+            let exhausted = source.downcast_ref::<FuelExhausted>().expect("fuel error");
+            assert_eq!(exhausted.module, plugin.id());
+            assert_eq!(exhausted.export, format!("sapio_v1_wasm_plugin_{export}"));
+            assert_eq!(exhausted.limit, crate::host::runtime::INSTANCE_FUEL);
+            assert!(exhausted.source().unwrap().is::<RuntimeError>());
             assert_eq!(
                 get_remaining_points(&mut plugin.store, &plugin._instance),
                 MeteringPoints::Exhausted,
                 "{export} must fail from fuel exhaustion"
             );
         }
+    }
+
+    #[test]
+    fn ordinary_guest_traps_keep_their_original_error_when_fuel_remains() {
+        let mut plugin = plugin("unreachable", "", 16);
+        let error = plugin.get_name().unwrap_err();
+        let CompilationError::ModuleCouldNotGetName(source) = error else {
+            panic!("unexpected error: {error}");
+        };
+        let runtime = source
+            .downcast_ref::<RuntimeError>()
+            .expect("original trap");
+        assert_eq!(
+            runtime.clone().to_trap(),
+            Some(wasmer_types::TrapCode::UnreachableCodeReached)
+        );
+        assert!(matches!(
+            get_remaining_points(&mut plugin.store, &plugin._instance),
+            MeteringPoints::Remaining(points) if points > 0,
+        ));
     }
 
     struct FixtureDirectory(PathBuf);
@@ -678,10 +779,8 @@ mod tests {
         );
         let source = plugin_source(&body, "", 16);
         let binary = wasmer::wat2wasm(source.as_bytes()).unwrap().into_owned();
-        let emulator: Arc<dyn CTVEmulator> = Arc::new(CTVAvailable);
         let mut original = WasmPluginHandle::<serde_json::Value>::new(
             cache.0.clone(),
-            &emulator,
             SyncModuleLocator::Bytes(binary),
             bitcoin::Network::Regtest,
             None,
@@ -700,7 +799,6 @@ mod tests {
 
         let mut reloaded = WasmPluginHandle::<serde_json::Value>::new(
             cache.0.clone(),
-            &emulator,
             SyncModuleLocator::Key(original.id()),
             bitcoin::Network::Regtest,
             None,
@@ -798,8 +896,8 @@ mod tests {
             "i32.const 8 i32.const -1 call $log i32.const 8",
             "i32.const 65536 i32.const 1 call $log i32.const 8",
             "i32.const 8 i32.const 16777217 call $log i32.const 8",
-            "i32.const 8 i32.const 2 call $sign",
-            "i32.const 8 i32.const -1 call $sign",
+            "i32.const 65536 call $api",
+            "i32.const -1 call $api",
             "i32.const 0 i32.const 0 i32.const 65535 i32.const 64 call $lookup i32.const 8",
             "i32.const 0 i32.const 0 i32.const 32 i32.const 65536 call $lookup i32.const 8",
         ] {
@@ -817,14 +915,12 @@ mod tests {
             (start $start)
         )"#;
         let module = Module::new(&store, source.as_bytes()).unwrap();
-        let emulator: Arc<dyn CTVEmulator> = Arc::new(CTVAvailable);
         let result = WasmPluginHandle::<serde_json::Value>::setup_plugin_inner(
             store,
             PathBuf::from("."),
             [0; 32],
             None,
             bitcoin::Network::Regtest,
-            &emulator,
             module,
             WASMCacheID::generate(source.as_bytes()),
             InvocationBudget::new(),

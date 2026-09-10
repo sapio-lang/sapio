@@ -1,3 +1,6 @@
+#[path = "fixtures/covenant.rs"]
+mod covenant;
+
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{Secp256k1, SecretKey};
 use bitcoin::{Amount, Network, XOnlyPublicKey};
@@ -8,8 +11,8 @@ use sapio::miniscript::policy::{semantic::Policy, Liftable};
 use sapio::miniscript::MiniscriptKey;
 use sapio::template::Template;
 use sapio::{continuation, declare, guard, then, Context};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::Clause;
-use sapio_ctv_emulator_trait::{CTVAvailable, CTVEmulator, EmulatorError};
 use std::sync::Arc;
 
 fn key(index: u8) -> XOnlyPublicKey {
@@ -20,27 +23,14 @@ fn key(index: u8) -> XOnlyPublicKey {
         .0
 }
 
-struct Emulated;
-impl CTVEmulator for Emulated {
-    fn get_signer_for(&self, _: sha256::Hash) -> Result<Clause, EmulatorError> {
-        Ok(Clause::Key(key(4)))
-    }
-    fn sign(
-        &self,
-        _: bitcoin::util::psbt::PartiallySignedTransaction,
-    ) -> Result<bitcoin::util::psbt::PartiallySignedTransaction, EmulatorError> {
-        unreachable!("compilation must not sign")
-    }
-}
-
 fn context(emulated: bool) -> Context {
     Context::new(
         Network::Regtest,
         Amount::from_sat(2_000),
         if emulated {
-            Arc::new(Emulated)
+            covenant::plan(4)
         } else {
-            Arc::new(CTVAvailable)
+            LoweringPlan::Native
         },
         "payments".try_into().unwrap(),
         Arc::new(Default::default()),
@@ -90,16 +80,24 @@ impl<const REVERSED: bool> Contract for Payments<REVERSED> {
     declare! {non updatable}
 }
 
-fn accepts(policy: &Policy<XOnlyPublicKey>, mask: u8, commitment: sha256::Hash) -> bool {
+fn accepts(
+    policy: &Policy<XOnlyPublicKey>,
+    mask: u8,
+    commitment: sha256::Hash,
+    covenant_key: XOnlyPublicKey,
+) -> bool {
     match policy {
         Policy::Unsatisfiable => false,
         Policy::Trivial => true,
-        Policy::KeyHash(hash) => (1..=4)
-            .any(|index| mask & (1 << (index - 1)) != 0 && key(index).to_pubkeyhash() == *hash),
+        Policy::KeyHash(hash) => {
+            (1..=3)
+                .any(|index| mask & (1 << (index - 1)) != 0 && key(index).to_pubkeyhash() == *hash)
+                || mask & 8 != 0 && covenant_key.to_pubkeyhash() == *hash
+        }
         Policy::Threshold(required, children) => {
             children
                 .iter()
-                .filter(|child| accepts(child, mask, commitment))
+                .filter(|child| accepts(child, mask, commitment, covenant_key))
                 .count()
                 >= *required
         }
@@ -128,9 +126,13 @@ fn duplicate_transactions_preserve_every_authorization_and_its_action_guard() {
             panic!()
         };
         let stored_guards = stored_guards.lift().unwrap();
+        let covenant_key = covenant::key(4, template.hash());
         for mask in 0..16 {
             let authorized = mask & 1 != 0 || mask & 6 == 6;
-            assert_eq!(accepts(&stored_guards, mask, template.hash()), authorized);
+            assert_eq!(
+                accepts(&stored_guards, mask, template.hash(), covenant_key),
+                authorized
+            );
             for hash in [template.hash(), sha256::Hash::hash(b"another transaction")] {
                 let covenant = if emulated {
                     mask & 8 != 0
@@ -138,7 +140,7 @@ fn duplicate_transactions_preserve_every_authorization_and_its_action_guard() {
                     hash == template.hash()
                 };
                 assert_eq!(
-                    accepts(&compiled_policy, mask, hash),
+                    accepts(&compiled_policy, mask, hash, covenant_key),
                     authorized && covenant,
                     "emulated={emulated}, signers={mask}, hash={hash}"
                 );
@@ -261,7 +263,8 @@ fn multiple_template_guards_all_remain_required() {
     };
     let policy = descriptor.lift().unwrap();
     let hash = compiled.ctv_to_tx.keys().next().copied().unwrap();
+    let covenant_key = covenant::key(4, hash);
     for mask in 0..8 {
-        assert_eq!(accepts(&policy, mask, hash), mask == 7);
+        assert_eq!(accepts(&policy, mask, hash, covenant_key), mask == 7);
     }
 }

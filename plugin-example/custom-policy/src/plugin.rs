@@ -84,7 +84,7 @@ mod tests {
     use bitcoin::secp256k1::{Keypair, Secp256k1, SecretKey};
     use sapio::contract::abi::object::SupportedDescriptors;
     use sapio::contract::Compilable;
-    use sapio_ctv_emulator_trait::CTVAvailable;
+    use sapio_base::covenant::LoweringPlan;
     use std::sync::Arc;
 
     #[test]
@@ -105,7 +105,7 @@ mod tests {
             let result = contract.compile(Context::new(
                 bitcoin::Network::Regtest,
                 Amount::from_sat(amount),
-                Arc::new(CTVAvailable),
+                LoweringPlan::Native,
                 "custom_policy".try_into().unwrap(),
                 Arc::new(Default::default()),
                 None,

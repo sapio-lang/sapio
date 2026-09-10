@@ -10,7 +10,7 @@
 //! conditions with action guards and transaction commitments. Raw fragments
 //! retain their instruction order and multiplicity when combined.
 
-use crate::Clause;
+use crate::{Clause, Ctv, Emulatable};
 use bitcoin::blockdata::opcodes::{all, Class, ClassifyContext};
 use bitcoin::blockdata::script::{Error as ScriptError, Instruction};
 use bitcoin::Script;
@@ -33,6 +33,8 @@ use std::fmt;
 pub enum ScriptPolicy {
     /// The existing native Miniscript policy language.
     Miniscript(Clause),
+    /// A CTV predicate explicitly resolved with public lowering inputs.
+    Emulatable(Emulatable<Ctv>),
     /// A checked raw fragment with backend-defined witness requirements.
     Script(ScriptFragment),
     /// Require every child, in encounter order. An empty conjunction is true.
@@ -53,6 +55,12 @@ impl From<ScriptFragment> for ScriptPolicy {
     }
 }
 
+impl From<Emulatable<Ctv>> for ScriptPolicy {
+    fn from(predicate: Emulatable<Ctv>) -> Self {
+        Self::Emulatable(predicate)
+    }
+}
+
 /// Translate another policy language into Sapio's immutable policy source.
 ///
 /// Implementations must preserve the source language's authorization and
@@ -69,6 +77,12 @@ pub trait PolicyCompiler {
 impl PolicyCompiler for Clause {
     fn compile_policy(&self) -> Result<ScriptPolicy, PolicyError> {
         Ok(ScriptPolicy::Miniscript(self.clone()))
+    }
+}
+
+impl PolicyCompiler for Emulatable<Ctv> {
+    fn compile_policy(&self) -> Result<ScriptPolicy, PolicyError> {
+        Ok(ScriptPolicy::Emulatable(*self))
     }
 }
 

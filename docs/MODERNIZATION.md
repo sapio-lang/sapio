@@ -48,6 +48,7 @@ with upstream crates would remove semantics, not complete a migration.
 | Artifact binding | Validate the complete object graph before signing or indexing: unsigned input-zero templates, matching commitments, descriptors, output metadata and funding totals; reject invalid auxiliary-input mappings |
 | Funding representation | Replace ambiguous BTC ranges with an explicit integer-satoshi minimum; retain `ensure_amount` without templates, validate fresh/reused graphs, reject underfunded children and enforce known input floors before signing |
 | Template accounting | Make builder debits private, preserve outputs-before-fees ordering, and count exact unsigned bytes and prospective outputs; regressions cover CompactSize boundaries, ordinal prefixes and the affected fee-paying examples |
+| Covenant assumptions | [Explicit CTV wrappers and public lowering plans](ENFORCEMENT.md), recorded predicate requirements including finish guards, pure compiled-object reuse checks and runtime signer compatibility; explicit CLI native assumptions before wallet funding |
 | Funding integrity | Authenticate previous transactions and index acknowledgements; check contract scripts, distinct inputs, checked funding totals and reserved fees before signing; preserve operational lookup errors and authenticated PSBT prevouts |
 | Bound graph identity | Derive child keys from parent bindings and transition/output identities; preserve reused leaves and contracts, original source paths and continuation paths; keep synthetic funding in its own path |
 | PSBT structure | Reject empty-input transactions, mismatched input/output maps and populated unsigned scriptSigs/witnesses before signing or finalization; preserve the PSBT on structural rejection |
@@ -67,7 +68,7 @@ with upstream crates would remove semantics, not complete a migration.
 | WASM source cache | Limit binary sources to 128 MiB, authenticate content hashes, recompile with the current engine, preserve corruption/I/O errors and ignore legacy native caches |
 | Module schemas | Validate actual inputs and successful outputs at the common host boundary, including raw nested calls; use offline Draft 7 validation, guard reference expansion and remove the no-op interface check |
 | Emulator protocol | Bound both directions of framed JSON, discard failed streams, reject malformed PSBT maps, support prebound listeners |
-| Emulator responses | Accept complete PSBT responses containing only signature additions; preserve existing signatures and every other field, including raw HD responses, each federation participant and the WASM signing import |
+| Emulator responses | Accept complete PSBT responses containing only signature additions; preserve existing signatures and every other field in raw HD responses and each federation participant; signer callbacks are absent from the compilation host |
 | Emulator lifecycle | Bound each peer exchange and the async wait for CLI peer resolution; cap admitted server connections; discard incomplete exchanges, isolate peer errors and cancel owned connection tasks on shutdown |
 | Integration | Restore the suite to the workspace; compile, sign and finalize two contract steps and reject a modified output |
 | Contract examples | [Complete inventory](EXAMPLES.md): repaired and tested library families, restored PowSwap/TapBet, 19 real WASM fixtures, both native examples and explicit research assumptions |
@@ -119,7 +120,25 @@ are transaction correctness. Keep those boundaries visible in APIs.
 the proposed CTV behavior. Its status must be checked for each supported chain;
 a compiler's ability to emit an opcode is not evidence of chain enforcement.
 
-Define backend capability information before adding another covenant primitive:
+The current [enforcement boundary](ENFORCEMENT.md) lowers explicit
+`Emulatable(Ctv(...))` predicates using a serialized public `LoweringPlan`.
+Compilation has no signer runtime or host signing callback. Artifacts record
+the plan and every resolved predicate, including finish guards. Reuse checks
+public plans without network access; binding compares derived requirements with
+the actual signer policy across the graph, including suggested descendants.
+
+The CLI separates compilation inputs from runtime native research,
+signer-emulation or combined configuration. Ordinary signer emulation rejects
+known native CTV instructions before wallet funding; the combined mode supports
+mixed policies with both signer-policy checks and an explicit native activation
+assumption. Neither errors nor missing configuration silently select another
+backend. Ordinary native clauses and raw scripts are never rewritten.
+
+These checks do not detect chain activation, prove signer availability, identify
+operators or authenticate arbitrary artifact policies against their scripts.
+Native research remains an explicit operator assumption; address-only outputs
+reveal no spending script to inspect. Before supporting deployments or another
+covenant primitive, establish the remaining evidence:
 
 | Mode | Required claim in an artifact | Required validation |
 | --- | --- | --- |
@@ -127,10 +146,16 @@ Define backend capability information before adding another covenant primitive:
 | Signer-emulated covenant | Signer identities, threshold, structural signing rule and availability assumptions | Allowed transitions sign and finalize; forbidden transitions fail |
 | Future primitive | Precisely named capability and assumptions | Its own lowering tests and execution evidence |
 
-The current CLI does not yet enforce this artifact-level distinction. A release
-must make backend selection explicit and fail before funding an unsupported
-combination. Native CTV and signer emulation must not silently substitute for one
-another. Never infer mainnet safety from a successful compilation or a unit test.
+The recorded predicate requirements are narrower than a complete deployment
+capability declaration. Future continuation behavior and supported chain
+semantics need their own evidence. Never infer mainnet safety from a successful
+compilation or a unit test.
+
+The [generic encumbrance design](ENFORCEMENT.md#generic-encumbrance-programs-design-boundary)
+builds on Rubin's program-instance model, but only CTV emulation is implemented.
+A generic protocol still needs versioned instance commitments, domain-separated
+key derivation, an exact signed transaction view and witness-carrying requests.
+There is no generic executor, BitVM dispute system or penalty bond in this pass.
 
 ## Ordered work after this recovery pass
 
@@ -145,8 +170,11 @@ This is the next release blocker, before a broad dependency migration.
   policy separate from artifact validation. The repaired fork verifies against
   supplied prevouts; callers outside the binder must also authenticate them and
   reject conflicting UTXO records.
-- Enforce backend capability information before funding and execute the supported
-  native CTV cases against a node implementing the intended semantics. The
+- Extend the explicit [covenant assumptions](ENFORCEMENT.md) with deployment
+  evidence and execute the supported native CTV cases against a node implementing
+  the intended semantics. Exact recorded-policy checks and native-script
+  detection are implemented; automatic chain-activation detection and a complete
+  capability model are not. The
   [fork repair record](CTV_FORK_AUDIT.md) documents hashing, finalization and
   explicit sighash checks, including 157 passing fork tests and Clippy. Keep the
   builder's unsigned, empty-scriptSig, input-zero domain explicit. Automatic
@@ -216,8 +244,9 @@ to supported financial products.
 - Explain a compilation with a transaction graph, amounts, fee budgets, timelocks,
   signer assumptions, and unresolved funding inputs. Start with deterministic
   JSON and a simple local viewer; share the artifact parser with the CLI.
-- Ship explicit configuration examples for local emulation and a supported native
-  research node. Remove dependence on obsolete public emulator defaults.
+- Maintain explicit configuration examples for local emulation and establish a
+  supported native research node. The CLI now requires a covenant mode without
+  an implicit native fallback; deployment instructions must state its assumptions.
 - Make book examples executable fixtures; clearly mark historical experiments.
   Every supported tutorial should run from a clean checkout in CI.
 - Consolidate duplicated terminology and obsolete crate/server references.

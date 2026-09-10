@@ -8,7 +8,6 @@
 
 use super::wasm_cache;
 use crate::CreateArgs;
-use sapio_ctv_emulator_trait::NullEmulator;
 
 use std::collections::BTreeMap;
 use std::str::FromStr;

@@ -204,8 +204,7 @@ fn expand(action: Action, args: AttributeArgs, mut input: ItemFn) -> syn::Result
                             schema: Self::#schema_helper(),
                             name: ::std::sync::Arc::new(#action_name.into()),
                             f: ::std::default::Default::default(),
-                            returned_txtmpls_modify_guards: false,
-                            extract_clause_from_txtmpl: ::sapio::contract::actions::default_extract_clause_from_txtmpl,
+                            template_kind: ::sapio::contract::actions::TemplateKind::Suggested,
                         };
                     ::std::option::Option::Some(::std::boxed::Box::new(action))
                 }

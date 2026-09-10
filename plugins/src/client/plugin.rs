@@ -71,11 +71,13 @@ where
             context:
                 ContextualArguments {
                     network,
+                    lowering,
                     amount,
                     effects,
                     ordinals_info,
                 },
         } = serde_json::from_slice(s.to_bytes()).map_err(CompilationError::DeserializationError)?;
+        lowering.validate()?;
         // TODO: In theory, these trampoline bounds are robust/serialization safe...
         // But the API needs stiching to the parent in a sane way...
         let caller = lookup_this_module_name()
@@ -102,7 +104,7 @@ where
         let ctx = Context::new(
             network,
             amount,
-            Arc::new(client::WasmHostEmulator),
+            lowering,
             path,
             // TODO: load database?
             Arc::new(effects),

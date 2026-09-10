@@ -9,8 +9,8 @@ use sapio::miniscript::policy::{
 };
 use sapio::miniscript::MiniscriptKey;
 use sapio::{continuation, declare, guard, then, Context};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::Clause;
-use sapio_ctv_emulator_trait::CTVAvailable;
 use std::sync::Arc;
 
 fn key(index: u8) -> XOnlyPublicKey {
@@ -25,7 +25,7 @@ fn context() -> Context {
     Context::new(
         Network::Regtest,
         Amount::from_sat(1_000),
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         "validation".try_into().unwrap(),
         Arc::new(Default::default()),
         None,

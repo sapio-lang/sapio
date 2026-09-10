@@ -6,9 +6,11 @@
 
 //! Lower policy alternatives to complete Tapscript predicates.
 
+use crate::contract::object::CovenantRequirements;
 use crate::contract::CompilationError;
 use bitcoin::blockdata::opcodes;
 use bitcoin::Script;
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::miniscript::ord::Inscription;
 use sapio_base::miniscript::Tap;
 use sapio_base::policy::ScriptPolicy;
@@ -104,12 +106,13 @@ impl Expansion {
 }
 
 #[derive(Default)]
-struct Preflight {
+struct Preflight<'a> {
+    lowering: Option<&'a LoweringPlan>,
     nodes: usize,
     payload_bytes: usize,
 }
 
-impl Preflight {
+impl Preflight<'_> {
     fn payload(&mut self, bytes: usize) -> Result<(), CompilationError> {
         self.payload_bytes = self
             .payload_bytes
@@ -137,6 +140,26 @@ impl Preflight {
     ) -> Result<Expansion, CompilationError> {
         self.visit(depth)?;
         match policy {
+            ScriptPolicy::Emulatable(_) => {
+                self.visit(depth + 1)?;
+                match self.lowering {
+                    Some(LoweringPlan::CtvEmulation { signers, threshold })
+                        if signers.len() > 1 =>
+                    {
+                        // Account for every generated key before derivation or
+                        // cloning can expand one wrapper into a large policy.
+                        for _ in signers {
+                            self.visit(depth + 2)?;
+                        }
+                        if *threshold == 1 {
+                            Expansion::checked(Some(signers.len()), Some(signers.len()), Some(0))
+                        } else {
+                            Ok(Expansion::ONE)
+                        }
+                    }
+                    _ => Ok(Expansion::ONE),
+                }
+            }
             ScriptPolicy::Miniscript(clause) => {
                 // Bound recursion before invoking the Miniscript validator.
                 let expansion = self.clause(clause, depth + 1, true)?;
@@ -277,6 +300,7 @@ fn expand_clause(clause: &Clause) -> Vec<Vec<Operand<'_>>> {
 fn expand(policy: &ScriptPolicy) -> Vec<Vec<Operand<'_>>> {
     match policy {
         ScriptPolicy::Miniscript(clause) => expand_clause(clause),
+        ScriptPolicy::Emulatable(_) => unreachable!("resolved before expansion"),
         ScriptPolicy::Script(fragment) => vec![vec![Operand::Script(fragment.as_script())]],
         ScriptPolicy::Or(children) => children.iter().flat_map(expand).collect(),
         ScriptPolicy::And(children) => {
@@ -401,11 +425,71 @@ fn compile_alternative(
 /// lowering work; it is not a consensus limit or a witness-size guarantee.
 pub(crate) fn lower_script_policy(policy: &ScriptPolicy) -> Result<Vec<Script>, CompilationError> {
     validate_source(policy)?;
+    let mut pending = vec![policy];
+    while let Some(policy) = pending.pop() {
+        match policy {
+            ScriptPolicy::Emulatable(_) => return Err(CompilationError::UnresolvedEmulation),
+            ScriptPolicy::And(children) | ScriptPolicy::Or(children) => pending.extend(children),
+            _ => {}
+        }
+    }
     let mut encoded_bytes = 0;
     expand(policy)
         .iter()
         .map(|alternative| compile_alternative(alternative, &mut encoded_bytes))
         .collect()
+}
+
+/// Resolve only explicitly wrapped predicates, retaining their public inputs.
+/// Validate source and generated node counts before any derivation or copying.
+pub(super) fn resolve_emulation(
+    policy: &ScriptPolicy,
+    requirements: &mut CovenantRequirements,
+) -> Result<ScriptPolicy, CompilationError> {
+    requirements.lowering.validate()?;
+    Preflight {
+        lowering: Some(&requirements.lowering),
+        ..Preflight::default()
+    }
+    .policy(policy, 0)?;
+    fn resolve(
+        policy: &ScriptPolicy,
+        requirements: &mut CovenantRequirements,
+    ) -> Result<(ScriptPolicy, bool), CompilationError> {
+        Ok(match policy {
+            ScriptPolicy::Emulatable(predicate) => {
+                requirements.predicates.insert(predicate.0);
+                (requirements.lowering.lower_ctv(predicate.0)?.into(), true)
+            }
+            ScriptPolicy::And(children) | ScriptPolicy::Or(children) => {
+                let mut changed = false;
+                let children = children
+                    .iter()
+                    .map(|child| {
+                        let (child, resolved) = resolve(child, requirements)?;
+                        changed |= resolved;
+                        Ok(child)
+                    })
+                    .collect::<Result<Vec<_>, CompilationError>>()?;
+                let policy = if matches!(policy, ScriptPolicy::And(_)) {
+                    if changed {
+                        // The automatic wrapped CTV can still share a native
+                        // Miniscript run with its surrounding guards.
+                        super::conjoin_source(children.iter())
+                    } else {
+                        ScriptPolicy::And(children)
+                    }
+                } else {
+                    ScriptPolicy::Or(children)
+                };
+                (policy, changed)
+            }
+            policy => (policy.clone(), false),
+        })
+    }
+    let (resolved, _) = resolve(policy, requirements)?;
+    validate_source(&resolved)?;
+    Ok(resolved)
 }
 
 /// Validate and bound source policies before cloning, simplification or
@@ -418,10 +502,169 @@ pub(crate) fn validate_source(policy: &ScriptPolicy) -> Result<(), CompilationEr
 mod tests {
     use super::*;
     use bitcoin::blockdata::script::Builder;
+    use bitcoin::hashes::{sha256, Hash};
     use bitcoin::secp256k1::{Keypair, Secp256k1, SecretKey};
+    use bitcoin::util::bip32::{ChainCode, ExtendedPrivKey, ExtendedPubKey};
+    use bitcoin::Network;
+    use sapio_base::covenant::{Ctv, Emulatable};
     use sapio_base::miniscript::ord::envelope::Envelope;
     use sapio_base::miniscript::policy::compiler::CompilerError;
     use sapio_base::policy::ScriptFragment;
+
+    fn public_lowering(signer_count: usize, threshold: u8) -> LoweringPlan {
+        let secret = ExtendedPrivKey::new_master(Network::Testnet, &[17; 32]).unwrap();
+        let root = ExtendedPubKey::from_priv(&Secp256k1::new(), &secret);
+        LoweringPlan::CtvEmulation {
+            signers: (0..signer_count)
+                .map(|index| {
+                    let mut signer = root;
+                    let mut chain_code = [0; 32];
+                    chain_code[..8].copy_from_slice(&(index as u64).to_be_bytes());
+                    signer.chain_code = ChainCode::from(&chain_code[..]);
+                    signer
+                })
+                .collect(),
+            threshold,
+        }
+    }
+
+    fn wrapped(byte: u8) -> ScriptPolicy {
+        Emulatable(Ctv(sha256::Hash::from_inner([byte; 32]))).into()
+    }
+
+    #[test]
+    fn generated_signer_nodes_are_bounded_before_any_wrapper_is_resolved() {
+        let mut requirements = CovenantRequirements {
+            lowering: public_lowering(8, 2),
+            predicates: Default::default(),
+        };
+        // Each wrapper is small in the source but generates a threshold and
+        // eight key leaves. Check both sides of that generated-node boundary.
+        let at_limit = ScriptPolicy::And(vec![wrapped(1); 6_553]);
+        Preflight {
+            lowering: Some(&requirements.lowering),
+            ..Preflight::default()
+        }
+        .policy(&at_limit, 0)
+        .unwrap();
+        let over_limit = ScriptPolicy::And(vec![wrapped(1); 6_554]);
+        validate_source(&over_limit).unwrap();
+        assert!(matches!(
+            resolve_emulation(&over_limit, &mut requirements),
+            Err(CompilationError::PolicyLimit {
+                resource: "policy nodes",
+                limit: MAX_NODES,
+            })
+        ));
+        // Resolution records a wrapper before deriving its keys. An empty set
+        // therefore also establishes rejection before that work started.
+        assert!(requirements.predicates.is_empty());
+    }
+
+    #[test]
+    fn signer_choices_respect_leaf_and_cartesian_alternative_limits() {
+        let mut too_many_signers = CovenantRequirements {
+            lowering: public_lowering(MAX_ALTERNATIVES + 1, 1),
+            predicates: Default::default(),
+        };
+        assert!(matches!(
+            resolve_emulation(&wrapped(1), &mut too_many_signers),
+            Err(CompilationError::PolicyLimit {
+                resource: "Taproot alternatives",
+                limit: MAX_ALTERNATIVES,
+            })
+        ));
+        assert!(too_many_signers.predicates.is_empty());
+
+        let policy = |count: u8| {
+            ScriptPolicy::And(
+                (0..count)
+                    // Raw separators retain independently selectable runs.
+                    .flat_map(|index| [wrapped(index), raw(i64::from(index))])
+                    .collect(),
+            )
+        };
+        let mut requirements = CovenantRequirements {
+            lowering: public_lowering(2, 1),
+            predicates: Default::default(),
+        };
+        let resolved = resolve_emulation(&policy(10), &mut requirements).unwrap();
+        let expansion = Preflight::default().policy(&resolved, 0).unwrap();
+        assert_eq!(expansion.alternatives, MAX_ALTERNATIVES);
+        assert_eq!(requirements.predicates.len(), 10);
+        let before = requirements.clone();
+        assert!(matches!(
+            resolve_emulation(&policy(11), &mut requirements),
+            Err(CompilationError::PolicyLimit {
+                resource: "Taproot alternatives",
+                limit: MAX_ALTERNATIVES,
+            })
+        ));
+        assert_eq!(requirements, before);
+    }
+
+    #[test]
+    fn generated_threshold_depth_is_checked_before_key_derivation() {
+        let mut requirements = CovenantRequirements {
+            lowering: public_lowering(2, 2),
+            predicates: Default::default(),
+        };
+        let mut policy = wrapped(1);
+        for _ in 0..MAX_DEPTH - 2 {
+            policy = ScriptPolicy::Or(vec![policy]);
+        }
+        Preflight {
+            lowering: Some(&requirements.lowering),
+            ..Preflight::default()
+        }
+        .policy(&policy, 0)
+        .unwrap();
+        policy = ScriptPolicy::Or(vec![policy]);
+        validate_source(&policy).unwrap();
+        assert!(matches!(
+            resolve_emulation(&policy, &mut requirements),
+            Err(CompilationError::PolicyLimit {
+                resource: "policy depth",
+                limit: MAX_DEPTH,
+            })
+        ));
+        assert!(requirements.predicates.is_empty());
+    }
+
+    #[test]
+    fn resolving_wrappers_preserves_native_predicates_and_raw_operand_order() {
+        let native = ScriptPolicy::from(Clause::TxTemplate(sha256::Hash::from_inner([2; 32])));
+        let original = ScriptPolicy::Or(vec![
+            wrapped(1),
+            ScriptPolicy::And(vec![raw(4), native.clone(), wrapped(3), raw(5)]),
+        ]);
+        for lowering in [LoweringPlan::Native, public_lowering(2, 2)] {
+            let mut requirements = CovenantRequirements {
+                lowering: lowering.clone(),
+                predicates: Default::default(),
+            };
+            let first = Ctv(sha256::Hash::from_inner([1; 32]));
+            let second = Ctv(sha256::Hash::from_inner([3; 32]));
+            let expected = ScriptPolicy::Or(vec![
+                lowering.lower_ctv(first).unwrap().into(),
+                ScriptPolicy::And(vec![
+                    raw(4),
+                    native.clone(),
+                    lowering.lower_ctv(second).unwrap().into(),
+                    raw(5),
+                ]),
+            ]);
+            assert_eq!(
+                resolve_emulation(&original, &mut requirements).unwrap(),
+                expected
+            );
+            assert_eq!(
+                requirements.predicates,
+                [first, second].into_iter().collect()
+            );
+            assert_eq!(requirements.lowering, lowering);
+        }
+    }
 
     fn raw(value: i64) -> ScriptPolicy {
         ScriptPolicy::Script(

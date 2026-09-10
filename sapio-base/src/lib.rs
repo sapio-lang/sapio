@@ -11,9 +11,11 @@ pub mod util;
 use bitcoin::XOnlyPublicKey;
 pub use miniscript;
 pub use util::CTVHash;
+pub mod covenant;
 pub mod plugin_args;
 pub mod policy;
 pub mod simp;
+pub use covenant::{CovenantError, Ctv, Emulatable, LoweringPlan};
 
 /// Helpers for making correct time locks
 pub mod timelocks;

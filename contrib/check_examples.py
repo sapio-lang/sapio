@@ -11,6 +11,7 @@ import time
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "contrib" / "vectors" / "examples"
 INTERFACES = {"batching-trait", "nft-trait"}
+SIGNER_CASES = ("treepay", "trampolinepay")
 # Each fixture performs two full create requests to check repeatability.
 REQUEST_TIMEOUT_SECONDS = 360
 
@@ -36,22 +37,33 @@ def main():
             interfaces.add(directory)
     assert interfaces == INTERFACES, (interfaces, INTERFACES)
     assert {name: case["wasm"] for name, case in catalog.items()} == guests
+    cases = [(name, "native") for name in sorted(catalog)]
+    cases.extend((name, "signer") for name in SIGNER_CASES)
+    assert all(name in catalog for name in SIGNER_CASES)
     failures = []
-    for name in sorted(catalog):
+    for name, mode in cases:
+        label = f"{name} [{mode}]"
         started = time.monotonic()
-        print(f"Checking WASM {name}...", flush=True)
+        print(f"Checking WASM {label}...", flush=True)
         with tempfile.TemporaryDirectory(prefix="sapio-example-") as cache:
             try:
+                command = [str(runner), str(modules), str(FIXTURES), name, cache]
+                if mode == "signer":
+                    command.append("signer")
                 subprocess.run(
-                    [str(runner), str(modules), str(FIXTURES), name, cache],
+                    command,
                     check=True, timeout=REQUEST_TIMEOUT_SECONDS,
                 )
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
-                failures.append(name)
-                print(f"FAILED {name}: {error}", file=sys.stderr)
-        print(f"WASM {name}: {time.monotonic() - started:.2f}s", flush=True)
+                failures.append(label)
+                print(f"FAILED {label}: {error}", file=sys.stderr)
+        print(f"WASM {label}: {time.monotonic() - started:.2f}s", flush=True)
     assert not failures, f"Failing examples: {', '.join(failures)}"
-    print(f"All {len(guests)} WASM modules checked; {len(interfaces)} shared interfaces inventoried")
+    print(
+        f"All {len(guests)} WASM modules checked in {len(cases)} cases "
+        f"({len(SIGNER_CASES)} signer propagation cases); "
+        f"{len(interfaces)} shared interfaces inventoried"
+    )
 
 
 if __name__ == "__main__":

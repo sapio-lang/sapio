@@ -8,8 +8,8 @@ use bitcoin::secp256k1::{Keypair, Secp256k1, SecretKey};
 use bitcoin::{Amount, Network, XOnlyPublicKey};
 use miner_payout::MiningPayout;
 use sapio::contract::{Compilable, Context};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::effects::EffectPath;
-use sapio_ctv_emulator_trait::CTVAvailable;
 use serde::Deserialize;
 use std::io::Read;
 use std::sync::Arc;
@@ -73,7 +73,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let compiled = payout.compile(Context::new(
         Network::Regtest,
         payout.funding_required()?,
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         EffectPath::try_from("mining_payout")?,
         Arc::new(Default::default()),
         None,

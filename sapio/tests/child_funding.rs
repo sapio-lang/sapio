@@ -5,9 +5,10 @@ use bitcoin::{Address, Amount, Network, OutPoint, Transaction, TxIn, TxOut, Txid
 use sapio::contract::abi::object::{ArtifactErrorKind, ObjectError};
 use sapio::contract::{Compilable, CompilationError, Compiled, Context, Contract};
 use sapio::{continuation, declare, guard, then};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::txindex::{TxIndex, TxIndexError};
 use sapio_base::Clause;
-use sapio_ctv_emulator_trait::{CTVAvailable, CTVEmulator, EmulatorError};
+use sapio_ctv_emulator_trait::{CTVEmulator, EmulatorError};
 use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::str::FromStr;
@@ -17,7 +18,7 @@ fn context(funds: u64, path: &str) -> Context {
     Context::new(
         Network::Regtest,
         Amount::from_sat(funds),
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         path.try_into().unwrap(),
         Arc::new(Default::default()),
         None,

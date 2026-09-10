@@ -19,8 +19,14 @@ impl Fixture {
         std::fs::create_dir(&path).unwrap();
         let mut config: Value =
             serde_json::from_str(include_str!("../../contrib/vectors/basic_config.json")).unwrap();
-        config["regtest"]["emulator_nodes"]["enabled"] = true.into();
-        config["regtest"]["emulator_nodes"]["emulators"][0][1] = "address-without-a-port".into();
+        config["regtest"]["covenant"] = serde_json::json!({
+            "mode": "signer_emulation",
+            "emulators": [[
+                "tpubD6NzVbkrYhZ4Wf398td3H8YhWBsXx9Sxa4W3cQWkNW3N3DHSNB2qtPoUMXrA6JNaPxodQfRpoZNE5tGM9iZ4xfUEFRJEJvfs8W5paUagYCE",
+                "address-without-a-port"
+            ]],
+            "threshold": 1
+        });
         std::fs::write(
             path.join("config.json"),
             serde_json::to_vec(&config).unwrap(),

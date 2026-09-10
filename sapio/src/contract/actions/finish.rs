@@ -10,9 +10,7 @@ use super::Context;
 use super::TxTmplIt;
 use crate::contract::actions::ConditionallyCompileIfList;
 use crate::contract::actions::GuardList;
-use crate::template::Template;
 use sapio_base::effects::EffectDBError;
-use sapio_base::policy::ScriptPolicy;
 use sapio_base::simp::ContinuationPointLT;
 use sapio_base::simp::SIMPAttachableAt;
 use serde_json::Value;
@@ -21,6 +19,15 @@ use core::marker::PhantomData;
 
 use serde::Deserialize;
 use std::sync::Arc;
+
+/// The compiler-owned relationship between an action and its templates.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TemplateKind {
+    /// Every returned template adds its guards and the configured covenant.
+    Covenant,
+    /// Templates are suggestions and cannot add authorization requirements.
+    Suggested,
+}
 
 /// A function which by default finishes, but may receive some context object which can induce the
 /// generation of additional transactions (as a suggestion)
@@ -58,11 +65,8 @@ pub struct FinishOrFunc<'a, ContractSelf, StatefulArguments, SpecificArgs, WebAP
     /// Type switch to enable/disable compilation with serialized fields
     /// (if negative trait bounds, could remove!)
     pub f: PhantomData<WebAPIStatus>,
-    /// if txtmpls returned by the func should modify guards.
-    pub returned_txtmpls_modify_guards: bool,
-    /// extract a clause from the txtmpl
-    pub extract_clause_from_txtmpl:
-        fn(&Template, &Context) -> Result<Option<ScriptPolicy>, CompilationError>,
+    /// Whether returned templates are covenant-bound or merely suggested.
+    pub template_kind: TemplateKind,
 }
 
 /// This trait hides the generic parameter `SpecificArgs` in FinishOrFunc
@@ -96,12 +100,8 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     fn get_name(&self) -> &Arc<String>;
     /// Get the RootSchema for calling this with an update
     fn get_schema(&self) -> &Option<Arc<Value>>;
-    /// get if txtmpls returned by the func should modify guards.
-    fn get_returned_txtmpls_modify_guards(&self) -> bool;
-    /// extract a clause from the txtmpl
-    fn get_extract_clause_from_txtmpl(
-        &self,
-    ) -> fn(&Template, &Context) -> Result<Option<ScriptPolicy>, CompilationError>;
+    /// Whether the compiler must attach a covenant to returned templates.
+    fn template_kind(&self) -> TemplateKind;
     /// rename this object
     fn rename(&mut self, a: Arc<String>);
 }
@@ -130,13 +130,8 @@ impl<ContractSelf, StatefulArguments, SpecificArgs> CallableAsFoF<ContractSelf, 
     fn get_schema(&self) -> &Option<Arc<Value>> {
         &self.schema
     }
-    fn get_returned_txtmpls_modify_guards(&self) -> bool {
-        self.returned_txtmpls_modify_guards
-    }
-    fn get_extract_clause_from_txtmpl(
-        &self,
-    ) -> fn(&Template, &Context) -> Result<Option<ScriptPolicy>, CompilationError> {
-        self.extract_clause_from_txtmpl
+    fn template_kind(&self) -> TemplateKind {
+        self.template_kind
     }
 
     fn rename(&mut self, a: Arc<String>) {
@@ -182,14 +177,8 @@ where
     fn get_schema(&self) -> &Option<Arc<Value>> {
         &self.schema
     }
-    fn get_returned_txtmpls_modify_guards(&self) -> bool {
-        self.returned_txtmpls_modify_guards
-    }
-
-    fn get_extract_clause_from_txtmpl(
-        &self,
-    ) -> fn(&Template, &Context) -> Result<Option<ScriptPolicy>, CompilationError> {
-        self.extract_clause_from_txtmpl
+    fn template_kind(&self) -> TemplateKind {
+        self.template_kind
     }
 
     fn rename(&mut self, a: Arc<String>) {
@@ -202,26 +191,5 @@ where
         ctx: Context,
     ) -> Result<Vec<Box<dyn SIMPAttachableAt<ContinuationPointLT>>>, CompilationError> {
         self.simp_gen.map(|f| (f)(cself, ctx)).unwrap_or(Ok(vec![]))
-    }
-}
-
-/// default clause extractor should not attempt to do anything, but should fail if the txtmpl has attached guards
-pub fn default_extract_clause_from_txtmpl(
-    t: &Template,
-    _ctx: &Context,
-) -> Result<Option<ScriptPolicy>, CompilationError> {
-    // Don't return or use the extra guards here
-    // because we're within a non-CTV context... if
-    // we did, then it would destabilize compilation
-    // with effect arguments.
-    if !t.guards.is_empty() {
-        // N.B.: In theory, the *default* effect
-        // could pass up something here.
-        // However, we don't do that since there's
-        // not much point to it.
-        Err(CompilationError::AdditionalGuardsNotAllowedHere)
-    } else {
-        // Don't add anything...
-        Ok(None)
     }
 }

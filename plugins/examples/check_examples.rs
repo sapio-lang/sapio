@@ -1,8 +1,8 @@
 //! Run one real WASM catalog fixture. The Python driver bounds each process.
 use bitcoin::Network;
 use sapio::contract::Compiled;
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::effects::EffectPath;
-use sapio_ctv_emulator_trait::{CTVAvailable, CTVEmulator};
 use sapio_wasm_plugin::host::plugin_handle::{SyncModuleLocator, WasmPluginHandle};
 use sapio_wasm_plugin::plugin_handle::PluginHandle;
 use sapio_wasm_plugin::CreateArgs;
@@ -11,7 +11,7 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::Path;
-use std::sync::Arc;
+use std::str::FromStr;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -60,13 +60,51 @@ fn substitute(value: &mut Value, modules: &BTreeMap<String, String>) -> Result<(
     Ok(())
 }
 
-fn check(value: Value, expected: &Expected) -> Result<(), Box<dyn Error>> {
+fn check(
+    value: Value,
+    expected: &Expected,
+    lowering: &LoweringPlan,
+    signer_case: Option<&str>,
+) -> Result<(), Box<dyn Error>> {
     if let Some(clause) = &expected.clause {
+        assert!(
+            signer_case.is_none(),
+            "signer case must return a compiled artifact"
+        );
         assert_eq!(value, Value::String(clause.clone()));
         return Ok(());
     }
     let compiled: Compiled = serde_json::from_value(value)?;
-    compiled.validate()?;
+    compiled.validate_for_lowering(lowering)?;
+    if let Some(case) = signer_case {
+        let mut committed = 0;
+        let mut pending = vec![&compiled];
+        while let Some(object) = pending.pop() {
+            committed += object.covenant_requirements.predicates.len();
+            pending.extend(
+                object
+                    .ctv_to_tx
+                    .values()
+                    .chain(object.suggested_txs.values())
+                    .flat_map(|template| template.outputs.iter())
+                    .map(|output| &output.contract),
+            );
+        }
+        assert!(
+            committed > 0,
+            "signer case must exercise a committed policy"
+        );
+        if case == "trampolinepay" {
+            assert_eq!(committed, 2, "cross-module child covenant was not retained");
+        }
+        assert!(
+            !compiled.requires_native_ctv(),
+            "native CTV leaked into signer output"
+        );
+        assert!(compiled
+            .validate_for_lowering(&LoweringPlan::Native)
+            .is_err());
+    }
     if let Some(expected) = expected.raw_taproot {
         assert_eq!(
             matches!(
@@ -140,19 +178,32 @@ fn check(value: Value, expected: &Expected) -> Result<(), Box<dyn Error>> {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<_> = std::env::args().collect();
-    if args.len() != 5 {
-        return Err("usage: check_examples WASM_DIR FIXTURE_DIR CASE CACHE_DIR".into());
+    if !(5..=6).contains(&args.len()) {
+        return Err("usage: check_examples WASM_DIR FIXTURE_DIR CASE CACHE_DIR [signer]".into());
     }
+    let signer = match args.get(5).map(String::as_str) {
+        None => false,
+        Some("signer") => true,
+        Some(_) => return Err("optional backend argument must be 'signer'".into()),
+    };
     let wasm = Path::new(&args[1]);
     let fixtures = Path::new(&args[2]);
     let catalog: BTreeMap<String, Case> =
         serde_json::from_slice(&std::fs::read(fixtures.join("catalog.json"))?)?;
     let case = catalog.get(&args[3]).ok_or("unknown catalog case")?;
-    let emulator: Arc<dyn CTVEmulator> = Arc::new(CTVAvailable);
+    let lowering = if signer {
+        LoweringPlan::CtvEmulation {
+            signers: vec![bitcoin::util::bip32::ExtendedPubKey::from_str(
+                "tpubD6NzVbkrYhZ4Wf398td3H8YhWBsXx9Sxa4W3cQWkNW3N3DHSNB2qtPoUMXrA6JNaPxodQfRpoZNE5tGM9iZ4xfUEFRJEJvfs8W5paUagYCE",
+            )?],
+            threshold: 1,
+        }
+    } else {
+        LoweringPlan::Native
+    };
     let load = |case: &Case| -> Result<WasmPluginHandle<Value>, Box<dyn Error>> {
         WasmPluginHandle::new(
             Path::new(&args[4]).to_path_buf(),
-            &emulator,
             SyncModuleLocator::Bytes(std::fs::read(wasm.join(&case.wasm))?),
             Network::Regtest,
             None,
@@ -173,6 +224,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut input: Value = serde_json::from_slice(&std::fs::read(fixtures.join(&case.input))?)?;
     substitute(&mut input, &modules)?;
     let mut input: CreateArgs<Value> = serde_json::from_value(input)?;
+    input.context.lowering = lowering.clone();
     let path = EffectPath::try_from("example")?;
     let mut plugin = load(case)?;
     assert!(!plugin.get_name()?.trim().is_empty());
@@ -183,7 +235,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         plugin.fresh_clone()?.call(&path, &input)?,
         "nondeterministic artifact"
     );
-    check(first, &case.expect)?;
+    check(
+        first,
+        &case.expect,
+        &lowering,
+        signer.then_some(args[3].as_str()),
+    )?;
     input.arguments = Value::Null;
     let error = plugin
         .fresh_clone()?
@@ -191,8 +248,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         .expect_err("null arguments accepted");
     assert!(error.to_string().contains("Input"), "{error}");
     println!(
-        "WASM {}: artifact, repeatability and schema rejection passed",
-        args[3]
+        "WASM {} [{}]: artifact, covenant backend, repeatability and schema rejection passed",
+        args[3],
+        if signer { "signer" } else { "native" },
     );
     Ok(())
 }

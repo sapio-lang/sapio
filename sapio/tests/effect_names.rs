@@ -1,8 +1,8 @@
 use bitcoin::{Amount, Network};
 use sapio::contract::{empty, Compilable, Compiled, Contract, DynamicContract};
 use sapio::{continuation, declare, guard, Context};
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::{effects::MapEffectDB, Clause};
-use sapio_ctv_emulator_trait::CTVAvailable;
 use std::cell::RefCell;
 use std::sync::Arc;
 
@@ -42,7 +42,7 @@ fn context(name: &str) -> Context {
     Context::new(
         Network::Regtest,
         Amount::ZERO,
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         "updates".try_into().unwrap(),
         Arc::new(effects),
         None,

@@ -211,7 +211,6 @@ mod test {
     use crate::test_helpers::{address, context};
     use sapio_base::effects::EffectPath;
     use sapio_base::plugin_args::CreateArgs;
-    use sapio_ctv_emulator_trait::CTVAvailable;
 
     fn tree(cap: u64, radix: usize, steps: u64) -> VaultTree {
         VaultTree {
@@ -293,13 +292,13 @@ mod test {
                     "timeout": {"RH": 5}
                 }
             },
-            "context": {"amount": 1000, "network": "Regtest"}
+            "context": {"amount": 1000, "network": "Regtest", "lowering": "Native"}
         }"#;
         let v: CreateArgs<Versions> = serde_json::from_str(string)?;
         let ctx = Context::new(
             v.context.network,
             v.context.amount,
-            Arc::new(CTVAvailable),
+            v.context.lowering,
             EffectPath::try_from("vault").unwrap(),
             Arc::new(v.context.effects),
             None,

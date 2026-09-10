@@ -4,15 +4,15 @@ use bitcoin::{Address, Amount, Network, Script, TxOut};
 use sapio::contract::{Compiled, Context};
 use sapio::template::Builder;
 use sapio::util::extended_address::ExtendedAddress;
+use sapio_base::covenant::LoweringPlan;
 use sapio_base::miniscript::Descriptor;
-use sapio_ctv_emulator_trait::CTVAvailable;
 use std::sync::Arc;
 
 fn builder() -> Builder {
     Context::new(
         Network::Regtest,
         Amount::from_sat(1_000_000),
-        Arc::new(CTVAvailable),
+        LoweringPlan::Native,
         "size".try_into().unwrap(),
         Arc::new(Default::default()),
         None,
