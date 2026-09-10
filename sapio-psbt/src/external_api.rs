@@ -6,7 +6,6 @@
 use crate::{validate_psbt, PSBTValidationError};
 use bitcoin::consensus::serialize;
 use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
-use miniscript::psbt::PsbtExt;
 use miniscript::{Miniscript, Tap};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -40,8 +39,7 @@ pub fn finalize_psbt_format_api(
 ) -> Result<PSBTApi, PSBTValidationError> {
     validate_psbt(&psbt)?;
     let secp = Secp256k1::new();
-    Ok(psbt
-        .finalize(&secp)
+    Ok(crate::finalize::finalize(psbt, &secp)
         .map(|tx| {
             let hex = bitcoin::consensus::encode::serialize_hex(&tx.extract_tx());
             PSBTApi::Finished {

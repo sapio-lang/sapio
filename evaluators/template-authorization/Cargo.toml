@@ -1,0 +1,12 @@
+[package]
+name = "sapio-template-authorization-evaluator"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.98.1"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+sapio-covenant-fragments = { path = "../fragments" }

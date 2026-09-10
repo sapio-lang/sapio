@@ -18,6 +18,7 @@ pub mod error;
 pub use error::CompilationError;
 pub mod context;
 use bitcoin::util::amount::Amount;
+use bitcoin::XOnlyPublicKey;
 pub use compiler::Compilable;
 pub use context::Context;
 pub use object::Object as Compiled;
@@ -55,6 +56,20 @@ where
     /// minimum balance to have in this coin
     fn ensure_amount(&self, _ctx: Context) -> Result<Amount, CompilationError> {
         Ok(Amount::from_sat(0))
+    }
+
+    /// Pin the Taproot internal key to an already authorized bare key branch.
+    ///
+    /// A matching unconditional finish guard can authorize the key. A key
+    /// behind additional guards, or only inside a raw script, is insufficient.
+    /// Selecting a key does not grant new spending authority. The compiler
+    /// removes its redundant bare-key leaves once it becomes the key path.
+    /// `None` retains deterministic automatic selection and its script tree.
+    fn pinned_internal_key(
+        &self,
+        _ctx: &Context,
+    ) -> Result<Option<XOnlyPublicKey>, CompilationError> {
+        Ok(None)
     }
 }
 
@@ -152,6 +167,15 @@ where
     fn metadata<'a>(&'a self, ctx: Context) -> Result<ObjectMetadata, CompilationError>;
     /// Minimum Amount
     fn ensure_amount<'a>(&'a self, ctx: Context) -> Result<Amount, CompilationError>;
+
+    /// Pin an independently authorized bare key as this output's internal key.
+    /// See [`Contract::pinned_internal_key`] for authorization and tree rules.
+    fn pinned_internal_key(
+        &self,
+        _ctx: &Context,
+    ) -> Result<Option<XOnlyPublicKey>, CompilationError> {
+        Ok(None)
+    }
 }
 
 impl<C> AnyContract for C
@@ -189,5 +213,12 @@ where
     }
     fn ensure_amount<'a>(&'a self, ctx: Context) -> Result<Amount, CompilationError> {
         Self::Ref::ensure_amount(self, ctx)
+    }
+
+    fn pinned_internal_key(
+        &self,
+        ctx: &Context,
+    ) -> Result<Option<XOnlyPublicKey>, CompilationError> {
+        <C as Contract>::pinned_internal_key(self, ctx)
     }
 }

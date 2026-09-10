@@ -57,6 +57,11 @@ pub enum CompilationError {
     },
     /// Error if a Policy is empty
     EmptyPolicy,
+    /// The requested internal key has no independently sufficient bare branch.
+    UnauthorizedInternalKey {
+        /// Key selected by the contract without an unconditional authorization.
+        key: bitcoin::XOnlyPublicKey,
+    },
     /// A custom policy compiler or script boundary rejected its input.
     Policy(sapio_base::policy::PolicyError),
     /// Policy expansion exceeded a documented compilation limit.

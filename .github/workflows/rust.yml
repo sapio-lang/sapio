@@ -41,6 +41,9 @@ jobs:
       - name: Build program emulation spend vectors
         if: runner.os == 'Linux'
         run: cargo build --locked -p sapio_integration_tests --example program_emulation_vectors
+      - name: Build covenant fragment spend vectors
+        if: runner.os == 'Linux'
+        run: cargo build --locked -p sapio_integration_tests --example covenant_fragment_vectors
       - name: Validate custom policy witnesses with Bitcoin Core
         if: runner.os == 'Linux'
         timeout-minutes: 5
@@ -57,6 +60,14 @@ jobs:
           "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoind"
           "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoin-cli"
           target/debug/examples/program_emulation_vectors
+      - name: Validate covenant fragments and annexes with Bitcoin Core
+        if: runner.os == 'Linux'
+        timeout-minutes: 5
+        run: >-
+          python3 contrib/check_custom_policy.py --accept-nonstandard
+          "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoind"
+          "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoin-cli"
+          target/debug/examples/covenant_fragment_vectors
 
   quality:
     runs-on: ubuntu-24.04
@@ -68,6 +79,8 @@ jobs:
       - run: cargo fmt --manifest-path evaluators/Cargo.toml --all -- --check
       - name: Verify distributed evaluator WASM bytes
         run: bash evaluators/build.sh --check
+      - name: Test the covenant fragment guest SDK
+        run: cargo test --manifest-path evaluators/Cargo.toml -p sapio-covenant-fragments --locked
       - run: cargo check -p sapio-wasm-plugin --no-default-features --locked
       - run: cargo check -p sapio-wasm-plugin --no-default-features --features host --locked
       - run: cargo clippy --workspace --all-targets --all-features --locked

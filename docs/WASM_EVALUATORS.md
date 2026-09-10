@@ -1,4 +1,4 @@
-# WASM evaluator version one
+# Versioned WASM evaluators
 
 Every program evaluation runs in a fresh, bounded WASM instance. The compiler
 still derives public program keys without contacting an oracle. At signing time,
@@ -11,7 +11,8 @@ committed program, and signs only after an explicit acceptance.
 `ProgramInstance::program()` contains the complete WASM module. Construct an
 inline instance with `ProgramInstance::wasm(module_bytes, parameters)`.
 
-A nonzero identity identifies a registered WASM interpreter. Its identity is:
+Non-reserved identities identify registered WASM interpreters. A v1 module's
+identity is:
 
 ```text
 tag = SHA256(UTF8("Sapio/Emulation/Evaluator/Wasm/v1"))
@@ -145,6 +146,39 @@ Incompatible changes to the evaluator ABI, host operations, view encoding or
 cost schedule need a new evaluator version. Do not silently redefine the zero
 identity to mean the latest runtime configuration.
 
+## Version two
+
+`ProgramInstance::wasm_v2` selects the reserved identity consisting of 31 zero
+bytes followed by `02`. Registered v2 modules use the tagged identity hash with
+tag `Sapio/Emulation/Evaluator/Wasm/v2`; construct them with
+`WasmEvaluator::with_version(WasmVersion::V2, module)`.
+Both reserved inline identities are unavailable for operator registration.
+The wire protocol remains `SignProgramV1`: wire framing and evaluator ABI
+versions are independent and the evaluator identity commits the ABI choice.
+
+V2 exports `sapio_alloc_v2` and `sapio_evaluate_v2`, with the same function
+signatures as v1. Its context contains the complete v1 encoding followed by
+the authenticated 32-byte Taproot internal key, a u32 little-endian annex
+length, and the exact annex bytes. A zero length denotes absence; a present
+annex starts with `0x50`. The complete view, including this suffix, is still
+bounded to 1 MiB. V1's view encoding and import allowlist remain unchanged.
+
+V2 admits the three unchanged `sapio_crypto_v1` imports plus:
+
+| `sapio_crypto_v2` import | Arguments | Result | Fuel |
+| --- | --- | --- | --- |
+| `schnorr_verify` | message pointer, message length, key32 pointer, signature64 pointer | 1 valid; 0 invalid | 50,000 + 2 per message byte |
+| `xonly_tweak_check` | key32 pointer, scalar32 pointer, output-key32 pointer, parity | 1 valid; 0 invalid | 50,000 |
+
+Messages contain at most 1 MiB and are verified directly under BIP340 without
+prehashing. Tweaks are canonical big-endian scalars, including zero; parity is
+exactly `0` or `1`. The check establishes `Q = lift_x(P) + t*G` with the supplied
+output parity. Invalid cryptographic data returns zero; invalid memory ranges
+or resource exhaustion trap. V1 and v2 imports share one fuel environment.
+
+The [covenant fragment library](COVENANT_FRAGMENTS.md) provides typed CSFS
+failure semantics, TemplateHash, internal-key lookup and known-tweak evidence.
+
 ## CTV as a program
 
 `sapio_base::program::ctv_wasm_instance(Ctv(expected_hash))` constructs an inline
@@ -181,10 +215,11 @@ for the WASM path and preserve the complete program metadata.
 
 ## Building and verifying the distributed programs
 
-`evaluators/` contains dependency-free Rust sources for CTV and the registered
-flexible-payment evaluator. Its pinned toolchain and build settings produce
-small `no_std` artifacts with names and debug sections stripped. Verify exact
-bytes with:
+`evaluators/` contains dependency-free Rust sources for CTV, the registered
+flexible-payment evaluator, TemplateHash and template authorization, plus the
+reusable typed [covenant fragment SDK](COVENANT_FRAGMENTS.md). Its pinned
+toolchain and build settings produce small `no_std` artifacts with names and
+debug sections stripped. Verify exact bytes for all four programs with:
 
 ```sh
 bash evaluators/build.sh --check

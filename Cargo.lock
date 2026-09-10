@@ -2067,8 +2067,7 @@ dependencies = [
 [[package]]
 name = "sapio-bitcoin"
 version = "0.28.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3912fcfee4e0e9d2120731f4ae8afd122a5b87f6da080573e5831c97b1213575"
+source = "git+https://github.com/sapio-lang/rust-bitcoin?rev=16c1b0059ecb420eaed089da28f8d24f99e36cf8#16c1b0059ecb420eaed089da28f8d24f99e36cf8"
 dependencies = [
  "base64-compat",
  "bech32",
@@ -2146,6 +2145,7 @@ name = "sapio-psbt"
 version = "0.2.4"
 dependencies = [
  "base64",
+ "sapio-base",
  "sapio-bitcoin",
  "sapio-miniscript",
  "serde",
@@ -2233,6 +2233,7 @@ dependencies = [
  "sapio-bitcoin",
  "sapio-ctv-emulator-trait",
  "sapio-miniscript",
+ "sapio-psbt",
  "schemars",
  "serde",
  "serde_derive",

@@ -16,6 +16,7 @@ serde = "1.0"
 serde_derive = "1.0"
 rand = "0.8.1"
 base64 = "0.13.0"
+sapio-psbt = { path = "../sapio-psbt" }
 
 [dependencies.sapio]
 path = "../sapio"

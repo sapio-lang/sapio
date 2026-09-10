@@ -30,6 +30,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 mod cache;
 mod feasibility;
+#[cfg(test)]
+mod internal_key_tests;
 mod script;
 mod util;
 mod validation;
@@ -154,6 +156,7 @@ where
     /// TODO: Better Document Semantics
     fn compile(&self, mut ctx: Context) -> Result<Compiled, CompilationError> {
         ctx.lowering_plan().validate()?;
+        let pinned_internal_key = self.pinned_internal_key(&ctx)?;
         let mut covenant_requirements = CovenantRequirements {
             lowering: ctx.lowering_plan().clone(),
             predicates: BTreeSet::new(),
@@ -329,15 +332,25 @@ where
                 append_branches(&mut branches, &mut branch_bytes, compile_branches(policy)?)?;
             }
         }
-        if branches.is_empty() {
-            return Err(CompilationError::EmptyPolicy);
-        }
         // Only a proven standalone Miniscript key may become a key-path spend.
-        let some_key =
+        let some_key = if let Some(key) = pinned_internal_key {
+            let matches = |branch: &CompiledBranch| matches!(branch, CompiledBranch::Miniscript(script) if bare_key(script) == Some(key));
+            if !branches.iter().any(matches) {
+                return Err(CompilationError::UnauthorizedInternalKey { key });
+            }
+            // The exact bare-key branch is now satisfied through the key path.
+            // Constrained branches and opaque scripts retain their full leaves.
+            branches.retain(|branch| !matches(branch));
+            key
+        } else {
+            if branches.is_empty() {
+                return Err(CompilationError::EmptyPolicy);
+            }
             pick_key_from_miniscripts(branches.iter().filter_map(|branch| match branch {
                 CompiledBranch::Miniscript(script) => Some(script),
                 CompiledBranch::Script(_) => None,
-            }));
+            }))
+        };
         let opaque = branches
             .iter()
             .any(|branch| matches!(branch, CompiledBranch::Script(_)));

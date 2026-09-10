@@ -32,6 +32,16 @@ pub const MAX_PROGRAM_ROOT_DEPTH: u8 = u8::MAX - 10;
 const PROGRAM_NAMESPACE: u32 = 0x5341_5049;
 const COMMITMENT_TAG: &[u8] = b"Sapio/Emulation/Program/v1";
 const EVALUATOR_TAG: &[u8] = b"Sapio/Emulation/Evaluator/Wasm/v1";
+const EVALUATOR_V2_TAG: &[u8] = b"Sapio/Emulation/Evaluator/Wasm/v2";
+
+/// The immutable execution ABI selected by an evaluator identity.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WasmVersion {
+    /// Original signed transaction projection and cryptographic imports.
+    V1,
+    /// Authenticated Taproot context and variable-message cryptography.
+    V2,
+}
 
 /// The exact compiled CTV evaluator distributed with this Sapio version.
 ///
@@ -85,6 +95,27 @@ impl EvaluatorId {
         self == Self::wasm()
     }
 
+    /// Execute an inline WASM-v2 module, with authenticated Taproot context.
+    ///
+    /// The reserved identity is 31 zero bytes followed by `02`. The original
+    /// all-zero identity retains its version-one ABI and cost schedule.
+    pub fn wasm_v2() -> Self {
+        let mut bytes = [0; 32];
+        bytes[31] = 2;
+        Self(sha256::Hash::from_inner(bytes))
+    }
+
+    /// Decode a reserved inline identity; all other IDs require registration.
+    pub fn inline_wasm_version(self) -> Option<WasmVersion> {
+        if self == Self::wasm() {
+            Some(WasmVersion::V1)
+        } else if self == Self::wasm_v2() {
+            Some(WasmVersion::V2)
+        } else {
+            None
+        }
+    }
+
     /// Identify a registered WASM-v1 interpreter by its exact module bytes.
     ///
     /// The tagged hash is SHA256(tag || tag || module), where tag is SHA256
@@ -92,7 +123,18 @@ impl EvaluatorId {
     /// become input to this interpreter. This helper does not validate WASM
     /// or register executable code with an oracle.
     pub fn for_wasm(module: &[u8]) -> Self {
-        let tag = sha256::Hash::hash(EVALUATOR_TAG);
+        Self::for_wasm_version(module, WasmVersion::V1)
+    }
+
+    /// Commit a registered interpreter and its exact execution version.
+    ///
+    /// Version two uses the tag `Sapio/Emulation/Evaluator/Wasm/v2`.
+    /// Identical bytes under different ABIs have different identities.
+    pub fn for_wasm_version(module: &[u8], version: WasmVersion) -> Self {
+        let tag = sha256::Hash::hash(match version {
+            WasmVersion::V1 => EVALUATOR_TAG,
+            WasmVersion::V2 => EVALUATOR_V2_TAG,
+        });
         let mut engine = sha256::Hash::engine();
         engine.input(&tag[..]);
         engine.input(&tag[..]);
@@ -140,6 +182,11 @@ impl ProgramInstance {
     /// distinct ABI arguments.
     pub fn wasm(module: Vec<u8>, parameters: Vec<u8>) -> Result<Self, ProgramError> {
         Self::new(EvaluatorId::wasm(), module, parameters)
+    }
+
+    /// Commit an inline WASM-v2 module and its fixed parameters.
+    pub fn wasm_v2(module: Vec<u8>, parameters: Vec<u8>) -> Result<Self, ProgramError> {
+        Self::new(EvaluatorId::wasm_v2(), module, parameters)
     }
 
     /// Construct an exact instance after checking both byte-length limits.

@@ -3,13 +3,20 @@
 
 /// Versioned native cryptography import namespace.
 pub const CRYPTO_NAMESPACE: &str = "sapio_crypto_v1";
+/// Additional native cryptography imports for explicitly version-two guests.
+pub const CRYPTO_NAMESPACE_V2: &str = "sapio_crypto_v2";
 /// Largest input to one SHA256 import, in bytes.
 pub const MAX_SHA256_BYTES: u32 = 1024 * 1024;
+/// Largest raw message accepted by version-two Schnorr verification.
+pub const MAX_SCHNORR_MESSAGE_BYTES: u32 = 1024 * 1024;
 /// Maximum normal BIP32 children in one derivation.
 pub const MAX_DERIVATION_CHILDREN: u32 = 255;
 
 #[cfg(target_arch = "wasm32")]
 pub mod crypto;
+
+#[cfg(target_arch = "wasm32")]
+pub mod crypto_v2;
 
 #[cfg(feature = "host")]
 pub mod host;

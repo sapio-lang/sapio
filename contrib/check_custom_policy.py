@@ -1,24 +1,30 @@
 #!/usr/bin/env python3
 """Execute Sapio policy witnesses against isolated Bitcoin Core regtest.
 
-Usage: check_custom_policy.py BITCOIND BITCOIN_CLI POLICY_VECTORS
+Usage: check_custom_policy.py [--accept-nonstandard] BITCOIND BITCOIN_CLI POLICY_VECTORS
 Build the vector executable using either `cargo build -p sapio --example
 custom_policy_vectors` or `cargo build -p sapio_integration_tests --example
 program_emulation_vectors`. No existing node, wallet, or user funds are accessed.
 """
 
+import argparse
 import json
 from pathlib import Path
 import socket
 import subprocess
-import sys
 import tempfile
 
 
 def main():
-    if len(sys.argv) != 4:
-        raise SystemExit(__doc__)
-    bitcoind, bitcoin_cli, vectors = [str(Path(arg).resolve()) for arg in sys.argv[1:]]
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--accept-nonstandard", action="store_true",
+                        help="test consensus-valid annex spends on isolated regtest")
+    parser.add_argument("bitcoind")
+    parser.add_argument("bitcoin_cli")
+    parser.add_argument("vectors")
+    options = parser.parse_args()
+    bitcoind, bitcoin_cli, vectors = [str(Path(arg).resolve()) for arg in
+                                     (options.bitcoind, options.bitcoin_cli, options.vectors)]
     initial = json.loads(subprocess.check_output([vectors], text=True, timeout=30))
 
     def manifest(document):
@@ -46,7 +52,8 @@ def main():
             node = subprocess.Popen(
                 [bitcoind, "-regtest", "-server=1", f"-datadir={data}",
                  f"-rpcport={port}", "-listen=0", "-connect=0", "-dnsseed=0",
-                 "-discover=0", "-fallbackfee=0.00001", "-printtoconsole=1"],
+                 "-discover=0", "-fallbackfee=0.00001", "-printtoconsole=1"]
+                + (["-acceptnonstdtxn=1"] if options.accept_nonstandard else []),
                 stdout=log, stderr=subprocess.STDOUT,
             )
 

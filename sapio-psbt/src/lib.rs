@@ -21,7 +21,9 @@ use bitcoin::{Network, SchnorrSig};
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt::Display;
+pub mod annex;
 pub mod external_api;
+pub mod finalize;
 
 pub struct SigningKey(pub Vec<ExtendedPrivKey>);
 
@@ -126,6 +128,16 @@ impl SigningKey {
             .inputs
             .get_mut(idx)
             .ok_or(PSBTSigningError::NoInputAtIndex(idx))?;
+        if input.final_script_sig.is_some() || input.final_script_witness.is_some() {
+            return Ok(());
+        }
+        if annex::get(input)
+            .map_err(|error| PSBTValidationError::InvalidAnnex { index: idx, error })?
+            .is_some()
+            && !utxos[idx].script_pubkey.is_v1_p2tr()
+        {
+            return Err(PSBTSigningError::AnnexRequiresTaproot(idx));
+        }
         let prevouts = &Prevouts::All(&utxos);
         let fingerprints_map = self.compute_fingerprint_map(secp);
         self.sign_taproot_top_key(
@@ -170,6 +182,10 @@ impl SigningKey {
                     secp,
                     &kp,
                     &Some((*tlh, DEFAULT_CODESEP)),
+                    annex::get(input).map_err(|error| PSBTValidationError::InvalidAnnex {
+                        index: input_index,
+                        error,
+                    })?,
                 )?;
                 input
                     .tap_script_sigs
@@ -207,6 +223,10 @@ impl SigningKey {
             secp,
             &tweaked,
             &None,
+            annex::get(input).map_err(|error| PSBTValidationError::InvalidAnnex {
+                index: input_index,
+                error,
+            })?,
         )?);
         Ok(())
     }
@@ -289,6 +309,7 @@ pub enum PSBTSigningError {
     InvalidPSBT(PSBTValidationError),
     NoUTXOAtIndex(usize),
     NoInputAtIndex(usize),
+    AnnexRequiresTaproot(usize),
     Sighash(bitcoin::util::sighash::Error),
 }
 
@@ -298,6 +319,10 @@ impl Display for PSBTSigningError {
             Self::InvalidPSBT(error) => Display::fmt(error, f),
             Self::NoUTXOAtIndex(index) => write!(f, "missing witness UTXO for input {index}"),
             Self::NoInputAtIndex(index) => write!(f, "no input at index {index}"),
+            Self::AnnexRequiresTaproot(index) => write!(
+                f,
+                "annex requires a Taproot previous output at input {index}"
+            ),
             Self::Sighash(error) => write!(f, "cannot compute signature hash: {error}"),
         }
     }
@@ -322,10 +347,20 @@ impl From<PSBTValidationError> for PSBTSigningError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PSBTValidationError {
     NoInputs,
-    InputMapCount { transaction: usize, maps: usize },
-    OutputMapCount { transaction: usize, maps: usize },
+    InputMapCount {
+        transaction: usize,
+        maps: usize,
+    },
+    OutputMapCount {
+        transaction: usize,
+        maps: usize,
+    },
     UnsignedTxHasScriptSig(usize),
     UnsignedTxHasWitness(usize),
+    InvalidAnnex {
+        index: usize,
+        error: annex::AnnexError,
+    },
 }
 
 impl Display for PSBTValidationError {
@@ -345,6 +380,9 @@ impl Display for PSBTValidationError {
             }
             Self::UnsignedTxHasWitness(index) => {
                 write!(f, "PSBT unsigned transaction input {index} has a witness")
+            }
+            Self::InvalidAnnex { index, error } => {
+                write!(f, "invalid annex for input {index}: {error}")
             }
         }
     }
@@ -380,6 +418,8 @@ pub fn validate_psbt(psbt: &PartiallySignedTransaction) -> Result<(), PSBTValida
         if !input.witness.is_empty() {
             return Err(PSBTValidationError::UnsignedTxHasWitness(index));
         }
+        annex::get(&psbt.inputs[index])
+            .map_err(|error| PSBTValidationError::InvalidAnnex { index, error })?;
     }
     Ok(())
 }
@@ -393,8 +433,12 @@ fn get_sig<C: Signing>(
     secp: &Secp256k1<C>,
     kp: &bitcoin::KeyPair,
     path: &Option<(TapLeafHash, u32)>,
+    annex: Option<&[u8]>,
 ) -> Result<SchnorrSig, PSBTSigningError> {
-    let annex = None;
+    let annex = annex
+        .map(bitcoin::util::sighash::Annex::new)
+        .transpose()
+        .map_err(PSBTSigningError::Sighash)?;
     let sighash: TapSighashHash = sighash
         .taproot_signature_hash(input_index, prevouts, annex, *path, hash_ty)
         .map_err(PSBTSigningError::Sighash)?;
