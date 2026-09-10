@@ -33,7 +33,7 @@ impl Object {
     /// This does not prove signer availability or chain opcode enforcement.
     pub fn validate_for_emulator(&self, emulator: &dyn CTVEmulator) -> Result<(), ObjectError> {
         self.validate()?;
-        self.validate_covenant_policies(|predicate| Ok(emulator.get_signer_for(predicate.0)?))
+        self.validate_covenant_policies(|predicate, _, _| Ok(emulator.get_signer_for(predicate.0)?))
     }
 
     /// Validate reused compiled children against explicit public lowering data.
@@ -41,20 +41,28 @@ impl Object {
     pub fn validate_for_lowering(&self, lowering: &LoweringPlan) -> Result<(), ObjectError> {
         self.validate()?;
         lowering.validate()?;
-        self.validate_covenant_policies(|predicate| Ok(lowering.lower_ctv(predicate)?))
+        self.validate_covenant_policies(|predicate, recorded, expected| {
+            if recorded == lowering {
+                // The recorded derivation already succeeded. Pure lowering of
+                // identical inputs cannot require a second BIP32 traversal.
+                Ok(expected.clone())
+            } else {
+                Ok(lowering.lower_ctv(predicate)?)
+            }
+        })
     }
 
     // The graph must pass structural validation before this traversal.
     fn validate_covenant_policies(
         &self,
-        mut actual_policy: impl FnMut(Ctv) -> Result<Clause, ObjectError>,
+        mut actual_policy: impl FnMut(Ctv, &LoweringPlan, &Clause) -> Result<Clause, ObjectError>,
     ) -> Result<(), ObjectError> {
         let mut pending = vec![self];
         while let Some(object) = pending.pop() {
             let requirements = &object.covenant_requirements;
             for predicate in &requirements.predicates {
                 let expected = requirements.lowering.lower_ctv(*predicate)?;
-                let actual = actual_policy(*predicate)?;
+                let actual = actual_policy(*predicate, &requirements.lowering, &expected)?;
                 if expected != actual {
                     return Err(ObjectError::CovenantPolicyMismatch {
                         path: object.root_path.clone(),
@@ -135,7 +143,9 @@ impl Object {
                 });
             }
         }
-        self.validate_covenant_policies(|predicate| Ok(emulator.get_signer_for(predicate.0)?))?;
+        self.validate_covenant_policies(|predicate, _, _| {
+            Ok(emulator.get_signer_for(predicate.0)?)
+        })?;
         // Prepare the complete graph before signing or inserting generated transactions.
         // Descendants use the actual generated parent, not a second index lookup.
         let mut prepared = Vec::new();

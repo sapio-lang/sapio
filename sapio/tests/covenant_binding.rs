@@ -305,6 +305,7 @@ fn compilation_uses_only_the_explicit_plan_and_binding_detects_changed_signer_po
         object.validate_for_emulator(&emulator),
         Err(ObjectError::CovenantPolicyMismatch { .. })
     ));
+    assert_eq!(emulator.0.load(Ordering::SeqCst), 2);
 }
 
 fn assert_invalid_artifact_before_effects(object: &Compiled, expected: ArtifactErrorKind) {
@@ -479,6 +480,33 @@ fn reused_compiled_children_reject_a_different_context_lowering_at_add_output() 
         .template()
         .add_output(Amount::from_sat(1_000), &child, None)
         .is_ok());
+}
+
+#[test]
+fn compiled_reuse_preserves_equal_and_equivalent_plans_without_skipping_validation() {
+    let child = round_trip(&payment(Policy::Derived(1)));
+    let plan = child.covenant_requirements.lowering.clone();
+    let mut relabeled = plan.clone();
+    let LoweringPlan::CtvEmulation { signers, .. } = &mut relabeled else {
+        unreachable!();
+    };
+    signers[0].network = Network::Bitcoin;
+    signers[0].depth = 10;
+    assert_ne!(plan, relabeled);
+    for selected in [plan.clone(), relabeled] {
+        // Different descriptive xpub metadata still derives the exact same
+        // signer clause. Reuse must preserve the originally compiled artifact.
+        let reused = child.compile(context(selected, "reused")).unwrap();
+        assert_eq!(reused, child);
+    }
+
+    let mut invalid = child;
+    invalid.ctv_to_tx.values_mut().next().unwrap().ctv_index = 1;
+    assert!(matches!(
+        invalid.compile(context(plan, "invalid_reuse")),
+        Err(CompilationError::InvalidArtifact(error))
+            if error.kind == ArtifactErrorKind::UnsupportedInputIndex(1)
+    ));
 }
 
 struct WrappedFinish(Ctv);
