@@ -6,13 +6,14 @@ members = ["sapio"
           , "cli"
           , "tools"
           , "plugins"
+          , "wasm"
           , 'emulator-trait'
           , 'examples/*'
           , 'sapio_macros'
           , 'sapio-psbt'
           , 'simp-pack'
           , 'integration_tests']
-exclude = ["plugin-example"]
+exclude = ["plugin-example", "evaluators"]
 resolver = "2"
 
 [workspace.package]

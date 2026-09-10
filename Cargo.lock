@@ -2184,6 +2184,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sapio-wasm"
+version = "0.2.4"
+dependencies = [
+ "wasmer",
+ "wasmer-middlewares",
+ "wasmer-types",
+]
+
+[[package]]
 name = "sapio-wasm-plugin"
 version = "0.2.4"
 dependencies = [
@@ -2194,6 +2203,7 @@ dependencies = [
  "sapio",
  "sapio-base",
  "sapio-bitcoin",
+ "sapio-wasm",
  "schemars",
  "serde",
  "serde_derive",
