@@ -5,7 +5,7 @@ use bitcoin::Network;
 use sapio_base::covenant::hash_to_child_vec;
 use sapio_base::policy::{PolicyCompiler, ScriptPolicy};
 use sapio_base::program::{
-    program_derivation_path, ProgramError, MAX_PARAMETER_BYTES, MAX_PROGRAM_BYTES,
+    program_derivation_path, ProgramError, WasmVersion, MAX_PARAMETER_BYTES, MAX_PROGRAM_BYTES,
     MAX_PROGRAM_ROOT_DEPTH,
 };
 use sapio_base::{Clause, EmulatedProgram, EvaluatorId, ProgramId, ProgramInstance};
@@ -52,6 +52,40 @@ fn wasm_identities_distinguish_inline_programs_from_registered_interpreters() {
     let interpreted = ProgramInstance::new(id, module.to_vec(), vec![7]).unwrap();
     assert_ne!(inline.id(), interpreted.id());
     assert_ne!(id, EvaluatorId::for_wasm(b"\0asm\x01\0\0\0\0"));
+}
+
+#[test]
+fn execution_version_is_committed_for_inline_and_registered_programs() {
+    let module = b"\0asm\x01\0\0\0";
+    let v2 = EvaluatorId::for_wasm_version(module, WasmVersion::V2);
+    assert_eq!(
+        v2.0.to_string(),
+        "ebbafa68e50e4a3e7f100cdc7ccf3c330c9f7cb1918016b8d4bb65d895f3e186"
+    );
+    assert_ne!(v2, EvaluatorId::for_wasm(module));
+    assert_eq!(v2.inline_wasm_version(), None);
+    assert_eq!(
+        EvaluatorId::wasm().inline_wasm_version(),
+        Some(WasmVersion::V1)
+    );
+    assert_eq!(
+        EvaluatorId::wasm_v2().inline_wasm_version(),
+        Some(WasmVersion::V2)
+    );
+    assert_eq!(
+        EvaluatorId::wasm_v2().0.to_string(),
+        format!("{}02", "00".repeat(31))
+    );
+    let v1 = ProgramInstance::wasm(module.to_vec(), vec![7]).unwrap();
+    let v2 = ProgramInstance::wasm_v2(module.to_vec(), vec![7]).unwrap();
+    assert_ne!(v1.id(), v2.id());
+    assert_ne!(
+        v1.derive_public_key(&public_root(12)).unwrap(),
+        v2.derive_public_key(&public_root(12)).unwrap()
+    );
+    let roundtrip: ProgramInstance =
+        serde_json::from_value(serde_json::to_value(&v2).unwrap()).unwrap();
+    assert_eq!(roundtrip, v2);
 }
 
 #[test]

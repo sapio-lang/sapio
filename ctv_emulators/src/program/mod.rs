@@ -6,7 +6,7 @@
 
 //! Conditional signatures for exact, versioned program instances.
 //!
-//! Evaluators execute as bounded WebAssembly. The zero evaluator identity runs
+//! Evaluators execute as bounded WebAssembly. Reserved evaluator identities run
 //! the supplied program directly; other identities select registered WASM
 //! interpreters committed by their exact bytes. The view excludes transaction
 //! fields that Taproot SIGHASH_ALL does not commit to.
@@ -16,15 +16,16 @@
 
 use bitcoin::blockdata::opcodes::all::OP_CODESEPARATOR;
 use bitcoin::blockdata::script::Instruction;
+use bitcoin::hashes::{sha256, Hash};
 use bitcoin::schnorr::TapTweak;
 use bitcoin::secp256k1::{Message, Secp256k1};
 use bitcoin::util::bip32::{ExtendedPrivKey, ExtendedPubKey};
 use bitcoin::util::psbt::PartiallySignedTransaction;
-use bitcoin::util::sighash::{Prevouts, SighashCache};
-use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
+use bitcoin::util::sighash::{Annex, Prevouts, SighashCache};
+use bitcoin::util::taproot::{LeafVersion, TapBranchHash, TapLeafHash};
 use bitcoin::{OutPoint, SchnorrSig, SchnorrSighashType, Script, TxOut, XOnlyPublicKey};
 use sapio_base::program::{
-    program_derivation_path, EvaluatorId, ProgramInstance, MAX_PROGRAM_ROOT_DEPTH,
+    program_derivation_path, EvaluatorId, ProgramInstance, WasmVersion, MAX_PROGRAM_ROOT_DEPTH,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -133,6 +134,8 @@ pub struct SignedTransactionView<'a> {
     transaction: &'a bitcoin::Transaction,
     prevouts: &'a [&'a TxOut],
     input_index: u32,
+    internal_key: XOnlyPublicKey,
+    annex: Option<&'a [u8]>,
 }
 
 impl SignedTransactionView<'_> {
@@ -149,6 +152,19 @@ impl SignedTransactionView<'_> {
     /// The input selected for this signature.
     pub fn input_index(&self) -> u32 {
         self.input_index
+    }
+
+    /// The Taproot internal key authenticated against the selected prevout.
+    ///
+    /// Version two exposes this key. Script-path requests derive it from a
+    /// verified control block; key-path requests prove the program-key tweak.
+    pub fn internal_key(&self) -> XOnlyPublicKey {
+        self.internal_key
+    }
+
+    /// The exact annex committed by this input's signature, including `0x50`.
+    pub fn annex(&self) -> Option<&[u8]> {
+        self.annex
     }
 
     /// Every input's signed fields, in transaction order.
@@ -193,7 +209,7 @@ pub enum ProgramError {
     RootDepth(u8),
     /// Two registered evaluators claim the same semantic identity.
     DuplicateEvaluator(EvaluatorId),
-    /// The all-zero identity is reserved for inline WASM programs.
+    /// The identity is reserved for versioned inline WASM programs.
     ReservedEvaluator,
     /// The requested evaluator was not registered by the operator.
     UnknownEvaluator(EvaluatorId),
@@ -215,12 +231,16 @@ pub enum ProgramError {
     FinalizedInput,
     /// Only an absent declaration or explicit SIGHASH_ALL is supported.
     UnsupportedSighash,
+    /// The original evaluator ABI cannot observe or authorize an annex.
+    AnnexRequiresV2,
     /// The selected previous output is not a valid P2TR output.
     NotTaproot,
     /// The program key and declared tweak do not match the previous output.
     KeyPathMismatch,
     /// No supplied tapscript and control block authenticate the selected leaf.
     MissingScriptPath,
+    /// Optional internal-key or Merkle-root metadata contradicts the proof.
+    ConflictingTaprootMetadata,
     /// A selected leaf uses unsupported semantics or OP_CODESEPARATOR.
     UnsupportedScriptPath,
     /// The target slot contains a signature that fails this request's checks.
@@ -244,7 +264,7 @@ impl fmt::Display for ProgramError {
             ),
             Self::DuplicateEvaluator(id) => write!(formatter, "duplicate program evaluator {id:?}"),
             Self::ReservedEvaluator => {
-                formatter.write_str("the zero evaluator identity is reserved for inline WASM")
+                formatter.write_str("reserved inline WASM identities cannot be registered")
             }
             Self::UnknownEvaluator(id) => write!(formatter, "unknown program evaluator {id:?}"),
             Self::Evaluation(error) => write!(formatter, "program evaluation failed: {error}"),
@@ -270,6 +290,9 @@ impl fmt::Display for ProgramError {
             Self::UnsupportedSighash => {
                 formatter.write_str("program signatures require SIGHASH_ALL")
             }
+            Self::AnnexRequiresV2 => {
+                formatter.write_str("annex signing requires WASM evaluator version two")
+            }
             Self::NotTaproot => {
                 formatter.write_str("selected program input must spend a P2TR output")
             }
@@ -278,6 +301,8 @@ impl fmt::Display for ProgramError {
             }
             Self::MissingScriptPath => formatter
                 .write_str("selected tapscript has no valid commitment to the spent output"),
+            Self::ConflictingTaprootMetadata => formatter
+                .write_str("Taproot metadata conflicts with the authenticated spending context"),
             Self::UnsupportedScriptPath => {
                 formatter.write_str("program signing requires tapscript without OP_CODESEPARATOR")
             }
@@ -319,8 +344,8 @@ pub struct ProgramOracle {
 impl ProgramOracle {
     /// Register exact WASM interpreters, rejecting duplicate or reserved IDs.
     ///
-    /// The zero identity always executes the instance's own program bytes as
-    /// WASM and cannot be replaced by a registered interpreter.
+    /// Reserved identities execute the instance's own program bytes under
+    /// their fixed WASM version and cannot be replaced by an interpreter.
     pub fn new(
         root: ExtendedPrivKey,
         evaluators: Vec<WasmEvaluator>,
@@ -331,7 +356,7 @@ impl ProgramOracle {
         let mut registry = BTreeMap::new();
         for evaluator in evaluators {
             let id = evaluator.id();
-            if id.is_wasm() {
+            if id.inline_wasm_version().is_some() {
                 return Err(ProgramError::ReservedEvaluator);
             }
             if registry.insert(id, evaluator).is_some() {
@@ -358,16 +383,24 @@ impl ProgramOracle {
         &self,
         request: ProgramSigningRequest,
     ) -> Result<PartiallySignedTransaction, ProgramError> {
-        let (module, program) = if request.instance.evaluator().is_wasm() {
-            (request.instance.program(), &[][..])
-        } else {
-            let evaluator = self
-                .evaluators
-                .get(&request.instance.evaluator())
-                .ok_or(ProgramError::UnknownEvaluator(request.instance.evaluator()))?;
-            (evaluator.module(), request.instance.program())
-        };
+        let (module, program, version) =
+            if let Some(version) = request.instance.evaluator().inline_wasm_version() {
+                (request.instance.program(), &[][..], version)
+            } else {
+                let evaluator = self
+                    .evaluators
+                    .get(&request.instance.evaluator())
+                    .ok_or(ProgramError::UnknownEvaluator(request.instance.evaluator()))?;
+                (
+                    evaluator.module(),
+                    request.instance.program(),
+                    evaluator.version(),
+                )
+            };
         let prepared = prepare(&request, &self.public_root)?;
+        if version == WasmVersion::V1 && prepared.annex.is_some() {
+            return Err(ProgramError::AnnexRequiresV2);
+        }
         let existing = target_signature(&request.psbt.0, &request, prepared.program_key);
         if existing.is_some_and(|signature| !prepared.verify(signature)) {
             return Err(ProgramError::ConflictingSignature);
@@ -376,8 +409,11 @@ impl ProgramOracle {
             transaction: &request.psbt.0.unsigned_tx,
             prevouts: &prepared.prevouts,
             input_index: request.input_index,
+            internal_key: prepared.internal_key,
+            annex: prepared.annex,
         };
         if !wasm::evaluate(
+            version,
             module,
             program,
             request.instance.parameters(),
@@ -428,6 +464,8 @@ struct Prepared<'a> {
     program_key: XOnlyPublicKey,
     verification_key: XOnlyPublicKey,
     message: Message,
+    internal_key: XOnlyPublicKey,
+    annex: Option<&'a [u8]>,
 }
 
 impl Prepared<'_> {
@@ -504,16 +542,16 @@ fn prepare<'a>(
         .derive_public_key(root)
         .map_err(ProgramError::Instance)?;
     let secp = Secp256k1::verification_only();
-    let verification_key = match request.path {
+    let (verification_key, internal_key) = match request.path {
         ProgramSpendPath::KeyPath => {
             let (tweaked, _) = program_key.tap_tweak(&secp, input.tap_merkle_root);
             if tweaked.to_inner() != output_key {
                 return Err(ProgramError::KeyPathMismatch);
             }
-            output_key
+            (output_key, program_key)
         }
         ProgramSpendPath::ScriptPath(leaf) => {
-            let mut authenticated = false;
+            let mut authenticated = None;
             for (control, (script, version)) in &input.tap_scripts {
                 if TapLeafHash::from_script(script, *version) != leaf {
                     continue;
@@ -526,14 +564,37 @@ fn prepare<'a>(
                 }) {
                     return Err(ProgramError::UnsupportedScriptPath);
                 }
-                authenticated |= control.verify_taproot_commitment(&secp, output_key, script);
+                if control.verify_taproot_commitment(&secp, output_key, script) {
+                    if let Some(expected_root) = input.tap_merkle_root {
+                        let mut root = TapBranchHash::from_inner(leaf.into_inner());
+                        for node in control.merkle_branch.as_inner() {
+                            root = TapBranchHash::from_node_hashes(
+                                sha256::Hash::from_inner(root.into_inner()),
+                                *node,
+                            );
+                        }
+                        if root != expected_root {
+                            return Err(ProgramError::ConflictingTaprootMetadata);
+                        }
+                    }
+                    authenticated = Some(control.internal_key);
+                }
             }
-            if !authenticated {
-                return Err(ProgramError::MissingScriptPath);
-            }
-            program_key
+            (
+                program_key,
+                authenticated.ok_or(ProgramError::MissingScriptPath)?,
+            )
         }
     };
+    if input
+        .tap_internal_key
+        .is_some_and(|key| key != internal_key)
+    {
+        return Err(ProgramError::ConflictingTaprootMetadata);
+    }
+    let annex = sapio_psbt::annex::get(input).map_err(|error| {
+        ProgramError::Psbt(sapio_psbt::PSBTValidationError::InvalidAnnex { index, error })
+    })?;
     let path = match request.path {
         ProgramSpendPath::KeyPath => None,
         ProgramSpendPath::ScriptPath(leaf) => Some((leaf, u32::MAX)),
@@ -542,7 +603,10 @@ fn prepare<'a>(
         .taproot_signature_hash(
             index,
             &Prevouts::All(&prevouts),
-            None,
+            annex
+                .map(Annex::new)
+                .transpose()
+                .map_err(ProgramError::Sighash)?,
             path,
             SchnorrSighashType::All,
         )
@@ -554,6 +618,8 @@ fn prepare<'a>(
         program_key,
         verification_key,
         message,
+        internal_key,
+        annex,
     })
 }
 
@@ -629,4 +695,8 @@ pub fn validate_program_response(
 }
 
 #[cfg(test)]
+mod fragments_tests;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tweak_tests;

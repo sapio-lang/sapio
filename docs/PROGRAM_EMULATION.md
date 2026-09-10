@@ -101,11 +101,12 @@ ProgramId = SHA256(
 )
 ```
 
-The version fixes the commitment encoding and the signed transaction view.
-The all-zero evaluator identity executes the program bytes directly as WASM.
-A nonzero identity commits to the exact registered WASM interpreter bytes;
-registration order and executable paths have no role. Both paths use the
-[same bounded evaluator ABI](WASM_EVALUATORS.md). The interpreter must reject
+The commitment encoding remains version one; the evaluator identity selects
+the execution version and signed view. The all-zero identity runs an inline
+WASM-v1 module, and the reserved `00..02` identity runs an inline WASM-v2 module.
+Other identities commit to registered interpreter bytes and their execution
+version; registration order and executable paths have no role. Both forms use
+the [versioned bounded evaluator ABI](WASM_EVALUATORS.md). The interpreter must reject
 invalid program and parameter encodings. Bitcoin still trusts the oracle to
 run the committed implementation before using its signing key.
 
@@ -129,7 +130,8 @@ Compilation does not register an evaluator or contact an endpoint.
 `emulator_connect::program` exposes `ProgramOracle`, `ProgramClient`,
 `ProgramSigningRequest` and `ProgramSpendPath`. Construct an oracle with an
 explicit vector of `WasmEvaluator` modules; duplicate identities are errors.
-An empty vector supports inline WASM programs through the reserved zero ID.
+An empty vector supports inline WASM programs through the reserved v1 and v2
+identities described in [the evaluator ABI](WASM_EVALUATORS.md).
 Use `sign(request)` locally or `serve(prebound_listener)` for TCP. A client takes
 an already resolved `SocketAddr` and public root and opens a fresh connection
 for each request. It never retries or falls back to the CTV protocol.
@@ -178,9 +180,11 @@ The signer requires every input's previous output, accepts consistent witness
 and/or authenticated non-witness UTXOs, and rejects conflicts. The selected
 input must spend P2TR and have no finalized scriptSig or witness. An explicit
 sighash declaration must be `ALL`; `DEFAULT`, `ANYONECANPAY`, `NONE` and `SINGLE`
-are unsupported. Every produced signature uses `ALL`, no annex, and either the
+are unsupported. Every produced signature uses `ALL` and either the
 verified tweaked key path or an authenticated TapScript leaf without
-`OP_CODESEPARATOR`.
+`OP_CODESEPARATOR`. V1 signs without an annex. V2 can sign the exact annex
+declared in the PSBT and exposed to the guest; see
+[covenant fragments and annexes](COVENANT_FRAGMENTS.md#annexes-in-psbts).
 
 Only the requested input/path signature slot may change. A valid existing
 signature is retained after evaluation; a conflicting signature fails. The
@@ -213,6 +217,8 @@ fraud proofs, or penalties for violating the predicate.
 `SignedTransactionView` exposes the fields covered by the supported Taproot
 `SIGHASH_ALL` signature: version, lock time, input outpoints and sequences,
 previous output amounts and scripts, all outputs, and the selected input index.
+V2 additionally exposes the authenticated Taproot internal key and the annex
+committed by the signature.
 It deliberately does not expose scriptSig bytes, witness stacks, transaction
 weight, txid, or arbitrary PSBT metadata as predicate inputs. An evaluator must
 not base acceptance on ambient host state. The WASM host exposes only the
