@@ -44,6 +44,9 @@ jobs:
       - name: Build covenant fragment spend vectors
         if: runner.os == 'Linux'
         run: cargo build --locked -p sapio_integration_tests --example covenant_fragment_vectors
+      - name: Build eltoo contest scenario
+        if: runner.os == 'Linux'
+        run: cargo build --locked -p sapio_integration_tests --example eltoo_vectors
       - name: Validate custom policy witnesses with Bitcoin Core
         if: runner.os == 'Linux'
         timeout-minutes: 5
@@ -68,6 +71,14 @@ jobs:
           "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoind"
           "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoin-cli"
           target/debug/examples/covenant_fragment_vectors
+      - name: Verify stale-state override and settlement with Bitcoin Core
+        if: runner.os == 'Linux'
+        timeout-minutes: 5
+        run: >-
+          python3 contrib/check_eltoo.py
+          "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoind"
+          "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoin-cli"
+          target/debug/examples/eltoo_vectors
 
   quality:
     runs-on: ubuntu-24.04
