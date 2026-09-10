@@ -57,6 +57,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 signed_spend(&compiled, changed, Some(4), false),
             ));
         }
+        // Keep the original two accepted and ten rejected cases mandatory
+        // even though the Core driver also accepts other policy vector sets.
+        assert_eq!(
+            cases.iter().filter(|case| case["allowed"] == true).count(),
+            1
+        );
+        assert_eq!(cases.len(), if protected { 8 } else { 4 });
         groups.push(json!({
             "name": name,
             "address": Address::p2tr_tweaked(raw.spend_info().output_key(), Network::Regtest).to_string(),

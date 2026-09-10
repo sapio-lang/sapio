@@ -35,6 +35,10 @@ features = ['use-serde', 'rand']
 path = "../sapio-base"
 version = "0.2.0"
 
+[dependencies.sapio-psbt]
+path = "../sapio-psbt"
+version = "0.2.0"
+
 
 [lib]
 name = "emulator_connect"

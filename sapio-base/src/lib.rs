@@ -14,8 +14,10 @@ pub use util::CTVHash;
 pub mod covenant;
 pub mod plugin_args;
 pub mod policy;
+pub mod program;
 pub mod simp;
 pub use covenant::{CovenantError, Ctv, Emulatable, LoweringPlan};
+pub use program::{EmulatedProgram, EvaluatorId, ProgramId, ProgramInstance};
 
 /// Helpers for making correct time locks
 pub mod timelocks;

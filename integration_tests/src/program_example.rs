@@ -1,0 +1,293 @@
+//! An executable, non-CTV covenant emulation example.
+//!
+//! The fixed recipient and minimum are part of the program instance. A
+//! continuation supplies candidate transactions; its witness only selects an
+//! output to check. The oracle is trusted to evaluate this predicate honestly.
+
+use bitcoin::hashes::{sha256, Hash};
+use bitcoin::psbt::PartiallySignedTransaction;
+use bitcoin::secp256k1::{Secp256k1, SecretKey};
+use bitcoin::util::bip32::{ExtendedPrivKey, ExtendedPubKey};
+use bitcoin::{Address, Amount, Network, OutPoint, Script, Transaction, TxIn, TxOut};
+use emulator_connect::program::{
+    EvaluationError, ProgramEvaluator, ProgramSigningRequest, ProgramSpendPath,
+    SignedTransactionView, PSBT,
+};
+use emulator_connect::CTVAvailable;
+use sapio::contract::abi::object::ObjectMetadata;
+use sapio::contract::abi::studio::SapioStudioFormat;
+use sapio::contract::*;
+use sapio::*;
+use sapio_base::effects::EffectPath;
+use sapio_base::program::{EmulatedProgram, EvaluatorId, ProgramInstance};
+use sapio_base::txindex::{TxIndex, TxIndexLogger};
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::error::Error;
+use std::rc::Rc;
+use std::str::FromStr;
+use std::sync::Arc;
+
+/// Public source metadata retained even though the guard lowers to a key.
+pub const PROGRAM_METADATA: &str = "emulated_program";
+/// Fixed semantics selector interpreted by the registered example evaluator.
+pub const PAY_AT_LEAST: &[u8] = b"pay-at-least/v1";
+/// Sample funding amount, in satoshis.
+pub const FUNDING_SATS: u64 = 20_000;
+const FEE_SATS: u64 = 500;
+
+/// Identity of this precisely specified evaluator, not a general VM name.
+pub fn evaluator_id() -> EvaluatorId {
+    EvaluatorId(sha256::Hash::hash(
+        b"sapio/example/pay-at-least/v1; params=u64le minimum,u32le script-length,script; witness=u32le output-index; exact consumption; output.value>=minimum && output.script==script",
+    ))
+}
+
+/// Fully specified predicate parameters with an unambiguous binary encoding.
+pub fn parameters(minimum: u64, recipient: &Script) -> Vec<u8> {
+    let mut encoded = minimum.to_le_bytes().to_vec();
+    encoded.extend_from_slice(&(recipient.len() as u32).to_le_bytes());
+    encoded.extend_from_slice(recipient.as_bytes());
+    encoded
+}
+
+/// The public instance needed to reproduce both evaluation and key derivation.
+pub fn instance(minimum: u64, recipient: &Script) -> ProgramInstance {
+    ProgramInstance::new(
+        evaluator_id(),
+        PAY_AT_LEAST.to_vec(),
+        parameters(minimum, recipient),
+    )
+    .expect("bounded example program")
+}
+
+/// Registered interpreter for the one bounded payment predicate in this demo.
+pub struct PayAtLeast;
+
+impl ProgramEvaluator for PayAtLeast {
+    fn id(&self) -> EvaluatorId {
+        evaluator_id()
+    }
+
+    fn evaluate(
+        &self,
+        program: &[u8],
+        parameters: &[u8],
+        view: &SignedTransactionView<'_>,
+        witness: &[u8],
+    ) -> Result<bool, EvaluationError> {
+        if program != PAY_AT_LEAST {
+            return Err(EvaluationError("unknown payment program selector".into()));
+        }
+        let (minimum, script) = decode_parameters(parameters)?;
+        let index =
+            u32::from_le_bytes(witness.try_into().map_err(|_| {
+                EvaluationError("payment witness must be exactly four bytes".into())
+            })?);
+        // The witness is merely an existential output selector. Every field
+        // used to accept the candidate is covered by the resulting signature.
+        Ok(view.outputs().nth(index as usize).is_some_and(|output| {
+            output.value >= minimum && output.script_pubkey.as_bytes() == script
+        }))
+    }
+}
+
+fn decode_parameters(parameters: &[u8]) -> Result<(u64, &[u8]), EvaluationError> {
+    let header = parameters
+        .get(..12)
+        .ok_or_else(|| EvaluationError("truncated payment parameters".into()))?;
+    let minimum = u64::from_le_bytes(header[..8].try_into().unwrap());
+    let length = u32::from_le_bytes(header[8..12].try_into().unwrap()) as usize;
+    let script = &parameters[12..];
+    if script.len() != length {
+        return Err(EvaluationError(
+            "payment script length must consume all parameters".into(),
+        ));
+    }
+    Ok((minimum, script))
+}
+
+/// Create an explicit program request for one candidate's key-path signature.
+pub fn signing_request(
+    program: &EmulatedProgram,
+    psbt: PartiallySignedTransaction,
+    output_index: u32,
+) -> ProgramSigningRequest {
+    ProgramSigningRequest {
+        instance: program.instance().clone(),
+        input_index: 0,
+        witness: output_index.to_le_bytes().to_vec(),
+        path: ProgramSpendPath::KeyPath,
+        psbt: PSBT(psbt),
+    }
+}
+
+/// Deterministic, disposable keys for this research example only.
+pub fn example_root() -> ExtendedPrivKey {
+    // Testnet is the canonical BIP32 serialization network shared by regtest.
+    ExtendedPrivKey::new_master(Network::Testnet, &[91; 32]).unwrap()
+}
+
+/// A standard destination used in the example.
+pub fn recipient(seed: u8) -> Address {
+    let secp = Secp256k1::new();
+    let key = bitcoin::PublicKey::new(bitcoin::secp256k1::PublicKey::from_secret_key(
+        &secp,
+        &SecretKey::from_slice(&[seed; 32]).unwrap(),
+    ));
+    Address::p2wpkh(&key, Network::Regtest).unwrap()
+}
+
+/// Values supplied by a continuation, with no authority to change the guard.
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct PaymentCandidate {
+    /// Amount paid to the contract's fixed recipient.
+    pub amount: u64,
+    /// Choose output order without changing the program identity.
+    pub recipient_first: bool,
+}
+
+/// A continuation whose spending predicate is fixed before any effects run.
+pub struct PaymentContract {
+    emulation: EmulatedProgram,
+    minimum: u64,
+    recipient: Address,
+}
+
+impl PaymentContract {
+    /// Build source data and its guard together so they cannot disagree.
+    pub fn new(minimum: u64, recipient: Address, root: ExtendedPubKey) -> Self {
+        Self {
+            emulation: EmulatedProgram::new(instance(minimum, &recipient.script_pubkey()), root)
+                .expect("valid example root"),
+            minimum,
+            recipient,
+        }
+    }
+
+    /// Full public source for an explicit signing request.
+    pub fn emulation(&self) -> &EmulatedProgram {
+        &self.emulation
+    }
+
+    #[guard(policy, cached)]
+    fn payment_policy(self) -> EmulatedProgram {
+        self.emulation.clone()
+    }
+
+    #[continuation(guarded_by = "[Self::payment_policy]", coerce_args = "Ok", web_api)]
+    fn pay(self, ctx: Context, candidate: Option<PaymentCandidate>) {
+        let candidate = candidate.unwrap_or(PaymentCandidate {
+            amount: self.minimum,
+            recipient_first: true,
+        });
+        let change = FUNDING_SATS
+            .checked_sub(FEE_SATS)
+            .and_then(|available| available.checked_sub(candidate.amount))
+            .ok_or_else(|| CompilationError::Custom("candidate exceeds example funding".into()))?;
+        let paid = Compiled::from_address(self.recipient.clone(), Amount::ZERO);
+        let change_address = Compiled::from_address(recipient(94), Amount::ZERO);
+        let outputs = if candidate.recipient_first {
+            [(candidate.amount, &paid), (change, &change_address)]
+        } else {
+            [(change, &change_address), (candidate.amount, &paid)]
+        };
+        let mut template = ctx.template();
+        for (amount, output) in outputs {
+            template = template.add_output(Amount::from_sat(amount), output, None)?;
+        }
+        template.add_fees(Amount::from_sat(FEE_SATS))?.into()
+    }
+
+    /// Compile using only source, public roots, and optional candidate effects.
+    pub fn compile_candidates(
+        &self,
+        candidates: &[PaymentCandidate],
+    ) -> Result<Compiled, CompilationError> {
+        let effects: BTreeMap<_, _> = candidates
+            .iter()
+            .enumerate()
+            .map(|(index, candidate)| (format!("candidate_{index}"), candidate))
+            .collect();
+        let effects = serde_json::from_value(serde_json::json!({
+            "effects": {"payment/@action/pay/@suggested": effects}
+        }))
+        .expect("valid candidate effects");
+        self.compile(Context::new(
+            Network::Regtest,
+            Amount::from_sat(FUNDING_SATS),
+            sapio_base::LoweringPlan::Native,
+            EffectPath::try_from("payment").unwrap(),
+            Arc::new(effects),
+            None,
+        ))
+    }
+}
+
+impl Contract for PaymentContract {
+    declare! {updatable<Option<PaymentCandidate>>, Self::pay}
+
+    fn metadata(&self, _ctx: Context) -> Result<ObjectMetadata, CompilationError> {
+        let mut metadata = ObjectMetadata::default();
+        // PolicyCompiler emits an ordinary key, so generic program source is
+        // deliberately retained here rather than implied by CTV requirements.
+        metadata.extra.insert(
+            PROGRAM_METADATA.into(),
+            serde_json::to_value(&self.emulation).map_err(CompilationError::SerializationError)?,
+        );
+        Ok(metadata)
+    }
+}
+
+/// Attach candidates to a known synthetic funding transaction, without signing.
+pub fn bind_candidates(
+    compiled: &Compiled,
+) -> Result<Vec<PartiallySignedTransaction>, Box<dyn Error>> {
+    let txindex: Rc<dyn TxIndex> = Rc::new(TxIndexLogger::new());
+    let funding = Transaction {
+        version: 2,
+        lock_time: 0,
+        input: vec![TxIn::default()],
+        output: vec![TxOut {
+            value: FUNDING_SATS,
+            script_pubkey: (&compiled.address).into(),
+        }],
+    };
+    let outpoint = OutPoint::new(txindex.add_tx(Arc::new(funding))?, 0);
+    let bound = compiled.bind_psbt(outpoint, BTreeMap::new(), txindex, &CTVAvailable)?;
+    let root = &bound.program[&compiled.root_path];
+    root.txs
+        .iter()
+        .map(|tx| {
+            let SapioStudioFormat::LinkedPSBT { psbt, .. } = tx;
+            PartiallySignedTransaction::from_str(psbt).map_err(Into::into)
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parameter_encoding_consumes_every_byte_and_rejects_wrong_lengths() {
+        let script = recipient(92).script_pubkey();
+        let encoded = parameters(5_000, &script);
+        assert_eq!(
+            decode_parameters(&encoded).unwrap(),
+            (5_000, script.as_bytes())
+        );
+        for length in 0..encoded.len() {
+            assert!(decode_parameters(&encoded[..length]).is_err());
+        }
+        let mut trailing = encoded.clone();
+        trailing.push(0);
+        assert!(decode_parameters(&trailing).is_err());
+        for length in [0, u32::MAX] {
+            let mut wrong_length = encoded.clone();
+            wrong_length[8..12].copy_from_slice(&length.to_le_bytes());
+            assert!(decode_parameters(&wrong_length).is_err());
+        }
+    }
+}

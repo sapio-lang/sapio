@@ -17,7 +17,7 @@ const MAX_MSG: usize = 1_000_000;
 
 /// a PSBT Wrapper type. Note that Serialize/Deserialize are manually implemented
 /// limited to 1MB in size.
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PSBT(pub PartiallySignedTransaction);
 
 /// Wrapper for message serialization

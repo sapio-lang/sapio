@@ -593,6 +593,7 @@ dependencies = [
  "sapio-base",
  "sapio-bitcoin",
  "sapio-ctv-emulator-trait",
+ "sapio-psbt",
  "schemars",
  "serde",
  "serde_derive",

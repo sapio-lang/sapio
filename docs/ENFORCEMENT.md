@@ -179,9 +179,12 @@ is an additional CLI policy, distinct from library policy-equality checks.
 
 ## Generic encumbrance programs: design boundary
 
-Only the built-in CTV wrapper and the existing CTV signer protocol are
-implemented. `Emulatable<P>` does not supply an interpreter or signing protocol
-for arbitrary `P`.
+`EmulatedProgram` supports an exact evaluator identity, program bytes, preset
+parameters and public oracle root through the existing `PolicyCompiler` API.
+It derives an ordinary signature-key clause without consulting a runtime.
+The [program-emulation guide](PROGRAM_EMULATION.md) specifies its commitment,
+separate derivation namespace, versioned signing protocol and executable
+non-CTV payment example. `Emulatable<P>` itself still implements only CTV.
 
 Rubin's oracle-assisted model derives a public key from a complete encumbrance
 instance, including preset parameters, and signs conditionally on a predicate
@@ -190,29 +193,37 @@ separate mechanism. This motivates separating public lowering from runtime
 signing without claiming that Sapio implements that full system.
 [Un-FE'd Covenants, sections 2.1–2.2](https://rubin.io/public/pdfs/unfedcovenants.pdf)
 
-A future generic protocol needs an exact instance commitment covering evaluator
-semantics/version, program bytes and parameter bytes, with unambiguous lengths
-and domain separation. Hashing just a program name or ignoring its parameters
-is insufficient. The current helper preserves CTV's existing eight low-31-bit
-children plus ninth high-bit child exactly; it introduces no generic-program
-namespace. A new protocol must define that namespace explicitly.
+The version-one commitment covers every instance byte with tagged hashing and
+explicit lengths. Generic derivation adds a fixed child before the existing
+nine-child hash encoding, leaving CTV derivation unchanged. These paths are
+distinct under the same configured root; arbitrary related xpubs do not
+establish independent signer custody.
 
-A generic signing request must carry the instance, selected input and auxiliary
-witness, and the server must evaluate the supported predicate before signing.
-The present PSBT-only CTV server cannot reconstruct an arbitrary program from a
-transaction hash. Unknown evaluators must fail; renaming the CTV service does
-not create a generic executor.
+`ProgramOracle` registers trusted Rust evaluators explicitly. A request carries
+the complete instance, selected input and Taproot path, PSBT and auxiliary
+witness. Unknown evaluators, invalid signing contexts and rejected predicates
+fail without producing a signature. `ProgramClient` verifies the derived
+signature and permits only its exact PSBT insertion. The existing PSBT-only CTV
+service remains separate and cannot process these requests.
 
-The predicate's transaction view also needs an exact definition. Taproot
-`SIGHASH_ALL` commits transaction fields and prevout amounts/scripts, but does
-not commit arbitrary scriptSig or witness contents. A predicate must not assume
-such mutable data is protected by the oracle signature. Auxiliary witness can
-serve as an existential proof input; later accountability or data-availability
-claims require an additional commitment protocol.
+Evaluators receive only the fields committed by the supported Taproot
+`SIGHASH_ALL` signature. The view excludes scriptSigs, witness contents,
+transaction weight, current txid and arbitrary PSBT metadata. The signer uses
+no annex, requires a non-finalized selected input, and accepts only supported
+key paths or authenticated TapScript leaves without code separators. Auxiliary
+witness is an existential proof input; it does not promise publication or
+commit those bytes to the transaction.
 [BIP341 signature message](https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki#common-signature-message)
 
-Generic evaluators, proof publication, BitVM disputes and bonds remain future
-work. Current tests establish CTV path compatibility, public/private derivation
-agreement, explicit-input reproducibility, wrapper collection, graph reuse and
-binding checks. They do not establish native activation or economic penalties
-for a dishonest signer.
+Generic program assumptions are not inferred from a key or added to
+`covenant_requirements`. Applications must retain the complete `EmulatedProgram`
+and dispatch requests explicitly; the example stores it in object metadata.
+CTV lowering plans, binder compatibility checks and CLI covenant modes retain
+their existing CTV scope.
+
+Evaluators must implement their declared semantics, avoid ambient mutable state
+and bound their synchronous work. The library does not enforce Rust callback
+purity or provide an execution sandbox. An interpreter for uploaded programs,
+automatic generic artifact dispatch, proof publication, BitVM disputes and bonds
+remain future work. Tests establish instance identity, signature boundaries and
+accepted/rejected spends, not penalties for a dishonest signer.

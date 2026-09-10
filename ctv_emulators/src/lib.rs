@@ -37,6 +37,7 @@ use std::sync::Arc;
 
 pub mod connections;
 mod msgs;
+pub mod program;
 pub mod servers;
 mod wire;
 

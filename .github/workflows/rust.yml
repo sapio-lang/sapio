@@ -38,6 +38,9 @@ jobs:
       - name: Build custom policy spend vectors
         if: runner.os == 'Linux'
         run: cargo build --locked -p sapio --example custom_policy_vectors
+      - name: Build program emulation spend vectors
+        if: runner.os == 'Linux'
+        run: cargo build --locked -p sapio_integration_tests --example program_emulation_vectors
       - name: Validate custom policy witnesses with Bitcoin Core
         if: runner.os == 'Linux'
         timeout-minutes: 5
@@ -46,6 +49,14 @@ jobs:
           "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoind"
           "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoin-cli"
           target/debug/examples/custom_policy_vectors
+      - name: Validate program emulation witnesses with Bitcoin Core
+        if: runner.os == 'Linux'
+        timeout-minutes: 5
+        run: >-
+          python3 contrib/check_custom_policy.py
+          "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoind"
+          "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoin-cli"
+          target/debug/examples/program_emulation_vectors
 
   quality:
     runs-on: ubuntu-24.04
