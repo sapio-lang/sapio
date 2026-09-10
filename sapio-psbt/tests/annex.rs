@@ -384,13 +384,14 @@ fn annex_ctv_uses_all_final_scriptsigs_and_rechecks_completed_inputs() {
     let (keys, mut psbt, _) = fixture(None, 2);
     let redeem = Builder::new().push_int(1).into_script();
     let final_script_sig = Builder::new().push_slice(redeem.as_bytes()).into_script();
-    let mut legacy = bitcoin::psbt::Input::default();
-    legacy.witness_utxo = Some(TxOut {
-        value: 10_000,
-        script_pubkey: redeem.to_p2sh(),
-    });
-    legacy.redeem_script = Some(redeem);
-    psbt.inputs[1] = legacy;
+    psbt.inputs[1] = bitcoin::psbt::Input {
+        witness_utxo: Some(TxOut {
+            value: 10_000,
+            script_pubkey: redeem.to_p2sh(),
+        }),
+        redeem_script: Some(redeem),
+        ..Default::default()
+    };
     let mut final_tx = psbt.unsigned_tx.clone();
     final_tx.input[1].script_sig = final_script_sig.clone();
     let key = keys.0[0].to_keypair(&secp).x_only_public_key().0;

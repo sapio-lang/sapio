@@ -219,9 +219,10 @@ fn finalize_input<C: Verification>(
             stack.push(control.serialize());
             stack.push(annex.to_vec());
             let witness = Witness::from_vec(stack);
-            if best.as_ref().map_or(true, |old: &Witness| {
-                witness.serialized_len() < old.serialized_len()
-            }) && verify_annex(psbt, secp, index, utxos, &witness, annex).is_ok()
+            if best
+                .as_ref()
+                .is_none_or(|old: &Witness| witness.serialized_len() < old.serialized_len())
+                && verify_annex(psbt, secp, index, utxos, &witness, annex).is_ok()
             {
                 best = Some(witness);
             }
@@ -320,9 +321,10 @@ fn verify_annex<C: Verification>(
         let KeySigPair::Schnorr(key, signature) = signature else {
             return false;
         };
-        if input.sighash_type.map_or(false, |required| {
-            required.to_u32() != signature.hash_ty as u32
-        }) {
+        if input
+            .sighash_type
+            .is_some_and(|required| required.to_u32() != signature.hash_ty as u32)
+        {
             return false;
         }
         let Ok(hash) = sighash.taproot_signature_hash(
