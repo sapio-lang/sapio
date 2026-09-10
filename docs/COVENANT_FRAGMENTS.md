@@ -161,5 +161,35 @@ components, and verifies both key-path and script-path signing. It also checks
 template authorization reuse across different outpoints, which requires a
 fresh transaction signature even when the auxiliary authorization is reused.
 
+Run the compiled contract demo and its integration test from the repository
+root:
+
+```sh
+cargo run --locked -p sapio_integration_tests --example covenant_fragments
+cargo test --locked -p sapio_integration_tests --test covenant_fragments
+```
+
+The demo emits four finalized synthetic spends: two payment candidates using
+an explicitly authorized participant internal key, and two using a public
+BIP32 root's known tweak. Candidate amounts change without changing either
+contract's address. The root authorizer signs the auxiliary TemplateHash
+without deriving the oracle's private signing key. No transactions are
+broadcast.
+
+To check real funded spends against an isolated Bitcoin Core regtest node:
+
+```sh
+cargo build --locked -p sapio_integration_tests --example covenant_fragment_vectors
+python3 contrib/check_custom_policy.py --accept-nonstandard \
+    /path/to/bitcoind /path/to/bitcoin-cli \
+    target/debug/examples/covenant_fragment_vectors
+```
+
+The driver checks two valid spends and six mutations covering changed outputs,
+changed annex bytes, and removed annexes. The annex-bearing valid spends need
+the explicit `--accept-nonstandard` relay-policy opt-in on the isolated test
+node; consensus signature validation remains enabled. The driver creates its
+own temporary node and wallet and does not use existing funds.
+
 The oracle remains responsible for enforcing the evaluated predicate under
 the existing [emulation assumptions](PROGRAM_EMULATION.md#what-the-oracle-guarantees).
