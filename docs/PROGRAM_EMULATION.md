@@ -1,7 +1,7 @@
 # Program-based covenant emulation
 
 Sapio can compile a fixed program instance to an oracle-derived key and ask a
-registered evaluator to authorize individual transactions later. The example
+WASM evaluator to authorize individual transactions later. The example
 below implements a predicate that CTV does not express directly: pay at least a
 fixed amount to a fixed recipient, allowing the amount and output order to vary.
 
@@ -19,7 +19,8 @@ the actual `ProgramClient`/`ProgramOracle` TCP exchange.
 ## Source, candidates, and authorization
 
 The source in `integration_tests/src/program_example.rs` fixes an evaluator
-identity, the `pay-at-least/v1` program selector, recipient script, minimum
+identity derived from the complete compiled WASM interpreter, the
+`pay-at-least/v1` program selector, recipient script, minimum
 payment, and public oracle root. `ProgramInstance` commits the complete selector
 and parameter bytes together with the evaluator's semantic identity.
 `EmulatedProgram` derives the corresponding key from the public root and
@@ -37,6 +38,9 @@ therefore explicitly retains the complete `EmulatedProgram` in its
 `covenant_requirements`, and `bind_psbt` does not infer or dispatch a generic
 program request from a key. An application must preserve this source and make
 its intended request explicitly.
+For a nonzero evaluator ID, also preserve the matching interpreter module;
+the ID authenticates those bytes but cannot reconstruct them. The example's
+interpreter is distributed in `evaluators/artifacts/pay_at_least.wasm`.
 
 Binding supplies the candidates' actual previous transactions and Taproot data.
 Only after compiling and binding does the example create the evaluator and ask
@@ -45,7 +49,7 @@ and an auxiliary witness.
 
 ## Exact example semantics
 
-The registered `PayAtLeast` evaluator accepts only `pay-at-least/v1` as its
+The registered `PayAtLeast` WASM evaluator accepts only `pay-at-least/v1` as its
 program selector. Parameters are an eight-byte little-endian minimum, a
 four-byte little-endian recipient-script length, and exactly that many script
 bytes. A witness is exactly one four-byte little-endian output index. Truncation
@@ -66,8 +70,8 @@ finalization after their payment amount or destination is changed.
 ## Bitcoin Core validation
 
 The vector executable also checks the signature boundary against an independent
-node, using two different payments from the continuation and one authenticated
-program-key TapScript spend:
+node, using two different payments from the continuation, one authenticated
+program-key TapScript spend, and one inline CTV WASM spend:
 
 ```sh
 cargo build --locked -p sapio_integration_tests --example program_emulation_vectors
@@ -76,7 +80,7 @@ python3 contrib/check_custom_policy.py /path/to/bitcoind /path/to/bitcoin-cli \
 ```
 
 The driver starts an isolated regtest node, creates its own wallet and funds the
-declared scripts. It checks three valid spends and five transactions mutated
+declared scripts. It checks four valid spends and seven transactions mutated
 after signing, then stops the node and removes its temporary data. CI runs the
 same checks with pinned Bitcoin Core 31.1. These are ordinary Taproot spends;
 the check does not establish native covenant enforcement or oracle honesty.
@@ -98,10 +102,12 @@ ProgramId = SHA256(
 ```
 
 The version fixes the commitment encoding and the signed transaction view.
-An evaluator identifier names its exact semantics/version; registration order
-and executable paths have no role. Each evaluator must reject invalid program
-and parameter encodings according to those semantics. This is not executable
-attestation: the operator supplies the implementation.
+The all-zero evaluator identity executes the program bytes directly as WASM.
+A nonzero identity commits to the exact registered WASM interpreter bytes;
+registration order and executable paths have no role. Both paths use the
+[same bounded evaluator ABI](WASM_EVALUATORS.md). The interpreter must reject
+invalid program and parameter encodings. Bitcoin still trusts the oracle to
+run the committed implementation before using its signing key.
 
 `program_derivation_path(id)` begins with the non-hardened index `0x53415049`
 (`SAPI`). Interpret the ID as eight big-endian 32-bit words. The next eight
@@ -122,7 +128,8 @@ Compilation does not register an evaluator or contact an endpoint.
 
 `emulator_connect::program` exposes `ProgramOracle`, `ProgramClient`,
 `ProgramSigningRequest` and `ProgramSpendPath`. Construct an oracle with an
-explicit vector of registered evaluators; duplicate identities are errors.
+explicit vector of `WasmEvaluator` modules; duplicate identities are errors.
+An empty vector supports inline WASM programs through the reserved zero ID.
 Use `sign(request)` locally or `serve(prebound_listener)` for TCP. A client takes
 an already resolved `SocketAddr` and public root and opens a fresh connection
 for each request. It never retries or falls back to the CTV protocol.
@@ -163,7 +170,9 @@ The legacy `SignPSBT` service cannot interpret `SignProgramV1` requests.
 The server deadline spans header, body and response for each request. The client
 deadline also includes connection establishment. Partial progress does not
 restart either deadline. These limits do not preempt synchronous evaluation,
-serialization or cryptography and do not sandbox registered native code.
+serialization or cryptography. Evaluators themselves execute under the
+[WASM fuel and memory limits](WASM_EVALUATORS.md#resource-and-execution-semantics);
+native module compilation remains outside execution fuel.
 
 The signer requires every input's previous output, accepts consistent witness
 and/or authenticated non-witness UTXOs, and rejects conflicts. The selected
@@ -199,16 +208,16 @@ This is trusted covenant emulation. Bitcoin enforces the signature; the oracle
 enforces the registered predicate. A dishonest oracle holding the signing root
 can authorize a transaction that violates the predicate, and an unavailable
 oracle can prevent spending. The API does not provide BitVM accountability,
-fraud proofs, or a general-purpose program VM.
+fraud proofs, or penalties for violating the predicate.
 
 `SignedTransactionView` exposes the fields covered by the supported Taproot
 `SIGHASH_ALL` signature: version, lock time, input outpoints and sequences,
 previous output amounts and scripts, all outputs, and the selected input index.
 It deliberately does not expose scriptSig bytes, witness stacks, transaction
 weight, txid, or arbitrary PSBT metadata as predicate inputs. An evaluator must
-not base acceptance on ambient host state, and must bound its own synchronous
-work. Registering an evaluator identity asserts exact semantics; it does not
-prove that the implementation is correct.
+not base acceptance on ambient host state. The WASM host exposes only the
+explicit arguments and metered public cryptographic operations. It bounds
+execution but does not prove that an evaluator's predicate is correct.
 
 These exclusions follow the [BIP341 signature
 message](https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki#common-signature-message).
@@ -220,3 +229,5 @@ does not publish that witness or establish a data-availability guarantee.
 This implements the offline public-key derivation and conditional signing
 pattern described in [Rubin's Un-FE'd Covenants](https://rubin.io/bitcoin/2024/11/26/unfed-covenants/).
 The existing CTV protocol retains its derivation and request type unchanged.
+The separate [CTV WASM program](WASM_EVALUATORS.md#ctv-as-a-program) implements
+the template predicate through this generic protocol for native witness inputs.
