@@ -1,0 +1,11 @@
+[workspace]
+members = ["ctv", "pay-at-least"]
+resolver = "2"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false

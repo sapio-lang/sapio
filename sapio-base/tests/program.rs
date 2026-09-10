@@ -35,6 +35,26 @@ fn public_root(byte: u8) -> ExtendedPubKey {
 }
 
 #[test]
+fn wasm_identities_distinguish_inline_programs_from_registered_interpreters() {
+    let module = b"\0asm\x01\0\0\0";
+    let id = EvaluatorId::for_wasm(module);
+    assert_eq!(
+        id.0.to_string(),
+        "56266469888468b6f9b89684a92561dc98943fa8fb88c35eebd37f2e16a6b747"
+    );
+    assert!(!id.is_wasm());
+    assert_eq!(
+        EvaluatorId::default(),
+        EvaluatorId(sha256::Hash::from_inner([0; 32]))
+    );
+    let inline = ProgramInstance::wasm(module.to_vec(), vec![7]).unwrap();
+    assert!(inline.evaluator().is_wasm());
+    let interpreted = ProgramInstance::new(id, module.to_vec(), vec![7]).unwrap();
+    assert_ne!(inline.id(), interpreted.id());
+    assert_ne!(id, EvaluatorId::for_wasm(b"\0asm\x01\0\0\0\0"));
+}
+
+#[test]
 fn exact_instance_commitment_matches_independent_tagged_hash_vectors() {
     assert_eq!(
         evaluator().0.to_string(),
