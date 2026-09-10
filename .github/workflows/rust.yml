@@ -65,6 +65,9 @@ jobs:
       - run: rustup show
       - run: cargo fmt --all -- --check
       - run: cargo fmt --manifest-path plugin-example/Cargo.toml --all -- --check
+      - run: cargo fmt --manifest-path evaluators/Cargo.toml --all -- --check
+      - name: Verify distributed evaluator WASM bytes
+        run: bash evaluators/build.sh --check
       - run: cargo check -p sapio-wasm-plugin --no-default-features --locked
       - run: cargo check -p sapio-wasm-plugin --no-default-features --features host --locked
       - run: cargo clippy --workspace --all-targets --all-features --locked

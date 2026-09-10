@@ -2,12 +2,12 @@
 
 ## Reproducible builds
 
-Use rustup and the checked-in `rust-toolchain.toml` (Rust 1.98.1). Both workspaces
+Use rustup and the checked-in `rust-toolchain.toml` (Rust 1.98.1). All workspaces
 commit `Cargo.lock`; use `--locked` for builds and tests. The supported compiler
 minimum is the tested pinned version. Upgrade the compiler and lockfiles in
 reviewed commits rather than regenerating dependencies in CI.
 
-Both workspaces pin the repaired `sapio-miniscript` Git source at
+The native and compiler-plugin workspaces pin the repaired `sapio-miniscript` Git source at
 `04b69f69459fe3b043ca61fb649cf546d5a241b6`. Keep that revision aligned when updating
 the dependency. The registry release at historical revision
 `3f23950459f3424ccfeecc0bb14579ec2aec9820` does not contain these correctness
@@ -101,6 +101,13 @@ program source metadata, compiled artifact and three locally finalized spends.
 It uses synthetic funding and a published disposable oracle key; it performs
 no wallet activity or broadcasting. Its tests also exercise the TCP protocol.
 
+The dependency-free `evaluators/` workspace contains the compiled CTV and
+flexible-payment WASM programs. Normal builds use their checked-in artifacts.
+Run `bash evaluators/build.sh --check` to rebuild with pinned settings and
+verify exact bytes, or `--write` after an intentional source change. Changed
+bytes change program identities and derived keys. The [WASM evaluator
+guide](WASM_EVALUATORS.md) specifies the ABI, crypto costs and CTV input domain.
+
 Useful focused checks:
 
 ```sh
@@ -113,6 +120,7 @@ cargo test --locked -p sapio --test template_semantics --test effect_names --tes
 cargo test --locked -p sapio --test custom_policy --test raw_artifacts --test contract_policy_limits
 cargo test --locked -p sapio --test child_funding --test template_size --test ordinal_allocation
 cargo test --locked -p sapio-wasm-plugin --features host
+cargo test --locked -p sapio-wasm --features host
 cargo test --locked -p sapio_integration_tests
 cargo test --locked -p ctv_emulators --lib
 cargo test --locked -p ctv_emulators --lib program::
@@ -345,8 +353,9 @@ signing protocol with the same frame bound and default 30-second I/O allowance.
 The program server admits 64 connections by default. Each client request uses
 a fresh connection and has no automatic retry or CTV fallback. Program bytes,
 preset parameters and auxiliary witness each have a 65,536-byte bound. The
-operator explicitly registers trusted Rust evaluators; elapsed deadlines cannot
-interrupt their synchronous work. See the [protocol and signing
+operator registers exact WASM interpreters, or uses inline WASM through the zero
+evaluator ID. Guest execution shares bounded fuel with native crypto imports;
+elapsed deadlines cannot interrupt native module compilation. See the [protocol and signing
 limits](PROGRAM_EMULATION.md#protocol-and-resource-limits).
 
 ## Artifact boundaries

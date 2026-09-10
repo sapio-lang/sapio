@@ -594,11 +594,15 @@ dependencies = [
  "sapio-bitcoin",
  "sapio-ctv-emulator-trait",
  "sapio-psbt",
+ "sapio-wasm",
  "schemars",
  "serde",
  "serde_derive",
  "serde_json",
  "tokio",
+ "wasmer",
+ "wasmer-middlewares",
+ "wat",
 ]
 
 [[package]]
@@ -2053,6 +2057,7 @@ version = "0.2.4"
 dependencies = [
  "sapio-bitcoin",
  "sapio-miniscript",
+ "sapio-wasm",
  "schemars",
  "serde",
  "serde_derive",
@@ -2184,6 +2189,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sapio-wasm"
+version = "0.2.4"
+dependencies = [
+ "sapio-bitcoin",
+ "wasmer",
+ "wasmer-middlewares",
+ "wasmer-types",
+]
+
+[[package]]
 name = "sapio-wasm-plugin"
 version = "0.2.4"
 dependencies = [
@@ -2194,6 +2209,7 @@ dependencies = [
  "sapio",
  "sapio-base",
  "sapio-bitcoin",
+ "sapio-wasm",
  "schemars",
  "serde",
  "serde_derive",

@@ -168,6 +168,7 @@ version = "0.2.4"
 dependencies = [
  "sapio-bitcoin",
  "sapio-miniscript",
+ "sapio-wasm",
  "schemars",
  "serde",
  "serde_derive",
@@ -245,6 +246,10 @@ checksum = "bb9028538ef1bdfb57d15745af7438063f0c90370a50e556aa8813bb4716f06e"
 dependencies = [
  "cc",
 ]
+
+[[package]]
+name = "sapio-wasm"
+version = "0.2.4"
 
 [[package]]
 name = "sapio-wasm-clause"

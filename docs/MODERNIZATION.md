@@ -154,13 +154,15 @@ compilation or a unit test.
 
 The [generic encumbrance boundary](ENFORCEMENT.md#generic-encumbrance-programs-design-boundary)
 now implements versioned instance commitments, domain-separated public
-derivation and evaluated signing requests through explicitly registered Rust
-evaluators. A payment example admits different amounts and output orderings
+derivation and evaluated signing requests through bounded WASM evaluators.
+The zero evaluator ID executes inline WASM; other IDs commit to registered
+WASM interpreters. A payment example admits different amounts and output orderings
 under one fixed continuation policy. Generic source and signer assumptions are
 retained explicitly by the application; they are not inferred from ordinary
-keys or dispatched by CTV artifact checks and CLI modes. Uploaded-code
-execution, automatic generic artifact dispatch, BitVM disputes and penalty
-bonds remain future work.
+keys or dispatched by CTV artifact checks and CLI modes. A compiled CTV guest
+uses the shared metered SHA256 host API, and compiler guests delegate public
+BIP32 derivation to native host code. Automatic generic artifact dispatch,
+BitVM disputes and penalty bonds remain future work.
 
 ## Ordered work after this recovery pass
 
@@ -206,9 +208,9 @@ This is the next release blocker, before a broad dependency migration.
   bound I/O waiting and admitted connections, without establishing a hard CPU
   limit or proving a public deployment's availability. The separate program
   service evaluates an exact instance over signed transaction fields before
-  signing its selected input/path. Its registered evaluators remain trusted
-  code and must bound their own computation; request deadlines do not provide
-  an evaluator sandbox.
+  signing its selected input/path. Its inline and registered evaluators run
+  in fresh WASM instances with shared instruction/host-operation fuel and
+  memory limits. Native module compilation remains outside execution fuel.
 
 Acceptance: malformed inputs fail with attributable errors; adversarial guest execution
 traps at the documented bounds; the hash, script, signing and finalization

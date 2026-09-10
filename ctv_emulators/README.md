@@ -12,10 +12,16 @@ See [Sapio CLI](../cli/README.md) for how to run a server.
 ## Explicit program evaluation
 
 `emulator_connect::program` provides `ProgramOracle` and `ProgramClient` for
-predicates beyond fixed CTV templates. The operator registers an evaluator;
-each request supplies an exact program instance, auxiliary evidence and a
+predicates beyond fixed CTV templates. The operator registers exact WASM
+interpreter modules; the reserved zero evaluator ID supports inline WASM.
+Each request supplies an exact program instance, auxiliary evidence and a
 selected Taproot input/path. The evaluator sees only signed transaction fields.
 Public key derivation and contract compilation require no running oracle.
+
+The [WASM evaluator guide](../docs/WASM_EVALUATORS.md) specifies the bounded
+runtime, native metered crypto imports, and compiled CTV evaluator. CTV through
+this program API supports native witness inputs and uses a different program
+key from the older CTV-specific service below.
 
 See the [program-emulation guide](../docs/PROGRAM_EMULATION.md) for the protocol,
 trust assumptions and a runnable payment continuation. This is a separate Rust

@@ -3,6 +3,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 cargo fmt --all -- --check
+cargo fmt --manifest-path evaluators/Cargo.toml --all -- --check
+bash evaluators/build.sh --check
 cargo test --workspace --all-features --locked
 cargo test -p sapio --example payment --locked
 cargo check -p sapio-wasm-plugin --no-default-features --locked

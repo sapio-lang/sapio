@@ -17,9 +17,13 @@ serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
 rand = "0.8.1"
+wasmer = "=6.1.0"
+wasmer-middlewares = "=6.1.0"
+sapio-wasm = { path = "../wasm", features = ["host"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }
+wat = "=1.258.0"
 
 
 [dependencies.sapio-ctv-emulator-trait]

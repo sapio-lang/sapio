@@ -199,7 +199,10 @@ nine-child hash encoding, leaving CTV derivation unchanged. These paths are
 distinct under the same configured root; arbitrary related xpubs do not
 establish independent signer custody.
 
-`ProgramOracle` registers trusted Rust evaluators explicitly. A request carries
+`ProgramOracle` executes inline WASM for the reserved zero evaluator identity
+and registers other WASM interpreters by their exact module hash. All evaluate
+in fresh instances under the [version-one ABI and resource
+limits](WASM_EVALUATORS.md). A request carries
 the complete instance, selected input and Taproot path, PSBT and auxiliary
 witness. Unknown evaluators, invalid signing contexts and rejected predicates
 fail without producing a signature. `ProgramClient` verifies the derived

@@ -11,11 +11,10 @@
 //! oracle implements those semantics honestly. Public derivation is independent
 //! of signer transports, evaluator registration and the CTV lowering plan.
 
-use crate::covenant::hash_to_child_vec;
+use crate::covenant::{hash_to_child_vec, Ctv};
 use crate::policy::{PolicyCompiler, PolicyError, ScriptPolicy};
 use crate::Clause;
 use bitcoin::hashes::{sha256, Hash, HashEngine};
-use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::bip32::{self, ChildNumber, ExtendedPubKey};
 use bitcoin::XOnlyPublicKey;
 use schemars::JsonSchema;
@@ -32,6 +31,29 @@ pub const MAX_PROGRAM_ROOT_DEPTH: u8 = u8::MAX - 10;
 
 const PROGRAM_NAMESPACE: u32 = 0x5341_5049;
 const COMMITMENT_TAG: &[u8] = b"Sapio/Emulation/Program/v1";
+const EVALUATOR_TAG: &[u8] = b"Sapio/Emulation/Evaluator/Wasm/v1";
+
+/// The exact compiled CTV evaluator distributed with this Sapio version.
+///
+/// Rebuilding different bytes changes the program identity and derived key.
+/// Sources and a byte-for-byte verification script live in `evaluators/`.
+pub const CTV_WASM: &[u8] = include_bytes!("../../evaluators/artifacts/ctv.wasm");
+const _: () = assert!(CTV_WASM.len() <= MAX_PROGRAM_BYTES);
+
+/// Construct the inline WASM CTV predicate for an expected BIP119 hash.
+///
+/// This evaluator requires every input to spend a native witness program,
+/// establishing empty scriptSigs by consensus. Legacy and P2SH inputs are
+/// unsupported. Parameters are the expected 32 hash bytes; evidence is empty.
+/// Its key commits to the complete module and differs from the older
+/// nine-child CTV emulation key.
+pub fn ctv_wasm_instance(Ctv(hash): Ctv) -> ProgramInstance {
+    ProgramInstance {
+        evaluator: EvaluatorId::wasm(),
+        program: CTV_WASM.to_vec(),
+        parameters: hash.as_ref().to_vec(),
+    }
+}
 
 /// An identifier for exact evaluator and transaction-view semantics.
 ///
@@ -47,6 +69,43 @@ pub struct EvaluatorId(
     #[schemars(with = "String", regex(pattern = "^[0-9a-fA-F]{64}$"))]
     pub sha256::Hash,
 );
+
+impl EvaluatorId {
+    /// Execute the instance's program bytes directly as a WASM-v1 evaluator.
+    ///
+    /// The all-zero identity permanently selects the version-one evaluator
+    /// ABI, signed view and metered host operations. It cannot be registered
+    /// or overridden by an oracle operator.
+    pub fn wasm() -> Self {
+        Self(sha256::Hash::from_inner([0; 32]))
+    }
+
+    /// Whether this is the reserved inline WASM-v1 identity.
+    pub fn is_wasm(self) -> bool {
+        self == Self::wasm()
+    }
+
+    /// Identify a registered WASM-v1 interpreter by its exact module bytes.
+    ///
+    /// The tagged hash is SHA256(tag || tag || module), where tag is SHA256
+    /// of `Sapio/Emulation/Evaluator/Wasm/v1`. The instance's program bytes
+    /// become input to this interpreter. This helper does not validate WASM
+    /// or register executable code with an oracle.
+    pub fn for_wasm(module: &[u8]) -> Self {
+        let tag = sha256::Hash::hash(EVALUATOR_TAG);
+        let mut engine = sha256::Hash::engine();
+        engine.input(&tag[..]);
+        engine.input(&tag[..]);
+        engine.input(module);
+        Self(sha256::Hash::from_engine(engine))
+    }
+}
+
+impl Default for EvaluatorId {
+    fn default() -> Self {
+        Self::wasm()
+    }
+}
 
 /// A domain-separated commitment to one complete program instance.
 #[derive(
@@ -74,6 +133,15 @@ pub struct ProgramInstance {
 }
 
 impl ProgramInstance {
+    /// Commit an inline WASM-v1 evaluator and its fixed parameters.
+    ///
+    /// The module itself is the program. At execution its separate program
+    /// input is empty; preset parameters and signed transaction data remain
+    /// distinct ABI arguments.
+    pub fn wasm(module: Vec<u8>, parameters: Vec<u8>) -> Result<Self, ProgramError> {
+        Self::new(EvaluatorId::wasm(), module, parameters)
+    }
+
     /// Construct an exact instance after checking both byte-length limits.
     pub fn new(
         evaluator: EvaluatorId,
@@ -140,12 +208,8 @@ impl ProgramInstance {
         if root.depth > MAX_PROGRAM_ROOT_DEPTH {
             return Err(ProgramError::RootDepth { depth: root.depth });
         }
-        root.derive_pub(
-            &Secp256k1::verification_only(),
-            &program_derivation_path(self.id()),
-        )
-        .map(|child| child.to_x_only_pub())
-        .map_err(ProgramError::Derivation)
+        crate::crypto::derive_public_key(root, &program_derivation_path(self.id()))
+            .map_err(ProgramError::Derivation)
     }
 }
 
