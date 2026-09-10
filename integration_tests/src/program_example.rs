@@ -4,15 +4,11 @@
 //! continuation supplies candidate transactions; its witness only selects an
 //! output to check. The oracle is trusted to evaluate this predicate honestly.
 
-use bitcoin::hashes::{sha256, Hash};
 use bitcoin::psbt::PartiallySignedTransaction;
 use bitcoin::secp256k1::{Secp256k1, SecretKey};
 use bitcoin::util::bip32::{ExtendedPrivKey, ExtendedPubKey};
 use bitcoin::{Address, Amount, Network, OutPoint, Script, Transaction, TxIn, TxOut};
-use emulator_connect::program::{
-    EvaluationError, ProgramEvaluator, ProgramSigningRequest, ProgramSpendPath,
-    SignedTransactionView, PSBT,
-};
+use emulator_connect::program::{ProgramSigningRequest, ProgramSpendPath, WasmEvaluator, PSBT};
 use emulator_connect::CTVAvailable;
 use sapio::contract::abi::object::ObjectMetadata;
 use sapio::contract::abi::studio::SapioStudioFormat;
@@ -37,11 +33,17 @@ pub const PAY_AT_LEAST: &[u8] = b"pay-at-least/v1";
 pub const FUNDING_SATS: u64 = 20_000;
 const FEE_SATS: u64 = 500;
 
-/// Identity of this precisely specified evaluator, not a general VM name.
+/// Checked-in interpreter compiled reproducibly from `evaluators/pay-at-least`.
+pub const PAY_AT_LEAST_WASM: &[u8] = include_bytes!("../../evaluators/artifacts/pay_at_least.wasm");
+
+/// Identity committing the complete bounded WASM interpreter.
 pub fn evaluator_id() -> EvaluatorId {
-    EvaluatorId(sha256::Hash::hash(
-        b"sapio/example/pay-at-least/v1; params=u64le minimum,u32le script-length,script; witness=u32le output-index; exact consumption; output.value>=minimum && output.script==script",
-    ))
+    EvaluatorId::for_wasm(PAY_AT_LEAST_WASM)
+}
+
+/// Register exact code instead of an ambient native evaluator callback.
+pub fn pay_at_least_evaluator() -> WasmEvaluator {
+    WasmEvaluator::new(PAY_AT_LEAST_WASM.to_vec()).expect("valid compiled payment interpreter")
 }
 
 /// Fully specified predicate parameters with an unambiguous binary encoding.
@@ -60,52 +62,6 @@ pub fn instance(minimum: u64, recipient: &Script) -> ProgramInstance {
         parameters(minimum, recipient),
     )
     .expect("bounded example program")
-}
-
-/// Registered interpreter for the one bounded payment predicate in this demo.
-pub struct PayAtLeast;
-
-impl ProgramEvaluator for PayAtLeast {
-    fn id(&self) -> EvaluatorId {
-        evaluator_id()
-    }
-
-    fn evaluate(
-        &self,
-        program: &[u8],
-        parameters: &[u8],
-        view: &SignedTransactionView<'_>,
-        witness: &[u8],
-    ) -> Result<bool, EvaluationError> {
-        if program != PAY_AT_LEAST {
-            return Err(EvaluationError("unknown payment program selector".into()));
-        }
-        let (minimum, script) = decode_parameters(parameters)?;
-        let index =
-            u32::from_le_bytes(witness.try_into().map_err(|_| {
-                EvaluationError("payment witness must be exactly four bytes".into())
-            })?);
-        // The witness is merely an existential output selector. Every field
-        // used to accept the candidate is covered by the resulting signature.
-        Ok(view.outputs().nth(index as usize).is_some_and(|output| {
-            output.value >= minimum && output.script_pubkey.as_bytes() == script
-        }))
-    }
-}
-
-fn decode_parameters(parameters: &[u8]) -> Result<(u64, &[u8]), EvaluationError> {
-    let header = parameters
-        .get(..12)
-        .ok_or_else(|| EvaluationError("truncated payment parameters".into()))?;
-    let minimum = u64::from_le_bytes(header[..8].try_into().unwrap());
-    let length = u32::from_le_bytes(header[8..12].try_into().unwrap()) as usize;
-    let script = &parameters[12..];
-    if script.len() != length {
-        return Err(EvaluationError(
-            "payment script length must consume all parameters".into(),
-        ));
-    }
-    Ok((minimum, script))
 }
 
 /// Create an explicit program request for one candidate's key-path signature.
@@ -264,30 +220,4 @@ pub fn bind_candidates(
             PartiallySignedTransaction::from_str(psbt).map_err(Into::into)
         })
         .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parameter_encoding_consumes_every_byte_and_rejects_wrong_lengths() {
-        let script = recipient(92).script_pubkey();
-        let encoded = parameters(5_000, &script);
-        assert_eq!(
-            decode_parameters(&encoded).unwrap(),
-            (5_000, script.as_bytes())
-        );
-        for length in 0..encoded.len() {
-            assert!(decode_parameters(&encoded[..length]).is_err());
-        }
-        let mut trailing = encoded.clone();
-        trailing.push(0);
-        assert!(decode_parameters(&trailing).is_err());
-        for length in [0, u32::MAX] {
-            let mut wrong_length = encoded.clone();
-            wrong_length[8..12].copy_from_slice(&length.to_le_bytes());
-            assert!(decode_parameters(&wrong_length).is_err());
-        }
-    }
 }

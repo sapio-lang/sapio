@@ -210,8 +210,8 @@ fn bip32_derive_import(
         return Ok(1);
     }
     let mut children = Vec::with_capacity(count as usize);
-    for bytes in encoded_path[..count as usize * 4].chunks_exact(4) {
-        let index = u32::from_le_bytes(bytes.try_into().expect("four-byte child index"));
+    for bytes in encoded_path[..count as usize * 4].as_chunks::<4>().0 {
+        let index = u32::from_le_bytes(*bytes);
         let Ok(child) = ChildNumber::from_normal_idx(index) else {
             return Ok(1);
         };

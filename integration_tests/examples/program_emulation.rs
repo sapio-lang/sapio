@@ -6,10 +6,9 @@ use emulator_connect::program::ProgramOracle;
 use miniscript::psbt::PsbtExt;
 use sapio_integration_tests::program_example::*;
 use std::error::Error;
-use std::sync::Arc;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let oracle = ProgramOracle::new(example_root(), vec![Arc::new(PayAtLeast)])?;
+    let oracle = ProgramOracle::new(example_root(), vec![pay_at_least_evaluator()])?;
     let recipient = recipient(92);
     let contract = PaymentContract::new(5_000, recipient.clone(), oracle.public_root());
     let original = contract.compile_candidates(&[])?;

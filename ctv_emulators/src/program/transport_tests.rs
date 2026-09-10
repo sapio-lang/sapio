@@ -1,5 +1,5 @@
 use super::*;
-use crate::program::{EvaluationError, ProgramEvaluator, ProgramSpendPath, SignedTransactionView};
+use crate::program::{ProgramSpendPath, WasmEvaluator};
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::util::bip32::ExtendedPrivKey;
@@ -7,22 +7,21 @@ use bitcoin::{Network, Script, Transaction, TxIn, TxOut};
 use sapio_base::program::{EvaluatorId, ProgramInstance};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-struct Accept;
-
-impl ProgramEvaluator for Accept {
-    fn id(&self) -> EvaluatorId {
-        EvaluatorId(sha256::Hash::hash(b"transport test evaluator v1"))
-    }
-
-    fn evaluate(
-        &self,
-        _: &[u8],
-        _: &[u8],
-        _: &SignedTransactionView<'_>,
-        _: &[u8],
-    ) -> Result<bool, EvaluationError> {
-        Ok(true)
-    }
+fn evaluator() -> WasmEvaluator {
+    WasmEvaluator::new(
+        wat::parse_str(
+            r#"(module
+        (memory (export "memory") 1)
+        (global $heap (mut i32) (i32.const 1024))
+        (func (export "sapio_alloc_v1") (param $length i32) (result i32)
+            global.get $heap
+            global.get $heap local.get $length i32.add global.set $heap)
+        (func (export "sapio_evaluate_v1")
+            (param i32 i32 i32 i32 i32 i32 i32 i32) (result i32) i32.const 1))"#,
+        )
+        .unwrap(),
+    )
+    .unwrap()
 }
 
 fn root() -> ExtendedPrivKey {
@@ -34,11 +33,11 @@ fn public_root() -> ExtendedPubKey {
 }
 
 fn oracle() -> ProgramOracle {
-    ProgramOracle::new(root(), vec![Arc::new(Accept)]).unwrap()
+    ProgramOracle::new(root(), vec![evaluator()]).unwrap()
 }
 
 fn request() -> ProgramSigningRequest {
-    let instance = ProgramInstance::new(Accept.id(), vec![1], vec![]).unwrap();
+    let instance = ProgramInstance::new(evaluator().id(), vec![1], vec![]).unwrap();
     let key = instance.derive_public_key(&public_root()).unwrap();
     let mut psbt = PartiallySignedTransaction::from_unsigned_tx(Transaction {
         version: 2,

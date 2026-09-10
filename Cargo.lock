@@ -594,11 +594,15 @@ dependencies = [
  "sapio-bitcoin",
  "sapio-ctv-emulator-trait",
  "sapio-psbt",
+ "sapio-wasm",
  "schemars",
  "serde",
  "serde_derive",
  "serde_json",
  "tokio",
+ "wasmer",
+ "wasmer-middlewares",
+ "wat",
 ]
 
 [[package]]

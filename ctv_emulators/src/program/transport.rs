@@ -143,8 +143,9 @@ impl ProgramOracle {
     /// Cancelling this future aborts its active connections. Peer failures do
     /// not stop the listener; unexpected task failures do.
     ///
-    /// Evaluators are trusted, registered Rust code. These limits cannot
-    /// interrupt an unbounded synchronous evaluator or provide a CPU sandbox.
+    /// WASM execution and crypto imports have their own shared fuel allowance.
+    /// This I/O deadline cannot preempt synchronous module validation or
+    /// compilation; evaluator module bytes are bounded before either step.
     pub async fn serve_with_limits(
         self,
         listener: TcpListener,

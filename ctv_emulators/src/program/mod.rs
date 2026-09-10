@@ -6,12 +6,13 @@
 
 //! Conditional signatures for exact, versioned program instances.
 //!
-//! Evaluators are trusted, locally registered Rust implementations. Requests
-//! select a registered semantic identity, not executable host code. The view
-//! excludes transaction fields that Taproot SIGHASH_ALL does not commit to.
+//! Evaluators execute as bounded WebAssembly. The zero evaluator identity runs
+//! the supplied program directly; other identities select registered WASM
+//! interpreters committed by their exact bytes. The view excludes transaction
+//! fields that Taproot SIGHASH_ALL does not commit to.
 //! A witness is auxiliary evidence, not a claim that those bytes will appear
-//! in the spending transaction. Evaluation is synchronous; implementations
-//! must enforce their own computational limits.
+//! in the spending transaction. Evaluation has no signing keys, plugin imports,
+//! filesystem, network, or clock access.
 
 use bitcoin::blockdata::opcodes::all::OP_CODESEPARATOR;
 use bitcoin::blockdata::script::Instruction;
@@ -28,12 +29,13 @@ use sapio_base::program::{
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt;
-use std::sync::Arc;
 
 pub use crate::msgs::PSBT;
 
 mod transport;
 pub use transport::{ProgramClient, ProgramClientError};
+mod wasm;
+pub use wasm::{WasmEvaluator, MAX_FUNCTION_SLOTS, MAX_SIGNED_VIEW_BYTES};
 
 /// Maximum auxiliary evidence accepted by the program protocol.
 pub const MAX_WITNESS_BYTES: usize = 65_536;
@@ -180,24 +182,6 @@ impl fmt::Display for EvaluationError {
 
 impl std::error::Error for EvaluationError {}
 
-/// A trusted, bounded implementation of one versioned predicate semantics.
-pub trait ProgramEvaluator: Send + Sync {
-    /// Identity covering the complete semantics, including its version.
-    fn id(&self) -> EvaluatorId;
-
-    /// Decide whether this signed transaction satisfies the exact instance.
-    ///
-    /// `witness` is evidence for this evaluation and is not itself signed.
-    /// Implementations must not accept based on ambient mutable host state.
-    fn evaluate(
-        &self,
-        program: &[u8],
-        parameters: &[u8],
-        view: &SignedTransactionView<'_>,
-        witness: &[u8],
-    ) -> Result<bool, EvaluationError>;
-}
-
 /// A request cannot be evaluated or signed under the program protocol.
 #[derive(Debug)]
 pub enum ProgramError {
@@ -209,6 +193,8 @@ pub enum ProgramError {
     RootDepth(u8),
     /// Two registered evaluators claim the same semantic identity.
     DuplicateEvaluator(EvaluatorId),
+    /// The all-zero identity is reserved for inline WASM programs.
+    ReservedEvaluator,
     /// The requested evaluator was not registered by the operator.
     UnknownEvaluator(EvaluatorId),
     /// The evaluator reported a failure.
@@ -257,6 +243,9 @@ impl fmt::Display for ProgramError {
                 "program root depth {depth} exceeds {MAX_PROGRAM_ROOT_DEPTH}"
             ),
             Self::DuplicateEvaluator(id) => write!(formatter, "duplicate program evaluator {id:?}"),
+            Self::ReservedEvaluator => {
+                formatter.write_str("the zero evaluator identity is reserved for inline WASM")
+            }
             Self::UnknownEvaluator(id) => write!(formatter, "unknown program evaluator {id:?}"),
             Self::Evaluation(error) => write!(formatter, "program evaluation failed: {error}"),
             Self::Rejected => formatter.write_str("program predicate rejected the transaction"),
@@ -319,19 +308,22 @@ impl std::error::Error for ProgramError {
     }
 }
 
-/// A signing root and immutable registry of trusted predicate implementations.
+/// A signing root and immutable registry of WASM predicate interpreters.
 #[derive(Clone)]
 pub struct ProgramOracle {
     root: ExtendedPrivKey,
     public_root: ExtendedPubKey,
-    evaluators: BTreeMap<EvaluatorId, Arc<dyn ProgramEvaluator>>,
+    evaluators: BTreeMap<EvaluatorId, WasmEvaluator>,
 }
 
 impl ProgramOracle {
-    /// Register evaluator semantics once, rejecting duplicate identities.
+    /// Register exact WASM interpreters, rejecting duplicate or reserved IDs.
+    ///
+    /// The zero identity always executes the instance's own program bytes as
+    /// WASM and cannot be replaced by a registered interpreter.
     pub fn new(
         root: ExtendedPrivKey,
-        evaluators: Vec<Arc<dyn ProgramEvaluator>>,
+        evaluators: Vec<WasmEvaluator>,
     ) -> Result<Self, ProgramError> {
         if root.depth > MAX_PROGRAM_ROOT_DEPTH {
             return Err(ProgramError::RootDepth(root.depth));
@@ -339,6 +331,9 @@ impl ProgramOracle {
         let mut registry = BTreeMap::new();
         for evaluator in evaluators {
             let id = evaluator.id();
+            if id.is_wasm() {
+                return Err(ProgramError::ReservedEvaluator);
+            }
             if registry.insert(id, evaluator).is_some() {
                 return Err(ProgramError::DuplicateEvaluator(id));
             }
@@ -363,10 +358,15 @@ impl ProgramOracle {
         &self,
         request: ProgramSigningRequest,
     ) -> Result<PartiallySignedTransaction, ProgramError> {
-        let evaluator = self
-            .evaluators
-            .get(&request.instance.evaluator())
-            .ok_or(ProgramError::UnknownEvaluator(request.instance.evaluator()))?;
+        let (module, program) = if request.instance.evaluator().is_wasm() {
+            (request.instance.program(), &[][..])
+        } else {
+            let evaluator = self
+                .evaluators
+                .get(&request.instance.evaluator())
+                .ok_or(ProgramError::UnknownEvaluator(request.instance.evaluator()))?;
+            (evaluator.module(), request.instance.program())
+        };
         let prepared = prepare(&request, &self.public_root)?;
         let existing = target_signature(&request.psbt.0, &request, prepared.program_key);
         if existing.is_some_and(|signature| !prepared.verify(signature)) {
@@ -377,14 +377,14 @@ impl ProgramOracle {
             prevouts: &prepared.prevouts,
             input_index: request.input_index,
         };
-        if !evaluator
-            .evaluate(
-                request.instance.program(),
-                request.instance.parameters(),
-                &view,
-                &request.witness,
-            )
-            .map_err(ProgramError::Evaluation)?
+        if !wasm::evaluate(
+            module,
+            program,
+            request.instance.parameters(),
+            &view,
+            &request.witness,
+        )
+        .map_err(ProgramError::Evaluation)?
         {
             return Err(ProgramError::Rejected);
         }

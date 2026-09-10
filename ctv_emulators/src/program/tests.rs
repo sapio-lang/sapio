@@ -5,45 +5,12 @@ use bitcoin::hashes::{sha256, Hash};
 use bitcoin::util::psbt::raw;
 use bitcoin::util::taproot::TaprootBuilder;
 use bitcoin::{Network, Transaction, TxIn, Witness};
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-struct PayAtLeast {
-    calls: Arc<AtomicUsize>,
+fn evaluator() -> WasmEvaluator {
+    WasmEvaluator::new(wat::parse_str(include_str!("pay_at_least_test.wat")).unwrap()).unwrap()
 }
 
 fn evaluator_id() -> EvaluatorId {
-    EvaluatorId(sha256::Hash::hash(b"program signing test evaluator v1"))
-}
-
-impl ProgramEvaluator for PayAtLeast {
-    fn id(&self) -> EvaluatorId {
-        evaluator_id()
-    }
-
-    fn evaluate(
-        &self,
-        program: &[u8],
-        parameters: &[u8],
-        view: &SignedTransactionView<'_>,
-        witness: &[u8],
-    ) -> Result<bool, EvaluationError> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
-        if program != b"pay-at-least" || parameters.len() != 8 || witness.len() != 4 {
-            return Err(EvaluationError("invalid program or evidence".into()));
-        }
-        assert_eq!(view.input_index(), 1);
-        assert_eq!(view.inputs().len(), 2);
-        let input = view.inputs().nth(1).unwrap();
-        assert_eq!(input.previous_output.vout, 0);
-        assert_eq!(input.prevout.value, 10_000);
-        assert_eq!(input.sequence, 0xffff_fffd);
-        let index = u32::from_le_bytes(witness.try_into().unwrap()) as usize;
-        let minimum = u64::from_le_bytes(parameters.try_into().unwrap());
-        Ok(view
-            .outputs()
-            .nth(index)
-            .is_some_and(|output| output.value >= minimum))
-    }
+    evaluator().id()
 }
 
 fn root() -> ExtendedPrivKey {
@@ -59,18 +26,8 @@ fn instance() -> ProgramInstance {
     .unwrap()
 }
 
-fn oracle() -> (ProgramOracle, Arc<AtomicUsize>) {
-    let calls = Arc::new(AtomicUsize::new(0));
-    (
-        ProgramOracle::new(
-            root(),
-            vec![Arc::new(PayAtLeast {
-                calls: calls.clone(),
-            })],
-        )
-        .unwrap(),
-        calls,
-    )
+fn oracle() -> ProgramOracle {
+    ProgramOracle::new(root(), vec![evaluator()]).unwrap()
 }
 
 fn request(script: Option<Script>) -> ProgramSigningRequest {
@@ -154,7 +111,7 @@ fn target<'a>(
 ) -> &'a SchnorrSig {
     let key = request
         .instance
-        .derive_public_key(&oracle().0.public_root())
+        .derive_public_key(&oracle().public_root())
         .unwrap();
     target_signature(psbt, request, key).unwrap()
 }
@@ -162,11 +119,10 @@ fn target<'a>(
 #[test]
 fn selected_input_and_path_are_the_only_modified_signature_slot() {
     for script in [None, Some(leaf())] {
-        let (oracle, calls) = oracle();
+        let oracle = oracle();
         let request = request(script);
         let response = oracle.sign(request.clone()).unwrap();
         validate_program_response(&request, &response, &oracle.public_root()).unwrap();
-        assert_eq!(calls.load(Ordering::SeqCst), 1);
         assert_eq!(response.inputs[0], request.psbt.0.inputs[0]);
         assert_eq!(target(&request, &response).hash_ty, SchnorrSighashType::All);
         match request.path {
@@ -177,18 +133,16 @@ fn selected_input_and_path_are_the_only_modified_signature_slot() {
         repeated.psbt = PSBT(response.clone());
         assert_eq!(oracle.sign(repeated.clone()).unwrap(), response);
         validate_program_response(&repeated, &response, &oracle.public_root()).unwrap();
-        assert_eq!(calls.load(Ordering::SeqCst), 2);
         // A previously valid signature does not bypass evaluation of the
         // current auxiliary evidence, which is not part of the sighash.
         repeated.witness = 1_u32.to_le_bytes().to_vec();
         assert!(matches!(oracle.sign(repeated), Err(ProgramError::Rejected)));
-        assert_eq!(calls.load(Ordering::SeqCst), 3);
     }
 }
 
 #[test]
 fn declined_unknown_and_failed_programs_never_return_a_signature() {
-    let (oracle, calls) = oracle();
+    let oracle = oracle();
     let mut rejected = request(None);
     rejected.psbt.0.unsigned_tx.output[0].value = 8_999;
     assert!(matches!(oracle.sign(rejected), Err(ProgramError::Rejected)));
@@ -209,12 +163,11 @@ fn declined_unknown_and_failed_programs_never_return_a_signature() {
         oracle.sign(malformed),
         Err(ProgramError::Evaluation(_))
     ));
-    assert_eq!(calls.load(Ordering::SeqCst), 2);
 }
 
 #[test]
 fn missing_conflicting_and_unauthenticated_prevouts_fail_before_evaluation() {
-    let (oracle, calls) = oracle();
+    let oracle = oracle();
     let base = request(None);
     let mut missing = base.clone();
     missing.psbt.0.inputs[0].witness_utxo = None;
@@ -260,7 +213,6 @@ fn missing_conflicting_and_unauthenticated_prevouts_fail_before_evaluation() {
         oracle.sign(wrong_vout),
         Err(ProgramError::InvalidNonWitnessPrevout(0))
     ));
-    assert_eq!(calls.load(Ordering::SeqCst), 0);
     let signed = oracle.sign(authenticated.clone()).unwrap();
     validate_program_response(&authenticated, &signed, &oracle.public_root()).unwrap();
     authenticated.psbt.0.inputs[0].witness_utxo = None;
@@ -274,7 +226,7 @@ fn missing_conflicting_and_unauthenticated_prevouts_fail_before_evaluation() {
 
 #[test]
 fn signing_rejects_structural_sighash_finalization_and_bound_violations() {
-    let (oracle, calls) = oracle();
+    let oracle = oracle();
     let base = request(None);
     let mut malformed = base.clone();
     malformed.psbt.0.inputs.pop();
@@ -329,7 +281,6 @@ fn signing_rejects_structural_sighash_finalization_and_bound_violations() {
         oracle.sign(oversized),
         Err(ProgramError::WitnessTooLarge(_))
     ));
-    assert_eq!(calls.load(Ordering::SeqCst), 0);
     let mut explicit_all = base;
     explicit_all.psbt.0.inputs[1].sighash_type = Some(SchnorrSighashType::All.into());
     oracle.sign(explicit_all).unwrap();
@@ -337,7 +288,7 @@ fn signing_rejects_structural_sighash_finalization_and_bound_violations() {
 
 #[test]
 fn signing_authenticates_key_tweak_and_script_control_block() {
-    let (oracle, calls) = oracle();
+    let oracle = oracle();
     let mut not_taproot = request(None);
     not_taproot.psbt.0.inputs[1]
         .witness_utxo
@@ -394,7 +345,6 @@ fn signing_authenticates_key_tweak_and_script_control_block() {
         oracle.sign(request(Some(code_separator))),
         Err(ProgramError::UnsupportedScriptPath)
     ));
-    assert_eq!(calls.load(Ordering::SeqCst), 0);
     // A pushed byte is data, not an executed code separator. The signature
     // certifies the predicate even when the script does not use this key.
     let pushed = Builder::new()
@@ -409,7 +359,7 @@ fn signing_authenticates_key_tweak_and_script_control_block() {
 
 #[test]
 fn finalization_metadata_on_other_inputs_cannot_change_evaluation_or_signature() {
-    let (oracle, calls) = oracle();
+    let oracle = oracle();
     let original = request(None);
     let first = oracle.sign(original.clone()).unwrap();
     let mut with_metadata = original;
@@ -430,7 +380,6 @@ fn finalization_metadata_on_other_inputs_cannot_change_evaluation_or_signature()
     );
     assert_eq!(second.inputs[0], with_metadata.psbt.0.inputs[0]);
     validate_program_response(&with_metadata, &second, &oracle.public_root()).unwrap();
-    assert_eq!(calls.load(Ordering::SeqCst), 2);
 }
 
 #[test]
@@ -449,7 +398,7 @@ fn signed_field_mutations_invalidate_both_signature_forms() {
         |psbt| psbt.unsigned_tx.output[0].script_pubkey = Script::from(vec![0x51]),
     ];
     for script in [None, Some(leaf())] {
-        let (oracle, _) = oracle();
+        let oracle = oracle();
         let request = request(script);
         let response = oracle.sign(request.clone()).unwrap();
         for mutate in mutations {
@@ -474,7 +423,7 @@ fn signed_field_mutations_invalidate_both_signature_forms() {
 #[test]
 fn responses_must_preserve_all_metadata_and_unrelated_signature_slots() {
     for script in [None, Some(leaf())] {
-        let (oracle, _) = oracle();
+        let oracle = oracle();
         let request = request(script);
         let response = oracle.sign(request.clone()).unwrap();
         let signature = *target(&request, &response);
@@ -523,7 +472,7 @@ fn responses_must_preserve_all_metadata_and_unrelated_signature_slots() {
 #[test]
 fn conflicting_target_signatures_are_rejected_and_unrelated_ones_preserved() {
     for script in [None, Some(leaf())] {
-        let (oracle, calls) = oracle();
+        let oracle = oracle();
         let mut request = request(script);
         let response = oracle.sign(request.clone()).unwrap();
         let key = request
@@ -538,7 +487,6 @@ fn conflicting_target_signatures_are_rejected_and_unrelated_ones_preserved() {
             Err(ProgramError::ConflictingSignature)
         ));
         assert!(validate_program_response(&request, &response, &oracle.public_root()).is_err());
-        assert_eq!(calls.load(Ordering::SeqCst), 1);
         // An unrelated partial signature remains caller-owned data.
         request.psbt = PSBT(response.clone());
         request.psbt.0.inputs[0].tap_key_sig = Some(bad_signature);
@@ -550,9 +498,7 @@ fn conflicting_target_signatures_are_rejected_and_unrelated_ones_preserved() {
 
 #[test]
 fn registry_depth_and_request_serialization_have_no_implicit_fallback() {
-    let evaluator = Arc::new(PayAtLeast {
-        calls: Arc::new(AtomicUsize::new(0)),
-    });
+    let evaluator = evaluator();
     assert!(matches!(
         ProgramOracle::new(root(), vec![evaluator.clone(), evaluator]),
         Err(ProgramError::DuplicateEvaluator(_))

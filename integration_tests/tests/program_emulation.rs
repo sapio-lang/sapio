@@ -4,7 +4,6 @@ use emulator_connect::program::{ProgramClient, ProgramClientError, ProgramError,
 use miniscript::psbt::PsbtExt;
 use sapio_base::program::EmulatedProgram;
 use sapio_integration_tests::program_example::*;
-use std::sync::Arc;
 
 fn contract() -> PaymentContract {
     PaymentContract::new(
@@ -87,7 +86,7 @@ fn recipient_minimum_and_oracle_root_are_fixed_before_funding() {
 #[test]
 fn the_oracle_enforces_the_program_and_rejects_altered_authorization() {
     let source = contract();
-    let oracle = ProgramOracle::new(example_root(), vec![Arc::new(PayAtLeast)]).unwrap();
+    let oracle = ProgramOracle::new(example_root(), vec![pay_at_least_evaluator()]).unwrap();
     let compiled = source
         .compile_candidates(&[PaymentCandidate {
             amount: 4_999,
@@ -146,7 +145,7 @@ fn the_oracle_enforces_the_program_and_rejects_altered_authorization() {
     let wrong_root = ProgramOracle::new(
         bitcoin::util::bip32::ExtendedPrivKey::new_master(bitcoin::Network::Regtest, &[95; 32])
             .unwrap(),
-        vec![Arc::new(PayAtLeast)],
+        vec![pay_at_least_evaluator()],
     )
     .unwrap();
     assert!(matches!(
@@ -183,7 +182,7 @@ async fn one_fixed_continuation_accepts_larger_and_reordered_payments_over_tcp()
         ])
         .unwrap();
     let candidates = bind_candidates(&compiled).unwrap();
-    let oracle = ProgramOracle::new(example_root(), vec![Arc::new(PayAtLeast)]).unwrap();
+    let oracle = ProgramOracle::new(example_root(), vec![pay_at_least_evaluator()]).unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let client = ProgramClient::new(address, oracle.public_root()).unwrap();

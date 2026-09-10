@@ -12,11 +12,12 @@ use bitcoin::util::taproot::{LeafVersion, TapLeafHash, TaprootBuilder};
 use bitcoin::{Address, Network, OutPoint, Script, Transaction, TxIn, TxOut};
 use emulator_connect::program::{ProgramOracle, ProgramSigningRequest, ProgramSpendPath, PSBT};
 use miniscript::psbt::PsbtExt;
+use sapio_base::program::ctv_wasm_instance;
+use sapio_base::{CTVHash, Ctv};
 use sapio_integration_tests::program_example::*;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::error::Error;
-use std::sync::Arc;
 
 fn case(name: String, allowed: bool, transaction: bitcoin::Transaction) -> Value {
     json!({"name": name, "allowed": allowed, "transaction": serialize_hex(&transaction)})
@@ -27,7 +28,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some(path) => serde_json::from_slice(&std::fs::read(path)?)?,
         None => BTreeMap::new(),
     };
-    let oracle = ProgramOracle::new(example_root(), vec![Arc::new(PayAtLeast)])?;
+    let oracle = ProgramOracle::new(example_root(), vec![pay_at_least_evaluator()])?;
     let destination = recipient(92);
     let contract = PaymentContract::new(5_000, destination.clone(), oracle.public_root());
     let compiled = contract.compile_candidates(&[
@@ -173,9 +174,77 @@ fn main() -> Result<(), Box<dyn Error>> {
             case("amount_changed_after_signing".into(), false, changed),
         ],
     });
+
+    // The inline evaluator commits the exact transaction template. Its hash
+    // does not depend on the funding outpoint or the derived program key.
+    let name = "program_inline_ctv";
+    let mut transaction = Transaction {
+        version: 2,
+        lock_time: 0,
+        input: vec![TxIn {
+            sequence: 0xffff_fffd,
+            ..TxIn::default()
+        }],
+        output: vec![TxOut {
+            value: FUNDING_SATS - 500,
+            script_pubkey: recipient(95).script_pubkey(),
+        }],
+    };
+    let instance = ctv_wasm_instance(Ctv(transaction.get_ctv_hash(0)));
+    let key = instance.derive_public_key(&oracle.public_root())?;
+    let address = Address::p2tr(&secp, key, None, Network::Regtest);
+    transaction.input[0].previous_output = funding.get(name).copied().unwrap_or_default();
+    let mut psbt = PartiallySignedTransaction::from_unsigned_tx(transaction)?;
+    psbt.inputs[0].tap_internal_key = Some(key);
+    psbt.inputs[0].witness_utxo = Some(TxOut {
+        value: FUNDING_SATS,
+        script_pubkey: address.script_pubkey(),
+    });
+    let mut signed = oracle.sign(ProgramSigningRequest {
+        instance,
+        input_index: 0,
+        witness: vec![],
+        path: ProgramSpendPath::KeyPath,
+        psbt: PSBT(psbt),
+    })?;
+    signed
+        .finalize_mut(&secp)
+        .map_err(|errors| format!("inline CTV spend failed finalization: {errors:?}"))?;
+    let transaction = signed.extract_tx();
+    assert_eq!(transaction.input[0].witness.len(), 1);
+    let mut amount_changed = transaction.clone();
+    amount_changed.output[0].value -= 1;
+    let mut sequence_changed = transaction.clone();
+    sequence_changed.input[0].sequence -= 1;
+    let ctv_group = json!({
+        "name": name,
+        "address": address.to_string(),
+        "funding_amount_sats": FUNDING_SATS,
+        "cases": [
+            case("valid".into(), true, transaction),
+            case("amount_changed_after_signing".into(), false, amount_changed),
+            case("sequence_changed_after_signing".into(), false, sequence_changed),
+        ],
+    });
+    let groups = [key_path_group, script_path_group, ctv_group];
+    assert_eq!(
+        groups
+            .iter()
+            .map(|group| group["cases"].as_array().unwrap().len())
+            .sum::<usize>(),
+        11
+    );
+    assert_eq!(
+        groups
+            .iter()
+            .flat_map(|group| group["cases"].as_array().unwrap())
+            .filter(|case| case["allowed"] == true)
+            .count(),
+        4
+    );
     println!(
         "{}",
-        serde_json::to_string_pretty(&json!({"groups": [key_path_group, script_path_group]}))?
+        serde_json::to_string_pretty(&json!({"groups": groups}))?
     );
     Ok(())
 }
