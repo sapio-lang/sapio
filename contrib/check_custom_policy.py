@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Execute Sapio's raw-policy witnesses against isolated Bitcoin Core regtest.
+"""Execute Sapio policy witnesses against isolated Bitcoin Core regtest.
 
-Usage: check_custom_policy.py BITCOIND BITCOIN_CLI CUSTOM_POLICY_VECTORS
-The vector executable comes from `cargo build -p sapio --example
-custom_policy_vectors`. No existing node, wallet, or user funds are accessed.
+Usage: check_custom_policy.py BITCOIND BITCOIN_CLI POLICY_VECTORS
+Build the vector executable using either `cargo build -p sapio --example
+custom_policy_vectors` or `cargo build -p sapio_integration_tests --example
+program_emulation_vectors`. No existing node, wallet, or user funds are accessed.
 """
 
 import json
@@ -19,6 +20,23 @@ def main():
         raise SystemExit(__doc__)
     bitcoind, bitcoin_cli, vectors = [str(Path(arg).resolve()) for arg in sys.argv[1:]]
     initial = json.loads(subprocess.check_output([vectors], text=True, timeout=30))
+
+    def manifest(document):
+        groups = {}
+        for group in document["groups"]:
+            assert group["name"] not in groups, "duplicate vector group"
+            cases = {}
+            for case in group["cases"]:
+                assert case["name"] not in cases, "duplicate vector case"
+                assert isinstance(case["allowed"], bool), "case must declare acceptance"
+                cases[case["name"]] = case["allowed"]
+            groups[group["name"]] = (group["address"], group["funding_amount_sats"], cases)
+        return groups
+
+    expected = manifest(initial)
+    allowed = [allowed for _, _, cases in expected.values() for allowed in cases.values()]
+    expected_counts = (sum(allowed), len(allowed) - sum(allowed))
+    assert all(expected_counts), "vectors must exercise both accepted and rejected spends"
     with tempfile.TemporaryDirectory(prefix="sapio-custom-policy-") as directory:
         data = Path(directory)
         with socket.socket() as reservation:
@@ -73,6 +91,7 @@ def main():
                 signed = json.loads(subprocess.check_output(
                     [vectors, str(funding_file)], text=True, timeout=30,
                 ))
+                assert manifest(signed) == expected, "funding changed the vector case manifest"
                 accepted, rejected = 0, 0
                 for group in signed["groups"]:
                     for case in group["cases"]:
@@ -89,8 +108,8 @@ def main():
                             assert "script" in result.get("reject-reason", "").lower(), result
                         print(f"{group['name']}/{case['name']}: "
                               f"{'accepted' if result['allowed'] else 'rejected'}", flush=True)
-                assert (accepted, rejected) == (2, 10), (accepted, rejected)
-                print(f"Bitcoin Core accepted {accepted} valid raw-policy spends and "
+                assert (accepted, rejected) == expected_counts, (accepted, rejected)
+                print(f"Bitcoin Core accepted {accepted} valid policy spends and "
                       f"rejected {rejected} invalid spends. Native CTV was not tested.")
             finally:
                 if node.poll() is None:
