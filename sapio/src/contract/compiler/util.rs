@@ -30,16 +30,19 @@ pub fn pick_key_from_miniscripts<'a, I: Iterator<Item = &'a Miniscript<XOnlyPubl
     branches: I,
 ) -> XOnlyPublicKey {
     branches
-        .filter_map(|f| {
-            if let Terminal::Check(check) = &f.node {
-                if let Terminal::PkK(k) = &check.node {
-                    return Some(*k);
-                }
-            }
-            None
-        })
+        .filter_map(bare_key)
         .min()
         .unwrap_or_else(unspendable_internal_key)
+}
+
+/// A key that independently authorizes this complete branch's satisfaction.
+pub fn bare_key(branch: &Miniscript<XOnlyPublicKey, Tap>) -> Option<XOnlyPublicKey> {
+    if let Terminal::Check(check) = &branch.node {
+        if let Terminal::PkK(key) = &check.node {
+            return Some(*key);
+        }
+    }
+    None
 }
 
 /// Build a deterministic tree of distinct script alternatives. Deduplication is
