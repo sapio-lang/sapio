@@ -15,7 +15,7 @@ export CARGO_NET_OFFLINE=true
 export CARGO_TARGET_DIR="$PWD/target"
 export RUSTFLAGS='-C link-arg=-zstack-size=65536 -C link-arg=--initial-memory=4194304 -C link-arg=--max-memory=4194304'
 cargo +1.98.1 build --locked --release --target wasm32-unknown-unknown
-for name in ctv pay_at_least; do
+for name in ctv pay_at_least templatehash template_authorization; do
     built="target/wasm32-unknown-unknown/release/sapio_${name}_evaluator.wasm"
     artifact="artifacts/${name}.wasm"
     if [[ $(wc -c < "$built") -gt 65536 ]]; then
