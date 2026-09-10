@@ -49,6 +49,7 @@ with upstream crates would remove semantics, not complete a migration.
 | Funding representation | Replace ambiguous BTC ranges with an explicit integer-satoshi minimum; retain `ensure_amount` without templates, validate fresh/reused graphs, reject underfunded children and enforce known input floors before signing |
 | Template accounting | Make builder debits private, preserve outputs-before-fees ordering, and count exact unsigned bytes and prospective outputs; regressions cover CompactSize boundaries, ordinal prefixes and the affected fee-paying examples |
 | Covenant assumptions | [Explicit CTV wrappers and public lowering plans](ENFORCEMENT.md), recorded predicate requirements including finish guards, pure compiled-object reuse checks and runtime signer compatibility; explicit CLI native assumptions before wallet funding |
+| Program emulation | [Exact program instances and public oracle keys](PROGRAM_EMULATION.md), versioned evaluated requests, a signature-bound transaction view and verified responses limited to one input/path; a fixed payment predicate admits multiple continuation candidates through local and TCP signing |
 | Funding integrity | Authenticate previous transactions and index acknowledgements; check contract scripts, distinct inputs, checked funding totals and reserved fees before signing; preserve operational lookup errors and authenticated PSBT prevouts |
 | Bound graph identity | Derive child keys from parent bindings and transition/output identities; preserve reused leaves and contracts, original source paths and continuation paths; keep synthetic funding in its own path |
 | PSBT structure | Reject empty-input transactions, mismatched input/output maps and populated unsigned scriptSigs/witnesses before signing or finalization; preserve the PSBT on structural rejection |
@@ -151,11 +152,15 @@ capability declaration. Future continuation behavior and supported chain
 semantics need their own evidence. Never infer mainnet safety from a successful
 compilation or a unit test.
 
-The [generic encumbrance design](ENFORCEMENT.md#generic-encumbrance-programs-design-boundary)
-builds on Rubin's program-instance model, but only CTV emulation is implemented.
-A generic protocol still needs versioned instance commitments, domain-separated
-key derivation, an exact signed transaction view and witness-carrying requests.
-There is no generic executor, BitVM dispute system or penalty bond in this pass.
+The [generic encumbrance boundary](ENFORCEMENT.md#generic-encumbrance-programs-design-boundary)
+now implements versioned instance commitments, domain-separated public
+derivation and evaluated signing requests through explicitly registered Rust
+evaluators. A payment example admits different amounts and output orderings
+under one fixed continuation policy. Generic source and signer assumptions are
+retained explicitly by the application; they are not inferred from ordinary
+keys or dispatched by CTV artifact checks and CLI modes. Uploaded-code
+execution, automatic generic artifact dispatch, BitVM disputes and penalty
+bonds remain future work.
 
 ## Ordered work after this recovery pass
 
@@ -199,7 +204,11 @@ This is the next release blocker, before a broad dependency migration.
   `SIGHASH_ALL`; its covenant restriction is structural and does not depend on
   authenticating a requester. The [service limits](DEVELOPMENT.md#emulator-service-limits)
   bound I/O waiting and admitted connections, without establishing a hard CPU
-  limit or proving a public deployment's availability.
+  limit or proving a public deployment's availability. The separate program
+  service evaluates an exact instance over signed transaction fields before
+  signing its selected input/path. Its registered evaluators remain trusted
+  code and must bound their own computation; request deadlines do not provide
+  an evaluator sandbox.
 
 Acceptance: malformed inputs fail with attributable errors; adversarial guest execution
 traps at the documented bounds; the hash, script, signing and finalization

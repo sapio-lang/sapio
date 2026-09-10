@@ -90,11 +90,23 @@ That command prints a research compilation artifact, including its explicit
 backend label. It performs no funding or broadcasting. The [native examples
 guide](../examples/README.md) also describes the runnable mining payout tree.
 
+For a continuation whose fixed policy admits several different payments:
+
+```sh
+cargo run --locked -p sapio_integration_tests --example program_emulation
+```
+
+The [program-emulation example](PROGRAM_EMULATION.md) prints its complete
+program source metadata, compiled artifact and three locally finalized spends.
+It uses synthetic funding and a published disposable oracle key; it performs
+no wallet activity or broadcasting. Its tests also exercise the TCP protocol.
+
 Useful focused checks:
 
 ```sh
 cargo test --locked -p sapio-psbt
 cargo test --locked -p sapio-base --test ctv_hash
+cargo test --locked -p sapio-base --test program
 cargo test --locked -p sapio --test fees --test action_names --test ordinal_allocation
 cargo test --locked -p sapio --test conditional_compilation --test guard_semantics --test macro_declarations
 cargo test --locked -p sapio --test template_semantics --test effect_names --test inscription_guards
@@ -103,6 +115,8 @@ cargo test --locked -p sapio --test child_funding --test template_size --test or
 cargo test --locked -p sapio-wasm-plugin --features host
 cargo test --locked -p sapio_integration_tests
 cargo test --locked -p ctv_emulators --lib
+cargo test --locked -p ctv_emulators --lib program::
+cargo test --locked -p sapio_integration_tests --test program_emulation
 cargo test --locked --manifest-path plugin-example/Cargo.toml --workspace
 cargo fmt --all -- --check
 cargo fmt --manifest-path plugin-example/Cargo.toml --all -- --check
@@ -325,6 +339,15 @@ trickled responses, queue waits and blocked writes, plus loopback sockets for
 reconnection, server admission and cancellation. See the
 [emulator guide](../ctv_emulators/README.md) for the structural signing rule and
 configuration.
+
+`ProgramOracle` and `ProgramClient` provide a separate versioned evaluated
+signing protocol with the same frame bound and default 30-second I/O allowance.
+The program server admits 64 connections by default. Each client request uses
+a fresh connection and has no automatic retry or CTV fallback. Program bytes,
+preset parameters and auxiliary witness each have a 65,536-byte bound. The
+operator explicitly registers trusted Rust evaluators; elapsed deadlines cannot
+interrupt their synchronous work. See the [protocol and signing
+limits](PROGRAM_EMULATION.md#protocol-and-resource-limits).
 
 ## Artifact boundaries
 

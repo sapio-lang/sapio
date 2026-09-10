@@ -9,6 +9,19 @@ This crate also defines logic for servers that want to offer emulator services.
 
 See [Sapio CLI](../cli/README.md) for how to run a server.
 
+## Explicit program evaluation
+
+`emulator_connect::program` provides `ProgramOracle` and `ProgramClient` for
+predicates beyond fixed CTV templates. The operator registers an evaluator;
+each request supplies an exact program instance, auxiliary evidence and a
+selected Taproot input/path. The evaluator sees only signed transaction fields.
+Public key derivation and contract compilation require no running oracle.
+
+See the [program-emulation guide](../docs/PROGRAM_EMULATION.md) for the protocol,
+trust assumptions and a runnable payment continuation. This is a separate Rust
+API and wire protocol; the CLI and CTV service described below retain their
+existing template-hash signing rule.
+
 ## Connection lifecycle
 
 The default client deadline is 30 seconds for each peer's signing exchange. It
