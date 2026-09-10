@@ -199,7 +199,10 @@ initialization, allocation, metadata and contract calls all consume the same
 allowance. Each operator costs one point, accounted at block boundaries. Bulk
 memory operations additionally cost one point per byte; memory growth costs
 65,536 points per requested page. Bulk table operations and table growth cost
-16 points per requested element. An exhausted allowance traps execution. Threads
+16 points per requested element. An exhausted allowance traps execution. Failed
+exported calls identify fuel exhaustion using the runtime's metering state and
+report the module ID, export and fuel limit; other traps retain their original
+error. Threads
 are disabled so atomic waits cannot block outside the fuel accounting.
 Declared memory/table maxima below the host caps remain in effect.
 
