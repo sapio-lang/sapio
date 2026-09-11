@@ -92,21 +92,40 @@ batching interface defines its arguments as follows:
 #[derive(JsonSchema, Serialize, Deserialize, Clone)]
 pub struct Payment {
     /// The amount to send
-    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    #[serde(with = "bitcoin::amount::serde::as_btc")]
     #[schemars(with = "f64")]
-    pub amount: bitcoin::util::amount::Amount,
+    pub amount: bitcoin::Amount,
     /// # Address
     /// The Address to send to
-    pub address: bitcoin::Address,
+    #[schemars(with = "String")]
+    pub address: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
 }
 #[derive(Serialize, JsonSchema, Deserialize, Clone)]
 pub struct BatchingTraitVersion0_1_1 {
     pub payments: Vec<Payment>,
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    #[serde(with = "bitcoin::amount::serde::as_sat")]
     #[schemars(with = "u64")]
-    pub feerate_per_byte: bitcoin::util::amount::Amount,
+    pub feerate_per_byte: bitcoin::Amount,
 }
 ```
+
+The payment amount deliberately uses bitcoin units through `as_btc`; the fee
+rate uses integer satoshis through `as_sat`. Upstream `Amount` defaults to
+integer-satoshi JSON, and the explicit schema annotations describe this
+interface's chosen representation.
+
+Addresses received from JSON use `Address<NetworkUnchecked>` and a string
+schema. A receiving contract must check the address against its compilation
+network before using it as an output, for example:
+
+```rust
+let address = payment.address.clone().require_network(ctx.network)?;
+let destination = Compiled::from_address(address, bitcoin::Amount::ZERO);
+```
+
+The string schema describes the wire format; parsing and `require_network`
+enforce address validity and the selected network. Already checked `Address`
+values are used after that boundary.
 
 The shared interface wraps those arguments in a versioned variant:
 
