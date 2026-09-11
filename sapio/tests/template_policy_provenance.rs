@@ -2,7 +2,7 @@
 mod fixture;
 
 use bitcoin::blockdata::opcodes::all::OP_VERIFY;
-use bitcoin::{Amount, Script};
+use bitcoin::{Amount, ScriptBuf};
 use fixture::{context, key, ArithmeticSigner};
 use sapio::contract::actions::ThenFuncAsFinishOrFunc;
 use sapio::contract::object::SupportedDescriptors;
@@ -80,13 +80,13 @@ fn an_unguarded_duplicate_preserves_the_optional_raw_policy_and_its_script() {
         unreachable!()
     };
     let mut guarded = fragment.into_script().as_bytes().to_vec();
-    guarded.push(OP_VERIFY.into_u8());
+    guarded.push(OP_VERIFY.to_u8());
     guarded.extend_from_slice(covenant.as_bytes());
     assert_eq!(
         raw.leaves()
             .iter()
             .map(|(_, script)| script.clone())
             .collect::<BTreeSet<_>>(),
-        BTreeSet::from([covenant, Script::from(guarded)])
+        BTreeSet::from([covenant, ScriptBuf::from(guarded)])
     );
 }

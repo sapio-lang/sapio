@@ -1,11 +1,11 @@
 //! Execute the checked-in Rust guest through the actual program oracle.
 
+use bitcoin::bip32::Xpub;
 use bitcoin::consensus::deserialize;
-use bitcoin::hashes::{hex::FromHex, sha256};
-use bitcoin::psbt::PartiallySignedTransaction;
+use bitcoin::hex::FromHex;
+use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::Secp256k1;
-use bitcoin::util::bip32::ExtendedPubKey;
-use bitcoin::{Address, Network, Script, Transaction, TxIn, TxOut};
+use bitcoin::{Address, Network, ScriptBuf, Transaction, TxIn, TxOut};
 use emulator_connect::program::{
     ProgramError, ProgramOracle, ProgramSigningRequest, ProgramSpendPath, WasmEvaluator, PSBT,
 };
@@ -22,15 +22,15 @@ fn request(
     index: u32,
 ) -> ProgramSigningRequest {
     for input in &mut transaction.input {
-        input.script_sig = Script::new();
+        input.script_sig = ScriptBuf::new();
         input.witness = Default::default();
     }
-    let root = ExtendedPubKey::from_priv(&Secp256k1::new(), &example_root());
+    let root = Xpub::from_priv(&Secp256k1::new(), &example_root());
     let key = instance.derive_public_key(&root).unwrap();
-    let mut psbt = PartiallySignedTransaction::from_unsigned_tx(transaction).unwrap();
+    let mut psbt = Psbt::from_unsigned_tx(transaction).unwrap();
     for input in &mut psbt.inputs {
         input.witness_utxo = Some(TxOut {
-            value: 100_000,
+            value: bitcoin::Amount::from_sat(100_000),
             script_pubkey: recipient(92).script_pubkey(),
         });
     }
@@ -49,15 +49,15 @@ fn request(
 
 fn transaction() -> Transaction {
     Transaction {
-        version: 2,
-        lock_time: 123,
+        version: bitcoin::transaction::Version::TWO,
+        lock_time: bitcoin::absolute::LockTime::from_consensus(123),
         input: vec![
             TxIn {
                 previous_output: bitcoin::OutPoint {
                     vout: 0,
                     ..Default::default()
                 },
-                sequence: 20,
+                sequence: bitcoin::Sequence(20),
                 ..TxIn::default()
             },
             TxIn {
@@ -65,17 +65,17 @@ fn transaction() -> Transaction {
                     vout: 1,
                     ..Default::default()
                 },
-                sequence: 30,
+                sequence: bitcoin::Sequence(30),
                 ..TxIn::default()
             },
         ],
         output: vec![
             TxOut {
-                value: 50_000,
+                value: bitcoin::Amount::from_sat(50_000),
                 script_pubkey: recipient(92).script_pubkey(),
             },
             TxOut {
-                value: 70_000,
+                value: bitcoin::Amount::from_sat(70_000),
                 script_pubkey: recipient(93).script_pubkey(),
             },
         ],
@@ -107,7 +107,7 @@ fn compiled_ctv_guest_matches_all_applicable_official_bip119_vectors() {
             if index as usize >= tx.input.len() {
                 continue;
             }
-            let instance = ctv_wasm_instance(Ctv(sha256::Hash::from_hex(&expected).unwrap()));
+            let instance = ctv_wasm_instance(Ctv(expected.parse().unwrap()));
             let signed = oracle
                 .sign(request(instance, tx.clone(), index))
                 .unwrap_or_else(|error| {
@@ -130,21 +130,23 @@ fn ctv_guest_commits_every_ctv_field_and_the_selected_input() {
         .unwrap();
     let mut mutations = vec![];
     let mut changed = tx.clone();
-    changed.version += 1;
+    changed.version.0 += 1;
     mutations.push(changed);
     let mut changed = tx.clone();
-    changed.lock_time += 1;
+    changed.lock_time =
+        bitcoin::absolute::LockTime::from_consensus(changed.lock_time.to_consensus_u32() + 1);
     mutations.push(changed);
     for index in 0..tx.input.len() {
         let mut changed = tx.clone();
-        changed.input[index].sequence += 1;
+        changed.input[index].sequence =
+            bitcoin::Sequence(changed.input[index].sequence.to_consensus_u32() + 1);
         mutations.push(changed);
     }
     let mut changed = tx.clone();
     changed.input.push(TxIn::default());
     mutations.push(changed);
     let mut changed = tx.clone();
-    changed.output[0].value -= 1;
+    changed.output[0].value -= bitcoin::Amount::ONE_SAT;
     mutations.push(changed);
     let mut changed = tx.clone();
     changed.output[0].script_pubkey = recipient(94).script_pubkey();
@@ -181,8 +183,8 @@ fn ctv_guest_requires_native_witness_prevouts_but_does_not_commit_their_values()
             let mut script = vec![if version == 0 { 0 } else { 0x50 + version }, length];
             script.resize(length as usize + 2, 42);
             let previous = allowed.psbt.0.inputs[1].witness_utxo.as_mut().unwrap();
-            previous.script_pubkey = Script::from(script);
-            previous.value += 1;
+            previous.script_pubkey = ScriptBuf::from(script);
+            previous.value += bitcoin::Amount::ONE_SAT;
             allowed.psbt.0.unsigned_tx.input[1].previous_output.vout = 99;
             oracle.sign(allowed).unwrap();
         }
@@ -201,7 +203,7 @@ fn ctv_guest_requires_native_witness_prevouts_but_does_not_commit_their_values()
             .witness_utxo
             .as_mut()
             .unwrap()
-            .script_pubkey = Script::from(script);
+            .script_pubkey = ScriptBuf::from(script);
         assert!(matches!(
             oracle.sign(unsupported),
             Err(ProgramError::Rejected)
@@ -214,7 +216,7 @@ fn ctv_guest_uses_consensus_compact_size_at_each_length_boundary() {
     let oracle = ProgramOracle::new(example_root(), vec![]).unwrap();
     for length in [0, 252, 253, 65_535, 65_536] {
         let mut tx = transaction();
-        tx.output[0].script_pubkey = Script::from(vec![42; length]);
+        tx.output[0].script_pubkey = ScriptBuf::from(vec![42; length]);
         let instance = ctv_wasm_instance(Ctv(tx.get_ctv_hash(0)));
         oracle.sign(request(instance, tx, 0)).unwrap();
     }

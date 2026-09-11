@@ -10,9 +10,9 @@
 #[cfg(target_arch = "wasm32")]
 use sapio_wasm_plugin::{optional_logo, REGISTER};
 
-use bitcoin::util::amount::CoinAmount;
 use sapio::contract::*;
 use sapio::*;
+use sapio_base::amount::CoinAmount;
 use sapio_base::timelocks::RelTime;
 use sapio_base::Clause;
 use schemars::JsonSchema;
@@ -23,33 +23,45 @@ use std::convert::{TryFrom, TryInto};
 #[derive(JsonSchema, Deserialize)]
 pub struct TrustlessEscrow {
     // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
     // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
-    alice_escrow_address: bitcoin::Address,
+    #[schemars(with = "String")]
+    alice_escrow_address: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     alice_escrow_amount: CoinAmount,
-    bob_escrow_address: bitcoin::Address,
+    #[schemars(with = "String")]
+    bob_escrow_address: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     bob_escrow_amount: CoinAmount,
 }
 
 impl TrustlessEscrow {
     #[guard]
     fn cooperate(self, _ctx: Context) {
-        Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
+        Clause::And(vec![
+            Clause::Key(self.alice).into(),
+            Clause::Key(self.bob).into(),
+        ])
     }
     #[then]
     fn use_escrow(self, ctx: Context) {
+        let network = ctx.network;
         ctx.template()
             .add_output(
                 self.alice_escrow_amount.try_into()?,
-                &Compiled::from_address(self.alice_escrow_address.clone(), bitcoin::Amount::ZERO),
+                &Compiled::from_address(
+                    self.alice_escrow_address.clone().require_network(network)?,
+                    bitcoin::Amount::ZERO,
+                ),
                 None,
             )?
             .add_output(
                 self.bob_escrow_amount.try_into()?,
-                &Compiled::from_address(self.bob_escrow_address.clone(), bitcoin::Amount::ZERO),
+                &Compiled::from_address(
+                    self.bob_escrow_address.clone().require_network(network)?,
+                    bitcoin::Amount::ZERO,
+                ),
                 None,
             )?
             .set_sequence(

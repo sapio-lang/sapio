@@ -9,7 +9,7 @@
 #![deny(missing_docs)]
 use sapio::contract::*;
 use sapio::*;
-use sapio_base::Clause;
+use sapio_base::policy::CompiledClause;
 use sapio_wasm_plugin::client::plugin::Callable;
 use sapio_wasm_plugin::client::*;
 use sapio_wasm_plugin::plugin_handle::PluginHandle;
@@ -22,10 +22,10 @@ use serde::Serialize;
 #[derive(JsonSchema, Deserialize, Serialize, Clone)]
 pub struct GetClause {
     // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
     // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
+    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
 }
 
@@ -37,8 +37,8 @@ pub struct Wrapper {
 }
 
 impl Callable for Wrapper {
-    type Output = Clause;
-    fn call(&self, ctx: Context) -> Result<Clause, CompilationError> {
+    type Output = CompiledClause;
+    fn call(&self, ctx: Context) -> Result<CompiledClause, CompilationError> {
         let create_args: CreateArgs<GetClause> = CreateArgs {
             context: ContextualArguments {
                 lowering: ctx.lowering_plan().clone(),

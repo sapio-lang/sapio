@@ -14,12 +14,11 @@ use miniscript::*;
 use sapio_base::miniscript;
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BinaryHeap};
-use std::sync::Arc;
 
 /// A reproducible internal point with no known discrete logarithm. Retain its
 /// original derivation so script-only outputs do not change unnecessarily.
 fn unspendable_internal_key() -> XOnlyPublicKey {
-    XOnlyPublicKey::from_slice(&Sha256::hash(&[1u8; 32]).into_inner())
+    XOnlyPublicKey::from_slice(&Sha256::hash(&[1u8; 32]).to_byte_array())
         .expect("fixed hash is a valid x-only point")
 }
 
@@ -68,14 +67,14 @@ pub fn branches_to_tree(
     }
     let mut scripts: BinaryHeap<(Reverse<u64>, TapTree<XOnlyPublicKey>)> = distinct_scripts
         .into_iter()
-        .map(|(_, branch)| (Reverse(1), TapTree::Leaf(Arc::new(branch))))
+        .map(|(_, branch)| (Reverse(1), TapTree::leaf(branch)))
         .collect();
     while scripts.len() > 1 {
         let (w1, v1) = scripts.pop().unwrap();
         let (w2, v2) = scripts.pop().unwrap();
         scripts.push((
             Reverse(w1.0.saturating_add(w2.0)),
-            TapTree::Tree(Arc::new(v1), Arc::new(v2)),
+            TapTree::combine(v1, v2).expect("balanced tree depth is bounded by the leaf count"),
         ));
     }
     scripts.pop().map(|v| v.1)
@@ -104,6 +103,6 @@ mod tests {
         let forward = branches_to_tree(vec![outside.clone(), inside.clone()]).unwrap();
         let reversed = branches_to_tree(vec![inside, outside]).unwrap();
         assert_eq!(forward, reversed);
-        assert_eq!(forward.iter().count(), 1);
+        assert_eq!(forward.leaves().count(), 1);
     }
 }

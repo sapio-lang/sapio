@@ -6,11 +6,11 @@
 
 use crate::{annex, validate_psbt, PSBTValidationError};
 use bitcoin::blockdata::{opcodes::all::OP_CODESEPARATOR, script::Instruction};
-use bitcoin::psbt::PartiallySignedTransaction as Psbt;
+use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{Message, Secp256k1, Verification};
-use bitcoin::util::sighash::{Annex, Prevouts, SighashCache};
-use bitcoin::util::taproot::{ControlBlock, LeafVersion, TapLeafHash};
-use bitcoin::{Script, TxOut, Witness, XOnlyPublicKey};
+use bitcoin::sighash::{Annex, Prevouts, SighashCache};
+use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash};
+use bitcoin::{ScriptBuf, TxOut, Witness, XOnlyPublicKey};
 use miniscript::interpreter::{Interpreter, KeySigPair, SatisfiedConstraint};
 use miniscript::psbt::{InputError, PsbtExt, PsbtInputSatisfier};
 use miniscript::{Miniscript, Satisfier, Tap};
@@ -86,7 +86,7 @@ pub fn finalize<C: Verification>(
     for native_pass in [false, true] {
         for (index, utxo) in utxos.iter().enumerate() {
             let script = &utxo.script_pubkey;
-            let native = script.is_v0_p2wpkh() || script.is_v0_p2wsh() || script.is_v1_p2tr();
+            let native = script.is_p2wpkh() || script.is_p2wsh() || script.is_p2tr();
             if native == native_pass {
                 if let Err(error) = finalize_input(&mut psbt, secp, index, &utxos) {
                     errors.push(error);
@@ -118,7 +118,7 @@ fn previous_outputs(psbt: &Psbt) -> Result<Vec<TxOut>, FinalizationError> {
                 .non_witness_utxo
                 .as_ref()
                 .map(|transaction| {
-                    if transaction.txid() != outpoint.txid {
+                    if transaction.compute_txid() != outpoint.txid {
                         return Err(input_error(index, "previous transaction ID mismatch"));
                     }
                     transaction
@@ -144,13 +144,13 @@ fn check_signature_flags(psbt: &Psbt) -> Result<(), FinalizationError> {
             for got in input
                 .partial_sigs
                 .values()
-                .map(|sig| sig.hash_ty as u32)
+                .map(|sig| sig.sighash_type as u32)
                 .chain(
                     input
                         .tap_key_sig
                         .iter()
                         .chain(input.tap_script_sigs.values())
-                        .map(|sig| sig.hash_ty as u32),
+                        .map(|sig| sig.sighash_type as u32),
                 )
             {
                 if required.to_u32() != got {
@@ -183,7 +183,7 @@ fn finalize_input<C: Verification>(
             .finalize_inp_mut(secp, index)
             .map_err(FinalizationError::Miniscript);
     };
-    if !utxos[index].script_pubkey.is_v1_p2tr() {
+    if !utxos[index].script_pubkey.is_p2tr() {
         return Err(input_error(
             index,
             "annex requires a native Taproot previous output",
@@ -198,7 +198,7 @@ fn finalize_input<C: Verification>(
     }
     let mut best = None;
     if let Some(signature) = input.tap_key_sig {
-        let witness = Witness::from_vec(vec![signature.to_vec(), annex.to_vec()]);
+        let witness = Witness::from_slice(&[signature.to_vec(), annex.to_vec()]);
         if verify_annex(psbt, secp, index, utxos, &witness, annex).is_ok() {
             best = Some(witness);
         }
@@ -209,7 +209,7 @@ fn finalize_input<C: Verification>(
             if *version != LeafVersion::TapScript || control.leaf_version != *version {
                 continue;
             }
-            let Ok(miniscript) = Miniscript::<XOnlyPublicKey, Tap>::parse_insane(script) else {
+            let Ok(miniscript) = Miniscript::<XOnlyPublicKey, Tap>::decode_consensus(script) else {
                 continue;
             };
             let Ok(mut stack) = miniscript.satisfy(&satisfier) else {
@@ -218,10 +218,10 @@ fn finalize_input<C: Verification>(
             stack.push(script.to_bytes());
             stack.push(control.serialize());
             stack.push(annex.to_vec());
-            let witness = Witness::from_vec(stack);
+            let witness = Witness::from_slice(&stack);
             if best
                 .as_ref()
-                .is_none_or(|old: &Witness| witness.serialized_len() < old.serialized_len())
+                .is_none_or(|old: &Witness| witness.size() < old.size())
                 && verify_annex(psbt, secp, index, utxos, &witness, annex).is_ok()
             {
                 best = Some(witness);
@@ -274,13 +274,13 @@ fn verify_annex<C: Verification>(
     let path = if stack.len() == 1 {
         None
     } else {
-        let control = ControlBlock::from_slice(stack.last().unwrap())
+        let control = ControlBlock::decode(stack.last().unwrap())
             .map_err(|_| input_error(index, "invalid Taproot control block"))?;
         if control.leaf_version != LeafVersion::TapScript {
             return Err(input_error(index, "unsupported Taproot leaf version"));
         }
-        let script = Script::from(stack[stack.len() - 2].clone());
-        let output_key = XOnlyPublicKey::from_slice(&utxos[index].script_pubkey[2..])
+        let script = ScriptBuf::from(stack[stack.len() - 2].clone());
+        let output_key = XOnlyPublicKey::from_slice(&utxos[index].script_pubkey.as_bytes()[2..])
             .map_err(|_| input_error(index, "invalid Taproot output key"))?;
         // The interpreter reconstructs Miniscript before checking its proof.
         // Authenticate the actual witness bytes before that normalization.
@@ -305,17 +305,20 @@ fn verify_annex<C: Verification>(
             u32::MAX,
         ))
     };
-    let stripped = Witness::from_vec(stack);
-    let transaction = psbt.clone().extract_tx();
+    let stripped = Witness::from_slice(&stack);
+    // CTV includes the final scriptSigs of every input. This extraction is
+    // solely an interpreter view; fee policy is checked when exporting a
+    // completed transaction, and PSBT structure was validated before entry.
+    let transaction = psbt.clone().extract_tx_unchecked_fee_rate();
     let interpreter = Interpreter::from_txdata(
         &utxos[index].script_pubkey,
         &script_sig,
         &stripped,
-        transaction.lock_time,
         transaction.input[index].sequence,
-        transaction.get_ctv_hash(index as u32),
+        transaction.lock_time,
     )
-    .map_err(|error| miniscript_error(index, InputError::Interpreter(error)))?;
+    .map_err(|error| miniscript_error(index, InputError::Interpreter(error)))?
+    .with_tx_template(transaction.get_ctv_hash(index as u32));
     let mut sighash = SighashCache::new(&transaction);
     let verify = Box::new(|signature: &KeySigPair| {
         let KeySigPair::Schnorr(key, signature) = signature else {
@@ -323,7 +326,7 @@ fn verify_annex<C: Verification>(
         };
         if input
             .sighash_type
-            .is_some_and(|required| required.to_u32() != signature.hash_ty as u32)
+            .is_some_and(|required| required.to_u32() != signature.sighash_type as u32)
         {
             return false;
         }
@@ -332,12 +335,13 @@ fn verify_annex<C: Verification>(
             &Prevouts::All(utxos),
             Some(Annex::new(annex).expect("validated annex")),
             path,
-            signature.hash_ty,
+            signature.sighash_type,
         ) else {
             return false;
         };
         let message = Message::from_digest_slice(&hash[..]).expect("32-byte signature hash");
-        secp.verify_schnorr(&signature.sig, &message, key).is_ok()
+        secp.verify_schnorr(&signature.signature, &message, key)
+            .is_ok()
     });
     let satisfier = PsbtInputSatisfier::new(psbt, index);
     for result in interpreter.iter_custom(verify) {
@@ -346,19 +350,19 @@ fn verify_annex<C: Verification>(
         // The interpreter compares abstract lock values. Completed witnesses
         // must also obey the transaction's version, sequence flags and units.
         let error = match constraint {
-            SatisfiedConstraint::RelativeTimeLock { time }
+            SatisfiedConstraint::RelativeTimelock { n: time }
                 if !<PsbtInputSatisfier as Satisfier<XOnlyPublicKey>>::check_older(
                     &satisfier, time,
                 ) =>
             {
-                Some(miniscript::interpreter::Error::RelativeLocktimeNotMet(time))
+                Some(miniscript::interpreter::Error::RelativeLockTimeNotMet(time))
             }
-            SatisfiedConstraint::AbsoluteTimeLock { time }
+            SatisfiedConstraint::AbsoluteTimelock { n: time }
                 if !<PsbtInputSatisfier as Satisfier<XOnlyPublicKey>>::check_after(
                     &satisfier, time,
                 ) =>
             {
-                Some(miniscript::interpreter::Error::AbsoluteLocktimeNotMet(time))
+                Some(miniscript::interpreter::Error::AbsoluteLockTimeNotMet(time))
             }
             _ => None,
         };

@@ -11,7 +11,7 @@ use crate::plugin_handle::PluginHandle;
 use core::convert::TryFrom;
 use sapio::contract::CompilationError;
 use sapio_base::effects::EffectPath;
-use sapio_base::Clause;
+use sapio_base::policy::CompiledClause;
 use std::marker::PhantomData;
 
 /// A resolved module key with typed call arguments and results.
@@ -35,8 +35,8 @@ pub struct SapioHostAPI<T: Serialize + JsonSchema + Clone, R: for<'a> Deserializ
 
 /// Convenience Label for [`SapioHostAPI<T, Compiled>`]
 pub type ContractModule<T> = SapioHostAPI<T, Compiled>;
-/// Convenience Label for [`SapioHostAPI<T, Clause>`]
-pub type ClauseModule<T> = SapioHostAPI<T, Clause>;
+/// Convenience Label for [`SapioHostAPI<T, CompiledClause>`]
+pub type ClauseModule<T> = SapioHostAPI<T, CompiledClause>;
 
 impl<T: Serialize + JsonSchema + Clone, R> PluginHandle for SapioHostAPI<T, R>
 where
@@ -69,9 +69,9 @@ where
     /// Ensures a [`SapioHostAPI`]'s [`LookupFrom`] field is
     /// [`LookupFrom::HashKey`] form.
     pub fn canonicalize(&self) -> Self {
-        use bitcoin::hashes::hex::ToHex;
+        use bitcoin::hex::DisplayHex;
         SapioHostAPI {
-            which_plugin: LookupFrom::HashKey(self.key.to_hex()),
+            which_plugin: LookupFrom::HashKey(self.key.to_lower_hex_string()),
             key: self.key,
             _pd: Default::default(),
         }

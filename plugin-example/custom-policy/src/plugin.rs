@@ -120,7 +120,9 @@ mod tests {
                     Some(SupportedDescriptors::Taproot(_))
                 ));
                 assert_eq!(
-                    compiled.ctv_to_tx.values().next().unwrap().tx.output[0].value,
+                    compiled.ctv_to_tx.values().next().unwrap().tx.output[0]
+                        .value
+                        .to_sat(),
                     9_000
                 );
             }

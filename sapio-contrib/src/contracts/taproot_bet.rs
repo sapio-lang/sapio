@@ -6,10 +6,11 @@
 
 //! Historical Taproot activation bet, with a finite recurring payout schedule.
 //! Cancellation is available after its timeout regardless of activation status.
-use bitcoin::{Amount, Script};
+use bitcoin::{Amount, ScriptBuf};
 use sapio::contract::*;
 use sapio::*;
-use sapio_base::timelocks::AnyRelTimeLock;
+use sapio_base::timelocks::{AnyRelTimeLock, LockTimeError};
+use sapio_base::Clause;
 use sapio_macros::guard;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -20,12 +21,12 @@ use serde::{Deserialize, Serialize};
 pub struct TapBet {
     /// How much Bitcoin to release per period
     #[schemars(with = "f64")]
-    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    #[serde(with = "bitcoin::amount::serde::as_btc")]
     pub amount_per_time: Amount,
     /// How much in fees to pay per cycle.
     /// Zero is allowed; each continuation still releases a positive payout.
     #[schemars(with = "f64")]
-    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    #[serde(with = "bitcoin::amount::serde::as_btc")]
     pub fees_per_time: Amount,
     /// How frequently should we test to see if Taproot is active?
     pub period: AnyRelTimeLock,
@@ -33,9 +34,11 @@ pub struct TapBet {
     /// be > period)
     pub cancel_timeout: AnyRelTimeLock,
     /// An externally generated Taproot script (not address) to send the funds to
-    pub taproot_script: Script,
+    #[schemars(with = "String")]
+    pub taproot_script: ScriptBuf,
     /// An arbitrary bitcoin address to send the funds to on cancellation
-    pub cancel_to: bitcoin::Address,
+    #[schemars(with = "String")]
+    pub cancel_to: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
 }
 
 impl TapBet {
@@ -45,11 +48,11 @@ impl TapBet {
             (AnyRelTimeLock::RH(_), AnyRelTimeLock::RH(_))
                 | (AnyRelTimeLock::RT(_), AnyRelTimeLock::RT(_))
         );
-        if self.amount_per_time.as_sat() == 0
+        if self.amount_per_time.to_sat() == 0
             || self.period.get() & 0xffff == 0
             || !same_units
             || self.cancel_timeout.get() <= self.period.get()
-            || !self.taproot_script.is_v1_p2tr()
+            || !self.taproot_script.is_p2tr()
             || bitcoin::XOnlyPublicKey::from_slice(&self.taproot_script.as_bytes()[2..]).is_err()
             || !self.cancel_to.is_valid_for_network(ctx.network)
             || ctx.funds() <= self.fees_per_time
@@ -61,13 +64,14 @@ impl TapBet {
         Ok(())
     }
 
-    #[guard]
-    fn period_over(self, _ctx: Context) {
-        self.period.into()
+    #[guard(policy)]
+    fn period_over(self, _ctx: Context) -> Result<Clause, LockTimeError> {
+        self.period.try_into()
     }
 
     #[then(guarded_by = "[Self::period_over]")]
     fn continue_expansion(self, ctx: Context) {
+        let network = ctx.network;
         let spendable = ctx.funds() - self.fees_per_time;
         let payout = std::cmp::min(self.amount_per_time, spendable);
         let remainder = spendable - payout;
@@ -83,31 +87,38 @@ impl TapBet {
             .add_output(payout, &destination, None)?;
         if remainder > self.fees_per_time {
             builder = builder.add_output(remainder, self, None)?;
-        } else if remainder.as_sat() > 0 {
+        } else if remainder.to_sat() > 0 {
             // A remainder unable to fund another fee-bearing step goes back now.
             builder = builder.add_output(
                 remainder,
-                &Compiled::from_address(self.cancel_to.clone(), bitcoin::Amount::ZERO),
+                &Compiled::from_address(
+                    self.cancel_to.clone().require_network(network)?,
+                    bitcoin::Amount::ZERO,
+                ),
                 None,
             )?;
         }
         builder.add_fees(self.fees_per_time)?.into()
     }
 
-    #[guard]
-    fn timeout(self, _ctx: Context) {
-        self.cancel_timeout.into()
+    #[guard(policy)]
+    fn timeout(self, _ctx: Context) -> Result<Clause, LockTimeError> {
+        self.cancel_timeout.try_into()
     }
 
     #[then(guarded_by = "[Self::timeout]")]
     fn stop_expansion(self, ctx: Context) {
+        let network = ctx.network;
         let payout = ctx.funds() - self.fees_per_time;
         ctx.template()
             .set_label("stop_expansion".into())
             .set_sequence(0, self.cancel_timeout)?
             .add_output(
                 payout,
-                &Compiled::from_address(self.cancel_to.clone(), bitcoin::Amount::ZERO),
+                &Compiled::from_address(
+                    self.cancel_to.clone().require_network(network)?,
+                    bitcoin::Amount::ZERO,
+                ),
                 None,
             )?
             .add_fees(self.fees_per_time)?
@@ -136,7 +147,7 @@ mod tests {
             period: RelHeight::from(1).into(),
             cancel_timeout: RelHeight::from(2).into(),
             taproot_script: address(1).script_pubkey(),
-            cancel_to: address(2),
+            cancel_to: address(2).into_unchecked(),
         }
     }
     #[test]
@@ -148,39 +159,39 @@ mod tests {
             let next = compiled
                 .ctv_to_tx
                 .values()
-                .find(|t| t.tx.input[0].sequence == 1)
+                .find(|t| t.tx.input[0].sequence.to_consensus_u32() == 1)
                 .unwrap();
             let cancel = compiled
                 .ctv_to_tx
                 .values()
-                .find(|t| t.tx.input[0].sequence == 2)
+                .find(|t| t.tx.input[0].sequence.to_consensus_u32() == 2)
                 .unwrap();
-            assert_eq!(cancel.tx.output[0].value, funds - 100);
+            assert_eq!(cancel.tx.output[0].value.to_sat(), funds - 100);
             assert_eq!(
                 cancel.tx.output[0].script_pubkey,
                 address(2).script_pubkey()
             );
-            assert_eq!(next.tx.output[0].value, payout);
+            assert_eq!(next.tx.output[0].value.to_sat(), payout);
             assert_eq!(next.tx.output[0].script_pubkey, address(1).script_pubkey());
             assert_eq!(
-                next.tx.output.iter().map(|o| o.value).sum::<u64>(),
+                next.tx.output.iter().map(|o| o.value.to_sat()).sum::<u64>(),
                 funds - 100
             );
-            assert_eq!(next.max.as_sat(), funds);
+            assert_eq!(next.max.to_sat(), funds);
             if remainder == 0 {
                 assert_eq!(next.tx.output.len(), 1);
                 break;
             }
-            assert_eq!(next.tx.output[1].value, remainder);
+            assert_eq!(next.tx.output[1].value.to_sat(), remainder);
             compiled = next.outputs[1].contract.clone();
         }
         let final_step = bet.compile(context(1150)).unwrap();
         let next = final_step
             .ctv_to_tx
             .values()
-            .find(|t| t.tx.input[0].sequence == 1)
+            .find(|t| t.tx.input[0].sequence.to_consensus_u32() == 1)
             .unwrap();
-        assert_eq!(next.tx.output[1].value, 50);
+        assert_eq!(next.tx.output[1].value.to_sat(), 50);
         assert_eq!(next.tx.output[1].script_pubkey, address(2).script_pubkey());
     }
     #[test]
@@ -199,9 +210,10 @@ mod tests {
         assert!(v.compile(context(2000)).is_err());
         let mut v = bet();
         v.period = RelHeight::from(0).into();
+        assert!(v.guard_period_over(context(2000)).is_err());
         assert!(v.compile(context(2000)).is_err());
         let mut v = bet();
-        v.taproot_script = Script::new();
+        v.taproot_script = ScriptBuf::new();
         assert!(v.compile(context(2000)).is_err());
         let mut v = bet();
         v.taproot_script = bitcoin::blockdata::script::Builder::new()
@@ -211,12 +223,24 @@ mod tests {
         assert!(v.compile(context(2000)).is_err());
         assert!(bet().compile(context(100)).is_err());
         let mut v = bet();
-        v.cancel_to.network = bitcoin::Network::Bitcoin;
+        v.cancel_to = bitcoin::Address::p2tr(
+            &bitcoin::secp256k1::Secp256k1::new(),
+            crate::test_helpers::key(2),
+            None,
+            bitcoin::Network::Bitcoin,
+        )
+        .into_unchecked();
         assert!(v.compile(context(2000)).is_err());
         let mut v = bet();
         let mut signet = context(2000);
         signet.network = bitcoin::Network::Signet;
-        v.cancel_to.network = bitcoin::Network::Testnet;
+        v.cancel_to = bitcoin::Address::p2tr(
+            &bitcoin::secp256k1::Secp256k1::new(),
+            crate::test_helpers::key(2),
+            None,
+            bitcoin::Network::Testnet,
+        )
+        .into_unchecked();
         assert!(v.compile(signet).is_ok());
         let json = serde_json::to_value(bet()).unwrap();
         assert!(serde_json::from_value::<TapBet>(json)

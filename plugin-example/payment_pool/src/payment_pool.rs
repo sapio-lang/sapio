@@ -9,14 +9,15 @@
 //! Payment Pool Contract
 
 use crate::sapio_base::Clause;
+use sapio_base::miniscript::{Threshold, ThresholdError};
 
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::{Hash, HashEngine};
 use bitcoin::secp256k1::schnorr::Signature;
 use bitcoin::secp256k1::Message;
 use bitcoin::secp256k1::Secp256k1;
-use bitcoin::util::amount::Amount;
 use bitcoin::Address;
+use bitcoin::Amount;
 
 use bitcoin::XOnlyPublicKey;
 use sapio::contract::actions::conditional_compile::ConditionalCompileType;
@@ -36,6 +37,7 @@ use std::str::FromStr;
 struct PaymentPool {
     /// # Pool Members
     /// map of all initial balances as PK to BTC
+    #[schemars(with = "BTreeMap<String, AmountF64>")]
     members: BTreeMap<XOnlyPublicKey, AmountF64>,
     /// The current sequence number (for authenticating state updates)
     sequence: u64,
@@ -78,13 +80,15 @@ struct PaymentRequest {
     fee: AmountU64,
     /// # Payments
     /// Mapping of Address to Bitcoin Amount (btc)
-    payments: BTreeMap<Address, AmountF64>,
+    #[schemars(with = "BTreeMap<String, AmountF64>")]
+    payments: BTreeMap<Address<bitcoin::address::NetworkUnchecked>, AmountF64>,
 }
 /// New Update message for generating a transaction from.
 #[derive(Deserialize, JsonSchema, Serialize)]
 struct DoTx {
     /// # Payments
     /// A mapping of public key in members to signed list of payouts with a fee rate.
+    #[schemars(with = "BTreeMap<String, PaymentRequest>")]
     payments: BTreeMap<XOnlyPublicKey, PaymentRequest>,
 }
 /// required...
@@ -168,12 +172,17 @@ impl PaymentPool {
     }
 
     /// all signed the transaction!
-    #[guard]
-    fn all_signed(self, _ctx: Context) {
-        Clause::Threshold(
+    #[guard(policy)]
+    fn all_signed(self, _ctx: Context) -> Result<Clause, ThresholdError> {
+        Ok(Clause::Thresh(Threshold::new(
             self.members.len(),
-            self.members.keys().cloned().map(Clause::Key).collect(),
-        )
+            self.members
+                .keys()
+                .cloned()
+                .map(Clause::Key)
+                .map(Into::into)
+                .collect(),
+        )?))
     }
     /// This Function will create a proposed transaction that is safe to sign
     /// given a list of data from participants.
@@ -183,6 +192,7 @@ impl PaymentPool {
         coerce_args = "default_coerce"
     )]
     fn do_tx(self, mut ctx: Context, update: DoTx) {
+        let network = ctx.network;
         Contract::ensure_amount(
             self,
             ctx.derive_str(std::sync::Arc::new("validate".into()))?,
@@ -229,7 +239,7 @@ impl PaymentPool {
                 .checked_add((*fee).into())
                 .ok_or(CompilationError::OutOfFunds)?;
             // updates the balance or remove if empty
-            if new_balance.as_sat() > 0 {
+            if new_balance.to_sat() > 0 {
                 new_members.insert(from.clone(), new_balance.into());
             } else {
                 new_members.remove(from);
@@ -253,10 +263,16 @@ impl PaymentPool {
             if self.sig_needed {
                 let mut hasher = sha256::Hash::engine();
                 hasher.input(&self.sequence.to_le_bytes());
-                hasher.input(&Amount::from(*fee).as_sat().to_le_bytes());
+                hasher.input(&Amount::from(*fee).to_sat().to_le_bytes());
                 for (address, amt) in payments.iter() {
-                    hasher.input(&Amount::from(*amt).as_sat().to_le_bytes());
-                    hasher.input(address.script_pubkey().as_bytes());
+                    hasher.input(&Amount::from(*amt).to_sat().to_le_bytes());
+                    hasher.input(
+                        address
+                            .clone()
+                            .require_network(network)?
+                            .script_pubkey()
+                            .as_bytes(),
+                    );
                 }
                 let h = sha256::Hash::from_engine(hasher);
                 let m = Message::from_digest_slice(&h[..]).expect("Correct Size");
@@ -299,7 +315,10 @@ impl PaymentPool {
             for p in all_payments {
                 tmpl = tmpl.add_output(
                     p.amount.try_into()?,
-                    &Compiled::from_address(p.address, bitcoin::Amount::ZERO),
+                    &Compiled::from_address(
+                        p.address.require_network(network)?,
+                        bitcoin::Amount::ZERO,
+                    ),
                     None,
                 )?;
             }

@@ -31,12 +31,14 @@ impl CTVEmulator for FederatedEmulatorConnection {
             .iter()
             .map(|e| e.get_signer_for(h))
             .collect::<Result<Vec<Clause>, EmulatorError>>()?;
-        Ok(Clause::Threshold(self.threshold as usize, v))
+        let threshold = sapio_base::miniscript::Threshold::new(
+            self.threshold as usize,
+            v.into_iter().map(Arc::new).collect(),
+        )
+        .map_err(EmulatorError::InvalidThreshold)?;
+        Ok(Clause::Thresh(threshold))
     }
-    fn sign(
-        &self,
-        mut b: PartiallySignedTransaction,
-    ) -> Result<PartiallySignedTransaction, EmulatorError> {
+    fn sign(&self, mut b: Psbt) -> Result<Psbt, EmulatorError> {
         for emulator in self.emulators.iter() {
             b = sapio_ctv_emulator_trait::sign_checked(emulator.as_ref(), b)?;
         }

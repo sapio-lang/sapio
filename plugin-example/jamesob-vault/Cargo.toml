@@ -23,9 +23,8 @@ version = "1.0"
 features = ["preserve_order"]
 
 [dependencies.bitcoin]
-package = "sapio-bitcoin"
-version = "0.28.0"
-features = ['use-serde']
+version = "=0.32.102"
+features = ['serde']
 [dependencies.sapio]
 path = "../../sapio"
 version = "0.2.0"

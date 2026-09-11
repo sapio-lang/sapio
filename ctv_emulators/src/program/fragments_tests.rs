@@ -1,20 +1,21 @@
 use super::*;
 use bitcoin::blockdata::opcodes::all::OP_CHECKSIG;
 use bitcoin::blockdata::script::Builder;
+use bitcoin::secp256k1::Keypair;
 use bitcoin::secp256k1::{Parity, Scalar, SecretKey};
-use bitcoin::util::taproot::{TapTweakHash, TaprootBuilder};
-use bitcoin::{KeyPair, Network, Transaction, TxIn};
+use bitcoin::taproot::{TapTweakHash, TaprootBuilder};
+use bitcoin::{Network, Transaction, TxIn};
 use sapio_base::fragments::{
     known_tweak_witness, template_authorization_wasm_instance, template_hash,
     templatehash_wasm_instance, TemplateKey, TEMPLATE_AUTHORIZATION_WASM,
 };
 
-fn root() -> ExtendedPrivKey {
-    ExtendedPrivKey::new_master(Network::Regtest, &[68; 32]).unwrap()
+fn root() -> Xpriv {
+    Xpriv::new_master(Network::Regtest, &[68; 32]).unwrap()
 }
 
-fn owner() -> KeyPair {
-    KeyPair::from_secret_key(
+fn owner() -> Keypair {
+    Keypair::from_secret_key(
         &Secp256k1::new(),
         &SecretKey::from_slice(&[71; 32]).unwrap(),
     )
@@ -22,28 +23,28 @@ fn owner() -> KeyPair {
 
 fn transaction() -> Transaction {
     Transaction {
-        version: 2,
-        lock_time: 40,
+        version: bitcoin::transaction::Version(2),
+        lock_time: bitcoin::absolute::LockTime::from_consensus(40),
         input: vec![
             TxIn {
                 previous_output: OutPoint {
-                    txid: bitcoin::Txid::from_inner([21; 32]),
+                    txid: bitcoin::Txid::from_byte_array([21; 32]),
                     vout: 2,
                 },
-                sequence: 42,
+                sequence: bitcoin::Sequence(42),
                 ..TxIn::default()
             },
             TxIn {
                 previous_output: OutPoint {
-                    txid: bitcoin::Txid::from_inner([22; 32]),
+                    txid: bitcoin::Txid::from_byte_array([22; 32]),
                     vout: 3,
                 },
-                sequence: 0xffff_fffd,
+                sequence: bitcoin::Sequence(0xffff_fffd),
                 ..TxIn::default()
             },
         ],
         output: vec![TxOut {
-            value: 7_000,
+            value: bitcoin::Amount::from_sat(7_000),
             script_pubkey: Builder::new().push_int(1).into_script(),
         }],
     }
@@ -56,7 +57,7 @@ fn request(
 ) -> ProgramSigningRequest {
     let secp = Secp256k1::new();
     let key = instance
-        .derive_public_key(&ExtendedPubKey::from_priv(&secp, &root()))
+        .derive_public_key(&Xpub::from_priv(&secp, &root()))
         .unwrap();
     let mut builder = TaprootBuilder::new();
     let script = Builder::new()
@@ -70,11 +71,11 @@ fn request(
         key
     };
     let spend = builder.finalize(&secp, internal).unwrap();
-    let mut psbt = PartiallySignedTransaction::from_unsigned_tx(transaction()).unwrap();
+    let mut psbt = Psbt::from_unsigned_tx(transaction()).unwrap();
     for (index, input) in psbt.inputs.iter_mut().enumerate() {
         input.witness_utxo = Some(TxOut {
-            value: if index == 0 { 3_000 } else { 6_000 },
-            script_pubkey: Script::new_v1_p2tr_tweaked(spend.output_key()),
+            value: bitcoin::Amount::from_sat(if index == 0 { 3_000 } else { 6_000 }),
+            script_pubkey: ScriptBuf::new_p2tr_tweaked(spend.output_key()),
         });
     }
     psbt.inputs[1].tap_merkle_root = spend.merkle_root();
@@ -100,7 +101,7 @@ fn request(
 
 fn signature(
     request: &ProgramSigningRequest,
-    key: &KeyPair,
+    key: &Keypair,
 ) -> bitcoin::secp256k1::schnorr::Signature {
     let hash = template_hash(
         &request.psbt.0.unsigned_tx,
@@ -112,7 +113,7 @@ fn signature(
         .sign_schnorr_no_aux_rand(&Message::from_digest_slice(hash.as_ref()).unwrap(), key)
 }
 
-fn program_keypair(instance: &ProgramInstance) -> KeyPair {
+fn program_keypair(instance: &ProgramInstance) -> Keypair {
     let secp = Secp256k1::new();
     root()
         .derive_priv(&secp, &program_derivation_path(instance.id()))
@@ -139,25 +140,27 @@ fn templatehash_guest_commits_fields_and_annex_but_allows_legacy_companion_input
             .witness_utxo
             .as_mut()
             .unwrap()
-            .script_pubkey = Script::new();
+            .script_pubkey = ScriptBuf::new();
         let oracle = oracle();
         let signed = oracle.sign(base.clone()).unwrap();
         validate_program_response(&base, &signed, &oracle.public_root()).unwrap();
         let mut changes = Vec::new();
         let mut changed = base.clone();
-        changed.psbt.0.unsigned_tx.version += 1;
+        changed.psbt.0.unsigned_tx.version.0 += 1;
         changes.push(changed);
         let mut changed = base.clone();
-        changed.psbt.0.unsigned_tx.lock_time += 1;
+        changed.psbt.0.unsigned_tx.lock_time = bitcoin::absolute::LockTime::from_consensus(
+            changed.psbt.0.unsigned_tx.lock_time.to_consensus_u32() + 1,
+        );
         changes.push(changed);
         let mut changed = base.clone();
-        changed.psbt.0.unsigned_tx.input[0].sequence -= 1;
+        changed.psbt.0.unsigned_tx.input[0].sequence.0 -= 1;
         changes.push(changed);
         let mut changed = base.clone();
-        changed.psbt.0.unsigned_tx.output[0].value += 1;
+        changed.psbt.0.unsigned_tx.output[0].value += bitcoin::Amount::ONE_SAT;
         changes.push(changed);
         let mut changed = base.clone();
-        changed.psbt.0.unsigned_tx.output[0].script_pubkey = Script::new();
+        changed.psbt.0.unsigned_tx.output[0].script_pubkey = ScriptBuf::new();
         changes.push(changed);
         let mut changed = base.clone();
         sapio_psbt::annex::set(
@@ -185,7 +188,7 @@ fn templatehash_guest_commits_fields_and_annex_but_allows_legacy_companion_input
         }
         let mut rebound = base.clone();
         rebound.psbt.0.unsigned_tx.input[1].previous_output.txid =
-            bitcoin::Txid::from_inner([24; 32]);
+            bitcoin::Txid::from_byte_array([24; 32]);
         let rebound_signature = oracle.sign(rebound).unwrap();
         assert_ne!(
             signed.inputs[1].tap_key_sig,
@@ -206,7 +209,8 @@ fn csfs_template_authorization_rebinds_and_preserves_terminal_signature_failures
     let oracle = oracle();
     let signed = oracle.sign(base.clone()).unwrap();
     let mut rebound = base.clone();
-    rebound.psbt.0.unsigned_tx.input[1].previous_output.txid = bitcoin::Txid::from_inner([25; 32]);
+    rebound.psbt.0.unsigned_tx.input[1].previous_output.txid =
+        bitcoin::Txid::from_byte_array([25; 32]);
     let second = oracle.sign(rebound.clone()).unwrap();
     assert_ne!(signed.inputs[1].tap_key_sig, second.inputs[1].tap_key_sig);
     validate_program_response(&rebound, &second, &oracle.public_root()).unwrap();
@@ -227,7 +231,7 @@ fn csfs_template_authorization_rebinds_and_preserves_terminal_signature_failures
     empty.witness.clear();
     assert!(matches!(oracle.sign(empty), Err(ProgramError::Rejected)));
     let mut wrong_message = base.clone();
-    wrong_message.psbt.0.unsigned_tx.output[0].value += 1;
+    wrong_message.psbt.0.unsigned_tx.output[0].value += bitcoin::Amount::ONE_SAT;
     assert!(matches!(
         oracle.sign(wrong_message),
         Err(ProgramError::Evaluation(_))
@@ -275,7 +279,7 @@ fn internal_key_is_authenticated_from_control_block_or_keypath_tweak() {
                 Err(ProgramError::MissingScriptPath)
             ));
             let mut forged = base.clone();
-            forged.psbt.0.inputs[1].tap_merkle_root = Some(TapBranchHash::from_inner([0; 32]));
+            forged.psbt.0.inputs[1].tap_merkle_root = Some(TapNodeHash::from_byte_array([0; 32]));
             assert!(matches!(
                 oracle.sign(forged),
                 Err(ProgramError::ConflictingTaprootMetadata)
@@ -346,7 +350,7 @@ fn known_tweak_can_authorize_a_related_key_distinct_from_physical_internal_key()
     let mut delta = SecretKey::from_slice(&[1; 32]).unwrap();
     let (untweaked, tweak) = loop {
         let candidate = normalized.add_tweak(&Scalar::from(delta.negate())).unwrap();
-        let candidate = KeyPair::from_secret_key(&secp, &candidate);
+        let candidate = Keypair::from_secret_key(&secp, &candidate);
         if candidate.x_only_public_key().1 == Parity::Even {
             let tweak = SecretKey::from_slice(&tap_tweak.to_be_bytes())
                 .unwrap()
@@ -387,8 +391,8 @@ fn registered_v2_template_authorization_executes_the_same_guest() {
 #[test]
 fn templatehash_wasm_runs_every_official_bip446_case() {
     use bitcoin::consensus::deserialize;
-    use bitcoin::hashes::hex::FromHex;
-    use bitcoin::util::taproot::ControlBlock;
+    use bitcoin::hex::FromHex;
+    use bitcoin::taproot::ControlBlock;
     use sapio_base::fragments::TEMPLATEHASH_WASM;
     #[derive(Deserialize)]
     struct Vector {
@@ -418,7 +422,7 @@ fn templatehash_wasm_runs_every_official_bip446_case() {
         if script_witness.last().unwrap().first() == Some(&0x50) {
             script_witness.pop();
         }
-        let control = ControlBlock::from_slice(script_witness.last().unwrap()).unwrap();
+        let control = ControlBlock::decode(script_witness.last().unwrap()).unwrap();
         let script = &script_witness[script_witness.len() - 2];
         assert_eq!(script.len(), 35);
         assert_eq!(script[0], 0x20);

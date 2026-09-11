@@ -25,7 +25,7 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 **/
-use bitcoin::util::amount::Amount;
+use bitcoin::Amount;
 use sapio::contract::*;
 use sapio::*;
 use sapio_base::Clause;
@@ -162,7 +162,10 @@ mod tests {
             .map(|t| {
                 assert_eq!(t.tx.input.len(), 1);
                 assert_eq!(
-                    t.tx.output.iter().map(|o| o.value).collect::<Vec<_>>(),
+                    t.tx.output
+                        .iter()
+                        .map(|o| o.value.to_sat())
+                        .collect::<Vec<_>>(),
                     vec![1500, 500]
                 );
                 (

@@ -6,9 +6,9 @@
 
 //! Contract for managing movement of funds from cold to hot storage
 use super::undo_send::UndoSendInternal;
-use bitcoin::util::amount::CoinAmount;
 use sapio::contract::*;
 use sapio::*;
+use sapio_base::amount::CoinAmount;
 use sapio_base::timelocks::AnyRelTimeLock;
 
 use schemars::*;
@@ -22,7 +22,7 @@ use std::sync::Arc;
 /// `mature`. At any time the remaining funds can be moved to `cold_storage`, which may vary based on the amount.
 pub struct Vault {
     cold_storage: Rc<dyn Fn(CoinAmount, Context) -> Result<Compiled, CompilationError>>,
-    hot_storage: bitcoin::Address,
+    hot_storage: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     n_steps: u64,
     amount_step: CoinAmount,
     timeout: AnyRelTimeLock,
@@ -32,6 +32,7 @@ pub struct Vault {
 impl Vault {
     #[then]
     fn step(self, ctx: sapio::Context) {
+        let network = ctx.network;
         let mut ctx = ctx;
         let cold_storage_ctx = ctx.derive_str(Arc::new("cold".into()))?;
         let mut builder = ctx.template();
@@ -41,7 +42,7 @@ impl Vault {
                 &UndoSendInternal {
                     from_contract: (self.cold_storage)(self.amount_step, cold_storage_ctx)?,
                     to_contract: Compiled::from_address(
-                        self.hot_storage.clone(),
+                        self.hot_storage.clone().require_network(network)?,
                         bitcoin::Amount::ZERO,
                     ),
                     timeout: self.mature,
@@ -108,9 +109,11 @@ impl Contract for Vault {
 /// A specialization of `Vault` where cold storage is a regular `bitcoin::Address`
 pub struct VaultAddress {
     /// # Address for Cold Storage
-    cold_storage: bitcoin::Address,
+    #[schemars(with = "String")]
+    cold_storage: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     /// # Address for Hot Storage
-    hot_storage: bitcoin::Address,
+    #[schemars(with = "String")]
+    hot_storage: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     /// # Number of Steps
     n_steps: u64,
     /// # Amount per Step
@@ -126,7 +129,12 @@ impl From<VaultAddress> for Vault {
         Vault {
             cold_storage: Rc::new({
                 let cs = v.cold_storage.clone();
-                move |_a, _ctx| Ok(Compiled::from_address(cs.clone(), bitcoin::Amount::ZERO))
+                move |_a, ctx| {
+                    Ok(Compiled::from_address(
+                        cs.clone().require_network(ctx.network)?,
+                        bitcoin::Amount::ZERO,
+                    ))
+                }
             }),
             hot_storage: v.hot_storage,
             n_steps: v.n_steps,
@@ -143,13 +151,15 @@ impl From<VaultAddress> for Vault {
 /// split up based on a max amount per address
 pub struct VaultTree {
     /// # Cold Storage Target
-    cold_storage: bitcoin::Address,
+    #[schemars(with = "String")]
+    cold_storage: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     /// # Max Funds per Cold Storage Addreess
     max_per_address: CoinAmount,
     /// # Radix for the split tree
     radix: usize,
     /// # A Hot Storage Address
-    hot_storage: bitcoin::Address,
+    #[schemars(with = "String")]
+    hot_storage: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     /// # How many iterations of the contract to run
     n_steps: u64,
     /// # How much funds per step
@@ -214,8 +224,8 @@ mod test {
 
     fn tree(cap: u64, radix: usize, steps: u64) -> VaultTree {
         VaultTree {
-            cold_storage: address(1),
-            hot_storage: address(2),
+            cold_storage: address(1).into_unchecked(),
+            hot_storage: address(2).into_unchecked(),
             max_per_address: bitcoin::Amount::from_sat(cap).into(),
             radix,
             n_steps: steps,
@@ -235,14 +245,14 @@ mod test {
         let cold = object
             .ctv_to_tx
             .values()
-            .find(|t| t.tx.input[0].sequence != 5)
+            .find(|t| t.tx.input[0].sequence.to_consensus_u32() != 5)
             .unwrap();
         let split = cold.outputs[0].contract.ctv_to_tx.values().next().unwrap();
         assert_eq!(
             split
                 .outputs
                 .iter()
-                .map(|o| o.amount.as_sat())
+                .map(|o| o.amount.to_sat())
                 .collect::<Vec<_>>(),
             vec![1000, 500]
         );

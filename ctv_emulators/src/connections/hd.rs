@@ -26,7 +26,7 @@ pub struct HDOracleEmulatorConnection {
     /// resolved address to the oracle
     pub reconnect: SocketAddr,
     /// the root key signatures will come from
-    pub root: ExtendedPubKey,
+    pub root: Xpub,
     /// a secp context
     pub secp: Arc<bitcoin::secp256k1::Secp256k1<bitcoin::secp256k1::All>>,
     request_timeout: Duration,
@@ -34,7 +34,7 @@ pub struct HDOracleEmulatorConnection {
 
 impl HDOracleEmulatorConnection {
     /// Helper function to derive an EPK
-    fn derive(&self, h: Sha256) -> Result<ExtendedPubKey, Error> {
+    fn derive(&self, h: Sha256) -> Result<Xpub, Error> {
         let c = hash_to_child_vec(h);
         self.root.derive_pub(&self.secp, &c)
     }
@@ -52,7 +52,7 @@ impl HDOracleEmulatorConnection {
     /// created to observe it.
     pub async fn new<A: ToSocketAddrs + std::fmt::Display + Clone>(
         address: A,
-        root: ExtendedPubKey,
+        root: Xpub,
         runtime: Option<Arc<tokio::runtime::Runtime>>,
         secp: Arc<bitcoin::secp256k1::Secp256k1<bitcoin::secp256k1::All>>,
     ) -> Result<Self, std::io::Error> {
@@ -89,10 +89,7 @@ impl HDOracleEmulatorConnection {
         Ok(self)
     }
 
-    async fn request(
-        &self,
-        request: PartiallySignedTransaction,
-    ) -> Result<PartiallySignedTransaction, EmulatorError> {
+    async fn request(&self, request: Psbt) -> Result<Psbt, EmulatorError> {
         tokio::time::timeout(self.request_timeout, async {
             let mut mconn = self.connection.lock().await;
             // Only a fully validated exchange restores the cached connection.
@@ -126,10 +123,7 @@ impl CTVEmulator for HDOracleEmulatorConnection {
     fn get_signer_for(&self, h: Sha256) -> Result<Clause, EmulatorError> {
         Ok(Clause::Key(self.derive(h)?.to_x_only_pub()))
     }
-    fn sign(
-        &self,
-        b: PartiallySignedTransaction,
-    ) -> Result<PartiallySignedTransaction, EmulatorError> {
+    fn sign(&self, b: Psbt) -> Result<Psbt, EmulatorError> {
         tokio::task::block_in_place(|| self.handle.block_on(self.request(b)))
     }
 }

@@ -6,7 +6,6 @@
 
 //! general non-parameter compilation state required by all contracts
 
-use crate::reverse_path::ReversePath;
 use crate::serialization_helpers::SArc;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

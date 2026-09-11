@@ -1,6 +1,6 @@
 use super::*;
 use bitcoin::secp256k1::{Keypair, SecretKey};
-use bitcoin::{Network, Script};
+use bitcoin::{Network, ScriptBuf};
 use sapio_base::covenant::LoweringPlan;
 use sapio_base::effects::EffectPath;
 use std::collections::BTreeMap;
@@ -30,20 +30,31 @@ fn context(sats: u64) -> Context {
     )
 }
 
-fn inspect(compiled: &Compiled, radix: usize, fee: u64, leaves: &mut BTreeMap<Script, u64>) -> u64 {
+fn inspect(
+    compiled: &Compiled,
+    radix: usize,
+    fee: u64,
+    leaves: &mut BTreeMap<ScriptBuf, u64>,
+) -> u64 {
     let mut transactions = 0;
     for template in compiled.ctv_to_tx.values() {
         transactions += 1;
         assert!(!template.tx.output.is_empty());
         assert!(template.tx.output.len() <= radix);
         assert_eq!(
-            template.max.as_sat() - template.tx.output.iter().map(|o| o.value).sum::<u64>(),
+            template.max.to_sat()
+                - template
+                    .tx
+                    .output
+                    .iter()
+                    .map(|o| o.value.to_sat())
+                    .sum::<u64>(),
             fee
         );
         for (output, metadata) in template.tx.output.iter().zip(&template.outputs) {
             if metadata.contract.ctv_to_tx.is_empty() {
                 assert!(leaves
-                    .insert(output.script_pubkey.clone(), output.value)
+                    .insert(output.script_pubkey.clone(), output.value.to_sat())
                     .is_none());
             } else {
                 transactions += inspect(&metadata.contract, radix, fee, leaves);
@@ -63,7 +74,7 @@ fn reward_tree_pays_each_miner_once_and_reserves_every_fee() {
             Amount::from_sat(100),
         )
         .unwrap();
-        assert_eq!(payout.funding_required().unwrap().as_sat(), 50_003);
+        assert_eq!(payout.funding_required().unwrap().to_sat(), 50_003);
         let compiled = payout.compile(context(50_003)).unwrap();
         compiled.validate().unwrap();
         let mut leaves = BTreeMap::new();
@@ -80,7 +91,7 @@ fn reward_tree_pays_each_miner_once_and_reserves_every_fee() {
                         Network::Regtest,
                     )
                     .script_pubkey(),
-                    share.amount.as_sat(),
+                    share.amount.to_sat(),
                 )
             })
             .collect();

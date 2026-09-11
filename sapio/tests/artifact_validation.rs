@@ -1,6 +1,6 @@
 use bitcoin::hashes::{sha256, Hash};
-use bitcoin::psbt::PartiallySignedTransaction;
-use bitcoin::{Address, Amount, Network, OutPoint, Script, Transaction, Txid, Witness};
+use bitcoin::psbt::Psbt;
+use bitcoin::{Address, Amount, Network, OutPoint, ScriptBuf, Transaction, Txid, Witness};
 use sapio::contract::abi::object::{ArtifactErrorKind, ObjectError};
 use sapio::contract::abi::studio::SapioStudioFormat;
 use sapio::contract::{Compilable, Compiled, Context, Contract};
@@ -57,7 +57,10 @@ fn payment(destination: Compiled, extra_input: bool, path: &str) -> Compiled {
 
 fn leaf() -> Compiled {
     Compiled::from_address(
-        Address::from_str("bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj").unwrap(),
+        Address::from_str("bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj")
+            .unwrap()
+            .require_network(Network::Regtest)
+            .unwrap(),
         bitcoin::Amount::ZERO,
     )
 }
@@ -86,10 +89,7 @@ impl CTVEmulator for NoEffects {
     fn get_signer_for(&self, _: sha256::Hash) -> Result<Clause, EmulatorError> {
         panic!("invalid artifact requested a signer");
     }
-    fn sign(
-        &self,
-        _: PartiallySignedTransaction,
-    ) -> Result<PartiallySignedTransaction, EmulatorError> {
+    fn sign(&self, _: Psbt) -> Result<Psbt, EmulatorError> {
         panic!("invalid artifact reached signing");
     }
 }
@@ -125,11 +125,11 @@ fn rejects_malformed_unsigned_templates_at_the_binding_boundary() {
             ArtifactErrorKind::OutputMetadataCount,
         ),
         (
-            |t| t.tx.input[0].script_sig = Script::from(vec![0x51]),
+            |t| t.tx.input[0].script_sig = ScriptBuf::from(vec![0x51]),
             ArtifactErrorKind::SignedInput(0),
         ),
         (
-            |t| t.tx.input[0].witness = Witness::from_vec(vec![vec![1]]),
+            |t| t.tx.input[0].witness = Witness::from_slice(&[vec![1]]),
             ArtifactErrorKind::SignedInput(0),
         ),
         (
@@ -137,7 +137,11 @@ fn rejects_malformed_unsigned_templates_at_the_binding_boundary() {
             ArtifactErrorKind::TemplateHashMismatch,
         ),
         (
-            |t| t.tx.lock_time += 1,
+            |t| {
+                t.tx.lock_time = bitcoin::absolute::LockTime::from_consensus(
+                    t.tx.lock_time.to_consensus_u32() + 1,
+                )
+            },
             ArtifactErrorKind::TemplateHashMismatch,
         ),
         (
@@ -147,7 +151,7 @@ fn rejects_malformed_unsigned_templates_at_the_binding_boundary() {
         (
             |t| {
                 t.outputs[0].contract.address =
-                    sapio::util::extended_address::ExtendedAddress::Unknown(Script::new())
+                    sapio::util::extended_address::ExtendedAddress::Unknown(ScriptBuf::new())
             },
             ArtifactErrorKind::OutputMismatch(0),
         ),
@@ -192,7 +196,7 @@ fn rejects_inconsistent_map_keys_and_descriptors() {
     reject_artifact(object, ArtifactErrorKind::TemplateHashMismatch);
 
     let mut object = payment(leaf(), false, "payment");
-    object.address = sapio::util::extended_address::ExtendedAddress::Unknown(Script::new());
+    object.address = sapio::util::extended_address::ExtendedAddress::Unknown(ScriptBuf::new());
     reject_artifact(object, ArtifactErrorKind::DescriptorMismatch);
 }
 
@@ -200,7 +204,7 @@ fn rejects_inconsistent_map_keys_and_descriptors() {
 fn rejects_overflow_even_when_output_metadata_and_hashes_agree() {
     let mut object = payment(leaf(), false, "payment");
     let (_, mut t) = object.ctv_to_tx.pop_first().unwrap();
-    t.tx.output[0].value = u64::MAX;
+    t.tx.output[0].value = bitcoin::Amount::from_sat(u64::MAX);
     t.outputs[0].amount = Amount::from_sat(u64::MAX);
     t.tx.output.push(t.tx.output[0].clone());
     t.outputs.push(t.outputs[0].clone());
@@ -272,10 +276,9 @@ fn binds_roundtripped_artifacts_with_explicit_auxiliary_inputs() {
     let txs = &program.program.get(&object.root_path).unwrap().txs;
     assert_eq!(txs.len(), 1);
     let SapioStudioFormat::LinkedPSBT { psbt, .. } = &txs[0];
-    let psbt: PartiallySignedTransaction =
-        bitcoin::consensus::deserialize(&base64::decode(psbt).unwrap()).unwrap();
+    let psbt: Psbt = Psbt::deserialize(&base64::decode(psbt).unwrap()).unwrap();
     assert_eq!(psbt.unsigned_tx.input[0].previous_output, contract_input);
     assert_eq!(psbt.unsigned_tx.input[1].previous_output, auxiliary_input);
     assert_eq!(psbt.unsigned_tx.get_ctv_hash(0), hash);
-    assert_eq!(psbt.unsigned_tx.output[0].value, 1_000);
+    assert_eq!(psbt.unsigned_tx.output[0].value.to_sat(), 1_000);
 }

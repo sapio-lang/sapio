@@ -7,7 +7,7 @@
 //!  Errors during object construction
 
 pub use crate::contract::abi::studio::*;
-use bitcoin::util::taproot::TaprootBuilderError;
+use bitcoin::taproot::TaprootBuilderError;
 use miniscript::*;
 use sapio_base::{miniscript, txindex::TxIndexError};
 use sapio_ctv_emulator_trait::EmulatorError;
@@ -51,15 +51,15 @@ pub enum ObjectError {
     /// An emulator failed or returned an invalid signing response.
     Emulator(EmulatorError),
     /// The transaction cannot be represented as an unsigned PSBT.
-    Psbt(bitcoin::util::psbt::Error),
+    Psbt(bitcoin::psbt::Error),
     /// The Error was due to Miniscript Policy
     MiniscriptPolicy(miniscript::policy::compiler::CompilerError),
     /// The Error was due to Miniscript
     Miniscript(miniscript::Error),
     /// Error Building Taproot Tree
     TaprootBulderError(TaprootBuilderError),
-    /// Unknown Script Type
-    UnknownScriptType(bitcoin::Script),
+    /// Unknown script type
+    UnknownScriptType(bitcoin::ScriptBuf),
     /// OpReturn Too Long
     OpReturnTooLong,
     /// The Error was for an unknown/unhandled reason
@@ -87,8 +87,8 @@ impl From<super::ArtifactError> for ObjectError {
         Self::InvalidArtifact(error)
     }
 }
-impl From<bitcoin::util::psbt::Error> for ObjectError {
-    fn from(error: bitcoin::util::psbt::Error) -> Self {
+impl From<bitcoin::psbt::Error> for ObjectError {
+    fn from(error: bitcoin::psbt::Error) -> Self {
         Self::Psbt(error)
     }
 }

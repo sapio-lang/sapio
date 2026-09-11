@@ -102,8 +102,8 @@ impl fmt::Display for ArtifactErrorKind {
             } => write!(
                 f,
                 "output {index} provides {} sat but its child requires {} sat",
-                available.as_sat(),
-                required.as_sat()
+                available.to_sat(),
+                required.to_sat()
             ),
             Self::OutputAmountOverflow => write!(f, "output amount total overflows"),
             Self::InsufficientAmount => {
@@ -164,7 +164,7 @@ impl Object {
                     )
                 })?;
             if let Some(descriptor) = &object.descriptor {
-                if descriptor.script_pubkey() != bitcoin::Script::from(&object.address) {
+                if descriptor.script_pubkey() != bitcoin::ScriptBuf::from(&object.address) {
                     return Err(error(None, ArtifactErrorKind::DescriptorMismatch));
                 }
             }
@@ -205,8 +205,8 @@ impl Object {
                 }
                 let mut total = 0u64;
                 for (index, (output, info)) in tx.output.iter().zip(&template.outputs).enumerate() {
-                    if output.value != info.amount.as_sat()
-                        || output.script_pubkey != bitcoin::Script::from(&info.contract.address)
+                    if output.value != info.amount
+                        || output.script_pubkey != bitcoin::ScriptBuf::from(&info.contract.address)
                     {
                         return Err(error(ArtifactErrorKind::OutputMismatch(index)));
                     }
@@ -219,11 +219,11 @@ impl Object {
                         }));
                     }
                     total = total
-                        .checked_add(output.value)
+                        .checked_add(output.value.to_sat())
                         .ok_or_else(|| error(ArtifactErrorKind::OutputAmountOverflow))?;
                     pending.push(&info.contract);
                 }
-                if total > template.max.as_sat() {
+                if total > template.max.to_sat() {
                     return Err(error(ArtifactErrorKind::InsufficientAmount));
                 }
                 if template.required_input_amount > template.max

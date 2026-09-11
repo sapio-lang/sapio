@@ -4,7 +4,7 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 //! A Hanukkah Miracle!
-use bitcoin::util::amount::Amount;
+use bitcoin::Amount;
 use sapio::contract::*;
 use sapio::util::amountrange::AmountF64;
 use sapio::*;
@@ -18,11 +18,12 @@ use std::convert::TryFrom;
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct Hanukkiah {
     /// Who receives the funds in the candles
-    recipient: bitcoin::Address,
+    #[schemars(with = "String")]
+    recipient: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     /// Amount of Coin per Candle
     amount_per_candle: AmountF64,
     /// Satoshis per unsigned transaction byte; witness costs are not included.
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    #[serde(with = "bitcoin::amount::serde::as_sat")]
     #[schemars(with = "u64")]
     feerate_per_byte: Amount,
     /// What time should the Hanukkiah be able to be lit the first night, subsequent nights will be 24 hours later.
@@ -46,6 +47,7 @@ fn candle_time(start: AbsTime, night: u8) -> Result<AbsTime, CompilationError> {
 impl Hanukkiah {
     #[then]
     fn light_candles(self, ictx: Context) {
+        let network = ictx.network;
         let mut ctx = ictx;
         let mut txn = ctx.derive_num(0u64)?.template();
         let night = self.night.unwrap_or(1);
@@ -60,7 +62,10 @@ impl Hanukkiah {
         for _ in 0..night {
             txn = txn.add_output(
                 self.amount_per_candle.into(),
-                &Compiled::from_address(self.recipient.clone(), Amount::ZERO),
+                &Compiled::from_address(
+                    self.recipient.clone().require_network(network)?,
+                    Amount::ZERO,
+                ),
                 None,
             )?;
         }
@@ -86,7 +91,7 @@ pub struct Hanukkiah2 {
     /// Amount of Coin per Candle
     amount_per_candle: AmountF64,
     /// Satoshis per unsigned transaction byte; witness costs are not included.
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    #[serde(with = "bitcoin::amount::serde::as_sat")]
     #[schemars(with = "u64")]
     feerate_per_byte: Amount,
     /// What time should the Hanukkiah be able to be lit the first night, subsequent nights will be 24 hours later.
@@ -97,14 +102,16 @@ pub struct Hanukkiah2 {
 #[serde(try_from = "String")]
 #[serde(into = "String")]
 #[schemars(transparent)]
-struct Recipients(#[schemars(with = "String")] [bitcoin::Address; 36]);
+struct Recipients(
+    #[schemars(with = "String")] [bitcoin::Address<bitcoin::address::NetworkUnchecked>; 36],
+);
 
 use std::convert::TryInto;
 use std::str::FromStr;
 impl TryFrom<String> for Recipients {
     type Error = CompilationError;
     fn try_from(s: String) -> std::result::Result<Self, Self::Error> {
-        let v: [bitcoin::Address; 36] = s
+        let v: [bitcoin::Address<bitcoin::address::NetworkUnchecked>; 36] = s
             .split_whitespace()
             .map(bitcoin::Address::from_str)
             .collect::<Result<Vec<_>, _>>()
@@ -118,7 +125,7 @@ impl Into<String> for Recipients {
     fn into(self) -> String {
         self.0
             .iter()
-            .map(ToString::to_string)
+            .map(|address| address.assume_checked_ref().to_string())
             .collect::<Vec<_>>()
             .join(" ")
     }
@@ -127,11 +134,12 @@ impl Into<String> for Recipients {
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
 struct Hanukkiah2Night {
     /// Who receives the funds in the candles
-    recipients: Vec<bitcoin::Address>,
+    #[schemars(with = "Vec<String>")]
+    recipients: Vec<bitcoin::Address<bitcoin::address::NetworkUnchecked>>,
     /// Amount of Coin per Candle
     amount_per_candle: AmountF64,
     /// Satoshis per unsigned transaction byte; witness costs are not included.
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    #[serde(with = "bitcoin::amount::serde::as_sat")]
     #[schemars(with = "u64")]
     feerate_per_byte: Amount,
     /// What time should the Hanukkiah be able to be lit the first night, subsequent nights will be 24 hours later.
@@ -142,6 +150,7 @@ struct Hanukkiah2Night {
 impl Hanukkiah2Night {
     #[then]
     fn light_candles(self, ctx: Context) {
+        let network = ctx.network;
         let lock_time = candle_time(self.night_time, self.night)?;
         if self.recipients.len() != usize::from(self.night) {
             return Err(CompilationError::Custom(
@@ -154,7 +163,9 @@ impl Hanukkiah2Night {
             txn = txn.add_output(
                 self.amount_per_candle.into(),
                 &Compiled::from_address(
-                    r.pop().ok_or(CompilationError::TerminateCompilation)?,
+                    r.pop()
+                        .ok_or(CompilationError::TerminateCompilation)?
+                        .require_network(network)?,
                     Amount::ZERO,
                 ),
                 None,
@@ -227,7 +238,7 @@ mod tests {
     #[test]
     fn chained_candles_cover_eight_nights_and_account_for_fees() {
         let contract = Hanukkiah {
-            recipient: address(1),
+            recipient: address(1).into_unchecked(),
             amount_per_candle: Amount::from_sat(1000).into(),
             feerate_per_byte: Amount::from_sat(7),
             night_time: AbsTime::try_from(500_000_001).unwrap(),
@@ -238,7 +249,10 @@ mod tests {
         let mut current = &object;
         for night in 1..=8 {
             let template = current.ctv_to_tx.values().next().unwrap();
-            assert_eq!(template.tx.lock_time, 500_000_001 + 86400 * (night - 1));
+            assert_eq!(
+                template.tx.lock_time.to_consensus_u32(),
+                500_000_001 + 86400 * (night - 1)
+            );
             assert_unsigned_fee(template, contract.feerate_per_byte);
             let candles = template
                 .outputs
@@ -246,7 +260,7 @@ mod tests {
                 .filter(|o| o.contract.ctv_to_tx.is_empty())
                 .collect::<Vec<_>>();
             assert_eq!(candles.len(), night as usize);
-            assert!(candles.iter().all(|o| o.amount.as_sat() == 1000));
+            assert!(candles.iter().all(|o| o.amount.to_sat() == 1000));
             if night < 8 {
                 current = &template.outputs[0].contract;
             }
@@ -255,7 +269,7 @@ mod tests {
 
     #[test]
     fn parallel_candles_cover_all_recipients_and_reject_bad_shapes() {
-        let recipients = Recipients(std::array::from_fn(|_| address(1)));
+        let recipients = Recipients(std::array::from_fn(|_| address(1).into_unchecked()));
         let text = serde_json::to_string(&recipients).unwrap();
         let parsed: Recipients = serde_json::from_str(&text).unwrap();
         assert_eq!(parsed.0.len(), 36);
@@ -288,7 +302,7 @@ mod tests {
         assert!(candle_time(contract.night_time, 0).is_err());
         assert!(candle_time(AbsTime::try_from(u32::MAX).unwrap(), 2).is_err());
         let expensive = Hanukkiah {
-            recipient: address(1),
+            recipient: address(1).into_unchecked(),
             amount_per_candle: Amount::from_sat(1000).into(),
             feerate_per_byte: Amount::from_sat(u64::MAX),
             night_time: contract.night_time,

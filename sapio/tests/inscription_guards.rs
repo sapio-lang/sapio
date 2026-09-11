@@ -15,7 +15,7 @@ fn inscription(body: &[u8]) -> Inscription {
 }
 
 fn effect(body: &[u8]) -> Clause {
-    Clause::Inscribe(Box::new(inscription(body)), Box::new(Clause::Trivial))
+    Clause::Inscribe(Box::new(inscription(body)), Arc::new(Clause::Trivial))
 }
 
 fn destination() -> XOnlyPublicKey {
@@ -42,9 +42,9 @@ fn encoded_inscriptions(compiled: &sapio::contract::Compiled) -> Vec<Inscription
     let Some(SupportedDescriptors::XOnly(Descriptor::Tr(tree))) = &compiled.descriptor else {
         panic!("expected a Taproot descriptor");
     };
-    let scripts: Vec<_> = tree.iter_scripts().collect();
+    let scripts: Vec<_> = tree.leaves().collect();
     assert_eq!(scripts.len(), 1);
-    let script = scripts[0].1.encode();
+    let script = scripts[0].compute_script();
     Envelope::from_tapscript(&script, 0)
         .unwrap()
         .into_iter()
@@ -63,7 +63,7 @@ impl<const IN_TEMPLATE: bool> Repeated<IN_TEMPLATE> {
     fn clause(&self) -> Clause {
         let inscription = effect(b"repeated");
         if self.nested {
-            Clause::And(vec![Clause::Trivial, inscription])
+            Clause::And(vec![Arc::new(Clause::Trivial), Arc::new(inscription)])
         } else {
             inscription
         }
@@ -150,7 +150,18 @@ fn conjunction_keeps_effect_order_and_nonadjacent_duplicates() {
     let template = compiled.ctv_to_tx.values().next().unwrap();
     assert_eq!(
         template.guards,
-        vec![Clause::Threshold(3, vec![effect(b"z"), effect(b"a"), effect(b"z")]).into()]
+        vec![Clause::Thresh(
+            sapio::miniscript::Threshold::new(
+                3,
+                vec![
+                    Arc::new(effect(b"z")),
+                    Arc::new(effect(b"a")),
+                    Arc::new(effect(b"z"))
+                ]
+            )
+            .unwrap()
+        )
+        .into()]
     );
     let mut inscriptions = encoded_inscriptions(&compiled);
     // Miniscript chooses the final instruction order while compiling the

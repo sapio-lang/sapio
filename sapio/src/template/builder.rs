@@ -10,9 +10,9 @@ pub use super::{Output, OutputMeta};
 use super::{Template, TemplateMetadata};
 use crate::contract::{CompilationError, Context};
 use crate::util::extended_address::ExtendedAddress;
-use bitcoin::util::amount::Amount;
+use bitcoin::amount::Amount;
 use bitcoin::Witness;
-use bitcoin::{Script, VarInt};
+use bitcoin::{Script, ScriptBuf, VarInt};
 use sapio_base::effects::PathFragment;
 use sapio_base::policy::ScriptPolicy;
 use sapio_base::simp::SIMPAttachableAt;
@@ -58,7 +58,7 @@ pub struct BuilderState<State> {
     sequences: Vec<Option<AnyRelTimeLock>>,
     outputs: Vec<Output>,
     inputs: Vec<InputMetadata>,
-    version: i32,
+    version: bitcoin::transaction::Version,
     lock_time: Option<AnyAbsTimeLock>,
     ctx: Context,
     initial_funding: Amount,
@@ -82,7 +82,7 @@ impl BuilderState<NotAddingFees> {
             sequences: vec![None],
             inputs: vec![InputMetadata::default()],
             outputs: vec![],
-            version: 2,
+            version: bitcoin::transaction::Version::TWO,
             lock_time: None,
             metadata: TemplateMetadata::new(),
             fees: Amount::from_sat(0),
@@ -326,7 +326,7 @@ impl<T> BuilderState<T> {
             .map(|sequence| bitcoin::TxIn {
                 previous_output: Default::default(),
                 script_sig: Default::default(),
-                sequence: sequence.unwrap_or(default_seq).get(),
+                sequence: bitcoin::Sequence(sequence.unwrap_or(default_seq).get()),
                 witness: Witness::new(),
             })
             .collect();
@@ -334,9 +334,10 @@ impl<T> BuilderState<T> {
             .outputs
             .iter()
             .map(|out| {
-                let value = out.amount.as_sat();
+                let value = out.amount;
 
-                let script_pubkey: Script = From::<&ExtendedAddress>::from(&out.contract.address);
+                let script_pubkey: ScriptBuf =
+                    From::<&ExtendedAddress>::from(&out.contract.address);
                 bitcoin::TxOut {
                     value,
                     script_pubkey,
@@ -345,7 +346,9 @@ impl<T> BuilderState<T> {
             .collect();
         let t = bitcoin::Transaction {
             version: self.version,
-            lock_time: self.lock_time.unwrap_or(default_nlt).get(),
+            lock_time: bitcoin::absolute::LockTime::from_consensus(
+                self.lock_time.unwrap_or(default_nlt).get(),
+            ),
             input,
             output,
         };
@@ -378,17 +381,17 @@ impl<T> BuilderState<T> {
             .outputs
             .iter()
             .map(|output| {
-                let script = Script::from(&output.contract.address);
+                let script = ScriptBuf::from(&output.contract.address);
                 let size = script.len() as u64;
-                8 + VarInt(size).len() as u64 + size
+                8 + VarInt(size).size() as u64 + size
             })
             .sum();
         // Each unsigned input has an outpoint, an empty scriptSig prefix and
         // a sequence. Neither its placeholder outpoint nor its lock changes
         // its encoded size.
-        4 + VarInt(inputs).len() as u64
+        4 + VarInt(inputs).size() as u64
             + inputs * 41
-            + VarInt(outputs).len() as u64
+            + VarInt(outputs).size() as u64
             + output_bytes
             + 4
     }
@@ -401,9 +404,9 @@ impl<T> BuilderState<T> {
     pub fn unsigned_tx_size_with_output(&self, script_pubkey: &Script) -> u64 {
         let count = self.outputs.len() as u64;
         let size = script_pubkey.len() as u64;
-        self.unsigned_tx_size() + VarInt(count + 1).len() as u64 - VarInt(count).len() as u64
+        self.unsigned_tx_size() + VarInt(count + 1).size() as u64 - VarInt(count).size() as u64
             + 8
-            + VarInt(size).len() as u64
+            + VarInt(size).size() as u64
             + size
     }
 }

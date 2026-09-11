@@ -8,7 +8,6 @@
 mod fixture;
 
 use bitcoin::consensus::encode::serialize_hex;
-use bitcoin::hashes::hex::ToHex;
 use bitcoin::{Address, Network, OutPoint};
 use fixture::*;
 use serde_json::{json, Value};
@@ -46,11 +45,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             signed_spend(&compiled, unsigned.clone(), None, true),
         ));
         let mut tampered = valid;
-        tampered.output[0].value -= 1;
+        tampered.output[0].value -= bitcoin::Amount::ONE_SAT;
         cases.push(case("output_changed_after_signing", false, tampered));
         if protected {
             let mut changed = unsigned;
-            changed.output[0].value -= 1;
+            changed.output[0].value -= bitcoin::Amount::ONE_SAT;
             cases.push(case(
                 "changed_output_without_covenant_signer",
                 false,
@@ -68,7 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "name": name,
             "address": Address::p2tr_tweaked(raw.spend_info().output_key(), Network::Regtest).to_string(),
             "funding_amount_sats": 10_000,
-            "script": raw.leaves()[0].1.as_bytes().to_hex(),
+            "script": raw.leaves()[0].1.to_hex_string(),
             "cases": cases,
         }));
     }

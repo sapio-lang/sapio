@@ -18,7 +18,9 @@ fn context(amount: u64) -> Context {
 }
 fn address() -> bitcoin::Address {
     "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj"
-        .parse()
+        .parse::<bitcoin::Address<bitcoin::address::NetworkUnchecked>>()
+        .unwrap()
+        .require_network(bitcoin::Network::Regtest)
         .unwrap()
 }
 fn key(byte: u8) -> bitcoin::XOnlyPublicKey {
@@ -39,7 +41,7 @@ fn ordinal(n: u64) -> SimpleOrdinal {
 }
 fn sale() -> Sale {
     Sale(Some(Sell {
-        purchaser: address(),
+        purchaser: address().into_unchecked(),
         amount: Amount::from_sat(1000).into(),
         change: Amount::from_sat(200).into(),
         fee: Amount::from_sat(100).into(),
@@ -59,7 +61,7 @@ fn sale_places_exact_target_sat_at_start_of_buyer_output() {
             .tx
             .output
             .iter()
-            .map(|o| o.value)
+            .map(|o| o.value.to_sat())
             .collect::<Vec<_>>(),
         vec![10, 501, 489, 1000, 200]
     );
@@ -81,7 +83,8 @@ fn sale_places_exact_target_sat_at_start_of_buyer_output() {
             .unwrap()
             .tx
             .output[0]
-            .value,
+            .value
+            .to_sat(),
         501
     );
 }
@@ -105,8 +108,8 @@ fn planner_sale_preserves_target_owner_balance_buyer_change_and_fees() {
         .next()
         .unwrap()
         .unwrap();
-    assert_eq!(template.tx.output[0].value, 10);
-    assert_eq!(template.tx.output[1].value, 501);
+    assert_eq!(template.tx.output[0].value.to_sat(), 10);
+    assert_eq!(template.tx.output[1].value.to_sat(), 501);
     assert_eq!(
         template.tx.output[1].script_pubkey,
         address().script_pubkey()
@@ -117,12 +120,17 @@ fn planner_sale_preserves_target_owner_balance_buyer_change_and_fees() {
             .output
             .iter()
             .filter(|o| o.script_pubkey == address().script_pubkey())
-            .map(|o| o.value)
+            .map(|o| o.value.to_sat())
             .sum::<u64>(),
         701
     );
     assert_eq!(
-        template.tx.output.iter().map(|o| o.value).sum::<u64>(),
+        template
+            .tx
+            .output
+            .iter()
+            .map(|o| o.value.to_sat())
+            .sum::<u64>(),
         2200
     );
     assert_eq!(template.max, Amount::from_sat(2300));

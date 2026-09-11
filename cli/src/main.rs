@@ -20,10 +20,9 @@ use crate::contracts::Load;
 use crate::contracts::Logo;
 use crate::contracts::Request;
 use crate::contracts::Response;
-use bitcoin::consensus::serialize;
+use bitcoin::bip32::Xpriv;
+use bitcoin::bip32::Xpub;
 use bitcoin::secp256k1::Secp256k1;
-use bitcoin::util::bip32::ExtendedPrivKey;
-use bitcoin::util::bip32::ExtendedPubKey;
 use bitcoin::Network;
 use clap::clap_app;
 use clap::ArgMatches;
@@ -31,7 +30,6 @@ use config::*;
 use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::CTVEmulator;
 use sapio::contract::Compiled;
-use sapio_base::util::CTVHash;
 use sapio_wasm_plugin::host::plugin_handle::ModuleLocator;
 use schemars::schema_for;
 use serde_json::Deserializer;
@@ -84,7 +82,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
      )
      (@subcommand new =>
       (about: "Get a new xpriv")
-      (@arg network: -n --network +takes_value +required #{1,2}  "One of: signet, testnet, regtest, bitcoin")
+      (@arg network: -n --network +takes_value +required #{1,2}  "One of: signet, testnet, testnet4, regtest, bitcoin")
       (@arg out: -o --output +takes_value +required #{1,2} {check_file_not} "The file to save the resulting key")
      )
      (@subcommand show =>
@@ -254,13 +252,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(("signer", sign_matches)) => match sign_matches.subcommand() {
             Some(("sign", args)) => {
                 let input = args.value_of_os("input").unwrap();
-                let psbt_str = args.value_of("psbt");
                 let output = args.value_of_os("out");
 
                 let buf = tokio::fs::read(input).await?;
                 let xpriv = sapio_psbt::SigningKey::read_key_from_buf(&buf[..])?;
-                let psbt = get_psbt_from(psbt_str).await?;
-                let hash_ty = bitcoin::util::sighash::SchnorrSighashType::All;
+                let psbt = if args.is_present("psbt") {
+                    decode_psbt_file(args, "psbt")?
+                } else {
+                    get_psbt_from(None).await?
+                };
+                let hash_ty = bitcoin::sighash::TapSighashType::All;
                 let bytes = xpriv.sign(psbt, hash_ty)?;
 
                 if let Some(file_out) = output {
@@ -292,13 +293,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let emulator = configured_emulator(custom_config).await?;
                 let psbt = decode_psbt_file(args, "psbt")?;
                 let psbt = emulator.sign(psbt)?;
-                let bytes = serialize(&psbt);
+                let bytes = psbt.serialize();
                 std::fs::write(args.value_of_os("out").unwrap(), &base64::encode(bytes))?;
             }
             Some(("get_key", args)) => {
                 let emulator = configured_emulator(custom_config).await?;
                 let psbt = decode_psbt_file(args, "psbt")?;
-                let h = emulator.get_signer_for(psbt.extract_tx().get_ctv_hash(0))?;
+                let h = emulator.get_signer_for(util::ctv_hash(&psbt)?)?;
                 println!("{}", h);
             }
             Some(("show", args)) => {
@@ -310,8 +311,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let filename = args.value_of("seed").unwrap();
                 let contents = tokio::fs::read(filename).await?;
 
-                let root = ExtendedPrivKey::new_master(config.network, &contents)?;
-                let pk_root = ExtendedPubKey::from_priv(&Secp256k1::new(), &root);
+                let root = Xpriv::new_master(config.network, &contents)?;
+                let pk_root = Xpub::from_priv(&Secp256k1::new(), &root);
                 let timeout_secs = args
                     .value_of("request_timeout_secs")
                     .map(str::parse::<u64>)
@@ -496,7 +497,7 @@ async fn run_server_stdin() -> Result<(), Box<dyn Error>> {
 async fn bind_command(
     args: &ArgMatches,
     client_url: String,
-    client_auth: bitcoincore_rpc_async::Auth,
+    client_auth: bitcoincore_rpc::Auth,
 ) -> Result<Command, Box<dyn Error>> {
     let use_mock = args.is_present("mock");
     let ordinals_info = None;

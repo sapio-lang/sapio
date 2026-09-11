@@ -166,7 +166,7 @@ fn declared_traits_and_attribute_implementations_compile_real_actions() {
         .call_json(&Policy, context(), serde_json::json!(700))
         .unwrap();
     let template = templates.into_iter().next().unwrap().unwrap();
-    assert_eq!(template.tx.output[0].value, 700);
+    assert_eq!(template.tx.output[0].value.to_sat(), 700);
     assert!(update
         .call_json(&Policy, context(), serde_json::json!("bad"))
         .is_err());

@@ -7,8 +7,8 @@
 //! Checked Taproot spending data for leaves outside the Miniscript language.
 
 use bitcoin::secp256k1::Secp256k1;
-use bitcoin::util::taproot::{TaprootBuilder, TaprootBuilderError, TaprootSpendInfo};
-use bitcoin::{Script, XOnlyPublicKey};
+use bitcoin::taproot::{TaprootBuilder, TaprootBuilderError, TaprootSpendInfo};
+use bitcoin::{ScriptBuf, XOnlyPublicKey};
 use sapio_base::policy::{validate_tapscript, PolicyError};
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -30,8 +30,8 @@ pub const MAX_TAPROOT_LEAVES: usize = 1024;
 pub struct RawTaproot {
     #[schemars(with = "String", regex(pattern = "^[0-9a-fA-F]{64}$"))]
     internal_key: XOnlyPublicKey,
-    #[schemars(length(max = "MAX_TAPROOT_LEAVES"))]
-    leaves: Vec<(u8, Script)>,
+    #[schemars(with = "Vec<(u8, String)>", length(max = "MAX_TAPROOT_LEAVES"))]
+    leaves: Vec<(u8, ScriptBuf)>,
     #[serde(skip)]
     #[schemars(skip)]
     spend_info: TaprootSpendInfo,
@@ -51,6 +51,8 @@ pub enum RawTaprootError {
     },
     /// The leaf depths do not describe a complete, valid Taproot tree.
     InvalidTree(TaprootBuilderError),
+    /// The supplied leaves do not close every branch of the tree.
+    IncompleteTree,
 }
 
 impl fmt::Display for RawTaprootError {
@@ -64,6 +66,7 @@ impl fmt::Display for RawTaprootError {
                 write!(f, "invalid raw Taproot leaf {index}: {error}")
             }
             Self::InvalidTree(error) => write!(f, "invalid raw Taproot tree: {error}"),
+            Self::IncompleteTree => f.write_str("incomplete raw Taproot tree"),
         }
     }
 }
@@ -71,7 +74,7 @@ impl fmt::Display for RawTaprootError {
 impl std::error::Error for RawTaprootError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::TooManyLeaves(_) => None,
+            Self::TooManyLeaves(_) | Self::IncompleteTree => None,
             Self::InvalidLeaf { error, .. } => Some(error),
             Self::InvalidTree(error) => Some(error),
         }
@@ -84,11 +87,11 @@ impl RawTaproot {
     /// retain their exact instruction order and multiplicity.
     pub fn from_scripts(
         internal_key: XOnlyPublicKey,
-        scripts: Vec<Script>,
+        scripts: Vec<ScriptBuf>,
     ) -> Result<Self, RawTaprootError> {
         #[derive(PartialEq, Eq, PartialOrd, Ord)]
         enum Tree {
-            Leaf(Script),
+            Leaf(ScriptBuf),
             Branch(Box<Tree>, Box<Tree>),
         }
 
@@ -132,7 +135,7 @@ impl RawTaproot {
     /// future leaf versions cannot be introduced through this representation.
     pub fn new(
         internal_key: XOnlyPublicKey,
-        leaves: Vec<(u8, Script)>,
+        leaves: Vec<(u8, ScriptBuf)>,
     ) -> Result<Self, RawTaprootError> {
         if leaves.len() > MAX_TAPROOT_LEAVES {
             return Err(RawTaprootError::TooManyLeaves(leaves.len()));
@@ -145,16 +148,9 @@ impl RawTaproot {
                 .add_leaf(*depth, script.clone())
                 .map_err(RawTaprootError::InvalidTree)?;
         }
-        // This bitcoin fork's finalize() does not itself require all pending
-        // branches to have been combined. Check completion before calling it.
-        if !leaves.is_empty() && !builder.is_finalized() {
-            return Err(RawTaprootError::InvalidTree(
-                TaprootBuilderError::IncompleteTree,
-            ));
-        }
         let spend_info = builder
             .finalize(&Secp256k1::verification_only(), internal_key)
-            .map_err(RawTaprootError::InvalidTree)?;
+            .map_err(|_| RawTaprootError::IncompleteTree)?;
         Ok(Self {
             internal_key,
             leaves,
@@ -168,7 +164,7 @@ impl RawTaproot {
     }
 
     /// The exact depth-first leaf list, with depths measured from root zero.
-    pub fn leaves(&self) -> &[(u8, Script)] {
+    pub fn leaves(&self) -> &[(u8, ScriptBuf)] {
         &self.leaves
     }
 
@@ -178,8 +174,8 @@ impl RawTaproot {
     }
 
     /// The scriptPubKey committing to the checked internal key and script tree.
-    pub fn script_pubkey(&self) -> Script {
-        Script::new_v1_p2tr_tweaked(self.spend_info.output_key())
+    pub fn script_pubkey(&self) -> ScriptBuf {
+        ScriptBuf::new_p2tr_tweaked(self.spend_info.output_key())
     }
 }
 
@@ -189,7 +185,7 @@ impl<'de> Deserialize<'de> for RawTaproot {
         #[serde(deny_unknown_fields)]
         struct Data {
             internal_key: XOnlyPublicKey,
-            leaves: Vec<(u8, Script)>,
+            leaves: Vec<(u8, ScriptBuf)>,
         }
 
         let data = Data::deserialize(deserializer)?;
@@ -201,7 +197,7 @@ impl<'de> Deserialize<'de> for RawTaproot {
 mod tests {
     use super::*;
     use bitcoin::secp256k1::{Keypair, SecretKey};
-    use bitcoin::util::taproot::LeafVersion;
+    use bitcoin::taproot::LeafVersion;
     use serde_json::json;
 
     fn key() -> XOnlyPublicKey {
@@ -210,8 +206,8 @@ mod tests {
             .0
     }
 
-    fn script(bytes: &[u8]) -> Script {
-        Script::from(bytes.to_vec())
+    fn script(bytes: &[u8]) -> ScriptBuf {
+        ScriptBuf::from(bytes.to_vec())
     }
 
     #[test]
@@ -233,21 +229,21 @@ mod tests {
                 .unwrap();
             assert!(control.verify_taproot_commitment(
                 &Secp256k1::verification_only(),
-                decoded.spend_info().output_key().to_inner(),
+                decoded.spend_info().output_key().to_x_only_public_key(),
                 &script,
             ));
         }
-        assert_eq!(raw.spend_info().as_script_map().len(), 2);
+        assert_eq!(raw.spend_info().script_map().len(), 2);
     }
 
     #[test]
     fn an_explicit_key_only_tree_has_no_script_path() {
         let raw = RawTaproot::new(key(), vec![]).unwrap();
         assert_eq!(raw.spend_info().merkle_root(), None);
-        assert!(raw.spend_info().as_script_map().is_empty());
+        assert!(raw.spend_info().script_map().is_empty());
         assert_eq!(
             raw.script_pubkey(),
-            Script::new_v1_p2tr(&Secp256k1::verification_only(), key(), None)
+            ScriptBuf::new_p2tr(&Secp256k1::verification_only(), key(), None)
         );
         let decoded: RawTaproot =
             serde_json::from_str(&serde_json::to_string(&raw).unwrap()).unwrap();
@@ -291,7 +287,7 @@ mod tests {
             let leaves = depths.into_iter().map(|depth| (depth, script(&[0x51])));
             assert!(matches!(
                 RawTaproot::new(key(), leaves.collect()),
-                Err(RawTaprootError::InvalidTree(_))
+                Err(RawTaprootError::InvalidTree(_) | RawTaprootError::IncompleteTree)
             ));
         }
     }

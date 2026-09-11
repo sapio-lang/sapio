@@ -16,7 +16,10 @@ impl Payment {
     #[then]
     fn pay(self, ctx: Context) {
         let destination = Compiled::from_address(
-            Address::from_str("bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj").unwrap(),
+            Address::from_str("bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj")
+                .unwrap()
+                .require_network(Network::Regtest)
+                .unwrap(),
             bitcoin::Amount::ZERO,
         );
         let mut builder = ctx

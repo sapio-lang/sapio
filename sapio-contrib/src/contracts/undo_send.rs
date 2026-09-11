@@ -5,7 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Contracts useful for operations that should be revertible
-use bitcoin::util::amount::CoinAmount;
+use sapio_base::amount::CoinAmount;
 
 use sapio::contract::*;
 use sapio::*;
@@ -71,15 +71,15 @@ mod tests {
         object.validate().unwrap();
         assert_eq!(object.ctv_to_tx.len(), 2);
         for template in object.ctv_to_tx.values() {
-            let expected = if template.tx.input[0].sequence == 12 {
+            let expected = if template.tx.input[0].sequence.to_consensus_u32() == 12 {
                 &contract.to_contract
             } else {
-                assert_eq!(template.tx.input[0].sequence, 1 << 22);
+                assert_eq!(template.tx.input[0].sequence.to_consensus_u32(), 1 << 22);
                 &contract.from_contract
             };
-            assert_eq!(template.tx.output[0].value, 1000);
-            let actual: bitcoin::Script = template.outputs[0].contract.address.clone().into();
-            let expected: bitcoin::Script = expected.address.clone().into();
+            assert_eq!(template.tx.output[0].value.to_sat(), 1000);
+            let actual: bitcoin::ScriptBuf = template.outputs[0].contract.address.clone().into();
+            let expected: bitcoin::ScriptBuf = expected.address.clone().into();
             assert_eq!(actual, expected);
         }
         assert!(contract.compile(context(999)).is_err());

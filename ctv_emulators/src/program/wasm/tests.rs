@@ -1,10 +1,10 @@
 use super::*;
 use crate::program::{ProgramError, ProgramOracle, ProgramSigningRequest, ProgramSpendPath, PSBT};
+use bitcoin::bip32::{Xpriv, Xpub};
 use bitcoin::hashes::{hex::FromHex, Hash};
+use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::Secp256k1;
-use bitcoin::util::bip32::{ExtendedPrivKey, ExtendedPubKey};
-use bitcoin::util::psbt::PartiallySignedTransaction;
-use bitcoin::{Network, OutPoint, Script, Transaction, TxIn, TxOut};
+use bitcoin::{Network, OutPoint, ScriptBuf, Transaction, TxIn, TxOut};
 use sapio_base::program::ProgramInstance;
 
 fn module(body: &str, extra: &str, allocation: Option<&str>) -> Vec<u8> {
@@ -43,24 +43,24 @@ fn versioned_module(
 fn data() -> (Transaction, Vec<TxOut>) {
     (
         Transaction {
-            version: -2,
-            lock_time: 0x0102_0304,
+            version: bitcoin::transaction::Version(-2),
+            lock_time: bitcoin::absolute::LockTime::from_consensus(0x0102_0304),
             input: vec![TxIn {
                 previous_output: OutPoint {
-                    txid: bitcoin::Txid::from_inner([1; 32]),
+                    txid: bitcoin::Txid::from_byte_array([1; 32]),
                     vout: 0x1122_3344,
                 },
-                sequence: 0xaabb_ccdd,
+                sequence: bitcoin::Sequence(0xaabb_ccdd),
                 ..TxIn::default()
             }],
             output: vec![TxOut {
-                value: 0xfedc_ba98_7654_3210,
-                script_pubkey: Script::from(vec![0x51]),
+                value: bitcoin::Amount::from_sat(0xfedc_ba98_7654_3210),
+                script_pubkey: ScriptBuf::from(vec![0x51]),
             }],
         },
         vec![TxOut {
-            value: 0x0102_0304_0506_0708,
-            script_pubkey: Script::from(vec![0x00, 0x02, 0xab, 0xcd]),
+            value: bitcoin::Amount::from_sat(0x0102_0304_0506_0708),
+            script_pubkey: ScriptBuf::from(vec![0x00, 0x02, 0xab, 0xcd]),
         }],
     )
 }
@@ -83,27 +83,27 @@ fn run(
     evaluate(WasmVersion::V1, module, program, params, &view, witness)
 }
 
-fn root() -> ExtendedPrivKey {
-    ExtendedPrivKey::new_master(Network::Testnet, &[42; 32]).unwrap()
+fn root() -> Xpriv {
+    Xpriv::new_master(Network::Testnet, &[42; 32]).unwrap()
 }
 
 fn request(instance: ProgramInstance) -> ProgramSigningRequest {
     let key = instance
-        .derive_public_key(&ExtendedPubKey::from_priv(&Secp256k1::new(), &root()))
+        .derive_public_key(&Xpub::from_priv(&Secp256k1::new(), &root()))
         .unwrap();
-    let mut psbt = PartiallySignedTransaction::from_unsigned_tx(Transaction {
-        version: 2,
-        lock_time: 0,
+    let mut psbt = Psbt::from_unsigned_tx(Transaction {
+        version: bitcoin::transaction::Version(2),
+        lock_time: bitcoin::absolute::LockTime::from_consensus(0),
         input: vec![TxIn::default()],
         output: vec![TxOut {
-            value: 900,
-            script_pubkey: Script::new(),
+            value: bitcoin::Amount::from_sat(900),
+            script_pubkey: ScriptBuf::new(),
         }],
     })
     .unwrap();
     psbt.inputs[0].witness_utxo = Some(TxOut {
-        value: 1_000,
-        script_pubkey: Script::new_v1_p2tr(&Secp256k1::new(), key, None),
+        value: bitcoin::Amount::from_sat(1_000),
+        script_pubkey: ScriptBuf::new_p2tr(&Secp256k1::new(), key, None),
     });
     ProgramSigningRequest {
         instance,
@@ -415,7 +415,7 @@ fn signed_view_limit_is_checked_before_copying_large_scripts() {
     let (mut transaction, outputs) = data();
     let prevouts: Vec<_> = outputs.iter().collect();
     // The fixed encoding consumes 88 bytes before the output's script.
-    transaction.output[0].script_pubkey = Script::from(vec![0; MAX_SIGNED_VIEW_BYTES - 88]);
+    transaction.output[0].script_pubkey = ScriptBuf::from(vec![0; MAX_SIGNED_VIEW_BYTES - 88]);
     let view = SignedTransactionView {
         transaction: &transaction,
         prevouts: &prevouts,
@@ -427,7 +427,7 @@ fn signed_view_limit_is_checked_before_copying_large_scripts() {
         encode_view(WasmVersion::V1, &view).unwrap().len(),
         MAX_SIGNED_VIEW_BYTES
     );
-    transaction.output[0].script_pubkey = Script::from(vec![0; MAX_SIGNED_VIEW_BYTES - 87]);
+    transaction.output[0].script_pubkey = ScriptBuf::from(vec![0; MAX_SIGNED_VIEW_BYTES - 87]);
     let view = SignedTransactionView {
         transaction: &transaction,
         prevouts: &prevouts,
@@ -536,7 +536,7 @@ fn registered_version_is_committed_and_selects_the_exact_guest_entrypoint() {
     let v1_instance = ProgramInstance::new(v1.id(), vec![7], vec![]).unwrap();
     let v2_instance = ProgramInstance::new(v2.id(), vec![7], vec![]).unwrap();
     assert_ne!(v1_instance.id(), v2_instance.id());
-    let root_public = ExtendedPubKey::from_priv(&Secp256k1::new(), &root());
+    let root_public = Xpub::from_priv(&Secp256k1::new(), &root());
     assert_ne!(
         v1_instance.derive_public_key(&root_public).unwrap(),
         v2_instance.derive_public_key(&root_public).unwrap()
@@ -589,7 +589,7 @@ fn v2_view_appends_exact_internal_key_and_annex_without_changing_v1() {
     expected.extend_from_slice(&annex);
     assert_eq!(encode_view(WasmVersion::V2, &view).unwrap(), expected);
     assert_eq!(encode_view(WasmVersion::V1, &view).unwrap(), v1);
-    let other = ExtendedPrivKey::new_master(Network::Testnet, &[43; 32])
+    let other = Xpriv::new_master(Network::Testnet, &[43; 32])
         .unwrap()
         .to_keypair(&Secp256k1::new())
         .x_only_public_key()
@@ -608,7 +608,7 @@ fn v2_view_limit_accounts_for_the_entire_context_suffix_before_copying() {
     for annex in [None, Some(annex.as_slice())] {
         let overhead = 88 + 36 + annex.map_or(0, <[u8]>::len);
         transaction.output[0].script_pubkey =
-            Script::from(vec![0; MAX_SIGNED_VIEW_BYTES - overhead]);
+            ScriptBuf::from(vec![0; MAX_SIGNED_VIEW_BYTES - overhead]);
         let view = SignedTransactionView {
             transaction: &transaction,
             prevouts: &prevouts,
@@ -621,7 +621,7 @@ fn v2_view_limit_accounts_for_the_entire_context_suffix_before_copying() {
             MAX_SIGNED_VIEW_BYTES
         );
         transaction.output[0].script_pubkey =
-            Script::from(vec![0; MAX_SIGNED_VIEW_BYTES - overhead + 1]);
+            ScriptBuf::from(vec![0; MAX_SIGNED_VIEW_BYTES - overhead + 1]);
         let view = SignedTransactionView {
             transaction: &transaction,
             prevouts: &prevouts,

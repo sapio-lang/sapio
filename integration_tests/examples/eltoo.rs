@@ -15,12 +15,12 @@ fn finish(oracle: &ProgramOracle, request: ProgramSigningRequest) -> Result<Tran
     sign_sponsor(&mut psbt, &fixture::sponsor_key())?;
     let psbt = sapio_psbt::finalize::finalize(psbt, &Secp256k1::new())
         .map_err(|(_, errors)| format!("eltoo finalization failed: {errors:?}"))?;
-    Ok(psbt.extract_tx())
+    Ok(psbt.extract_tx()?)
 }
 
 fn output_zero(transaction: &Transaction) -> Coin {
     Coin {
-        outpoint: OutPoint::new(transaction.txid(), 0),
+        outpoint: OutPoint::new(transaction.compute_txid(), 0),
         txout: transaction.output[0].clone(),
     }
 }

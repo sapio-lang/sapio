@@ -2,8 +2,8 @@ use super::*;
 use bitcoin::blockdata::opcodes::all::{OP_CHECKSIG, OP_DROP};
 use bitcoin::blockdata::script::Builder;
 use bitcoin::hashes::{sha256, Hash};
-use bitcoin::util::psbt::raw;
-use bitcoin::util::taproot::TaprootBuilder;
+use bitcoin::psbt::raw;
+use bitcoin::taproot::TaprootBuilder;
 use bitcoin::{Network, Transaction, TxIn, Witness};
 fn evaluator() -> WasmEvaluator {
     WasmEvaluator::new(wat::parse_str(include_str!("pay_at_least_test.wat")).unwrap()).unwrap()
@@ -13,8 +13,8 @@ fn evaluator_id() -> EvaluatorId {
     evaluator().id()
 }
 
-fn root() -> ExtendedPrivKey {
-    ExtendedPrivKey::new_master(Network::Regtest, &[39; 32]).unwrap()
+fn root() -> Xpriv {
+    Xpriv::new_master(Network::Regtest, &[39; 32]).unwrap()
 }
 
 fn instance() -> ProgramInstance {
@@ -30,50 +30,50 @@ fn oracle() -> ProgramOracle {
     ProgramOracle::new(root(), vec![evaluator()]).unwrap()
 }
 
-fn request(script: Option<Script>) -> ProgramSigningRequest {
+fn request(script: Option<ScriptBuf>) -> ProgramSigningRequest {
     let secp = Secp256k1::new();
     let instance = instance();
-    let public_root = ExtendedPubKey::from_priv(&secp, &root());
+    let public_root = Xpub::from_priv(&secp, &root());
     let internal = instance.derive_public_key(&public_root).unwrap();
     let mut builder = TaprootBuilder::new();
     if let Some(script) = &script {
         builder = builder.add_leaf(0, script.clone()).unwrap();
     }
     let spend = builder.finalize(&secp, internal).unwrap();
-    let mut psbt = PartiallySignedTransaction::from_unsigned_tx(Transaction {
-        version: 2,
-        lock_time: 500,
+    let mut psbt = Psbt::from_unsigned_tx(Transaction {
+        version: bitcoin::transaction::Version(2),
+        lock_time: bitcoin::absolute::LockTime::from_consensus(500),
         input: vec![
             TxIn {
                 previous_output: OutPoint {
-                    txid: bitcoin::Txid::from_inner([1; 32]),
+                    txid: bitcoin::Txid::from_byte_array([1; 32]),
                     vout: 2,
                 },
-                sequence: 100,
+                sequence: bitcoin::Sequence(100),
                 ..TxIn::default()
             },
             TxIn {
                 previous_output: OutPoint {
-                    txid: bitcoin::Txid::from_inner([2; 32]),
+                    txid: bitcoin::Txid::from_byte_array([2; 32]),
                     vout: 0,
                 },
-                sequence: 0xffff_fffd,
+                sequence: bitcoin::Sequence(0xffff_fffd),
                 ..TxIn::default()
             },
         ],
         output: vec![TxOut {
-            value: 9_000,
-            script_pubkey: Script::new(),
+            value: bitcoin::Amount::from_sat(9_000),
+            script_pubkey: ScriptBuf::new(),
         }],
     })
     .unwrap();
     psbt.inputs[0].witness_utxo = Some(TxOut {
-        value: 1_000,
-        script_pubkey: Script::new(),
+        value: bitcoin::Amount::from_sat(1_000),
+        script_pubkey: ScriptBuf::new(),
     });
     psbt.inputs[1].witness_utxo = Some(TxOut {
-        value: 10_000,
-        script_pubkey: Script::new_v1_p2tr_tweaked(spend.output_key()),
+        value: bitcoin::Amount::from_sat(10_000),
+        script_pubkey: ScriptBuf::new_p2tr_tweaked(spend.output_key()),
     });
     psbt.inputs[1].tap_merkle_root = spend.merkle_root();
     let path = if let Some(script) = script {
@@ -95,9 +95,9 @@ fn request(script: Option<Script>) -> ProgramSigningRequest {
     }
 }
 
-fn leaf() -> Script {
+fn leaf() -> ScriptBuf {
     let key = instance()
-        .derive_public_key(&ExtendedPubKey::from_priv(&Secp256k1::new(), &root()))
+        .derive_public_key(&Xpub::from_priv(&Secp256k1::new(), &root()))
         .unwrap();
     Builder::new()
         .push_slice(&key.serialize())
@@ -105,10 +105,7 @@ fn leaf() -> Script {
         .into_script()
 }
 
-fn target<'a>(
-    request: &ProgramSigningRequest,
-    psbt: &'a PartiallySignedTransaction,
-) -> &'a SchnorrSig {
+fn target<'a>(request: &ProgramSigningRequest, psbt: &'a Psbt) -> &'a bitcoin::taproot::Signature {
     let key = request
         .instance
         .derive_public_key(&oracle().public_root())
@@ -124,7 +121,10 @@ fn selected_input_and_path_are_the_only_modified_signature_slot() {
         let response = oracle.sign(request.clone()).unwrap();
         validate_program_response(&request, &response, &oracle.public_root()).unwrap();
         assert_eq!(response.inputs[0], request.psbt.0.inputs[0]);
-        assert_eq!(target(&request, &response).hash_ty, SchnorrSighashType::All);
+        assert_eq!(
+            target(&request, &response).sighash_type,
+            TapSighashType::All
+        );
         match request.path {
             ProgramSpendPath::KeyPath => assert!(response.inputs[1].tap_script_sigs.is_empty()),
             ProgramSpendPath::ScriptPath(_) => assert!(response.inputs[1].tap_key_sig.is_none()),
@@ -144,7 +144,7 @@ fn selected_input_and_path_are_the_only_modified_signature_slot() {
 fn declined_unknown_and_failed_programs_never_return_a_signature() {
     let oracle = oracle();
     let mut rejected = request(None);
-    rejected.psbt.0.unsigned_tx.output[0].value = 8_999;
+    rejected.psbt.0.unsigned_tx.output[0].value = bitcoin::Amount::from_sat(8_999);
     assert!(matches!(oracle.sign(rejected), Err(ProgramError::Rejected)));
     let mut unknown = request(None);
     unknown.instance = ProgramInstance::new(
@@ -176,14 +176,14 @@ fn missing_conflicting_and_unauthenticated_prevouts_fail_before_evaluation() {
         Err(ProgramError::MissingPrevout(0))
     ));
     let parent = Transaction {
-        version: 1,
-        lock_time: 0,
+        version: bitcoin::transaction::Version(1),
+        lock_time: bitcoin::absolute::LockTime::from_consensus(0),
         input: vec![TxIn::default()],
         output: vec![base.psbt.0.inputs[0].witness_utxo.clone().unwrap()],
     };
     let mut authenticated = base;
     authenticated.psbt.0.unsigned_tx.input[0].previous_output = OutPoint {
-        txid: parent.txid(),
+        txid: parent.compute_txid(),
         vout: 0,
     };
     authenticated.psbt.0.inputs[0].non_witness_utxo = Some(parent.clone());
@@ -192,7 +192,7 @@ fn missing_conflicting_and_unauthenticated_prevouts_fail_before_evaluation() {
         .witness_utxo
         .as_mut()
         .unwrap()
-        .value += 1;
+        .value += bitcoin::Amount::ONE_SAT;
     assert!(matches!(
         oracle.sign(conflict),
         Err(ProgramError::ConflictingPrevouts(0))
@@ -202,7 +202,7 @@ fn missing_conflicting_and_unauthenticated_prevouts_fail_before_evaluation() {
         .non_witness_utxo
         .as_mut()
         .unwrap()
-        .lock_time = 1;
+        .lock_time = bitcoin::absolute::LockTime::from_consensus(1);
     assert!(matches!(
         oracle.sign(wrong_txid),
         Err(ProgramError::InvalidNonWitnessPrevout(0))
@@ -235,10 +235,10 @@ fn signing_rejects_structural_sighash_finalization_and_bound_violations() {
     malformed.psbt.0.outputs.clear();
     assert!(matches!(oracle.sign(malformed), Err(ProgramError::Psbt(_))));
     let mut malformed = base.clone();
-    malformed.psbt.0.unsigned_tx.input[0].script_sig = Script::from(vec![0x51]);
+    malformed.psbt.0.unsigned_tx.input[0].script_sig = ScriptBuf::from(vec![0x51]);
     assert!(matches!(oracle.sign(malformed), Err(ProgramError::Psbt(_))));
     let mut malformed = base.clone();
-    malformed.psbt.0.unsigned_tx.input[0].witness = Witness::from_vec(vec![vec![1]]);
+    malformed.psbt.0.unsigned_tx.input[0].witness = Witness::from_slice(&vec![vec![1]]);
     assert!(matches!(oracle.sign(malformed), Err(ProgramError::Psbt(_))));
     let mut malformed = base.clone();
     malformed.input_index = 2;
@@ -247,10 +247,10 @@ fn signing_rejects_structural_sighash_finalization_and_bound_violations() {
         Err(ProgramError::InputIndex(2))
     ));
     for hash_ty in [
-        SchnorrSighashType::Default,
-        SchnorrSighashType::None,
-        SchnorrSighashType::Single,
-        SchnorrSighashType::AllPlusAnyoneCanPay,
+        TapSighashType::Default,
+        TapSighashType::None,
+        TapSighashType::Single,
+        TapSighashType::AllPlusAnyoneCanPay,
     ] {
         let mut malformed = base.clone();
         malformed.psbt.0.inputs[1].sighash_type = Some(hash_ty.into());
@@ -260,7 +260,7 @@ fn signing_rejects_structural_sighash_finalization_and_bound_violations() {
         ));
     }
     let mut finalized = base.clone();
-    finalized.psbt.0.inputs[1].final_script_sig = Some(Script::new());
+    finalized.psbt.0.inputs[1].final_script_sig = Some(ScriptBuf::new());
     assert!(matches!(
         oracle.sign(finalized),
         Err(ProgramError::FinalizedInput)
@@ -282,7 +282,7 @@ fn signing_rejects_structural_sighash_finalization_and_bound_violations() {
         Err(ProgramError::WitnessTooLarge(_))
     ));
     let mut explicit_all = base;
-    explicit_all.psbt.0.inputs[1].sighash_type = Some(SchnorrSighashType::All.into());
+    explicit_all.psbt.0.inputs[1].sighash_type = Some(TapSighashType::All.into());
     oracle.sign(explicit_all).unwrap();
 }
 
@@ -294,7 +294,7 @@ fn signing_authenticates_key_tweak_and_script_control_block() {
         .witness_utxo
         .as_mut()
         .unwrap()
-        .script_pubkey = Script::new();
+        .script_pubkey = ScriptBuf::new();
     assert!(matches!(
         oracle.sign(not_taproot),
         Err(ProgramError::NotTaproot)
@@ -348,7 +348,7 @@ fn signing_authenticates_key_tweak_and_script_control_block() {
     // A pushed byte is data, not an executed code separator. The signature
     // certifies the predicate even when the script does not use this key.
     let pushed = Builder::new()
-        .push_slice(&[OP_CODESEPARATOR.into_u8()])
+        .push_slice(&[OP_CODESEPARATOR.to_u8()])
         .push_opcode(OP_DROP)
         .push_int(1)
         .into_script();
@@ -363,9 +363,9 @@ fn finalization_metadata_on_other_inputs_cannot_change_evaluation_or_signature()
     let original = request(None);
     let first = oracle.sign(original.clone()).unwrap();
     let mut with_metadata = original;
-    with_metadata.psbt.0.inputs[0].final_script_sig = Some(Script::from(vec![0x51]));
+    with_metadata.psbt.0.inputs[0].final_script_sig = Some(ScriptBuf::from(vec![0x51]));
     with_metadata.psbt.0.inputs[0].final_script_witness =
-        Some(Witness::from_vec(vec![vec![1, 2, 3]]));
+        Some(Witness::from_slice(&vec![vec![1, 2, 3]]));
     with_metadata.psbt.0.inputs[0].unknown.insert(
         raw::Key {
             type_value: 0xfa,
@@ -384,18 +384,23 @@ fn finalization_metadata_on_other_inputs_cannot_change_evaluation_or_signature()
 
 #[test]
 fn signed_field_mutations_invalidate_both_signature_forms() {
-    type Mutation = fn(&mut PartiallySignedTransaction);
+    type Mutation = fn(&mut Psbt);
     let mutations: &[Mutation] = &[
-        |psbt| psbt.unsigned_tx.version += 1,
-        |psbt| psbt.unsigned_tx.lock_time += 1,
-        |psbt| psbt.unsigned_tx.input[0].previous_output.vout += 1,
-        |psbt| psbt.unsigned_tx.input[0].sequence += 1,
-        |psbt| psbt.inputs[0].witness_utxo.as_mut().unwrap().value += 1,
+        |psbt| psbt.unsigned_tx.version.0 += 1,
         |psbt| {
-            psbt.inputs[0].witness_utxo.as_mut().unwrap().script_pubkey = Script::from(vec![0x51])
+            psbt.unsigned_tx.lock_time = bitcoin::absolute::LockTime::from_consensus(
+                psbt.unsigned_tx.lock_time.to_consensus_u32() + 1,
+            )
         },
-        |psbt| psbt.unsigned_tx.output[0].value += 1,
-        |psbt| psbt.unsigned_tx.output[0].script_pubkey = Script::from(vec![0x51]),
+        |psbt| psbt.unsigned_tx.input[0].previous_output.vout += 1,
+        |psbt| psbt.unsigned_tx.input[0].sequence.0 += 1,
+        |psbt| psbt.inputs[0].witness_utxo.as_mut().unwrap().value += bitcoin::Amount::ONE_SAT,
+        |psbt| {
+            psbt.inputs[0].witness_utxo.as_mut().unwrap().script_pubkey =
+                ScriptBuf::from(vec![0x51])
+        },
+        |psbt| psbt.unsigned_tx.output[0].value += bitcoin::Amount::ONE_SAT,
+        |psbt| psbt.unsigned_tx.output[0].script_pubkey = ScriptBuf::from(vec![0x51]),
     ];
     for script in [None, Some(leaf())] {
         let oracle = oracle();
@@ -436,7 +441,7 @@ fn responses_must_preserve_all_metadata_and_unrelated_signature_slots() {
         extra_key.inputs[1].tap_script_sigs.insert(
             (
                 root().to_keypair(&Secp256k1::new()).x_only_public_key().0,
-                TapLeafHash::from_inner([2; 32]),
+                TapLeafHash::from_byte_array([2; 32]),
             ),
             signature,
         );
@@ -461,9 +466,9 @@ fn responses_must_preserve_all_metadata_and_unrelated_signature_slots() {
         assert!(
             validate_program_response(&request, &request.psbt.0, &oracle.public_root()).is_err()
         );
-        let wrong_root = ExtendedPubKey::from_priv(
+        let wrong_root = Xpub::from_priv(
             &Secp256k1::new(),
-            &ExtendedPrivKey::new_master(Network::Regtest, &[40; 32]).unwrap(),
+            &Xpriv::new_master(Network::Regtest, &[40; 32]).unwrap(),
         );
         assert!(validate_program_response(&request, &response, &wrong_root).is_err());
     }
@@ -480,7 +485,7 @@ fn conflicting_target_signatures_are_rejected_and_unrelated_ones_preserved() {
             .derive_public_key(&oracle.public_root())
             .unwrap();
         let mut bad_signature = *target(&request, &response);
-        bad_signature.hash_ty = SchnorrSighashType::Default;
+        bad_signature.sighash_type = TapSighashType::Default;
         put_signature(&mut request.psbt.0, 1, request.path, key, bad_signature);
         assert!(matches!(
             oracle.sign(request.clone()),

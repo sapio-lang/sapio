@@ -34,7 +34,7 @@ fn royalty_cannot_exceed_price_even_at_u64_boundary() {
         mint(1.0)
             .compute_royalty_for_artist(Amount::from_sat(u64::MAX))
             .unwrap()
-            .as_sat(),
+            .to_sat(),
         u64::MAX
     );
     assert_eq!(
@@ -47,7 +47,7 @@ fn royalty_cannot_exceed_price_even_at_u64_boundary() {
         mint(0.25)
             .compute_royalty_for_artist(Amount::from_sat(101))
             .unwrap()
-            .as_sat(),
+            .to_sat(),
         25
     );
     assert_eq!(

@@ -250,10 +250,10 @@ fn absent_factories_preserve_declared_condition_context_slots() {
     assert_eq!(compiled.ctv_to_tx.len(), 1);
     let template = compiled.ctv_to_tx.values().next().unwrap();
     assert_eq!(template.tx.output.len(), 1);
-    assert_eq!(template.tx.output[0].value, 1000);
+    assert_eq!(template.tx.output[0].value.to_sat(), 1000);
     assert_eq!(
         template.tx.output[0].script_pubkey,
-        bitcoin::Script::from(&key(3).compile(context()).unwrap().address)
+        bitcoin::ScriptBuf::from(&key(3).compile(context()).unwrap().address)
     );
 }
 

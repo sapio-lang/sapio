@@ -1,6 +1,6 @@
 use bitcoin::consensus::serialize;
 use bitcoin::secp256k1::{Keypair, Secp256k1, SecretKey};
-use bitcoin::{Address, Amount, Network, Script, TxOut};
+use bitcoin::{Address, Amount, Network, ScriptBuf, TxOut};
 use sapio::contract::{Compiled, Context};
 use sapio::template::Builder;
 use sapio::util::extended_address::ExtendedAddress;
@@ -24,11 +24,14 @@ fn destinations() -> Vec<Compiled> {
     let secp = Secp256k1::new();
     let pair = Keypair::from_secret_key(&secp, &SecretKey::from_slice(&[1; 32]).unwrap());
     let public = bitcoin::PublicKey::new(pair.public_key());
-    let script = Script::new_op_return(&[1, 2, 3]);
+    let script = ScriptBuf::new_op_return([1, 2, 3]);
     let mut values: Vec<_> = [
-        Address::p2pkh(&public, Network::Regtest),
+        Address::p2pkh(public, Network::Regtest),
         Address::p2sh(&script, Network::Regtest).unwrap(),
-        Address::p2wpkh(&public, Network::Regtest).unwrap(),
+        Address::p2wpkh(
+            &bitcoin::CompressedPublicKey::try_from(public).unwrap(),
+            Network::Regtest,
+        ),
         Address::p2wsh(&script, Network::Regtest),
         Address::p2tr(&secp, pair.x_only_public_key().0, None, Network::Regtest),
     ]
@@ -52,7 +55,7 @@ fn unsigned_size_counts_actual_scripts_for_every_destination_form() {
             .add_output(Amount::from_sat(1), &destination, None)
             .unwrap();
         assert_eq!(tx.unsigned_tx_size(), serialize(&tx.get_tx()).len() as u64);
-        assert_eq!(tx.unsigned_tx_size() * 4, tx.get_tx().weight() as u64);
+        assert_eq!(tx.unsigned_tx_size() * 4, tx.get_tx().weight().to_wu());
     }
     let size = tx.unsigned_tx_size();
     let paying_fees = tx.add_fees(Amount::from_sat(100)).unwrap();
@@ -64,7 +67,7 @@ fn unsigned_size_counts_actual_scripts_for_every_destination_form() {
 fn output_script_compact_size_boundaries_are_counted_exactly() {
     for size in [0, 1, 252, 253, 65_535, 65_536] {
         let mut destination = destinations().remove(0);
-        let script = Script::from(vec![0x61; size]);
+        let script = ScriptBuf::from(vec![0x61; size]);
         destination.address = ExtendedAddress::Unknown(script.clone());
         let tx = builder();
         let predicted = tx.unsigned_tx_size_with_output(&script);
@@ -77,7 +80,7 @@ fn output_script_compact_size_boundaries_are_counted_exactly() {
 #[test]
 fn input_and_output_count_boundaries_include_their_compact_size_growth() {
     let destination = destinations().remove(0);
-    let script = Script::from(&destination.address);
+    let script = ScriptBuf::from(&destination.address);
     let mut tx = builder();
     for inputs in 1..=253 {
         if inputs > 1 {
@@ -99,7 +102,7 @@ fn input_and_output_count_boundaries_include_their_compact_size_growth() {
     let predicted = tx.unsigned_tx_size_with_output(&script);
     let mut transaction = tx.get_tx();
     transaction.output.push(TxOut {
-        value: u64::MAX,
+        value: bitcoin::Amount::from_sat(u64::MAX),
         script_pubkey: script,
     });
     assert_eq!(predicted, serialize(&transaction).len() as u64);

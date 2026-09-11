@@ -4,9 +4,9 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use bitcoin::amount::Amount;
+use bitcoin::bip32::*;
 use bitcoin::secp256k1::Secp256k1;
-use bitcoin::util::amount::Amount;
-use bitcoin::util::bip32::*;
 use bitcoin::TxOut;
 use emulator_connect::connections::hd::HDOracleEmulatorConnection;
 use emulator_connect::servers::hd::HDOracleEmulator;
@@ -50,10 +50,8 @@ impl<T: Compilable + 'static> Contract for TestEmulation<T> {
 #[tokio::test(flavor = "multi_thread")]
 async fn compiles_signs_and_finalizes_a_two_step_contract() {
     let secp = Secp256k1::new();
-    let root =
-        ExtendedPrivKey::new_master(bitcoin::network::constants::Network::Regtest, &[44u8; 32])
-            .unwrap();
-    let pk_root = ExtendedPubKey::from_priv(&secp, &root);
+    let root = Xpriv::new_master(bitcoin::Network::Regtest, &[44u8; 32]).unwrap();
+    let pk_root = Xpub::from_priv(&secp, &root);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let server = tokio::spawn(HDOracleEmulator::new(root).serve(listener));
@@ -63,6 +61,8 @@ async fn compiles_signs_and_finalizes_a_two_step_contract() {
             bitcoin::Address::from_str(
                 "tb1pnt49mgrp6djyzj7ttldle9lhnhav9hh7pcaqmv9yqpfrwk4yzvasd8wc37",
             )
+            .unwrap()
+            .require_network(bitcoin::Network::Testnet)
             .unwrap(),
             bitcoin::Amount::ZERO,
         ),
@@ -104,11 +104,11 @@ async fn compiles_signs_and_finalizes_a_two_step_contract() {
     compiled.validate_for_emulator(rc_conn.as_ref()).unwrap();
     let txindex: Rc<dyn TxIndex> = Rc::new(TxIndexLogger::new());
     let tx = bitcoin::Transaction {
-        version: 2,
-        lock_time: 0,
+        version: bitcoin::transaction::Version::TWO,
+        lock_time: bitcoin::absolute::LockTime::from_consensus(0),
         input: vec![bitcoin::TxIn::default()],
         output: vec![TxOut {
-            value: Amount::from_btc(1.0).unwrap().as_sat(),
+            value: Amount::from_btc(1.0).unwrap(),
             script_pubkey: compiled.address.clone().into(),
         }],
     };
@@ -119,25 +119,25 @@ async fn compiles_signs_and_finalizes_a_two_step_contract() {
         txindex,
         rc_conn.as_ref(),
     );
-    use bitcoin::psbt::PartiallySignedTransaction;
+    use bitcoin::psbt::Psbt;
     use sapio::contract::abi::studio::SapioStudioFormat;
 
     let mut sequences = Vec::new();
     for sso in psbts.unwrap().program.values() {
         for tx in &sso.txs {
             let SapioStudioFormat::LinkedPSBT { psbt, .. } = tx;
-            let mut psbt = PartiallySignedTransaction::from_str(psbt).unwrap();
+            let mut psbt = Psbt::from_str(psbt).unwrap();
             assert_eq!(psbt.inputs.len(), 1);
-            let original_txid = psbt.unsigned_tx.txid();
+            let original_txid = psbt.unsigned_tx.compute_txid();
             let mut tampered = psbt.clone();
-            tampered.unsigned_tx.output[0].value -= 1;
+            tampered.unsigned_tx.output[0].value -= bitcoin::Amount::ONE_SAT;
             assert!(tampered.finalize_mut(&secp).is_err());
             psbt.finalize_mut(&secp).unwrap();
-            let finalized = psbt.extract_tx();
-            assert_eq!(finalized.txid(), original_txid);
+            let finalized = psbt.extract_tx().unwrap();
+            assert_eq!(finalized.compute_txid(), original_txid);
             assert!(!finalized.input[0].witness.is_empty());
-            assert_eq!(finalized.output[0].value, 100_000_000);
-            sequences.push(finalized.input[0].sequence);
+            assert_eq!(finalized.output[0].value.to_sat(), 100_000_000);
+            sequences.push(finalized.input[0].sequence.to_consensus_u32());
         }
     }
     sequences.sort_unstable();

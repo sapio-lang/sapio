@@ -7,8 +7,8 @@
 //! Public inputs for deterministic covenant lowering, without signer runtimes.
 
 use crate::Clause;
+use bitcoin::bip32::{self, ChildNumber, Xpub};
 use bitcoin::hashes::{sha256, Hash};
-use bitcoin::util::bip32::{self, ChildNumber, ExtendedPubKey};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -53,7 +53,7 @@ pub enum LoweringPlan {
     CtvEmulation {
         /// Public roots in policy order; endpoint and transport settings are absent.
         #[schemars(with = "Vec<String>")]
-        signers: Vec<ExtendedPubKey>,
+        signers: Vec<Xpub>,
         /// Required signer count, from one through the number of distinct roots.
         #[schemars(range(min = 1))]
         threshold: u8,
@@ -182,7 +182,13 @@ impl LoweringPlan {
                 if clauses.len() == 1 {
                     Ok(clauses.remove(0))
                 } else {
-                    Ok(Clause::Threshold(usize::from(*threshold), clauses))
+                    Ok(Clause::Thresh(
+                        miniscript::Threshold::new(
+                            usize::from(*threshold),
+                            clauses.into_iter().map(std::sync::Arc::new).collect(),
+                        )
+                        .expect("validated signer threshold"),
+                    ))
                 }
             }
         }
@@ -196,7 +202,7 @@ impl LoweringPlan {
 /// This preserves the existing CTV protocol exactly; it is not a namespaced
 /// commitment scheme for arbitrary programs.
 pub fn hash_to_child_vec(hash: sha256::Hash) -> Vec<ChildNumber> {
-    let bytes = hash.into_inner();
+    let bytes = hash.to_byte_array();
     let mut children = Vec::with_capacity(9);
     let mut high_bits = 0;
     for (index, chunk) in bytes.chunks_exact(4).enumerate() {
@@ -214,18 +220,18 @@ pub fn hash_to_child_vec(hash: sha256::Hash) -> Vec<ChildNumber> {
 mod tests {
     use super::*;
     use crate::policy::{PolicyCompiler, ScriptPolicy};
+    use bitcoin::bip32::{ChainCode, Fingerprint, Xpriv};
     use bitcoin::secp256k1::Secp256k1;
-    use bitcoin::util::bip32::{ChainCode, ExtendedPrivKey, Fingerprint};
     use bitcoin::Network;
     use serde_json::json;
     use std::collections::BTreeSet;
 
-    fn root(byte: u8) -> ExtendedPrivKey {
-        ExtendedPrivKey::new_master(Network::Testnet, &[byte; 32]).unwrap()
+    fn root(byte: u8) -> Xpriv {
+        Xpriv::new_master(Network::Testnet, &[byte; 32]).unwrap()
     }
 
-    fn public_root(byte: u8) -> ExtendedPubKey {
-        ExtendedPubKey::from_priv(&Secp256k1::new(), &root(byte))
+    fn public_root(byte: u8) -> Xpub {
+        Xpub::from_priv(&Secp256k1::new(), &root(byte))
     }
 
     fn predicate() -> Ctv {
@@ -268,7 +274,7 @@ mod tests {
         for bit in 0..256 {
             let mut bytes = [0; 32];
             bytes[bit / 8] = 1 << (bit % 8);
-            let path = hash_to_child_vec(sha256::Hash::from_inner(bytes));
+            let path = hash_to_child_vec(sha256::Hash::from_byte_array(bytes));
             assert_eq!(path.len(), 9);
             assert!(path.iter().all(ChildNumber::is_normal));
             let high = u32::from(path[8]);
@@ -285,10 +291,10 @@ mod tests {
         }
         assert_eq!(paths.len(), 256);
         assert_eq!(
-            hash_to_child_vec(sha256::Hash::from_inner([0; 32])),
+            hash_to_child_vec(sha256::Hash::from_byte_array([0; 32])),
             vec![ChildNumber::Normal { index: 0 }; 9]
         );
-        let maximum = hash_to_child_vec(sha256::Hash::from_inner([255; 32]));
+        let maximum = hash_to_child_vec(sha256::Hash::from_byte_array([255; 32]));
         assert_eq!(
             maximum[..8],
             [ChildNumber::Normal { index: 0x7fff_ffff }; 8]
@@ -327,7 +333,13 @@ mod tests {
                 }
                 .lower_ctv(Ctv(hash))
                 .unwrap(),
-                Clause::Threshold(usize::from(threshold), expected.clone())
+                Clause::Thresh(
+                    miniscript::Threshold::new(
+                        usize::from(threshold),
+                        expected.iter().cloned().map(std::sync::Arc::new).collect()
+                    )
+                    .unwrap()
+                )
             );
         }
         assert_eq!(
@@ -353,9 +365,9 @@ mod tests {
         }
         let root = public_root(1);
         let mut relabeled = root;
-        relabeled.network = Network::Bitcoin;
+        relabeled.network = Network::Bitcoin.into();
         relabeled.depth = 12;
-        relabeled.parent_fingerprint = Fingerprint::from(&[2; 4][..]);
+        relabeled.parent_fingerprint = Fingerprint::from([2; 4]);
         relabeled.child_number = ChildNumber::Normal { index: 42 };
         assert_ne!(root, relabeled);
         for duplicate in [root, relabeled] {
@@ -372,16 +384,17 @@ mod tests {
             );
         }
         let mut independent = root;
-        independent.chain_code = ChainCode::from(&[3; 32][..]);
+        independent.chain_code = ChainCode::from([3; 32]);
         let plan = LoweringPlan::CtvEmulation {
             signers: vec![root, independent],
             threshold: 2,
         };
         plan.validate().unwrap();
-        let Clause::Threshold(2, keys) = plan.lower_ctv(predicate()).unwrap() else {
+        let Clause::Thresh(keys) = plan.lower_ctv(predicate()).unwrap() else {
             panic!("expected two-signer policy");
         };
-        assert_ne!(keys[0], keys[1]);
+        assert_eq!(keys.k(), 2);
+        assert_ne!(keys.data()[0], keys.data()[1]);
     }
 
     #[test]
@@ -432,7 +445,7 @@ mod tests {
         // BIP32 has one tpub version for all test networks. Deserialization
         // labels it Testnet; that metadata does not change the derived policy.
         let mut regtest_root = public_root(1);
-        regtest_root.network = Network::Regtest;
+        regtest_root.network = Network::Regtest.into();
         let regtest_plan = LoweringPlan::CtvEmulation {
             signers: vec![regtest_root],
             threshold: 1,

@@ -1,5 +1,5 @@
+use bitcoin::bip32::Xpub;
 use bitcoin::secp256k1::Secp256k1;
-use bitcoin::util::bip32::ExtendedPubKey;
 use emulator_connect::program::{ProgramClient, ProgramClientError, ProgramError, ProgramOracle};
 use miniscript::psbt::PsbtExt;
 use sapio_base::program::EmulatedProgram;
@@ -9,7 +9,7 @@ fn contract() -> PaymentContract {
     PaymentContract::new(
         5_000,
         recipient(92),
-        ExtendedPubKey::from_priv(&Secp256k1::new(), &example_root()),
+        Xpub::from_priv(&Secp256k1::new(), &example_root()),
     )
 }
 
@@ -67,13 +67,9 @@ fn recipient_minimum_and_oracle_root_are_fixed_before_funding() {
         PaymentContract::new(
             5_000,
             recipient(92),
-            ExtendedPubKey::from_priv(
+            Xpub::from_priv(
                 &Secp256k1::new(),
-                &bitcoin::util::bip32::ExtendedPrivKey::new_master(
-                    bitcoin::Network::Regtest,
-                    &[95; 32],
-                )
-                .unwrap(),
+                &bitcoin::bip32::Xpriv::new_master(bitcoin::Network::Regtest, &[95; 32]).unwrap(),
             ),
         ),
     ] {
@@ -96,7 +92,7 @@ fn the_oracle_enforces_the_program_and_rejects_altered_authorization() {
     let mut candidates = bind_candidates(&compiled).unwrap();
     let underpaid = candidates
         .iter()
-        .position(|candidate| candidate.unsigned_tx.output[0].value == 4_999)
+        .position(|candidate| candidate.unsigned_tx.output[0].value.to_sat() == 4_999)
         .unwrap();
     let underpaid = candidates.remove(underpaid);
     assert!(matches!(
@@ -109,7 +105,7 @@ fn the_oracle_enforces_the_program_and_rejects_altered_authorization() {
     let signed = oracle.sign(request.clone()).unwrap();
     let mut finalized = signed.clone();
     finalized.finalize_mut(&Secp256k1::new()).unwrap();
-    assert!(!finalized.extract_tx().input[0].witness.is_empty());
+    assert!(!finalized.extract_tx().unwrap().input[0].witness.is_empty());
 
     let mut wrong_recipient = request.clone();
     wrong_recipient.psbt.0.unsigned_tx.output[0].script_pubkey = recipient(93).script_pubkey();
@@ -143,8 +139,7 @@ fn the_oracle_enforces_the_program_and_rejects_altered_authorization() {
         Err(ProgramError::KeyPathMismatch)
     ));
     let wrong_root = ProgramOracle::new(
-        bitcoin::util::bip32::ExtendedPrivKey::new_master(bitcoin::Network::Regtest, &[95; 32])
-            .unwrap(),
+        bitcoin::bip32::Xpriv::new_master(bitcoin::Network::Regtest, &[95; 32]).unwrap(),
         vec![pay_at_least_evaluator()],
     )
     .unwrap();
@@ -159,7 +154,7 @@ fn the_oracle_enforces_the_program_and_rejects_altered_authorization() {
         if changed_recipient {
             altered.unsigned_tx.output[0].script_pubkey = recipient(93).script_pubkey();
         } else {
-            altered.unsigned_tx.output[0].value -= 1;
+            altered.unsigned_tx.output[0].value -= bitcoin::Amount::ONE_SAT;
         }
         assert!(altered.finalize_mut(&Secp256k1::new()).is_err());
     }
@@ -205,15 +200,15 @@ async fn one_fixed_continuation_accepts_larger_and_reordered_payments_over_tcp()
             .iter()
             .position(|output| output.script_pubkey == recipient(92).script_pubkey())
             .unwrap();
-        let value = candidate.unsigned_tx.output[index].value;
-        let original_txid = candidate.unsigned_tx.txid();
+        let value = candidate.unsigned_tx.output[index].value.to_sat();
+        let original_txid = candidate.unsigned_tx.compute_txid();
         let mut signed = client
             .sign(signing_request(source.emulation(), candidate, index as u32))
             .await
             .unwrap();
         signed.finalize_mut(&Secp256k1::new()).unwrap();
-        let transaction = signed.extract_tx();
-        assert_eq!(transaction.txid(), original_txid);
+        let transaction = signed.extract_tx().unwrap();
+        assert_eq!(transaction.compute_txid(), original_txid);
         assert!(!transaction.input[0].witness.is_empty());
         accepted.push((value, index));
     }

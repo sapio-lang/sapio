@@ -6,8 +6,8 @@
 
 //! configuration file format / parsing for sapio command line interface
 
-use bitcoin::util::bip32::ExtendedPubKey;
-use bitcoincore_rpc_async as rpc;
+use bitcoin::bip32::Xpub;
+use bitcoincore_rpc as rpc;
 
 use directories::BaseDirs;
 use emulator_connect::connections::federated::FederatedEmulatorConnection;
@@ -33,7 +33,7 @@ mod tests;
 pub struct EmulatorConfig {
     /// list of emulators to use & how to contact them
     #[schemars(with = "Vec<(String, String)>")]
-    pub emulators: Vec<(ExtendedPubKey, String)>,
+    pub emulators: Vec<(Xpub, String)>,
     /// threshold could be larger than u8, but that seems very unlikely/an error.
     pub threshold: u8,
     /// Elapsed seconds allowed for configuration resolution and each signing
@@ -120,20 +120,6 @@ impl EmulatorConfig {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(into = "PathBuf")]
-#[serde(from = "String")]
-struct PathBufWrapped(PathBuf);
-impl From<String> for PathBufWrapped {
-    fn from(s: String) -> Self {
-        PathBufWrapped(s.into())
-    }
-}
-impl Into<PathBuf> for PathBufWrapped {
-    fn into(self) -> PathBuf {
-        self.0
-    }
-}
 /// Used to serailize/deserialize pathbufs for config
 mod pathbuf_serde {
     use serde::*;
@@ -207,15 +193,15 @@ impl From<WasmerCacheHash> for [u8; 32] {
 #[serde(try_from = "String", into = "String")]
 pub struct WasmerCacheHash([u8; 32]);
 
-use bitcoin::hashes::hex::{FromHex, ToHex};
+use bitcoin::hashes::hex::{DisplayHex, FromHex};
 impl From<WasmerCacheHash> for String {
     fn from(x: WasmerCacheHash) -> Self {
-        ToHex::to_hex(&x.0[..])
+        x.0.as_slice().to_lower_hex_string()
     }
 }
 
 impl TryFrom<String> for WasmerCacheHash {
-    type Error = bitcoin::hashes::hex::Error;
+    type Error = <[u8; 32] as FromHex>::Error;
     fn try_from(s: String) -> Result<Self, Self::Error> {
         FromHex::from_hex(&s).map(WasmerCacheHash)
     }
@@ -229,7 +215,7 @@ pub struct Config {
     /// the currently active configuration
     pub active: NetworkConfig,
     /// which network the configuration is for
-    pub network: bitcoin::network::constants::Network,
+    pub network: bitcoin::Network,
 }
 
 impl Config {
@@ -271,6 +257,7 @@ impl Config {
 pub struct ConfigVerifier {
     main: Option<NetworkConfig>,
     testnet: Option<NetworkConfig>,
+    testnet4: Option<NetworkConfig>,
     signet: Option<NetworkConfig>,
     regtest: Option<NetworkConfig>,
 }
@@ -293,20 +280,24 @@ impl From<Config> for ConfigVerifier {
         let mut res = ConfigVerifier {
             main: None,
             testnet: None,
+            testnet4: None,
             signet: None,
             regtest: None,
         };
         match c.network {
-            bitcoin::network::constants::Network::Regtest => {
+            bitcoin::Network::Regtest => {
                 res.regtest = Some(c.active);
             }
-            bitcoin::network::constants::Network::Signet => {
+            bitcoin::Network::Signet => {
                 res.signet = Some(c.active);
             }
-            bitcoin::network::constants::Network::Testnet => {
+            bitcoin::Network::Testnet => {
                 res.testnet = Some(c.active);
             }
-            bitcoin::network::constants::Network::Bitcoin => {
+            bitcoin::Network::Testnet4 => {
+                res.testnet4 = Some(c.active);
+            }
+            bitcoin::Network::Bitcoin => {
                 res.main = Some(c.active);
             }
         };
@@ -315,53 +306,43 @@ impl From<Config> for ConfigVerifier {
 }
 
 impl ConfigVerifier {
-    /// Return the active network
-    fn get_network(&self) -> Result<bitcoin::network::constants::Network, ConfigError> {
-        match self.get_n() {
-            1 => Err(ConfigError::NoActiveConfig),
-            3 => Ok(bitcoin::network::constants::Network::Bitcoin),
-            11 => Ok(bitcoin::network::constants::Network::Testnet),
-            7 => Ok(bitcoin::network::constants::Network::Regtest),
-            5 => Ok(bitcoin::network::constants::Network::Signet),
-            _ => Err(ConfigError::TooManyActiveNetworks),
+    fn networks(&self) -> [(bitcoin::Network, Option<&NetworkConfig>); 5] {
+        [
+            (bitcoin::Network::Bitcoin, self.main.as_ref()),
+            (bitcoin::Network::Testnet, self.testnet.as_ref()),
+            (bitcoin::Network::Testnet4, self.testnet4.as_ref()),
+            (bitcoin::Network::Signet, self.signet.as_ref()),
+            (bitcoin::Network::Regtest, self.regtest.as_ref()),
+        ]
+    }
+
+    /// Return the sole active network, ignoring configured inactive networks.
+    fn get_network(&self) -> Result<bitcoin::Network, ConfigError> {
+        let mut active = self
+            .networks()
+            .into_iter()
+            .filter_map(|(network, config)| config.filter(|config| config.active).map(|_| network));
+        let network = active.next().ok_or(ConfigError::NoActiveConfig)?;
+        if active.next().is_some() {
+            return Err(ConfigError::TooManyActiveNetworks);
         }
+        Ok(network)
     }
-    /// This is some... clever... code which assigns a prime number to every
-    /// active network and then multiplies them all together.
-    ///
-    /// The result can then be used to pick which network should be used & verify
-    /// that only one network is active at once.
-    ///
-    /// The alternative is a bit messier unfortunately, but maybe simpler as a refactor.
-    fn get_n(&self) -> i32 {
-        let v0 = self.main.as_ref().map(|c| 3 * c.active as i32).unwrap_or(1);
-        let v1 = self
-            .signet
-            .as_ref()
-            .map(|c| 5 * c.active as i32)
-            .unwrap_or(1);
-        let v2 = self
-            .regtest
-            .as_ref()
-            .map(|c| 7 * c.active as i32)
-            .unwrap_or(1);
-        let v3 = self
-            .testnet
-            .as_ref()
-            .map(|c| 11 * c.active as i32)
-            .unwrap_or(1);
-        v0 * v1 * v2 * v3
-    }
+
     /// Checks the config for correctness and then returns the active config.
     pub fn check(self) -> Result<NetworkConfig, ConfigError> {
-        match self.get_n() {
-            1 => Err(ConfigError::NoActiveConfig),
-            3 => Ok(self.main.unwrap()),
-            5 => Ok(self.signet.unwrap()),
-            7 => Ok(self.regtest.unwrap()),
-            11 => Ok(self.testnet.unwrap()),
-            _ => Err(ConfigError::TooManyActiveNetworks),
-        }
+        self.get_network()?;
+        [
+            self.main,
+            self.testnet,
+            self.testnet4,
+            self.signet,
+            self.regtest,
+        ]
+        .into_iter()
+        .flatten()
+        .find(|config| config.active)
+        .ok_or(ConfigError::NoActiveConfig)
     }
 
     /// a setup wizard to generate a new config file
@@ -380,13 +361,14 @@ impl ConfigVerifier {
         let network;
         let mut lines = reader.lines();
         loop {
-            println!("Which Network? (main, reg, sig, test): ");
+            println!("Which Network? (main, reg, sig, test, test4): ");
             if let Some(line) = lines.next_line().await? {
                 network = match line.trim() {
-                    "main" => bitcoin::network::constants::Network::Bitcoin,
-                    "reg" => bitcoin::network::constants::Network::Regtest,
-                    "sig" => bitcoin::network::constants::Network::Signet,
-                    "test" => bitcoin::network::constants::Network::Testnet,
+                    "main" => bitcoin::Network::Bitcoin,
+                    "reg" => bitcoin::Network::Regtest,
+                    "sig" => bitcoin::Network::Signet,
+                    "test" => bitcoin::Network::Testnet,
+                    "test4" => bitcoin::Network::Testnet4,
                     _ => {
                         println!("Not a valid option {:?}", line);
                         continue;
@@ -532,7 +514,7 @@ async fn covenant_wizard<R: tokio::io::AsyncBufRead + Unpin>(
         if key.is_empty() && !emulators.is_empty() {
             break;
         }
-        let key = match ExtendedPubKey::from_str(key) {
+        let key = match Xpub::from_str(key) {
             Ok(key) => key,
             Err(error) => {
                 println!("Invalid extended public key: {error}");

@@ -6,8 +6,8 @@
 
 //! utilities for building Bitcoin transaction templates up programmatically
 use crate::contract::error::CompilationError;
+use bitcoin::amount::Amount;
 use bitcoin::hashes::sha256;
-use bitcoin::util::amount::Amount;
 use sapio_base::policy::ScriptPolicy;
 use sapio_base::simp::SIMPAttachableAt;
 use sapio_base::simp::SIMPError;
@@ -120,30 +120,28 @@ pub struct Template {
     pub guards: Vec<ScriptPolicy>,
     /// the precomputed template hash for this Template
     #[serde(rename = "precomputed_template_hash")]
+    #[schemars(with = "String")]
     pub ctv: sha256::Hash,
     /// the index used for the template hash. (TODO: currently always 0, although
     /// future version may support other indexes)
     #[serde(rename = "precomputed_template_hash_idx")]
     pub ctv_index: u32,
     /// Aggregate funding required across all inputs for outputs and reserved fees.
-    #[serde(
-        rename = "max_amount_sats",
-        with = "bitcoin::util::amount::serde::as_sat"
-    )]
+    #[serde(rename = "max_amount_sats", with = "bitcoin::amount::serde::as_sat")]
     #[schemars(with = "u64")]
     pub max: Amount,
     /// Minimum funding required from the contract input at index zero, after
     /// accounting for declared auxiliary input contributions.
     #[serde(
         rename = "required_input_amount_sats",
-        with = "bitcoin::util::amount::serde::as_sat"
+        with = "bitcoin::amount::serde::as_sat"
     )]
     #[schemars(with = "u64")]
     pub required_input_amount: Amount,
     /// Minimum fee rate requested for this transaction.
     #[serde(
         rename = "min_feerate_sats_vbyte",
-        with = "bitcoin::util::amount::serde::as_sat::opt"
+        with = "bitcoin::amount::serde::as_sat::opt"
     )]
     #[schemars(with = "Option<u64>")]
     pub min_feerate_sats_vbyte: Option<Amount>,
@@ -155,6 +153,7 @@ pub struct Template {
     pub metadata_map_s2s: TemplateMetadata,
     /// The actual transaction this template will create
     #[serde(rename = "transaction_literal")]
+    #[schemars(with = "sapio_base::schema::Transaction")]
     pub tx: bitcoin::Transaction,
     /// sapio specific information about all the outputs in the `tx`.
     #[serde(rename = "outputs_info")]

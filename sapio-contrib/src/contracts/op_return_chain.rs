@@ -55,7 +55,7 @@ impl ChainReturn {
                 .funds()
                 .checked_sub(pay_fees)
                 .ok_or(CompilationError::OutOfFunds)?;
-            if funds.as_sat() != 0 {
+            if funds.to_sat() != 0 {
                 tmpl = tmpl.add_output(funds, self, None)?;
             }
         } else {
@@ -116,7 +116,7 @@ mod tests {
                 .tx
                 .output
                 .iter()
-                .map(|o| o.value)
+                .map(|o| o.value.to_sat())
                 .collect::<Vec<_>>(),
             vec![0, 900]
         );

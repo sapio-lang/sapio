@@ -45,8 +45,8 @@ fn template_hash_matches_all_official_bip446_cases() {
 #[test]
 fn template_hash_rejects_nonexistent_inputs_and_malformed_annexes() {
     let transaction = Transaction {
-        version: 2,
-        lock_time: 0,
+        version: bitcoin::transaction::Version(2),
+        lock_time: bitcoin::absolute::LockTime::from_consensus(0),
         input: vec![bitcoin::TxIn::default()],
         output: vec![],
     };

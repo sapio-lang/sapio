@@ -2,8 +2,8 @@ use super::*;
 use sapio_base::covenant::LoweringPlan;
 #[test]
 fn fee_rounds_up_and_rejects_unrepresentable_total() {
-    assert_eq!(estimated_fee(1.into(), 1).unwrap().as_sat(), 1);
-    assert_eq!(estimated_fee(250.into(), 100).unwrap().as_sat(), 100);
+    assert_eq!(estimated_fee(1.into(), 1).unwrap().to_sat(), 1);
+    assert_eq!(estimated_fee(250.into(), 100).unwrap().to_sat(), 100);
     assert!(estimated_fee(u64::MAX.into(), u64::MAX).is_err());
 }
 
@@ -26,7 +26,12 @@ fn vault_records_fees_in_required_funding() {
                     amount: Amount::from_sat(500).into(),
                 });
             }
-            let backup_script = vault.backup_addr.script_pubkey();
+            let backup_script = vault
+                .backup_addr
+                .clone()
+                .require_network(bitcoin::Network::Regtest)
+                .unwrap()
+                .script_pubkey();
             let ctx = Context::new(
                 bitcoin::Network::Regtest,
                 Amount::from_sat(10000),
@@ -54,14 +59,19 @@ fn vault_records_fees_in_required_funding() {
 
                     let unsigned_bytes = bitcoin::consensus::serialize(&template.tx).len() as u64;
                     let expected_fee = (unsigned_bytes * 4 * rate).div_ceil(1000);
-                    let output_total = template.tx.output.iter().map(|o| o.value).sum::<u64>();
+                    let output_total = template
+                        .tx
+                        .output
+                        .iter()
+                        .map(|o| o.value.to_sat())
+                        .sum::<u64>();
                     assert_eq!(funding - output_total, expected_fee);
                     assert_eq!(
                         template.max - template.total_amount(),
                         Amount::from_sat(expected_fee)
                     );
                     if cpfp {
-                        assert_eq!(template.tx.output[0].value, 500);
+                        assert_eq!(template.tx.output[0].value.to_sat(), 500);
                         assert_eq!(template.tx.output[0].script_pubkey, backup_script);
                     }
                     match template.metadata_map_s2s.label.as_deref() {
@@ -74,13 +84,7 @@ fn vault_records_fees_in_required_funding() {
                         }
                         Some("begin redeem") => {
                             redeems += 1;
-                            assert!(template
-                                .tx
-                                .output
-                                .last()
-                                .unwrap()
-                                .script_pubkey
-                                .is_v1_p2tr());
+                            assert!(template.tx.output.last().unwrap().script_pubkey.is_p2tr());
                         }
                         label => panic!("Unexpected vault transaction: {label:?}"),
                     }
@@ -89,7 +93,7 @@ fn vault_records_fees_in_required_funding() {
                             .outputs
                             .iter()
                             .filter(|output| !output.contract.ctv_to_tx.is_empty())
-                            .map(|output| (&output.contract, output.amount.as_sat())),
+                            .map(|output| (&output.contract, output.amount.to_sat())),
                     );
                 }
             }

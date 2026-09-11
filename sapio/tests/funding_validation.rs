@@ -1,6 +1,6 @@
 use bitcoin::hashes::{sha256, Hash};
-use bitcoin::psbt::PartiallySignedTransaction as Psbt;
-use bitcoin::{Address, Amount, Network, OutPoint, Script, Transaction, TxIn, TxOut, Txid};
+use bitcoin::psbt::Psbt;
+use bitcoin::{Address, Amount, Network, OutPoint, ScriptBuf, Transaction, TxIn, TxOut, Txid};
 use sapio::contract::abi::object::{ArtifactErrorKind, ObjectError};
 use sapio::contract::abi::studio::{Program, SapioStudioFormat};
 use sapio::contract::{Compilable, Compiled, Context, Contract};
@@ -41,7 +41,10 @@ impl Contract for Payment {
 
 fn leaf() -> Compiled {
     Compiled::from_address(
-        Address::from_str("bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj").unwrap(),
+        Address::from_str("bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj")
+            .unwrap()
+            .require_network(Network::Regtest)
+            .unwrap(),
         bitcoin::Amount::ZERO,
     )
 }
@@ -65,11 +68,11 @@ fn payment(destination: Compiled, extra_input: bool, fees: u64, path: &str) -> C
 
 fn funding(object: &Compiled, value: u64) -> Transaction {
     Transaction {
-        version: 2,
-        lock_time: 0,
+        version: bitcoin::transaction::Version(2),
+        lock_time: bitcoin::absolute::LockTime::from_consensus(0),
         input: vec![TxIn::default()],
         output: vec![TxOut {
-            value,
+            value: Amount::from_sat(value),
             script_pubkey: object.address.clone().into(),
         }],
     }
@@ -87,7 +90,10 @@ struct Index {
 impl Index {
     fn with(tx: Transaction) -> Rc<Self> {
         let index = Rc::new(Self::default());
-        index.txs.borrow_mut().insert(tx.txid(), Arc::new(tx));
+        index
+            .txs
+            .borrow_mut()
+            .insert(tx.compute_txid(), Arc::new(tx));
         index
     }
 }
@@ -112,7 +118,7 @@ impl TxIndex for Index {
         if self.wrong_ack.get() {
             return Ok(Txid::from_slice(&[0; 32]).unwrap());
         }
-        let txid = tx.txid();
+        let txid = tx.compute_txid();
         self.txs.borrow_mut().insert(txid, tx);
         Ok(txid)
     }
@@ -132,7 +138,7 @@ impl CTVEmulator for Signer {
     fn sign(&self, mut psbt: Psbt) -> Result<Psbt, EmulatorError> {
         let call = self.calls.fetch_add(1, Ordering::SeqCst) + 1;
         if self.corrupt_on == Some(call) {
-            psbt.inputs[0].witness_utxo.as_mut().unwrap().value += 1;
+            psbt.inputs[0].witness_utxo.as_mut().unwrap().value += bitcoin::Amount::ONE_SAT;
         }
         Ok(psbt)
     }
@@ -141,7 +147,7 @@ impl CTVEmulator for Signer {
 fn psbt(program: &Program, object: &Compiled) -> Psbt {
     let SapioStudioFormat::LinkedPSBT { psbt, .. } =
         &program.program.get(&object.root_path).unwrap().txs[0];
-    bitcoin::consensus::deserialize(&base64::decode(psbt).unwrap()).unwrap()
+    Psbt::deserialize(&base64::decode(psbt).unwrap()).unwrap()
 }
 
 #[test]
@@ -149,12 +155,12 @@ fn authenticates_funding_transactions_and_propagates_lookup_errors() {
     let object = payment(leaf(), false, 100, "payment");
     for case in 0..3 {
         let tx = funding(&object, 1_100);
-        let mut out = OutPoint::new(tx.txid(), 0);
+        let mut out = OutPoint::new(tx.compute_txid(), 0);
         let index = Index::with(tx.clone());
         match case {
             0 => {
                 let mut wrong = tx;
-                wrong.output[0].value += 1;
+                wrong.output[0].value += bitcoin::Amount::ONE_SAT;
                 index.txs.borrow_mut().insert(out.txid, Arc::new(wrong));
             }
             1 => out.vout = 1,
@@ -188,8 +194,8 @@ fn unrelated_unknown_txid_is_an_error_before_signing_or_indexing() {
     }
 
     let object = payment(leaf(), false, 100, "payment");
-    let requested = funding(&object, 1_100).txid();
-    let unrelated = funding(&object, 1_101).txid();
+    let requested = funding(&object, 1_100).compute_txid();
+    let unrelated = funding(&object, 1_101).compute_txid();
     assert_ne!(requested, unrelated);
     let signer = Signer::default();
     let result = object.bind_psbt(
@@ -225,7 +231,7 @@ fn authenticates_known_funding_without_calling_output_lookup_overrides() {
 
     let object = payment(leaf(), false, 100, "payment");
     let tx = funding(&object, 1_100);
-    let out = OutPoint::new(tx.txid(), 0);
+    let out = OutPoint::new(tx.compute_txid(), 0);
     let program = object
         .bind_psbt(
             out,
@@ -246,9 +252,9 @@ fn checks_contract_script_and_reserved_fees_before_signing() {
     for wrong_script in [false, true] {
         let mut tx = funding(&object, if wrong_script { 1_100 } else { 1_099 });
         if wrong_script {
-            tx.output[0].script_pubkey = Script::new();
+            tx.output[0].script_pubkey = ScriptBuf::new();
         }
-        let out = OutPoint::new(tx.txid(), 0);
+        let out = OutPoint::new(tx.compute_txid(), 0);
         let index = Index::with(tx);
         let signer = Signer::default();
         assert!(object
@@ -263,7 +269,7 @@ fn checks_contract_script_and_reserved_fees_before_signing() {
 fn authenticates_every_known_prevout_and_accepts_excess_funding() {
     let object = payment(leaf(), false, 100, "payment");
     let tx = funding(&object, 1_200);
-    let out = OutPoint::new(tx.txid(), 0);
+    let out = OutPoint::new(tx.compute_txid(), 0);
     let program = object
         .bind_psbt(out, BTreeMap::new(), Index::with(tx.clone()), &CTVAvailable)
         .unwrap();
@@ -271,7 +277,7 @@ fn authenticates_every_known_prevout_and_accepts_excess_funding() {
     assert_eq!(bound.inputs[0].non_witness_utxo, Some(tx.clone()));
     assert_eq!(bound.inputs[0].witness_utxo, Some(tx.output[0].clone()));
     assert_eq!(bound.unsigned_tx.input[0].previous_output, out);
-    assert_eq!(bound.unsigned_tx.output[0].value, 1_000);
+    assert_eq!(bound.unsigned_tx.output[0].value.to_sat(), 1_000);
 }
 
 #[test]
@@ -285,14 +291,14 @@ fn sums_auxiliary_funding_and_rejects_duplicates_and_overflow() {
         (u64::MAX, 1, false, false),
     ] {
         let tx = funding(&object, root_value);
-        let out = OutPoint::new(tx.txid(), 0);
+        let out = OutPoint::new(tx.compute_txid(), 0);
         let index = Index::with(tx);
         let auxiliary = funding(&leaf(), auxiliary_value);
-        let auxiliary_out = OutPoint::new(auxiliary.txid(), 0);
+        let auxiliary_out = OutPoint::new(auxiliary.compute_txid(), 0);
         index
             .txs
             .borrow_mut()
-            .insert(auxiliary.txid(), Arc::new(auxiliary));
+            .insert(auxiliary.compute_txid(), Arc::new(auxiliary));
         let mapping = BTreeMap::from([(
             hash,
             vec![None, Some(if duplicate { out } else { auxiliary_out })],
@@ -307,11 +313,20 @@ fn sums_auxiliary_funding_and_rejects_duplicates_and_overflow() {
         if valid {
             let bound = psbt(&result.unwrap(), &object);
             assert_eq!(
-                bound.inputs[1].witness_utxo.as_ref().unwrap().value,
+                bound.inputs[1]
+                    .witness_utxo
+                    .as_ref()
+                    .unwrap()
+                    .value
+                    .to_sat(),
                 auxiliary_value
             );
             assert_eq!(
-                bound.inputs[1].non_witness_utxo.as_ref().unwrap().txid(),
+                bound.inputs[1]
+                    .non_witness_utxo
+                    .as_ref()
+                    .unwrap()
+                    .compute_txid(),
                 auxiliary_out.txid
             );
         } else {
@@ -325,13 +340,13 @@ fn sums_auxiliary_funding_and_rejects_duplicates_and_overflow() {
 fn auxiliary_contributions_do_not_inflate_contract_funding_requirements() {
     let object = payment(leaf(), true, 100, "payment");
     let template = object.ctv_to_tx.values().next().unwrap();
-    assert_eq!(template.max.as_sat(), 1_100);
-    assert_eq!(template.required_input_amount.as_sat(), 400);
-    assert_eq!(object.required_input_amount.as_sat(), 400);
+    assert_eq!(template.max.to_sat(), 1_100);
+    assert_eq!(template.required_input_amount.to_sat(), 400);
+    assert_eq!(object.required_input_amount.to_sat(), 400);
     let json = serde_json::to_value(&object).unwrap();
     let roundtrip: Compiled = serde_json::from_value(json).unwrap();
     roundtrip.validate().unwrap();
-    assert_eq!(roundtrip.required_input_amount.as_sat(), 400);
+    assert_eq!(roundtrip.required_input_amount.to_sat(), 400);
 }
 
 #[test]
@@ -340,13 +355,16 @@ fn known_contract_input_minimum_is_checked_with_unresolved_or_excess_auxiliary_f
     let hash = *object.ctv_to_tx.keys().next().unwrap();
     for auxiliary_value in [None, Some(1_000)] {
         let tx = funding(&object, 399);
-        let out = OutPoint::new(tx.txid(), 0);
+        let out = OutPoint::new(tx.compute_txid(), 0);
         let index = Index::with(tx);
         let mut mapping = BTreeMap::new();
         if let Some(amount) = auxiliary_value {
             let extra = funding(&leaf(), amount);
-            let extra_out = OutPoint::new(extra.txid(), 0);
-            index.txs.borrow_mut().insert(extra.txid(), Arc::new(extra));
+            let extra_out = OutPoint::new(extra.compute_txid(), 0);
+            index
+                .txs
+                .borrow_mut()
+                .insert(extra.compute_txid(), Arc::new(extra));
             mapping.insert(hash, vec![None, Some(extra_out)]);
         }
         let signer = Signer::default();
@@ -358,7 +376,7 @@ fn known_contract_input_minimum_is_checked_with_unresolved_or_excess_auxiliary_f
         assert_eq!(index.writes.get(), 0);
     }
     let tx = funding(&object, 400);
-    let out = OutPoint::new(tx.txid(), 0);
+    let out = OutPoint::new(tx.compute_txid(), 0);
     let signer = Signer::default();
     let program = object
         .bind_psbt(out, BTreeMap::new(), Index::with(tx), &signer)
@@ -415,7 +433,7 @@ fn builder_checks_initial_and_cumulative_funding_even_after_spending() {
         .add_output(Amount::from_sat(1000), &leaf(), None)
         .unwrap()
         .into();
-    assert_eq!(template.max.as_sat(), 1000);
+    assert_eq!(template.max.to_sat(), 1000);
     assert_eq!(template.required_input_amount, Amount::ZERO);
 }
 
@@ -451,11 +469,11 @@ fn rejects_underfunded_descendants_before_funding_lookups_or_signing() {
     // so that only the child's funding requirement is violated.
     let (_, mut template) = object.ctv_to_tx.pop_first().unwrap();
     template.outputs[0].amount = Amount::from_sat(999);
-    template.tx.output[0].value = 999;
+    template.tx.output[0].value = bitcoin::Amount::from_sat(999);
     template.ctv = template.tx.get_ctv_hash(0);
     object.ctv_to_tx.insert(template.ctv, template);
     let tx = funding(&object, 1_000);
-    let out = OutPoint::new(tx.txid(), 0);
+    let out = OutPoint::new(tx.compute_txid(), 0);
     let index = Index::with(tx);
     let signer = Signer::default();
     let error = object
@@ -483,7 +501,7 @@ fn validates_all_signer_responses_before_indexing_the_graph() {
     let object = payment(child, false, 0, "parent");
     for corrupt_on in [1, 2] {
         let tx = funding(&object, 1_000);
-        let out = OutPoint::new(tx.txid(), 0);
+        let out = OutPoint::new(tx.compute_txid(), 0);
         let index = Index::with(tx);
         let signer = Signer {
             corrupt_on: Some(corrupt_on),
@@ -501,7 +519,7 @@ fn validates_all_signer_responses_before_indexing_the_graph() {
 fn rejects_incorrect_index_acknowledgements() {
     let object = payment(leaf(), false, 0, "payment");
     let tx = funding(&object, 1_000);
-    let out = OutPoint::new(tx.txid(), 0);
+    let out = OutPoint::new(tx.compute_txid(), 0);
     let index = Index::with(tx);
     index.wrong_ack.set(true);
     assert!(object

@@ -1,7 +1,7 @@
 //! Explicit program-signing protocol over bounded length-prefixed JSON.
 
 use super::{validate_program_response, ProgramError, ProgramOracle, ProgramSigningRequest, PSBT};
-use bitcoin::util::{bip32::ExtendedPubKey, psbt::PartiallySignedTransaction};
+use bitcoin::{bip32::Xpub, psbt::Psbt};
 use sapio_base::program::MAX_PROGRAM_ROOT_DEPTH;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -72,13 +72,13 @@ impl From<io::Error> for ProgramClientError {
 #[derive(Clone, Debug)]
 pub struct ProgramClient {
     address: SocketAddr,
-    root: ExtendedPubKey,
+    root: Xpub,
     request_timeout: Duration,
 }
 
 impl ProgramClient {
     /// Configure an already resolved endpoint with the default 30-second limit.
-    pub fn new(address: SocketAddr, root: ExtendedPubKey) -> io::Result<Self> {
+    pub fn new(address: SocketAddr, root: Xpub) -> io::Result<Self> {
         if root.depth > MAX_PROGRAM_ROOT_DEPTH {
             return Err(crate::input_err(
                 "Program signer root is too deep for derivation",
@@ -99,7 +99,7 @@ impl ProgramClient {
     }
 
     /// The public root whose derived signature every response must contain.
-    pub fn root(&self) -> &ExtendedPubKey {
+    pub fn root(&self) -> &Xpub {
         &self.root
     }
 
@@ -107,10 +107,7 @@ impl ProgramClient {
     ///
     /// Success requires a valid signature from the configured derived key.
     /// Other signatures and every non-signature PSBT field must be preserved.
-    pub async fn sign(
-        &self,
-        request: ProgramSigningRequest,
-    ) -> Result<PartiallySignedTransaction, ProgramClientError> {
+    pub async fn sign(&self, request: ProgramSigningRequest) -> Result<Psbt, ProgramClientError> {
         tokio::time::timeout(self.request_timeout, async {
             let mut stream = TcpStream::connect(self.address).await?;
             crate::wire::write_message(&mut stream, &Request::SignProgramV1(&request)).await?;

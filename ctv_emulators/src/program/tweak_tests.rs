@@ -1,7 +1,7 @@
 use super::*;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{Parity, Scalar, SecretKey};
-use bitcoin::util::taproot::TapTweakHash;
+use bitcoin::taproot::TapTweakHash;
 use bitcoin::{Network, Transaction, TxIn};
 use sapio_base::fragments::{
     known_tweak_witness, template_authorization_wasm_instance, template_hash, TemplateKey,
@@ -44,10 +44,7 @@ fn with_sign(value: Scalar, sign: Parity) -> Scalar {
     }
 }
 
-fn public_child_and_tweak(
-    root: ExtendedPubKey,
-    instance: &ProgramInstance,
-) -> (ExtendedPubKey, Scalar) {
+fn public_child_and_tweak(root: Xpub, instance: &ProgramInstance) -> (Xpub, Scalar) {
     let secp = Secp256k1::verification_only();
     let path = program_derivation_path(instance.id());
     let mut current = root;
@@ -74,12 +71,13 @@ fn emulator_root_authorizes_its_bip32_program_child_for_every_parity_combination
     // The instance and derivation path exist before the witness. Neither the
     // root signature nor the opening scalar participates in the program ID.
     let instance = template_authorization_wasm_instance(TemplateKey::KnownTweak);
-    let tree = TapBranchHash::from_inner(sha256::Hash::hash(b"known-tweak tree").into_inner());
+    let tree =
+        TapNodeHash::from_byte_array(sha256::Hash::hash(b"known-tweak tree").to_byte_array());
     let secp = Secp256k1::new();
     let mut seen = [[false; 2]; 2];
     for seed in 0..64u8 {
-        let root = ExtendedPrivKey::new_master(Network::Testnet, &[seed; 32]).unwrap();
-        let public_root = ExtendedPubKey::from_priv(&secp, &root);
+        let root = Xpriv::new_master(Network::Testnet, &[seed; 32]).unwrap();
+        let public_root = Xpub::from_priv(&secp, &root);
         let (root_key, root_parity) = public_root.public_key.x_only_public_key();
         let (child, cumulative) = public_child_and_tweak(public_root, &instance);
         let (internal, child_parity) = child.public_key.x_only_public_key();
@@ -105,26 +103,26 @@ fn emulator_root_authorizes_its_bip32_program_child_for_every_parity_combination
             let proof_parity = output_parity ^ output_sign;
             assert!(root_key.tweak_add_check(&secp, &output_key, proof_parity, tweak));
 
-            let mut psbt = PartiallySignedTransaction::from_unsigned_tx(Transaction {
-                version: 2,
-                lock_time: 40,
+            let mut psbt = Psbt::from_unsigned_tx(Transaction {
+                version: bitcoin::transaction::Version(2),
+                lock_time: bitcoin::absolute::LockTime::from_consensus(40),
                 input: vec![TxIn {
                     previous_output: OutPoint {
-                        txid: bitcoin::Txid::from_inner([3; 32]),
+                        txid: bitcoin::Txid::from_byte_array([3; 32]),
                         vout: 0,
                     },
-                    sequence: 42,
+                    sequence: bitcoin::Sequence(42),
                     ..TxIn::default()
                 }],
                 output: vec![TxOut {
-                    value: 9_000,
-                    script_pubkey: Script::from(vec![0x51]),
+                    value: bitcoin::Amount::from_sat(9_000),
+                    script_pubkey: ScriptBuf::from(vec![0x51]),
                 }],
             })
             .unwrap();
             psbt.inputs[0].witness_utxo = Some(TxOut {
-                value: 10_000,
-                script_pubkey: Script::new_v1_p2tr(&secp, internal, merkle_root),
+                value: bitcoin::Amount::from_sat(10_000),
+                script_pubkey: ScriptBuf::new_p2tr(&secp, internal, merkle_root),
             });
             psbt.inputs[0].tap_merkle_root = merkle_root;
             assert!(psbt.inputs[0].tap_internal_key.is_none());

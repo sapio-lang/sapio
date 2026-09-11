@@ -20,9 +20,8 @@ serde_derive = "1.0"
 version = "0.8.0"
 features = ['impl_json_schema']
 [dependencies.bitcoin]
-package = "sapio-bitcoin"
-version = "0.28.0"
-features = ['use-serde']
+version = "=0.32.102"
+features = ['serde']
 [dependencies.sapio]
 path = "../../sapio"
 version = "0.2.0"

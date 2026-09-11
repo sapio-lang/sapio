@@ -14,7 +14,7 @@ use std::sync::Arc;
 #[derive(
     Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, PartialOrd, Eq, Hash, Ord,
 )]
-#[serde(bound = "T: Serialize + for<'d> Deserialize<'d> + JsonSchema + std::fmt::Debug + Clone ")]
+#[serde(bound = "T: Serialize + for<'d> Deserialize<'d> + std::fmt::Debug + Clone ")]
 #[serde(transparent)]
 pub struct SArc<T>(
     #[serde(serialize_with = "serializer")]

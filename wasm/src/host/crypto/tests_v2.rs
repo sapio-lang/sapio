@@ -1,6 +1,6 @@
 use super::*;
 use crate::host::{store_with_fuel, INSTANCE_FUEL};
-use bitcoin::hashes::hex::FromHex;
+use bitcoin::hex::FromHex;
 use bitcoin::secp256k1::{Keypair, SecretKey};
 use wasmer::Module;
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints};

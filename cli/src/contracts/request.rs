@@ -3,9 +3,9 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
-use bitcoin::{consensus::deserialize, psbt::PartiallySignedTransaction, OutPoint};
-use bitcoincore_rpc_async as rpc;
-use bitcoincore_rpc_async::RpcApi;
+use bitcoin::{psbt::Psbt, OutPoint};
+use bitcoincore_rpc as rpc;
+use bitcoincore_rpc::RpcApi;
 use emulator_connect::CTVEmulator;
 use sapio::{
     contract::{
@@ -27,7 +27,7 @@ use sapio_wasm_plugin::{
 use schemars::JsonSchema;
 use serde::*;
 use serde_json::Value;
-use std::fmt::{Display, Formatter, Write};
+use std::fmt::{Display, Formatter};
 use std::{
     collections::{BTreeMap, HashMap},
     convert::TryInto,
@@ -67,9 +67,11 @@ pub struct CallReturn {
 pub struct Bind {
     pub client_url: String,
     #[serde(with = "crate::config::Auth")]
+    #[schemars(with = "crate::config::Auth")]
     pub client_auth: rpc::Auth,
     pub use_base64: bool,
     pub use_mock: bool,
+    #[schemars(with = "Option<String>")]
     pub outpoint: Option<OutPoint>,
     pub use_txn: Option<String>,
     pub compiled: Compiled,
@@ -264,12 +266,12 @@ impl Bind {
         let use_txn = use_txn
             .map(|buf| base64::decode(buf.as_bytes()))
             .transpose()?
-            .map(|b| deserialize::<PartiallySignedTransaction>(&b))
+            .map(|b| Psbt::deserialize(&b))
             .transpose()?;
         if let Some(psbt) = &use_txn {
             sapio_psbt::validate_psbt(psbt)?;
         }
-        let client = rpc::Client::new(client_url, client_auth).await?;
+        let client = rpc::Client::new(&client_url, client_auth)?;
         let (tx, vout, funding_psbt) = if use_mock {
             let ctx = Context::new(
                 net,
@@ -285,33 +287,37 @@ impl Bind {
                 .get_tx();
             tx.input[0].previous_output = create_mock_output();
             let psbt = if outpoint.is_none() {
-                Some(PartiallySignedTransaction::from_unsigned_tx(tx.clone())?)
+                Some(Psbt::from_unsigned_tx(tx.clone())?)
             } else {
                 None
             };
             (tx, 0, psbt)
         } else if let Some(outpoint) = outpoint {
-            let res = client.get_raw_transaction(&outpoint.txid, None).await?;
+            let res = tokio::task::spawn_blocking(move || {
+                client.get_raw_transaction(&outpoint.txid, None)
+            })
+            .await??;
             validate_funding_outpoint(&res, outpoint)?;
             (res, outpoint.vout, None)
         } else {
             let mut spends = HashMap::new();
-            let script = bitcoin::Script::from(&compiled.address);
-            if let Some(a) = bitcoin::Address::from_script(&script, net) {
+            let script = bitcoin::ScriptBuf::from(&compiled.address);
+            if let Ok(a) = bitcoin::Address::from_script(&script, net) {
                 spends.insert(format!("{}", a), compiled.required_input_amount);
 
                 let psbt = if let Some(psbt) = use_txn {
                     psbt
                 } else {
-                    let res = client
-                        .wallet_create_funded_psbt(&[], &spends, None, None, None)
-                        .await?;
-                    deserialize(&base64::decode(&res.psbt)?)?
+                    let res = tokio::task::spawn_blocking(move || {
+                        client.wallet_create_funded_psbt(&[], &spends, None, None, None)
+                    })
+                    .await??;
+                    Psbt::deserialize(&base64::decode(&res.psbt)?)?
                 };
                 let vout = funding_output(&psbt, &script)?;
                 // Final scriptSigs can change the TXID. Bind the extracted
                 // transaction while retaining the complete PSBT for signing.
-                (psbt.clone().extract_tx(), vout, Some(psbt))
+                (psbt.clone().extract_tx()?, vout, Some(psbt))
             } else {
                 return Err(Err(RequestError("Must have a valid address".into()))?);
             }
@@ -319,7 +325,7 @@ impl Bind {
         let logger = Rc::new(TxIndexLogger::new());
         (*logger).add_tx(Arc::new(tx.clone()))?;
         let mut bound = compiled.bind_psbt(
-            OutPoint::new(tx.txid(), vout),
+            OutPoint::new(tx.compute_txid(), vout),
             BTreeMap::new(),
             logger,
             emulator.as_ref(),
@@ -357,7 +363,7 @@ impl Bind {
     }
 }
 
-fn funding_output(psbt: &PartiallySignedTransaction, script: &bitcoin::Script) -> ResultT<u32> {
+fn funding_output(psbt: &Psbt, script: &bitcoin::ScriptBuf) -> ResultT<u32> {
     sapio_psbt::validate_psbt(psbt)?;
     let index = psbt
         .unsigned_tx
@@ -374,7 +380,7 @@ fn validate_funding_outpoint(
     tx: &bitcoin::Transaction,
     outpoint: OutPoint,
 ) -> Result<(), TxIndexError> {
-    let actual = tx.txid();
+    let actual = tx.compute_txid();
     if actual != outpoint.txid {
         return Err(TxIndexError::TxidMismatch {
             expected: outpoint.txid,

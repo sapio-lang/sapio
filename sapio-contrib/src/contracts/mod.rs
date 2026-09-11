@@ -5,7 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! A collection of contracts of varying quality and usefullness
-use bitcoin::util::amount::CoinAmount;
+use sapio_base::amount::CoinAmount;
 use sapio_base::Clause;
 
 use sapio::contract::*;

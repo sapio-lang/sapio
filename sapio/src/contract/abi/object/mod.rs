@@ -143,6 +143,7 @@ pub struct Object {
         skip_serializing_if = "BTreeMap::is_empty",
         default
     )]
+    #[schemars(with = "BTreeMap<String, Template>")]
     pub ctv_to_tx: BTreeMap<sha256::Hash, Template>,
     /// a map of template hashes to the corresponding template, that in the
     /// policy are not necessarily CTV protected but we might want to know about
@@ -152,6 +153,7 @@ pub struct Object {
         skip_serializing_if = "BTreeMap::is_empty",
         default
     )]
+    #[schemars(with = "BTreeMap<String, Template>")]
     pub suggested_txs: BTreeMap<sha256::Hash, Template>,
     /// A Map of arguments to continue execution and generate an update at this
     /// point via a passed message
@@ -163,7 +165,7 @@ pub struct Object {
     pub continue_apis: BTreeMap<SArc<EffectPath>, ContinuationPoint>,
     /// The base location for the set of continue_apis.
     pub root_path: SArc<EffectPath>,
-    /// The Object's address, or a Script if no address is possible
+    /// The Object's address, or a ScriptBuf if no address is possible
     pub address: ExtendedAddress,
     /// The Object's descriptor -- if there is one known/available
     #[serde(
@@ -177,7 +179,7 @@ pub struct Object {
     /// Auxiliary inputs fund their separately declared contributions.
     #[serde(
         rename = "required_input_amount_sats",
-        with = "bitcoin::util::amount::serde::as_sat"
+        with = "bitcoin::amount::serde::as_sat"
     )]
     #[schemars(with = "u64")]
     pub required_input_amount: bitcoin::Amount,
@@ -210,12 +212,12 @@ impl Object {
 
     /// Create a recognized script destination with an explicit funding minimum.
     pub fn from_script(
-        script: bitcoin::Script,
+        script: bitcoin::ScriptBuf,
         required_input_amount: bitcoin::Amount,
         net: bitcoin::Network,
     ) -> Result<Object, ObjectError> {
         bitcoin::Address::from_script(&script, net)
-            .ok_or_else(|| ObjectError::UnknownScriptType(script.clone()))
+            .map_err(|_| ObjectError::UnknownScriptType(script.clone()))
             .map(|m| Object::from_address(m, required_input_amount))
     }
     /// create an op_return of no more than 40 bytes

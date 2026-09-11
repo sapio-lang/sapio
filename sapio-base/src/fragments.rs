@@ -7,7 +7,7 @@ use crate::program::ProgramInstance;
 use bitcoin::consensus::Encodable;
 use bitcoin::hashes::{sha256, Hash, HashEngine};
 use bitcoin::secp256k1::{schnorr::Signature, Parity, Scalar};
-use bitcoin::util::sighash::Annex;
+use bitcoin::sighash::Annex;
 use bitcoin::{Transaction, XOnlyPublicKey};
 use std::fmt;
 
@@ -32,8 +32,11 @@ pub enum TemplateKey {
 
 /// Require the exact BIP446 template hash, with no auxiliary witness.
 pub fn templatehash_wasm_instance(expected: sha256::Hash) -> ProgramInstance {
-    ProgramInstance::wasm_v2(TEMPLATEHASH_WASM.to_vec(), expected.as_ref().to_vec())
-        .expect("distributed module and fixed parameters fit the program bounds")
+    ProgramInstance::wasm_v2(
+        TEMPLATEHASH_WASM.to_vec(),
+        expected.to_byte_array().to_vec(),
+    )
+    .expect("distributed module and fixed parameters fit the program bounds")
 }
 
 /// Authorize the current template using CSFS and the selected key source.
@@ -115,11 +118,11 @@ pub fn template_hash(
     let mut hash = sha256::Hash::engine();
     hash.input(tag.as_ref());
     hash.input(tag.as_ref());
-    hash.input(&transaction.version.to_le_bytes());
-    hash.input(&transaction.lock_time.to_le_bytes());
+    hash.input(&transaction.version.0.to_le_bytes());
+    hash.input(&transaction.lock_time.to_consensus_u32().to_le_bytes());
     let mut sequences = sha256::Hash::engine();
     for input in &transaction.input {
-        sequences.input(&input.sequence.to_le_bytes());
+        sequences.input(&input.sequence.to_consensus_u32().to_le_bytes());
     }
     hash.input(sha256::Hash::from_engine(sequences).as_ref());
     let mut outputs = sha256::Hash::engine();

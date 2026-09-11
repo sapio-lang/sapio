@@ -41,14 +41,14 @@ fn main() -> Result<(), Box<dyn Error>> {
             let signed = oracle.sign(request)?;
             let finalized = sapio_psbt::finalize::finalize(signed, &secp)
                 .map_err(|(_, errors)| format!("fragment finalization failed: {errors:?}"))?;
-            let tx = finalized.extract_tx();
+            let tx = finalized.extract_tx()?;
             assert_eq!(
                 tx.input[0].witness.last(),
                 Some(&b"\x50sapio-fragments"[..])
             );
             spends.push(serde_json::json!({
                 "transaction": serialize_hex(&tx),
-                "txid": tx.txid(),
+                "txid": tx.compute_txid(),
                 "off_chain_authorization": evidence,
             }));
         }

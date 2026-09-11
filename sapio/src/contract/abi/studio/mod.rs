@@ -9,8 +9,7 @@ use crate::contract::abi::continuation::ContinuationPoint;
 use crate::contract::object::ObjectMetadata;
 use crate::template::output::OutputMeta;
 use crate::template::TemplateMetadata;
-use bitcoin::consensus::serialize;
-use bitcoin::util::psbt::PartiallySignedTransaction;
+use bitcoin::psbt::Psbt;
 use bitcoin::OutPoint;
 use miniscript::*;
 use sapio_base::serialization_helpers::SArc;
@@ -24,7 +23,7 @@ use std::collections::BTreeMap;
 #[serde(rename = "linked_psbt")]
 pub struct LinkedPSBT {
     /// a PSBT
-    pub psbt: PartiallySignedTransaction,
+    pub psbt: Psbt,
     /// tx level metadata
     pub metadata: TemplateMetadata,
     /// output specific metadata
@@ -55,10 +54,13 @@ pub enum SapioStudioFormat {
 impl From<LinkedPSBT> for SapioStudioFormat {
     fn from(l: LinkedPSBT) -> SapioStudioFormat {
         let psbt = {
-            let bytes = serialize(&l.psbt);
+            let bytes = l.psbt.serialize();
             base64::encode(bytes)
         };
-        let hex = bitcoin::consensus::encode::serialize_hex(&l.psbt.extract_tx());
+        // Studio previews may be unsigned or incomplete; this is not a
+        // completed-spend export or a fee-policy acceptance check.
+        let hex =
+            bitcoin::consensus::encode::serialize_hex(&l.psbt.extract_tx_unchecked_fee_rate());
         SapioStudioFormat::LinkedPSBT {
             psbt,
             hex,
@@ -90,6 +92,7 @@ pub struct SapioStudioObject {
     /// The object's metadata
     pub metadata: ObjectMetadata,
     /// The main covenant OutPoint
+    #[schemars(with = "String")]
     pub out: OutPoint,
     /// List of SapioStudioFormat PSBTs
     pub txs: Vec<SapioStudioFormat>,

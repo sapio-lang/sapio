@@ -5,7 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! Explicit BTC and satoshi serialization wrappers for amounts
-use bitcoin::util::amount::Amount;
+use bitcoin::amount::Amount;
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 pub struct AmountF64(
     /// # Amount (BTC)
     #[schemars(with = "f64")]
-    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    #[serde(with = "bitcoin::amount::serde::as_btc")]
     Amount,
 );
 
@@ -40,7 +40,7 @@ impl From<AmountF64> for Amount {
 pub struct AmountU64(
     /// # Amount (Sats)
     #[schemars(with = "u64")]
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    #[serde(with = "bitcoin::amount::serde::as_sat")]
     Amount,
 );
 
@@ -61,6 +61,6 @@ impl From<AmountU64> for Amount {
 }
 impl From<AmountU64> for u64 {
     fn from(a: AmountU64) -> u64 {
-        a.0.as_sat()
+        a.0.to_sat()
     }
 }

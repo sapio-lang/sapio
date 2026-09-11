@@ -23,7 +23,9 @@ members = ["treepay"
           , "custom-policy"]
 
 [patch.crates-io]
-# Canonical BIP341 signature parsing and sighash validation.
-sapio-bitcoin = { git = "https://github.com/sapio-lang/rust-bitcoin", rev = "16c1b0059ecb420eaed089da28f8d24f99e36cf8" }
-# CTV finalization and inscription correctness repairs in the owned fork.
-sapio-miniscript = { git = "https://github.com/sapio-lang/rust-miniscript", rev = "04b69f69459fe3b043ca61fb649cf546d5a241b6" }
+# Upstream Bitcoin 0.32.102 with strict Taproot signature and PSBT decoding.
+bitcoin = { git = "https://github.com/sapio-lang/rust-bitcoin", rev = "6ef940bb2d98ba5dece053fdabd1d9ad65ff5864" }
+# Keep Bitcoin and its upstream secp256k1 dependency on the same hash types.
+bitcoin_hashes = { git = "https://github.com/sapio-lang/rust-bitcoin", rev = "6ef940bb2d98ba5dece053fdabd1d9ad65ff5864" }
+# Sapio covenant and inscription extensions rebased onto Miniscript 13.1.0.
+miniscript = { git = "https://github.com/sapio-lang/rust-miniscript", rev = "d9f9176a68a93efbfb303f24da154f9c72829892" }

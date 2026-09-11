@@ -1,5 +1,4 @@
-use bitcoin::consensus::deserialize;
-use bitcoin::psbt::PartiallySignedTransaction as Psbt;
+use bitcoin::psbt::Psbt;
 use bitcoin::{Address, Amount, Network, OutPoint};
 use sapio::contract::abi::continuation::ContinuationPoint;
 use sapio::contract::abi::studio::{Program, SapioStudioFormat};
@@ -48,7 +47,10 @@ fn payment(destinations: Vec<Compiled>, path: &str) -> Compiled {
 
 fn leaf(label: &str) -> Compiled {
     let mut object = Compiled::from_address(
-        Address::from_str("bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj").unwrap(),
+        Address::from_str("bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj")
+            .unwrap()
+            .require_network(Network::Regtest)
+            .unwrap(),
         bitcoin::Amount::ZERO,
     );
     object.metadata.extra.insert("label".into(), label.into());
@@ -68,7 +70,7 @@ fn bind(object: &Compiled) -> Program {
 
 fn psbt(format: &SapioStudioFormat) -> Psbt {
     let SapioStudioFormat::LinkedPSBT { psbt, .. } = format;
-    deserialize(&base64::decode(psbt).unwrap()).unwrap()
+    Psbt::deserialize(&base64::decode(psbt).unwrap()).unwrap()
 }
 
 #[test]
@@ -82,7 +84,7 @@ fn reused_leaf_paths_preserve_every_output_and_its_metadata() {
         let child = program
             .program
             .values()
-            .find(|node| node.out == OutPoint::new(tx.txid(), vout))
+            .find(|node| node.out == OutPoint::new(tx.compute_txid(), vout))
             .unwrap();
         assert!(child.txs.is_empty());
         assert_eq!(child.metadata.extra["label"], label);
@@ -116,7 +118,7 @@ fn reused_contract_paths_preserve_both_bound_spending_branches() {
     for node in program
         .program
         .values()
-        .filter(|node| node.out.txid == parent.txid())
+        .filter(|node| node.out.txid == parent.compute_txid())
     {
         assert_eq!(node.txs.len(), 1);
         assert_eq!(node.source_path.as_ref(), Some(&child.root_path));

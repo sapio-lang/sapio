@@ -9,7 +9,7 @@
 use super::RawTaproot;
 pub use crate::contract::abi::studio::*;
 use bitcoin::PublicKey;
-use bitcoin::Script;
+use bitcoin::ScriptBuf;
 use bitcoin::XOnlyPublicKey;
 use miniscript::*;
 use sapio_base::miniscript;
@@ -20,9 +20,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 pub enum SupportedDescriptors {
     /// # ECDSA Descriptors
-    Pk(Descriptor<PublicKey>),
+    Pk(#[schemars(with = "String")] Descriptor<PublicKey>),
     /// # Taproot Descriptors
-    XOnly(Descriptor<XOnlyPublicKey>),
+    XOnly(#[schemars(with = "String")] Descriptor<XOnlyPublicKey>),
     /// # Checked raw Taproot scripts
     /// Spending data for scripts whose witness requirements are not described
     /// by Miniscript. This representation carries no satisfaction-weight bound.
@@ -46,7 +46,7 @@ impl From<RawTaproot> for SupportedDescriptors {
 }
 impl SupportedDescriptors {
     /// Regardless of descriptor type, get the output script
-    pub fn script_pubkey(&self) -> Script {
+    pub fn script_pubkey(&self) -> ScriptBuf {
         match self {
             SupportedDescriptors::Pk(p) => p.script_pubkey(),
             SupportedDescriptors::XOnly(x) => x.script_pubkey(),

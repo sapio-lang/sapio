@@ -6,11 +6,10 @@
 
 //! definitions for oracle servers
 use super::*;
-use bitcoin::util::sighash::Prevouts;
-use bitcoin::util::taproot::TapLeafHash;
-use bitcoin::util::taproot::TapSighashHash;
-use bitcoin::SchnorrSig;
-use bitcoin::Script;
+use bitcoin::sighash::Prevouts;
+use bitcoin::sighash::TapSighash;
+use bitcoin::taproot::TapLeafHash;
+use bitcoin::ScriptBuf;
 use bitcoin::TxOut;
 use bitcoin::XOnlyPublicKey;
 use std::io::{Error as IoError, ErrorKind};
@@ -21,7 +20,7 @@ use tokio::task::JoinSet;
 /// hierarchical deterministic oracle emulator
 #[derive(Clone)]
 pub struct HDOracleEmulator {
-    root: ExtendedPrivKey,
+    root: Xpriv,
     request_timeout: Duration,
     max_connections: usize,
 }
@@ -31,7 +30,7 @@ impl HDOracleEmulator {
     ///
     /// Idle connections consume a slot and must send their next complete
     /// request within the request timeout.
-    pub fn new(root: ExtendedPrivKey) -> Self {
+    pub fn new(root: Xpriv) -> Self {
         HDOracleEmulator {
             root,
             request_timeout: crate::DEFAULT_REQUEST_TIMEOUT,
@@ -101,7 +100,7 @@ impl HDOracleEmulator {
         }
     }
     /// helper to get an EPK for the oracle.
-    fn derive(&self, h: Sha256, secp: &Secp256k1<All>) -> Result<ExtendedPrivKey, Error> {
+    fn derive(&self, h: Sha256, secp: &Secp256k1<All>) -> Result<Xpriv, Error> {
         let c = hash_to_child_vec(h);
         self.root.derive_priv(secp, &c)
     }
@@ -111,11 +110,7 @@ impl HDOracleEmulator {
     /// Always signs for spending index 0.
     ///
     /// May fail to sign if the PSBT is not properly formatted
-    fn sign(
-        &self,
-        mut b: PartiallySignedTransaction,
-        secp: &Secp256k1<All>,
-    ) -> Result<PartiallySignedTransaction, std::io::Error> {
+    fn sign(&self, mut b: Psbt, secp: &Secp256k1<All>) -> Result<Psbt, std::io::Error> {
         if b.inputs.is_empty()
             || b.inputs.len() != b.unsigned_tx.input.len()
             || b.outputs.len() != b.unsigned_tx.output.len()
@@ -124,7 +119,12 @@ impl HDOracleEmulator {
                 "PSBT input/output maps do not match a nonempty transaction",
             ));
         }
-        let tx = b.clone().extract_tx();
+        let mut tx = b.unsigned_tx.clone();
+        for (input, data) in tx.input.iter_mut().zip(&b.inputs) {
+            if let Some(script_sig) = &data.final_script_sig {
+                input.script_sig = script_sig.clone();
+            }
+        }
         let h = tx.get_ctv_hash(0);
         let utxos: Vec<TxOut> = b
             .inputs
@@ -137,31 +137,34 @@ impl HDOracleEmulator {
             .map_err(|_| input_err("Could Not Derive Key"))?;
         let untweaked = key.to_keypair(secp);
         let pk = XOnlyPublicKey::from_keypair(&untweaked);
-        let mut sighash = bitcoin::util::sighash::SighashCache::new(&tx);
+        let mut sighash = bitcoin::sighash::SighashCache::new(&tx);
         let input_zero = b
             .inputs
             .first_mut()
             .ok_or_else(|| input_err("PSBT has no inputs"))?;
-        use bitcoin::schnorr::TapTweak;
+        use bitcoin::key::TapTweak;
         let tweaked = untweaked
             .tap_tweak(secp, input_zero.tap_merkle_root)
-            .into_inner();
+            .to_keypair();
         let tweaked_pk = tweaked.public_key();
-        let hash_ty = bitcoin::util::sighash::SchnorrSighashType::All;
+        let hash_ty = bitcoin::sighash::TapSighashType::All;
         let prevouts = &Prevouts::All(&utxos);
         let mut get_sig = |path, kp| {
             let annex = None;
-            let sighash: TapSighashHash = sighash
+            let sighash: TapSighash = sighash
                 .taproot_signature_hash(0, prevouts, annex, path, hash_ty)
                 .map_err(|error| input_err(&error.to_string()))?;
             let msg = bitcoin::secp256k1::Message::from_digest_slice(&sighash[..])
                 .expect("Size must be correct.");
             let sig = secp.sign_schnorr_no_aux_rand(&msg, kp);
-            Ok::<_, std::io::Error>(SchnorrSig { sig, hash_ty })
+            Ok::<_, std::io::Error>(bitcoin::taproot::Signature {
+                signature: sig,
+                sighash_type: hash_ty,
+            })
         };
         if let Some(true) = input_zero.witness_utxo.as_ref().map(|v| {
             v.script_pubkey
-                == Script::new_v1_p2tr_tweaked(
+                == ScriptBuf::new_p2tr_tweaked(
                     XOnlyPublicKey::from(tweaked_pk).dangerous_assume_tweaked(),
                 )
         }) {
@@ -199,17 +202,17 @@ impl HDOracleEmulator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitcoin::util::taproot::{LeafVersion, TaprootBuilder};
+    use bitcoin::taproot::{LeafVersion, TaprootBuilder};
     use sapio_ctv_emulator_trait::validate_signing_response;
 
     #[test]
     fn rejects_psbts_without_an_input_to_sign() {
         let secp = Secp256k1::new();
-        let root = ExtendedPrivKey::new_master(bitcoin::Network::Regtest, &[44; 32]).unwrap();
+        let root = Xpriv::new_master(bitcoin::Network::Regtest, &[44; 32]).unwrap();
         let oracle = HDOracleEmulator::new(root);
-        let psbt = PartiallySignedTransaction::from_unsigned_tx(bitcoin::Transaction {
-            version: 2,
-            lock_time: 0,
+        let psbt = Psbt::from_unsigned_tx(bitcoin::Transaction {
+            version: bitcoin::transaction::Version(2),
+            lock_time: bitcoin::absolute::LockTime::from_consensus(0),
             input: vec![],
             output: vec![],
         })
@@ -223,31 +226,31 @@ mod tests {
     #[test]
     fn signing_adds_both_taproot_signature_forms_without_replacing_existing_entries() {
         let secp = Secp256k1::new();
-        let root = ExtendedPrivKey::new_master(bitcoin::Network::Regtest, &[44; 32]).unwrap();
+        let root = Xpriv::new_master(bitcoin::Network::Regtest, &[44; 32]).unwrap();
         let oracle = HDOracleEmulator::new(root);
-        let mut request = PartiallySignedTransaction::from_unsigned_tx(bitcoin::Transaction {
-            version: 2,
-            lock_time: 0,
+        let mut request = Psbt::from_unsigned_tx(bitcoin::Transaction {
+            version: bitcoin::transaction::Version(2),
+            lock_time: bitcoin::absolute::LockTime::from_consensus(0),
             input: vec![bitcoin::TxIn::default()],
             output: vec![TxOut {
-                value: 9_000,
-                script_pubkey: Script::new(),
+                value: bitcoin::Amount::from_sat(9_000),
+                script_pubkey: ScriptBuf::new(),
             }],
         })
         .unwrap();
         let derived = oracle
-            .derive(request.clone().extract_tx().get_ctv_hash(0), &secp)
+            .derive(request.unsigned_tx.get_ctv_hash(0), &secp)
             .unwrap();
         let internal = derived.to_keypair(&secp).x_only_public_key().0;
-        let leaf = (Script::from(vec![0x51]), LeafVersion::TapScript);
+        let leaf = (ScriptBuf::from(vec![0x51]), LeafVersion::TapScript);
         let spend = TaprootBuilder::new()
             .add_leaf(0, leaf.0.clone())
             .unwrap()
             .finalize(&secp, internal)
             .unwrap();
         request.inputs[0].witness_utxo = Some(TxOut {
-            value: 10_000,
-            script_pubkey: Script::new_v1_p2tr_tweaked(spend.output_key()),
+            value: bitcoin::Amount::from_sat(10_000),
+            script_pubkey: ScriptBuf::new_p2tr_tweaked(spend.output_key()),
         });
         request.inputs[0].tap_merkle_root = spend.merkle_root();
         request.inputs[0]
@@ -261,14 +264,17 @@ mod tests {
         // Existing entries belong to the caller, even if their validity has
         // not been established. A signer cannot silently replace them.
         let mut existing = response;
-        existing.inputs[0].tap_key_sig.as_mut().unwrap().hash_ty =
-            bitcoin::SchnorrSighashType::Default;
+        existing.inputs[0]
+            .tap_key_sig
+            .as_mut()
+            .unwrap()
+            .sighash_type = bitcoin::TapSighashType::Default;
         existing.inputs[0]
             .tap_script_sigs
             .values_mut()
             .next()
             .unwrap()
-            .hash_ty = bitcoin::SchnorrSighashType::Default;
+            .sighash_type = bitcoin::TapSighashType::Default;
         let repeated = oracle.sign(existing.clone(), &secp).unwrap();
         assert_eq!(repeated, existing);
     }

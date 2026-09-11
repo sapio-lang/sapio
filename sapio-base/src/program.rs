@@ -14,8 +14,8 @@
 use crate::covenant::{hash_to_child_vec, Ctv};
 use crate::policy::{PolicyCompiler, PolicyError, ScriptPolicy};
 use crate::Clause;
+use bitcoin::bip32::{self, ChildNumber, Xpub};
 use bitcoin::hashes::{sha256, Hash, HashEngine};
-use bitcoin::util::bip32::{self, ChildNumber, ExtendedPubKey};
 use bitcoin::XOnlyPublicKey;
 use schemars::JsonSchema;
 use serde::de::{Error as _, SeqAccess, Visitor};
@@ -61,7 +61,7 @@ pub fn ctv_wasm_instance(Ctv(hash): Ctv) -> ProgramInstance {
     ProgramInstance {
         evaluator: EvaluatorId::wasm(),
         program: CTV_WASM.to_vec(),
-        parameters: hash.as_ref().to_vec(),
+        parameters: hash.to_byte_array().to_vec(),
     }
 }
 
@@ -87,7 +87,7 @@ impl EvaluatorId {
     /// ABI, signed view and metered host operations. It cannot be registered
     /// or overridden by an oracle operator.
     pub fn wasm() -> Self {
-        Self(sha256::Hash::from_inner([0; 32]))
+        Self(sha256::Hash::from_byte_array([0; 32]))
     }
 
     /// Whether this is the reserved inline WASM-v1 identity.
@@ -102,7 +102,7 @@ impl EvaluatorId {
     pub fn wasm_v2() -> Self {
         let mut bytes = [0; 32];
         bytes[31] = 2;
-        Self(sha256::Hash::from_inner(bytes))
+        Self(sha256::Hash::from_byte_array(bytes))
     }
 
     /// Decode a reserved inline identity; all other IDs require registration.
@@ -251,7 +251,7 @@ impl ProgramInstance {
     /// Under the same configured root, the fixed ten-child namespace is
     /// separate from CTV's nine-child path. Failed derivation never selects
     /// an alternate path.
-    pub fn derive_public_key(&self, root: &ExtendedPubKey) -> Result<XOnlyPublicKey, ProgramError> {
+    pub fn derive_public_key(&self, root: &Xpub) -> Result<XOnlyPublicKey, ProgramError> {
         if root.depth > MAX_PROGRAM_ROOT_DEPTH {
             return Err(ProgramError::RootDepth { depth: root.depth });
         }
@@ -338,12 +338,12 @@ pub fn program_derivation_path(id: ProgramId) -> Vec<ChildNumber> {
 pub struct EmulatedProgram {
     instance: ProgramInstance,
     #[schemars(with = "String")]
-    root: ExtendedPubKey,
+    root: Xpub,
 }
 
 impl EmulatedProgram {
     /// Check that this public root can derive the exact instance key.
-    pub fn new(instance: ProgramInstance, root: ExtendedPubKey) -> Result<Self, ProgramError> {
+    pub fn new(instance: ProgramInstance, root: Xpub) -> Result<Self, ProgramError> {
         instance.derive_public_key(&root)?;
         Ok(Self { instance, root })
     }
@@ -354,7 +354,7 @@ impl EmulatedProgram {
     }
 
     /// Borrow the explicitly selected public oracle root.
-    pub fn root(&self) -> &ExtendedPubKey {
+    pub fn root(&self) -> &Xpub {
         &self.root
     }
 
@@ -370,7 +370,7 @@ impl<'de> Deserialize<'de> for EmulatedProgram {
         #[serde(deny_unknown_fields)]
         struct Fields {
             instance: ProgramInstance,
-            root: ExtendedPubKey,
+            root: Xpub,
         }
         let Fields { instance, root } = Fields::deserialize(deserializer)?;
         Self::new(instance, root).map_err(D::Error::custom)

@@ -6,8 +6,8 @@
 
 //! An example of how one might begin building a payment channel contract in Sapio
 use bitcoin;
-use bitcoin::util::amount::CoinAmount;
 use contract::*;
+use sapio_base::amount::CoinAmount;
 
 use sapio::*;
 use sapio_base::Clause;
@@ -43,10 +43,10 @@ mod tests {
         let object = channel().compile(context(1000)).unwrap();
         object.validate().unwrap();
         let start = object.ctv_to_tx.values().next().unwrap();
-        assert_eq!(start.outputs[0].amount.as_sat(), 1000);
+        assert_eq!(start.outputs[0].amount.to_sat(), 1000);
         let stop = start.outputs[0].contract.ctv_to_tx.values().next().unwrap();
-        assert_eq!(stop.outputs[0].amount.as_sat(), 1000);
-        assert_eq!(stop.tx.input[0].sequence, 100);
+        assert_eq!(stop.outputs[0].amount.to_sat(), 1000);
+        assert_eq!(stop.tx.input[0].sequence.to_consensus_u32(), 100);
         assert!(serde_json::to_string(&start.outputs[0].contract.descriptor)
             .unwrap()
             .contains("older(100)"));
@@ -57,7 +57,7 @@ mod tests {
         let contract = channel();
         assert_eq!(
             contract.guard_signed(),
-            Clause::And(vec![Clause::Key(key(1)), Clause::Key(key(2))])
+            Clause::And(vec![Clause::Key(key(1)).into(), Clause::Key(key(2)).into()])
         );
         let update = |a, b| {
             Some(Update {
@@ -75,7 +75,7 @@ mod tests {
                 .tx
                 .output
                 .iter()
-                .map(|o| o.value)
+                .map(|o| o.value.to_sat())
                 .collect::<Vec<_>>(),
             vec![400, 600]
         );
@@ -245,11 +245,15 @@ where
 {
     #[guard]
     fn timeout(self, _ctx: Context) {
-        Clause::Older(100)
+        Clause::try_from(sapio_base::timelocks::RelHeight::from(100))
+            .expect("positive constant locktime")
     }
     #[guard(cached)]
     fn signed(self) {
-        Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
+        Clause::And(vec![
+            Clause::Key(self.alice).into(),
+            Clause::Key(self.bob).into(),
+        ])
     }
 
     #[continuation(guarded_by = "[Self::signed]", coerce_args = "coerce_args", web_api)]

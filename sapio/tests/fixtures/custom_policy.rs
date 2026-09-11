@@ -6,12 +6,12 @@ mod covenant;
 use bitcoin::blockdata::opcodes::all;
 use bitcoin::blockdata::script::{Builder, Instruction};
 use bitcoin::hashes::sha256;
+use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{Keypair, Message, Secp256k1, SecretKey};
-use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
-use bitcoin::util::sighash::{Prevouts, SighashCache};
-use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
-use bitcoin::{Amount, Network, OutPoint, SchnorrSighashType, Transaction, TxIn, TxOut, Witness};
-use bitcoin::{Script, XOnlyPublicKey};
+use bitcoin::sighash::{Prevouts, SighashCache};
+use bitcoin::taproot::{LeafVersion, TapLeafHash};
+use bitcoin::{Amount, Network, OutPoint, TapSighashType, Transaction, TxIn, TxOut, Witness};
+use bitcoin::{ScriptBuf, XOnlyPublicKey};
 use sapio::contract::abi::object::{RawTaproot, SupportedDescriptors};
 use sapio::contract::{Compilable, Compiled, Context, Contract};
 use sapio::{declare, guard, then};
@@ -41,7 +41,7 @@ impl PolicyCompiler for ArithmeticSigner {
     fn compile_policy(&self) -> Result<ScriptPolicy, PolicyError> {
         ScriptFragment::new(
             Builder::new()
-                .push_slice(&self.0.serialize())
+                .push_slice(self.0.serialize())
                 .push_opcode(all::OP_CHECKSIG)
                 .push_opcode(all::OP_1ADD)
                 .push_int(2)
@@ -152,11 +152,11 @@ pub fn tree(compiled: &Compiled) -> &RawTaproot {
 
 pub fn funding(compiled: &Compiled) -> Transaction {
     Transaction {
-        version: 2,
-        lock_time: 0,
+        version: bitcoin::transaction::Version(2),
+        lock_time: bitcoin::absolute::LockTime::from_consensus(0),
         input: vec![TxIn::default()],
         output: vec![TxOut {
-            value: 10_000,
+            value: bitcoin::Amount::from_sat(10_000),
             script_pubkey: tree(compiled).script_pubkey(),
         }],
     }
@@ -166,12 +166,12 @@ pub fn unsigned_spend(compiled: &Compiled, outpoint: OutPoint) -> Transaction {
     let mut transaction = match compiled.ctv_to_tx.values().next() {
         Some(template) => template.tx.clone(),
         None => Transaction {
-            version: 2,
-            lock_time: 0,
+            version: bitcoin::transaction::Version(2),
+            lock_time: bitcoin::absolute::LockTime::from_consensus(0),
             input: vec![TxIn::default()],
             output: vec![TxOut {
-                value: 9_000,
-                script_pubkey: Script::new_v1_p2tr(&Secp256k1::new(), key(9), None),
+                value: bitcoin::Amount::from_sat(9_000),
+                script_pubkey: ScriptBuf::new_p2tr(&Secp256k1::new(), key(9), None),
             }],
         },
     };
@@ -179,7 +179,7 @@ pub fn unsigned_spend(compiled: &Compiled, outpoint: OutPoint) -> Transaction {
     transaction
 }
 
-pub fn script_signers(script: &Script) -> Vec<XOnlyPublicKey> {
+pub fn script_signers(script: &ScriptBuf) -> Vec<XOnlyPublicKey> {
     let instructions: Vec<_> = script.instructions().collect::<Result<_, _>>().unwrap();
     instructions
         .windows(2)
@@ -193,7 +193,7 @@ pub fn script_signers(script: &Script) -> Vec<XOnlyPublicKey> {
                     ]
                     .contains(opcode) =>
             {
-                Some(XOnlyPublicKey::from_slice(bytes).unwrap())
+                Some(XOnlyPublicKey::from_slice(bytes.as_bytes()).unwrap())
             }
             _ => None,
         })
@@ -222,7 +222,7 @@ pub fn signed_spend(
             0,
             &Prevouts::All(&prevouts),
             leaf,
-            SchnorrSighashType::Default,
+            TapSighashType::Default,
         )
         .unwrap();
     let message = Message::from_digest_slice(&hash[..]).unwrap();
@@ -258,6 +258,6 @@ pub fn signed_spend(
             .unwrap()
             .serialize(),
     );
-    transaction.input[0].witness = Witness::from_vec(witness);
+    transaction.input[0].witness = Witness::from_slice(&witness);
     transaction
 }

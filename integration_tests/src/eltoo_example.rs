@@ -4,16 +4,17 @@
 //! fixture simulates joint authorization with one keypair; it is not MuSig2.
 //! An external sponsor pays the complete fee without reducing channel funds.
 
+use bitcoin::bip32::Xpub;
 use bitcoin::hashes::{sha256, Hash};
-use bitcoin::psbt::{Input, PartiallySignedTransaction as Psbt};
+use bitcoin::key::TapTweak;
+use bitcoin::psbt::{Input, Psbt};
+use bitcoin::secp256k1::Keypair;
 use bitcoin::secp256k1::{schnorr::Signature, Message, Secp256k1};
-use bitcoin::util::bip32::ExtendedPubKey;
-use bitcoin::util::schnorr::TapTweak;
-use bitcoin::util::sighash::{Prevouts, SighashCache};
-use bitcoin::util::taproot::{LeafVersion, TapLeafHash, TaprootSpendInfo};
+use bitcoin::sighash::{Prevouts, SighashCache};
+use bitcoin::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::{
-    Address, Amount, KeyPair, Network, OutPoint, SchnorrSig, SchnorrSighashType, Script,
-    Transaction, TxOut, XOnlyPublicKey,
+    taproot, Address, Amount, Network, OutPoint, ScriptBuf, TapSighashType, Transaction, TxOut,
+    XOnlyPublicKey,
 };
 use emulator_connect::program::{ProgramSigningRequest, ProgramSpendPath, PSBT};
 use miniscript::Descriptor;
@@ -75,7 +76,7 @@ impl Terms {
     /// Fix public authorization, payouts and the bounded state-number domain.
     pub fn new(
         joint_key: XOnlyPublicKey,
-        oracle_root: ExtendedPubKey,
+        oracle_root: Xpub,
         capacity: u64,
         delay: u16,
         max_state: u32,
@@ -220,7 +221,7 @@ impl Terms {
     ///
     /// The dummy allocation affects only the discarded settlement leaf. Native
     /// update lowering depends on TL(n+1) and the shared program key alone.
-    pub fn update_leaf_for(&self, number: u32) -> Result<Script, Error> {
+    pub fn update_leaf_for(&self, number: u32) -> Result<ScriptBuf, Error> {
         self.state(State {
             number,
             alice_sats: self.capacity / 2,
@@ -261,30 +262,26 @@ impl Channel {
     }
 
     #[guard(policy, cached)]
-    fn update_policy(self) -> ScriptPolicy {
-        let program = self
-            .terms
-            .update_program
-            .compile_policy()
-            .expect("validated program key");
-        match self.state {
+    fn update_policy(self) -> Result<ScriptPolicy, CompilationError> {
+        let program = self.terms.update_program.compile_policy()?;
+        Ok(match self.state {
             None => program,
             Some(state) => ScriptPolicy::And(vec![
-                Clause::After(LOCK_TIME_BASE + state.number + 1).into(),
+                Clause::try_from(AbsTime::try_from(LOCK_TIME_BASE + state.number + 1)?)?.into(),
                 program,
             ]),
-        }
+        })
     }
 
     #[guard(policy, cached)]
-    fn settlement_policy(self) -> ScriptPolicy {
-        match &self.settlement_program {
+    fn settlement_policy(self) -> Result<ScriptPolicy, CompilationError> {
+        Ok(match &self.settlement_program {
             None => Clause::Unsatisfiable.into(),
             Some(program) => ScriptPolicy::And(vec![
-                Clause::Older(u32::from(self.terms.delay)).into(),
-                program.compile_policy().expect("validated program key"),
+                Clause::try_from(RelHeight::from(self.terms.delay))?.into(),
+                program.compile_policy()?,
             ]),
-        }
+        })
     }
 
     #[compile_if]
@@ -399,13 +396,13 @@ impl Channel {
         self.compile_with(Some(("settle", Candidate::Settle)))
     }
 
-    fn leaf_for(&self, program: &EmulatedProgram) -> Result<Script, Error> {
+    fn leaf_for(&self, program: &EmulatedProgram) -> Result<ScriptBuf, Error> {
         let compiled = self.compile()?;
         let key = program.derive_public_key()?.serialize();
-        let info = spend_info(&compiled)?;
-        let mut matches = info.as_script_map().keys().filter_map(|(script, _)| {
+        let input = spending_input(&compiled)?;
+        let mut matches = input.tap_scripts.values().filter_map(|(script, _)| {
             script.instructions().any(|instruction| matches!(instruction,
-                Ok(bitcoin::blockdata::script::Instruction::PushBytes(bytes)) if bytes == key
+                Ok(bitcoin::blockdata::script::Instruction::PushBytes(bytes)) if bytes.as_bytes() == key
             )).then_some(script.clone())
         });
         let script = matches
@@ -417,11 +414,11 @@ impl Channel {
         Ok(script)
     }
 
-    pub fn update_leaf(&self) -> Result<Script, Error> {
+    pub fn update_leaf(&self) -> Result<ScriptBuf, Error> {
         self.leaf_for(&self.terms.update_program)
     }
 
-    pub fn settlement_leaf(&self) -> Result<Script, Error> {
+    pub fn settlement_leaf(&self) -> Result<ScriptBuf, Error> {
         self.leaf_for(
             self.settlement_program
                 .as_ref()
@@ -432,25 +429,13 @@ impl Channel {
     /// Populate the authenticated spending proof from actual compiler output.
     pub fn input(&self, coin: &Coin) -> Result<Input, Error> {
         let compiled = self.compile()?;
-        if coin.txout.value != self.terms.capacity
-            || coin.txout.script_pubkey != Script::from(&compiled.address)
+        if coin.txout.value.to_sat() != self.terms.capacity
+            || coin.txout.script_pubkey != ScriptBuf::from(&compiled.address)
         {
             return Err("channel funding does not match the compiled output".into());
         }
-        let info = spend_info(&compiled)?;
-        let mut input = Input {
-            witness_utxo: Some(coin.txout.clone()),
-            tap_internal_key: Some(info.internal_key()),
-            tap_merkle_root: info.merkle_root(),
-            ..Input::default()
-        };
-        for item in info.as_script_map().keys() {
-            input.tap_scripts.insert(
-                info.control_block(item)
-                    .ok_or("missing compiled control block")?,
-                item.clone(),
-            );
-        }
+        let mut input = spending_input(&compiled)?;
+        input.witness_utxo = Some(coin.txout.clone());
         Ok(input)
     }
 }
@@ -484,12 +469,35 @@ impl Contract for Channel {
     }
 }
 
-fn spend_info(compiled: &Compiled) -> Result<TaprootSpendInfo, Error> {
+fn spending_input(compiled: &Compiled) -> Result<Input, Error> {
+    let mut input = Input::default();
     match &compiled.descriptor {
-        Some(SupportedDescriptors::XOnly(Descriptor::Tr(tree))) => Ok((*tree.spend_info()).clone()),
-        Some(SupportedDescriptors::Taproot(tree)) => Ok(tree.spend_info().clone()),
-        _ => Err("expected a compiled Taproot descriptor".into()),
+        Some(SupportedDescriptors::XOnly(Descriptor::Tr(tree))) => {
+            let info = tree.spend_info();
+            input.tap_internal_key = Some(info.internal_key());
+            input.tap_merkle_root = info.merkle_root();
+            for leaf in info.leaves() {
+                input.tap_scripts.insert(
+                    leaf.control_block().clone(),
+                    (leaf.script().to_owned(), leaf.leaf_version()),
+                );
+            }
+        }
+        Some(SupportedDescriptors::Taproot(tree)) => {
+            let info = tree.spend_info();
+            input.tap_internal_key = Some(info.internal_key());
+            input.tap_merkle_root = info.merkle_root();
+            for leaf in info.script_map().keys() {
+                input.tap_scripts.insert(
+                    info.control_block(leaf)
+                        .ok_or("missing compiled control block")?,
+                    leaf.clone(),
+                );
+            }
+        }
+        _ => return Err("expected a compiled Taproot descriptor".into()),
     }
+    Ok(input)
 }
 
 fn only_candidate(compiled: &Compiled) -> Result<Transaction, Error> {
@@ -520,7 +528,10 @@ pub fn attach_inputs(
     mut input: Input,
     sponsor: Sponsor,
 ) -> Result<Psbt, Error> {
-    if transaction.version != 2 || transaction.input.len() != 2 || sponsor.coin.txout.value == 0 {
+    if transaction.version != bitcoin::transaction::Version::TWO
+        || transaction.input.len() != 2
+        || sponsor.coin.txout.value.to_sat() == 0
+    {
         return Err("eltoo requires version two, two inputs and a positive sponsor".into());
     }
     let script = Address::p2tr(
@@ -536,9 +547,11 @@ pub fn attach_inputs(
     let output_sum = transaction
         .output
         .iter()
-        .try_fold(0u64, |sum, output| sum.checked_add(output.value))
+        .try_fold(0u64, |sum, output| sum.checked_add(output.value.to_sat()))
         .ok_or("output sum overflows")?;
-    if channel.txout.value != output_sum || input.witness_utxo.as_ref() != Some(&channel.txout) {
+    if channel.txout.value.to_sat() != output_sum
+        || input.witness_utxo.as_ref() != Some(&channel.txout)
+    {
         return Err("channel capacity and authenticated prevout must match all outputs".into());
     }
     transaction.input[0].previous_output = channel.outpoint;
@@ -555,7 +568,7 @@ pub fn attach_inputs(
 }
 
 /// Jointly authorize a target template once, independent of its funding outpoints.
-pub fn authorize_update(terms: &Terms, target: State, joint: &KeyPair) -> Result<Signature, Error> {
+pub fn authorize_update(terms: &Terms, target: State, joint: &Keypair) -> Result<Signature, Error> {
     if joint.x_only_public_key().0 != terms.joint_key {
         return Err("authorization key does not match the channel's joint key".into());
     }
@@ -610,7 +623,7 @@ pub fn settlement_request(
 }
 
 /// Add the sponsor's real SIGHASH_ALL signature after the oracle accepts input zero.
-pub fn sign_sponsor(psbt: &mut Psbt, key: &KeyPair) -> Result<(), Error> {
+pub fn sign_sponsor(psbt: &mut Psbt, key: &Keypair) -> Result<(), Error> {
     if psbt.inputs.len() != 2 || psbt.inputs[1].tap_internal_key != Some(key.x_only_public_key().0)
     {
         return Err("sponsor signing key does not match input one".into());
@@ -625,17 +638,17 @@ pub fn sign_sponsor(psbt: &mut Psbt, key: &KeyPair) -> Result<(), Error> {
                 .ok_or("missing authenticated prevout")
         })
         .collect::<Result<_, _>>()?;
-    let hash_ty = SchnorrSighashType::All;
+    let hash_ty = TapSighashType::All;
     let hash = SighashCache::new(&psbt.unsigned_tx).taproot_key_spend_signature_hash(
         1,
         &Prevouts::All(&prevouts),
         hash_ty,
     )?;
     let secp = Secp256k1::new();
-    let key = key.tap_tweak(&secp, None).into_inner();
-    psbt.inputs[1].tap_key_sig = Some(SchnorrSig {
-        sig: secp.sign_schnorr_no_aux_rand(&Message::from_digest_slice(hash.as_ref())?, &key),
-        hash_ty,
+    let key = key.tap_tweak(&secp, None).to_keypair();
+    psbt.inputs[1].tap_key_sig = Some(taproot::Signature {
+        signature: secp.sign_schnorr_no_aux_rand(&Message::from_digest_slice(hash.as_ref())?, &key),
+        sighash_type: hash_ty,
     });
     Ok(())
 }
@@ -643,28 +656,28 @@ pub fn sign_sponsor(psbt: &mut Psbt, key: &KeyPair) -> Result<(), Error> {
 /// Deterministic disposable test material, separate from public contract source.
 pub mod fixture {
     use super::*;
+    use bitcoin::bip32::Xpriv;
     use bitcoin::secp256k1::SecretKey;
-    use bitcoin::util::bip32::ExtendedPrivKey;
 
-    fn key(seed: u8) -> KeyPair {
-        KeyPair::from_secret_key(
+    fn key(seed: u8) -> Keypair {
+        Keypair::from_secret_key(
             &Secp256k1::new(),
             &SecretKey::from_slice(&[seed; 32]).unwrap(),
         )
     }
-    pub fn joint_key() -> KeyPair {
+    pub fn joint_key() -> Keypair {
         key(101)
     }
-    pub fn sponsor_key() -> KeyPair {
+    pub fn sponsor_key() -> Keypair {
         key(103)
     }
-    pub fn oracle_key() -> ExtendedPrivKey {
-        ExtendedPrivKey::new_master(Network::Testnet, &[102; 32]).unwrap()
+    pub fn oracle_key() -> Xpriv {
+        Xpriv::new_master(Network::Testnet, &[102; 32]).unwrap()
     }
     pub fn terms() -> Terms {
         Terms::new(
             joint_key().x_only_public_key().0,
-            ExtendedPubKey::from_priv(&Secp256k1::new(), &oracle_key()),
+            Xpub::from_priv(&Secp256k1::new(), &oracle_key()),
             100_000,
             6,
             MAX_STATE,
@@ -675,7 +688,7 @@ pub mod fixture {
     }
     fn outpoint(tag: u8) -> OutPoint {
         OutPoint::new(
-            bitcoin::Txid::from_inner(sha256::Hash::hash(&[tag]).into_inner()),
+            bitcoin::Txid::from_byte_array(sha256::Hash::hash(&[tag]).to_byte_array()),
             0,
         )
     }
@@ -683,7 +696,7 @@ pub mod fixture {
         Coin {
             outpoint: outpoint(tag),
             txout: TxOut {
-                value: channel.terms.capacity,
+                value: bitcoin::Amount::from_sat(channel.terms.capacity),
                 script_pubkey: (&channel.compile().unwrap().address).into(),
             },
         }
@@ -694,7 +707,7 @@ pub mod fixture {
             coin: Coin {
                 outpoint: outpoint(tag),
                 txout: TxOut {
-                    value,
+                    value: Amount::from_sat(value),
                     script_pubkey: Address::p2tr(
                         &Secp256k1::new(),
                         internal_key,

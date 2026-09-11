@@ -3,27 +3,38 @@
 version = 4
 
 [[package]]
+name = "arrayvec"
+version = "0.7.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
+
+[[package]]
+name = "base58ck"
+version = "0.1.101"
+source = "git+https://github.com/sapio-lang/rust-bitcoin?rev=6ef940bb2d98ba5dece053fdabd1d9ad65ff5864#6ef940bb2d98ba5dece053fdabd1d9ad65ff5864"
+dependencies = [
+ "bitcoin_hashes",
+]
+
+[[package]]
 name = "base64"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
-name = "base64-compat"
-version = "1.0.0"
+name = "base64"
+version = "0.21.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a8d4d2746f89841e49230dd26917df1876050f95abafafbe34f47cb534b88d7"
-dependencies = [
- "byteorder",
-]
+checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
 name = "batching-trait"
 version = "0.1.0"
 dependencies = [
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-plugin",
  "schemars",
@@ -33,25 +44,70 @@ dependencies = [
 
 [[package]]
 name = "bech32"
-version = "0.8.1"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf9ff0bbfd639f15c74af777d81383cf53efb7c93613f6cab67c6c11e05bbf8b"
+checksum = "32637268377fc7b10a8c6d51de3e7fba1ce5dd371a96e342b34e6078db558e7f"
 
 [[package]]
-name = "bitcoin_hashes"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "006cc91e1a1d99819bc5b8214be3555c1f0611b169f527a1fdc54ed1f2b745b0"
+name = "bitcoin"
+version = "0.32.102"
+source = "git+https://github.com/sapio-lang/rust-bitcoin?rev=6ef940bb2d98ba5dece053fdabd1d9ad65ff5864#6ef940bb2d98ba5dece053fdabd1d9ad65ff5864"
 dependencies = [
- "schemars",
+ "base58ck",
+ "base64 0.21.7",
+ "bech32",
+ "bitcoin-io",
+ "bitcoin-units",
+ "bitcoin_hashes",
+ "hex-conservative 0.2.3",
+ "hex_lit",
+ "secp256k1",
  "serde",
 ]
 
 [[package]]
-name = "byteorder"
-version = "1.5.0"
+name = "bitcoin-consensus-encoding"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
+checksum = "6712f9c6fd6785b3b270884e57c441c403dc5d7e19ca45368c97c7a1de3000ec"
+dependencies = [
+ "bitcoin-internals",
+ "hex-conservative 1.3.0",
+ "serde",
+]
+
+[[package]]
+name = "bitcoin-internals"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d573f4cf32996a8dce612e4348cece65a241f1882ed594047c9ba348e8869fa5"
+
+[[package]]
+name = "bitcoin-io"
+version = "0.1.101"
+source = "git+https://github.com/sapio-lang/rust-bitcoin?rev=6ef940bb2d98ba5dece053fdabd1d9ad65ff5864#6ef940bb2d98ba5dece053fdabd1d9ad65ff5864"
+dependencies = [
+ "bitcoin-consensus-encoding",
+]
+
+[[package]]
+name = "bitcoin-units"
+version = "0.1.101"
+source = "git+https://github.com/sapio-lang/rust-bitcoin?rev=6ef940bb2d98ba5dece053fdabd1d9ad65ff5864#6ef940bb2d98ba5dece053fdabd1d9ad65ff5864"
+dependencies = [
+ "bitcoin-consensus-encoding",
+ "serde",
+]
+
+[[package]]
+name = "bitcoin_hashes"
+version = "0.14.101"
+source = "git+https://github.com/sapio-lang/rust-bitcoin?rev=6ef940bb2d98ba5dece053fdabd1d9ad65ff5864#6ef940bb2d98ba5dece053fdabd1d9ad65ff5864"
+dependencies = [
+ "bitcoin-io",
+ "hex-conservative 0.2.3",
+ "serde",
+]
 
 [[package]]
 name = "cc"
@@ -94,6 +150,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
+name = "hex-conservative"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db3fef046dca3ca91ee1408a8c1b80ab777e80a4d308d1bf4e7adb3fcb047e08"
+dependencies = [
+ "arrayvec",
+]
+
+[[package]]
+name = "hex-conservative"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "271e0d19bcb473b6675739a2b536076b24a082316cb5199ad918edce10c599e8"
+dependencies = [
+ "arrayvec",
+]
+
+[[package]]
+name = "hex_lit"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3011d1213f159867b13cfd6ac92d2cd5f1345762c63be3554e84092d85a50bbd"
+
+[[package]]
 name = "indexmap"
 version = "2.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -120,6 +200,17 @@ name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
+
+[[package]]
+name = "miniscript"
+version = "13.1.0"
+source = "git+https://github.com/sapio-lang/rust-miniscript?rev=d9f9176a68a93efbfb303f24da154f9c72829892#d9f9176a68a93efbfb303f24da154f9c72829892"
+dependencies = [
+ "bech32",
+ "bitcoin",
+ "hex-conservative 1.3.0",
+ "serde",
+]
 
 [[package]]
 name = "paste"
@@ -149,11 +240,11 @@ dependencies = [
 name = "sapio"
 version = "0.2.4"
 dependencies = [
- "base64",
+ "base64 0.13.1",
+ "bitcoin",
  "lazy_static",
  "paste",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-ctv-emulator-trait",
  "sapio_macros",
  "schemars",
@@ -166,8 +257,8 @@ dependencies = [
 name = "sapio-base"
 version = "0.2.4"
 dependencies = [
- "sapio-bitcoin",
- "sapio-miniscript",
+ "bitcoin",
+ "miniscript",
  "sapio-wasm",
  "schemars",
  "serde",
@@ -176,26 +267,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "sapio-bitcoin"
-version = "0.28.2"
-source = "git+https://github.com/sapio-lang/rust-bitcoin?rev=16c1b0059ecb420eaed089da28f8d24f99e36cf8#16c1b0059ecb420eaed089da28f8d24f99e36cf8"
-dependencies = [
- "base64-compat",
- "bech32",
- "bitcoin_hashes",
- "sapio-secp256k1",
- "schemars",
- "serde",
-]
-
-[[package]]
 name = "sapio-contrib"
 version = "0.2.4"
 dependencies = [
+ "bitcoin",
  "lazy_static",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-ctv-emulator-trait",
  "sapio_macros",
  "schemars",
@@ -208,42 +286,12 @@ dependencies = [
 name = "sapio-ctv-emulator-trait"
 version = "0.2.4"
 dependencies = [
+ "bitcoin",
  "sapio-base",
- "sapio-bitcoin",
  "schemars",
  "serde",
  "serde_derive",
  "serde_json",
-]
-
-[[package]]
-name = "sapio-miniscript"
-version = "7.0.2-alpha.0"
-source = "git+https://github.com/sapio-lang/rust-miniscript?rev=04b69f69459fe3b043ca61fb649cf546d5a241b6#04b69f69459fe3b043ca61fb649cf546d5a241b6"
-dependencies = [
- "sapio-bitcoin",
- "schemars",
- "serde",
-]
-
-[[package]]
-name = "sapio-secp256k1"
-version = "0.28.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "183ee2f213702f3feb127390b0bcd9aa8722e736add78b9b307a8546d6945d0e"
-dependencies = [
- "sapio-secp256k1-sys",
- "schemars",
- "serde",
-]
-
-[[package]]
-name = "sapio-secp256k1-sys"
-version = "0.9.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb9028538ef1bdfb57d15745af7438063f0c90370a50e556aa8813bb4716f06e"
-dependencies = [
- "cc",
 ]
 
 [[package]]
@@ -255,9 +303,9 @@ name = "sapio-wasm-clause"
 version = "0.1.0"
 dependencies = [
  "batching-trait",
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-contrib",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-plugin",
@@ -272,9 +320,9 @@ name = "sapio-wasm-clause-trampoline"
 version = "0.1.0"
 dependencies = [
  "batching-trait",
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-contrib",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-plugin",
@@ -288,9 +336,9 @@ name = "sapio-wasm-coin-pool"
 version = "0.1.0"
 dependencies = [
  "batching-trait",
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-contrib",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-plugin",
@@ -304,9 +352,9 @@ dependencies = [
 name = "sapio-wasm-custom-policy"
 version = "0.1.0"
 dependencies = [
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-plugin",
  "schemars",
@@ -318,9 +366,9 @@ name = "sapio-wasm-fedpeg"
 version = "0.1.0"
 dependencies = [
  "batching-trait",
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-contrib",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-plugin",
@@ -335,9 +383,9 @@ name = "sapio-wasm-hanukkiah"
 version = "0.1.0"
 dependencies = [
  "batching-trait",
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-contrib",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-plugin",
@@ -352,9 +400,9 @@ name = "sapio-wasm-helloworld"
 version = "0.1.0"
 dependencies = [
  "batching-trait",
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-contrib",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-plugin",
@@ -369,9 +417,9 @@ name = "sapio-wasm-jamesob-vault"
 version = "0.1.0"
 dependencies = [
  "batching-trait",
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-contrib",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-plugin",
@@ -386,9 +434,9 @@ name = "sapio-wasm-nft"
 version = "0.1.0"
 dependencies = [
  "batching-trait",
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-contrib",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-nft-trait",
@@ -404,9 +452,9 @@ name = "sapio-wasm-nft-auction"
 version = "0.1.0"
 dependencies = [
  "batching-trait",
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-contrib",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-nft-trait",
@@ -422,9 +470,9 @@ name = "sapio-wasm-nft-sale"
 version = "0.1.0"
 dependencies = [
  "batching-trait",
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-contrib",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-nft-trait",
@@ -439,9 +487,9 @@ dependencies = [
 name = "sapio-wasm-nft-trait"
 version = "0.1.0"
 dependencies = [
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-plugin",
  "schemars",
@@ -456,9 +504,9 @@ name = "sapio-wasm-op-return-chain"
 version = "0.1.0"
 dependencies = [
  "batching-trait",
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-contrib",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-plugin",
@@ -473,9 +521,9 @@ name = "sapio-wasm-ordinal-example"
 version = "0.1.0"
 dependencies = [
  "batching-trait",
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-contrib",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-nft-trait",
@@ -491,9 +539,9 @@ name = "sapio-wasm-ordinal-inscription"
 version = "0.1.0"
 dependencies = [
  "batching-trait",
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-contrib",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-nft-trait",
@@ -509,9 +557,9 @@ name = "sapio-wasm-payment-pool"
 version = "0.1.0"
 dependencies = [
  "batching-trait",
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-contrib",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-plugin",
@@ -525,11 +573,11 @@ dependencies = [
 name = "sapio-wasm-plugin"
 version = "0.2.4"
 dependencies = [
- "base64",
+ "base64 0.13.1",
+ "bitcoin",
  "hex",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "schemars",
  "serde",
  "serde_derive",
@@ -541,9 +589,9 @@ name = "sapio-wasm-plugin-example"
 version = "0.1.0"
 dependencies = [
  "batching-trait",
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-plugin",
  "schemars",
@@ -557,9 +605,9 @@ name = "sapio-wasm-staker"
 version = "0.1.0"
 dependencies = [
  "batching-trait",
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-contrib",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-plugin",
@@ -574,9 +622,9 @@ name = "sapio-wasm-vault"
 version = "0.1.0"
 dependencies = [
  "batching-trait",
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-contrib",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-plugin",
@@ -617,6 +665,26 @@ dependencies = [
  "quote",
  "serde_derive_internals",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "secp256k1"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9465315bc9d4566e1724f0fffcbcc446268cb522e60f9a27bcded6b19c108113"
+dependencies = [
+ "bitcoin_hashes",
+ "secp256k1-sys",
+ "serde",
+]
+
+[[package]]
+name = "secp256k1-sys"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4387882333d3aa8cb20530a17c69a3752e97837832f34f6dccc760e715001d9"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
@@ -684,8 +752,8 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 name = "simp-pack"
 version = "0.2.4"
 dependencies = [
+ "bitcoin",
  "sapio-base",
- "sapio-bitcoin",
  "schemars",
  "serde",
  "serde_derive",
@@ -730,9 +798,9 @@ name = "trampolinepay"
 version = "0.1.0"
 dependencies = [
  "batching-trait",
+ "bitcoin",
  "sapio",
  "sapio-base",
- "sapio-bitcoin",
  "sapio-ctv-emulator-trait",
  "sapio-wasm-plugin",
  "schemars",

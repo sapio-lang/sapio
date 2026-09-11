@@ -4,10 +4,10 @@
 //  License, v. 2.0. If a copy of the MPL was not distributed with this
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+use bitcoin::amount::Amount;
 use bitcoin::consensus::encode::Encodable;
 use bitcoin::hashes::sha256;
 use bitcoin::hashes::Hash;
-use bitcoin::util::amount::Amount;
 
 /// Any type which can generate a CTVHash. Allows some decoupling in the future if some types will
 /// not be literal transactions.
@@ -31,7 +31,7 @@ impl CTVHash for bitcoin::Transaction {
                 input.script_sig.consensus_encode(&mut scripts).unwrap();
             }
             sha256::Hash::from_engine(scripts)
-                .into_inner()
+                .to_byte_array()
                 .consensus_encode(&mut ctv_hash)
                 .unwrap();
         }
@@ -44,7 +44,7 @@ impl CTVHash for bitcoin::Transaction {
                 seq.consensus_encode(&mut enc).unwrap();
             }
             sha256::Hash::from_engine(enc)
-                .into_inner()
+                .to_byte_array()
                 .consensus_encode(&mut ctv_hash)
                 .unwrap();
         }
@@ -59,7 +59,7 @@ impl CTVHash for bitcoin::Transaction {
                 out.consensus_encode(&mut enc).unwrap();
             }
             sha256::Hash::from_engine(enc)
-                .into_inner()
+                .to_byte_array()
                 .consensus_encode(&mut ctv_hash)
                 .unwrap();
         }
@@ -68,6 +68,6 @@ impl CTVHash for bitcoin::Transaction {
     }
 
     fn total_amount(&self) -> Amount {
-        Amount::from_sat(self.output.iter().fold(0, |a, b| a + b.value))
+        self.output.iter().map(|output| output.value).sum()
     }
 }

@@ -1,18 +1,18 @@
 #![allow(dead_code)]
 
+use bitcoin::bip32::{Xpriv, Xpub};
 use bitcoin::hashes::sha256;
 use bitcoin::secp256k1::{Keypair, Secp256k1};
-use bitcoin::util::bip32::{ExtendedPrivKey, ExtendedPubKey};
 use bitcoin::{Network, XOnlyPublicKey};
 use sapio_base::covenant::{hash_to_child_vec, Ctv, LoweringPlan};
 use sapio_base::Clause;
 
-pub fn private_root(seed: u8) -> ExtendedPrivKey {
-    ExtendedPrivKey::new_master(Network::Testnet, &[seed; 32]).unwrap()
+pub fn private_root(seed: u8) -> Xpriv {
+    Xpriv::new_master(Network::Testnet, &[seed; 32]).unwrap()
 }
 
-pub fn public_root(seed: u8) -> ExtendedPubKey {
-    ExtendedPubKey::from_priv(&Secp256k1::new(), &private_root(seed))
+pub fn public_root(seed: u8) -> Xpub {
+    Xpub::from_priv(&Secp256k1::new(), &private_root(seed))
 }
 
 pub fn plan(seed: u8) -> LoweringPlan {

@@ -9,7 +9,7 @@
 use crate::contract::object::CovenantRequirements;
 use crate::contract::CompilationError;
 use bitcoin::blockdata::opcodes;
-use bitcoin::Script;
+use bitcoin::{Script, ScriptBuf};
 use sapio_base::covenant::LoweringPlan;
 use sapio_base::miniscript::ord::Inscription;
 use sapio_base::miniscript::Tap;
@@ -223,16 +223,28 @@ impl Preflight<'_> {
                     }
                 })
             }
-            Clause::Threshold(1, children) if split => {
+            Clause::Thresh(threshold) if split && threshold.k() == 1 => {
                 let mut expansion = Expansion::EMPTY;
-                for child in children {
+                for child in threshold.iter() {
                     expansion = expansion.or(self.clause(child, depth + 1, true)?)?;
                 }
                 Ok(expansion)
             }
-            Clause::And(children) | Clause::Threshold(_, children) => {
+            Clause::And(children) => {
                 let mut payload_bytes = 0usize;
                 for child in children {
+                    payload_bytes = payload_bytes
+                        .checked_add(self.clause(child, depth + 1, false)?.payload_bytes)
+                        .ok_or_else(|| limit("expanded script bytes", MAX_SCRIPT_BYTES))?;
+                }
+                Ok(Expansion {
+                    payload_bytes,
+                    ..Expansion::ONE
+                })
+            }
+            Clause::Thresh(threshold) => {
+                let mut payload_bytes = 0usize;
+                for child in threshold.iter() {
                     payload_bytes = payload_bytes
                         .checked_add(self.clause(child, depth + 1, false)?.payload_bytes)
                         .ok_or_else(|| limit("expanded script bytes", MAX_SCRIPT_BYTES))?;
@@ -292,7 +304,10 @@ fn expand_clause(clause: &Clause) -> Vec<Vec<Operand<'_>>> {
             .iter()
             .flat_map(|(_, child)| expand_clause(child))
             .collect(),
-        Clause::Threshold(1, children) => children.iter().flat_map(expand_clause).collect(),
+        Clause::Thresh(threshold) if threshold.k() == 1 => threshold
+            .iter()
+            .flat_map(|child| expand_clause(child))
+            .collect(),
         clause => vec![vec![Operand::Miniscript(clause)]],
     }
 }
@@ -352,7 +367,7 @@ fn compile_run(
     clauses: &[&Clause],
     encoded_bytes: usize,
     separator: bool,
-) -> Result<Script, CompilationError> {
+) -> Result<ScriptBuf, CompilationError> {
     // Combining the complete run lets a key/CTV predicate protect an adjacent
     // timelock or hashlock. Do not reorder predicates across an opaque script.
     // The current public Miniscript compiler requires a safe run; an opaque
@@ -373,7 +388,7 @@ fn append_script(
 ) -> Result<(), CompilationError> {
     let next_size = encoded_size(*encoded_bytes, script.len(), *has_predicate)?;
     if *has_predicate {
-        bytes.push(opcodes::all::OP_VERIFY.into_u8());
+        bytes.push(opcodes::all::OP_VERIFY.to_u8());
     }
     bytes.extend_from_slice(script.as_bytes());
     *has_predicate = true;
@@ -384,12 +399,12 @@ fn append_script(
 fn compile_alternative(
     operands: &[Operand<'_>],
     encoded_bytes: &mut usize,
-) -> Result<Script, CompilationError> {
+) -> Result<ScriptBuf, CompilationError> {
     if operands.is_empty() {
         // The IR's empty conjunction is explicitly true. It has no Miniscript
         // clause whose standalone signature-safety rules need to be applied.
         *encoded_bytes = encoded_size(*encoded_bytes, 1, false)?;
-        return Ok(Script::from(vec![opcodes::OP_TRUE.into_u8()]));
+        return Ok(ScriptBuf::from(vec![opcodes::OP_TRUE.to_u8()]));
     }
     let mut bytes = vec![];
     let mut has_predicate = false;
@@ -413,7 +428,7 @@ fn compile_alternative(
         let script = compile_run(&clauses, *encoded_bytes, has_predicate)?;
         append_script(&mut bytes, &script, &mut has_predicate, encoded_bytes)?;
     }
-    Ok(Script::from(bytes))
+    Ok(ScriptBuf::from(bytes))
 }
 
 /// Compile disjunctive alternatives after validating the complete source and
@@ -423,7 +438,9 @@ fn compile_alternative(
 /// Source raw/inscription payloads, their expanded repetitions and the total
 /// encoded output are each limited to 16 MiB per invocation. This bounds
 /// lowering work; it is not a consensus limit or a witness-size guarantee.
-pub(crate) fn lower_script_policy(policy: &ScriptPolicy) -> Result<Vec<Script>, CompilationError> {
+pub(crate) fn lower_script_policy(
+    policy: &ScriptPolicy,
+) -> Result<Vec<ScriptBuf>, CompilationError> {
     validate_source(policy)?;
     let mut pending = vec![policy];
     while let Some(policy) = pending.pop() {
@@ -501,26 +518,27 @@ pub(crate) fn validate_source(policy: &ScriptPolicy) -> Result<(), CompilationEr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bitcoin::bip32::{ChainCode, Xpriv, Xpub};
     use bitcoin::blockdata::script::Builder;
     use bitcoin::hashes::{sha256, Hash};
     use bitcoin::secp256k1::{Keypair, Secp256k1, SecretKey};
-    use bitcoin::util::bip32::{ChainCode, ExtendedPrivKey, ExtendedPubKey};
     use bitcoin::Network;
     use sapio_base::covenant::{Ctv, Emulatable};
     use sapio_base::miniscript::ord::envelope::Envelope;
     use sapio_base::miniscript::policy::compiler::CompilerError;
     use sapio_base::policy::ScriptFragment;
+    use std::sync::Arc;
 
     fn public_lowering(signer_count: usize, threshold: u8) -> LoweringPlan {
-        let secret = ExtendedPrivKey::new_master(Network::Testnet, &[17; 32]).unwrap();
-        let root = ExtendedPubKey::from_priv(&Secp256k1::new(), &secret);
+        let secret = Xpriv::new_master(Network::Testnet, &[17; 32]).unwrap();
+        let root = Xpub::from_priv(&Secp256k1::new(), &secret);
         LoweringPlan::CtvEmulation {
             signers: (0..signer_count)
                 .map(|index| {
                     let mut signer = root;
                     let mut chain_code = [0; 32];
                     chain_code[..8].copy_from_slice(&(index as u64).to_be_bytes());
-                    signer.chain_code = ChainCode::from(&chain_code[..]);
+                    signer.chain_code = ChainCode::from(chain_code);
                     signer
                 })
                 .collect(),
@@ -529,7 +547,7 @@ mod tests {
     }
 
     fn wrapped(byte: u8) -> ScriptPolicy {
-        Emulatable(Ctv(sha256::Hash::from_inner([byte; 32]))).into()
+        Emulatable(Ctv(sha256::Hash::from_byte_array([byte; 32]))).into()
     }
 
     #[test]
@@ -633,7 +651,7 @@ mod tests {
 
     #[test]
     fn resolving_wrappers_preserves_native_predicates_and_raw_operand_order() {
-        let native = ScriptPolicy::from(Clause::TxTemplate(sha256::Hash::from_inner([2; 32])));
+        let native = ScriptPolicy::from(Clause::TxTemplate(sha256::Hash::from_byte_array([2; 32])));
         let original = ScriptPolicy::Or(vec![
             wrapped(1),
             ScriptPolicy::And(vec![raw(4), native.clone(), wrapped(3), raw(5)]),
@@ -643,8 +661,8 @@ mod tests {
                 lowering: lowering.clone(),
                 predicates: Default::default(),
             };
-            let first = Ctv(sha256::Hash::from_inner([1; 32]));
-            let second = Ctv(sha256::Hash::from_inner([3; 32]));
+            let first = Ctv(sha256::Hash::from_byte_array([1; 32]));
+            let second = Ctv(sha256::Hash::from_byte_array([3; 32]));
             let expected = ScriptPolicy::Or(vec![
                 lowering.lower_ctv(first).unwrap().into(),
                 ScriptPolicy::And(vec![
@@ -687,11 +705,11 @@ mod tests {
     }
 
     fn raw_bytes(size: usize) -> ScriptPolicy {
-        let mut bytes = vec![opcodes::all::OP_NOP.into_u8(); size];
+        let mut bytes = vec![opcodes::all::OP_NOP.to_u8(); size];
         if let Some(last) = bytes.last_mut() {
-            *last = opcodes::OP_TRUE.into_u8();
+            *last = opcodes::OP_TRUE.to_u8();
         }
-        ScriptPolicy::Script(ScriptFragment::new(Script::from(bytes)).unwrap())
+        ScriptPolicy::Script(ScriptFragment::new(ScriptBuf::from(bytes)).unwrap())
     }
 
     #[test]
@@ -771,7 +789,7 @@ mod tests {
         let inscription = Inscription::new(Some(b"text/plain".to_vec()), Some(vec![42; 1_025]));
         let policy = ScriptPolicy::Miniscript(Clause::Inscribe(
             Box::new(inscription.clone()),
-            Box::new(Clause::Key(key)),
+            Arc::new(Clause::Key(key)),
         ));
         let scripts = lower_script_policy(&policy).unwrap();
         let envelopes = Envelope::from_tapscript(&scripts[0], 0).unwrap();
@@ -795,7 +813,7 @@ mod tests {
         assert_eq!(scripts.len(), 20);
         for (index, script) in scripts.iter().enumerate() {
             let mut expected = bytes(&left[index / 4]);
-            expected.push(opcodes::all::OP_VERIFY.into_u8());
+            expected.push(opcodes::all::OP_VERIFY.to_u8());
             expected.extend_from_slice(&bytes(&right[index % 4]));
             assert_eq!(script.as_bytes(), expected);
         }
@@ -821,12 +839,33 @@ mod tests {
     fn unreachable_miniscript_still_requires_structural_validation() {
         let policy = ScriptPolicy::And(vec![
             ScriptPolicy::Or(vec![]),
-            ScriptPolicy::Miniscript(Clause::Threshold(0, vec![])),
+            ScriptPolicy::Miniscript(Clause::And(vec![])),
         ]);
         assert!(matches!(
             lower_script_policy(&policy),
             Err(CompilationError::Miniscript(_))
         ));
+    }
+
+    #[test]
+    fn zero_relative_policy_lock_is_rejected_before_simplification() {
+        use sapio_base::miniscript::RelLockTime;
+        use sapio_base::timelocks::LockTimeError;
+
+        for zero in [RelLockTime::ZERO, RelLockTime::from_height(0)] {
+            let zero = ScriptPolicy::Miniscript(Clause::Older(zero));
+            for policy in [
+                zero.clone(),
+                ScriptPolicy::And(vec![ScriptPolicy::Or(vec![]), zero]),
+            ] {
+                assert!(matches!(
+                    lower_script_policy(&policy),
+                    Err(CompilationError::TimeLockError(
+                        LockTimeError::InvalidPolicyLockTime(0)
+                    ))
+                ));
+            }
+        }
     }
 
     #[test]
@@ -836,17 +875,19 @@ mod tests {
                 .x_only_public_key()
                 .0;
         let key = Clause::Key(key);
-        let time = Clause::Older(16);
+        let time = Clause::Older(sapio_base::miniscript::RelLockTime::from_height(16));
         let policy = ScriptPolicy::And(vec![
             ScriptPolicy::Miniscript(key.clone()),
             ScriptPolicy::Miniscript(time.clone()),
         ]);
         assert_eq!(
             lower_script_policy(&policy).unwrap(),
-            vec![Clause::And(vec![key, time])
-                .compile::<Tap>()
-                .unwrap()
-                .encode()]
+            vec![
+                Clause::And(vec![std::sync::Arc::new(key), std::sync::Arc::new(time)])
+                    .compile::<Tap>()
+                    .unwrap()
+                    .encode()
+            ]
         );
     }
 
@@ -865,7 +906,9 @@ mod tests {
             )
             .unwrap(),
         );
-        let time = ScriptPolicy::Miniscript(Clause::Older(16));
+        let time = ScriptPolicy::Miniscript(Clause::Older(
+            sapio_base::miniscript::RelLockTime::from_height(16),
+        ));
         for children in [vec![raw_key.clone(), time.clone()], vec![time, raw_key]] {
             assert!(matches!(
                 lower_script_policy(&ScriptPolicy::And(children)),

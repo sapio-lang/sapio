@@ -7,13 +7,13 @@
 //! James O'Beirne's Vault Demo
 
 #![deny(missing_docs)]
-use bitcoin::util::bip32::ExtendedPubKey;
+use bitcoin::bip32::Xpub;
 use bitcoin::Amount;
 use sapio::contract::actions::conditional_compile::ConditionalCompileType;
 use sapio::contract::*;
 use sapio::util::amountrange::{AmountF64, AmountU64};
 use sapio::*;
-use sapio_base::timelocks::AnyRelTimeLock;
+use sapio_base::timelocks::{AnyRelTimeLock, LockTimeError};
 use sapio_base::*;
 #[cfg(target_arch = "wasm32")]
 use sapio_wasm_plugin::{optional_logo, REGISTER};
@@ -67,7 +67,8 @@ impl State for Redeeming {
 struct Output {
     /// # Address
     /// The address to pay to
-    address: bitcoin::Address,
+    #[schemars(with = "String")]
+    address: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     /// # Amount
     /// How much funds to pay in Bitcoin
     amount: AmountF64,
@@ -83,15 +84,16 @@ struct Vault<S: State> {
     /// key which can be used to spend from the vault <timeout> after claim
     /// initiated.
     #[schemars(with = "String")]
-    hot_key: ExtendedPubKey,
+    hot_key: Xpub,
     /// # Backup Direct
     /// If available, this key can be used immediately as a single sig cold
     /// multisig option. usable with a musig key.
-    #[schemars(with = "String")]
-    backup: Option<ExtendedPubKey>,
+    #[schemars(with = "Option<String>")]
+    backup: Option<Xpub>,
     /// # Backup Address
     /// Where funds should land if they are backed up
-    backup_addr: bitcoin::Address,
+    #[schemars(with = "String")]
+    backup_addr: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     /// # Default Fee
     /// Fee rate in satoshis per 1000 weight units.
     /// The unsigned transaction size is charged at four weight units per byte;
@@ -118,12 +120,12 @@ impl<S: State> Vault<S> {
         S::is_redeeming()
     }
     /// make a guard with the timeout condition and the hot key.
-    #[guard]
-    fn hot_key_cl(self, _ctx: Context) {
-        Clause::And(vec![
-            Clause::Key(self.hot_key.to_x_only_pub()),
-            self.timeout.into(),
-        ])
+    #[guard(policy)]
+    fn hot_key_cl(self, _ctx: Context) -> Result<Clause, LockTimeError> {
+        Ok(Clause::And(vec![
+            Clause::Key(self.hot_key.to_x_only_pub()).into(),
+            Clause::try_from(self.timeout)?.into(),
+        ]))
     }
     /// allow spending with the satisfaction of hot_key_cl, but only in state =
     /// Redeeming.
@@ -134,6 +136,7 @@ impl<S: State> Vault<S> {
         web_api
     )]
     fn spend_hot(self, ctx: Context, u: Option<Output>) {
+        let network = ctx.network;
         if let Some(Output { address, amount }) = u {
             ctx.template()
                 .set_label("spend via hot".into())
@@ -141,7 +144,7 @@ impl<S: State> Vault<S> {
                 .set_sequence(-1, self.timeout.into())?
                 .add_output(
                     amount.into(),
-                    &Compiled::from_address(address, Amount::ZERO),
+                    &Compiled::from_address(address.require_network(network)?, Amount::ZERO),
                     Some(
                         [(
                             "purpose",
@@ -182,13 +185,14 @@ impl<S: State> Vault<S> {
         web_api
     )]
     fn spend_cold(self, ctx: Context, u: Option<Output>) {
+        let network = ctx.network;
         if let Some(Output { amount, address }) = u {
             ctx.template()
                 .set_label("spend via cold direct".into())
                 .set_color("cyan".into())
                 .add_output(
                     amount.into(),
-                    &Compiled::from_address(address, Amount::ZERO),
+                    &Compiled::from_address(address.require_network(network)?, Amount::ZERO),
                     Some(
                         [(
                             "purpose",
@@ -205,6 +209,7 @@ impl<S: State> Vault<S> {
     /// send the funds to the backup address without delay.
     #[then]
     fn backup(self, ctx: Context) {
+        let network = ctx.network;
         let mut tmpl = ctx
             .template()
             .set_label("backup to cold".into())
@@ -212,11 +217,17 @@ impl<S: State> Vault<S> {
         if let Some(Output { address, amount }) = self.cpfp.clone() {
             tmpl = tmpl.add_output(
                 amount.into(),
-                &Compiled::from_address(address, Amount::ZERO),
+                &Compiled::from_address(address.require_network(network)?, Amount::ZERO),
                 Some([("purpose", "CPFP Anchor Output".into())].into()),
             )?;
         }
-        let size = tmpl.unsigned_tx_size_with_output(&self.backup_addr.script_pubkey());
+        let size = tmpl.unsigned_tx_size_with_output(
+            &self
+                .backup_addr
+                .clone()
+                .require_network(network)?
+                .script_pubkey(),
+        );
         let fees = estimated_fee(self.default_feerate, size)?;
         let funds = tmpl
             .ctx()
@@ -225,7 +236,10 @@ impl<S: State> Vault<S> {
             .ok_or(CompilationError::OutOfFunds)?;
         tmpl = tmpl.add_output(
             funds,
-            &Compiled::from_address(self.backup_addr.clone(), Amount::ZERO),
+            &Compiled::from_address(
+                self.backup_addr.clone().require_network(network)?,
+                Amount::ZERO,
+            ),
             Some(
                 [(
                     "purpose",
@@ -244,6 +258,7 @@ impl<S: State> Vault<S> {
     /// Move the funds from a vault state = Secure to a vault State = Redeeming
     #[then(compile_if = "[Self::compile_begin_redeem]")]
     fn begin_redeem(self, ctx: Context) {
+        let network = ctx.network;
         let mut tmpl = ctx
             .template()
             .set_label("begin redeem".into())
@@ -251,13 +266,13 @@ impl<S: State> Vault<S> {
         if let Some(Output { address, amount }) = self.cpfp.clone() {
             tmpl = tmpl.add_output(
                 amount.into(),
-                &Compiled::from_address(address, Amount::ZERO),
+                &Compiled::from_address(address.require_network(network)?, Amount::ZERO),
                 Some([("purpose", "CPFP Anchor Output".into())].into()),
             )?;
         }
         // Redeeming compiles to a 34-byte P2TR output. Its commitment changes
         // with the funding amount, but its serialized size does not.
-        let redeem_script = bitcoin::Script::new_v1_p2tr(
+        let redeem_script = bitcoin::ScriptBuf::new_p2tr(
             &bitcoin::secp256k1::Secp256k1::verification_only(),
             self.hot_key.to_x_only_pub(),
             None,
