@@ -3,13 +3,20 @@
 //! Evaluation runs the committed guest bytes. The native template hash helper
 //! constructs authorization messages; it does not replace WASM evaluation.
 
-use crate::program::ProgramInstance;
+use crate::program::{EmulatedProgram, ProgramError, ProgramInstance};
+use bitcoin::bip32::Xpub;
 use bitcoin::consensus::Encodable;
 use bitcoin::hashes::{sha256, Hash, HashEngine};
 use bitcoin::secp256k1::{schnorr::Signature, Parity, Scalar};
 use bitcoin::sighash::Annex;
 use bitcoin::{Transaction, XOnlyPublicKey};
 use std::fmt;
+
+mod known_tweak;
+pub use known_tweak::{KnownTweakError, KnownTweakProof};
+
+#[cfg(test)]
+mod tests;
 
 /// The exact distributed BIP446 hash-equality evaluator (WASM version two).
 pub const TEMPLATEHASH_WASM: &[u8] = include_bytes!("../../evaluators/artifacts/templatehash.wasm");
@@ -28,6 +35,29 @@ pub enum TemplateKey {
     InternalKey,
     /// Witness proves an additive opening of the selected output key.
     KnownTweak,
+}
+
+/// Require an exact BIP446 template hash under an explicit emulation root.
+///
+/// This constructs public policy source only. The oracle evaluates the
+/// distributed WASM equality predicate before authorizing a spend.
+pub fn template_hash_eq(
+    expected: sha256::Hash,
+    oracle_root: Xpub,
+) -> Result<EmulatedProgram, ProgramError> {
+    EmulatedProgram::new(templatehash_wasm_instance(expected), oracle_root)
+}
+
+/// Require a BIP340 signature over TemplateHash under the selected key source.
+///
+/// The explicit oracle root lowers this predicate to an emulation key. Pinned
+/// and internal-key modes use the signature as evidence; known-tweak mode uses
+/// [`KnownTweakProof::witness`] or an independently constructed opening.
+pub fn template_signed_by(
+    key: TemplateKey,
+    oracle_root: Xpub,
+) -> Result<EmulatedProgram, ProgramError> {
+    EmulatedProgram::new(template_authorization_wasm_instance(key), oracle_root)
 }
 
 /// Require the exact BIP446 template hash, with no auxiliary witness.

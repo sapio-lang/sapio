@@ -1,76 +1,16 @@
 use super::*;
 use bitcoin::hashes::{sha256, Hash};
-use bitcoin::secp256k1::{Parity, Scalar, SecretKey};
+use bitcoin::secp256k1::Parity;
 use bitcoin::taproot::TapTweakHash;
 use bitcoin::{Network, Transaction, TxIn};
 use sapio_base::fragments::{
-    known_tweak_witness, template_authorization_wasm_instance, template_hash, TemplateKey,
+    template_hash, template_signed_by, KnownTweakError, KnownTweakProof, TemplateKey,
 };
-
-// These are public scalars. Reuse the pinned curve arithmetic while handling
-// zero explicitly, since SecretKey intentionally cannot represent zero.
-fn negate(value: Scalar) -> Scalar {
-    if value == Scalar::ZERO {
-        value
-    } else {
-        Scalar::from(
-            SecretKey::from_slice(&value.to_be_bytes())
-                .unwrap()
-                .negate(),
-        )
-    }
-}
-
-fn add(left: Scalar, right: Scalar) -> Scalar {
-    if left == Scalar::ZERO {
-        right
-    } else if negate(left) == right {
-        Scalar::ZERO
-    } else {
-        Scalar::from(
-            SecretKey::from_slice(&left.to_be_bytes())
-                .unwrap()
-                .add_tweak(&right)
-                .expect("canonical operands with a nonzero sum"),
-        )
-    }
-}
-
-fn with_sign(value: Scalar, sign: Parity) -> Scalar {
-    if sign == Parity::Odd {
-        negate(value)
-    } else {
-        value
-    }
-}
-
-fn public_child_and_tweak(root: Xpub, instance: &ProgramInstance) -> (Xpub, Scalar) {
-    let secp = Secp256k1::verification_only();
-    let path = program_derivation_path(instance.id());
-    let mut current = root;
-    let mut cumulative = Scalar::ZERO;
-    for child in &path {
-        let (tweak, _) = current.ckd_pub_tweak(*child).unwrap();
-        cumulative = add(cumulative, Scalar::from(tweak));
-        current = current.ckd_pub(&secp, *child).unwrap();
-    }
-    assert_eq!(current, root.derive_pub(&secp, &path).unwrap());
-    assert_eq!(
-        current.to_x_only_pub(),
-        instance.derive_public_key(&root).unwrap()
-    );
-    (current, cumulative)
-}
 
 #[test]
 fn emulator_root_authorizes_its_bip32_program_child_for_every_parity_combination() {
-    assert_eq!(add(Scalar::ZERO, Scalar::ZERO), Scalar::ZERO);
-    assert_eq!(add(Scalar::ONE, Scalar::MAX), Scalar::ZERO);
-    assert_eq!(negate(Scalar::ZERO), Scalar::ZERO);
-
     // The instance and derivation path exist before the witness. Neither the
     // root signature nor the opening scalar participates in the program ID.
-    let instance = template_authorization_wasm_instance(TemplateKey::KnownTweak);
     let tree =
         TapNodeHash::from_byte_array(sha256::Hash::hash(b"known-tweak tree").to_byte_array());
     let secp = Secp256k1::new();
@@ -78,9 +18,14 @@ fn emulator_root_authorizes_its_bip32_program_child_for_every_parity_combination
     for seed in 0..64u8 {
         let root = Xpriv::new_master(Network::Testnet, &[seed; 32]).unwrap();
         let public_root = Xpub::from_priv(&secp, &root);
+        let program = template_signed_by(TemplateKey::KnownTweak, public_root).unwrap();
+        let instance = program.instance();
         let (root_key, root_parity) = public_root.public_key.x_only_public_key();
-        let (child, cumulative) = public_child_and_tweak(public_root, &instance);
+        let child = public_root
+            .derive_pub(&secp, &program_derivation_path(instance.id()))
+            .unwrap();
         let (internal, child_parity) = child.public_key.x_only_public_key();
+        assert_eq!(internal, program.derive_public_key().unwrap());
         let slot = (root_parity.to_u8() as usize, child_parity.to_u8() as usize);
         if seen[slot.0][slot.1] {
             continue;
@@ -90,18 +35,32 @@ fn emulator_root_authorizes_its_bip32_program_child_for_every_parity_combination
 
         for merkle_root in [None, Some(tree)] {
             let tap = TapTweakHash::from_key_and_tweak(internal, merkle_root).to_scalar();
-            let (output_key, output_parity) = internal.add_tweak(&secp, &tap).unwrap();
-            // Let r/c be +1 for an even root/child and -1 for an odd one.
-            // The full BIP32 child is root + C*G. After x-only normalization
-            // and TapTweak, choose Q or -Q so P has coefficient +1:
-            // t = r*C + (r*c)*Tap, with Q parity flipped when r*c = -1.
-            let output_sign = root_parity ^ child_parity;
-            let tweak = add(
-                with_sign(cumulative, root_parity),
-                with_sign(tap, output_sign),
+            let (output_key, _) = internal.add_tweak(&secp, &tap).unwrap();
+            let proof = KnownTweakProof::for_program(&program, merkle_root).unwrap();
+            assert_eq!(proof.key(), root_key);
+            proof.check_output(output_key).unwrap();
+            // Independently reconstruct the full point, including the proof's
+            // claimed parity, against the separately derived Taproot output.
+            let opened = root_key
+                .public_key(Parity::Even)
+                .add_exp_tweak(&secp, &proof.tweak())
+                .unwrap();
+            assert_eq!(opened, output_key.public_key(proof.parity()));
+            assert_eq!(
+                proof.check_output(root_key),
+                Err(KnownTweakError::OutputKeyMismatch)
             );
-            let proof_parity = output_parity ^ output_sign;
-            assert!(root_key.tweak_add_check(&secp, &output_key, proof_parity, tweak));
+            let other_tree = if merkle_root.is_some() {
+                None
+            } else {
+                Some(tree)
+            };
+            assert_eq!(
+                KnownTweakProof::for_program(&program, other_tree)
+                    .unwrap()
+                    .check_output(output_key),
+                Err(KnownTweakError::OutputKeyMismatch)
+            );
 
             let mut psbt = Psbt::from_unsigned_tx(Transaction {
                 version: bitcoin::transaction::Version(2),
@@ -140,7 +99,7 @@ fn emulator_root_authorizes_its_bip32_program_child_for_every_parity_combination
             let request = ProgramSigningRequest {
                 instance: instance.clone(),
                 input_index: 0,
-                witness: known_tweak_witness(root_key, tweak, proof_parity, Some(&signature)),
+                witness: proof.witness(&signature),
                 path: ProgramSpendPath::KeyPath,
                 psbt: PSBT(psbt),
             };
@@ -151,12 +110,7 @@ fn emulator_root_authorizes_its_bip32_program_child_for_every_parity_combination
             assert!(signed.inputs[0].tap_scripts.is_empty());
 
             let mut wrong_tweak = request.clone();
-            wrong_tweak.witness = known_tweak_witness(
-                root_key,
-                add(tweak, Scalar::ONE),
-                proof_parity,
-                Some(&signature),
-            );
+            wrong_tweak.witness[32] ^= 1;
             assert!(matches!(
                 oracle.sign(wrong_tweak),
                 Err(ProgramError::Evaluation(_))
