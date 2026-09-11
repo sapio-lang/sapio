@@ -1,8 +1,11 @@
 //! Disposable keys and synthetic funding for the eltoo runner and tests.
 
-use super::*;
-use bitcoin::bip32::Xpriv;
-use bitcoin::secp256k1::SecretKey;
+use super::runner::{compile, Coin, Sponsor};
+use bitcoin::bip32::{Xpriv, Xpub};
+use bitcoin::hashes::{sha256, Hash};
+use bitcoin::secp256k1::{Keypair, Secp256k1, SecretKey};
+use bitcoin::{Address, Amount, Network, OutPoint, TxOut};
+use sapio_contrib::contracts::eltoo::{Channel, Terms, MAX_STATE};
 
 fn key(seed: u8) -> Keypair {
     Keypair::from_secret_key(
@@ -41,8 +44,8 @@ pub fn coin(channel: &Channel, tag: u8) -> Coin {
     Coin {
         outpoint: outpoint(tag),
         txout: TxOut {
-            value: bitcoin::Amount::from_sat(channel.terms.capacity),
-            script_pubkey: (&channel.compile().unwrap().address).into(),
+            value: bitcoin::Amount::from_sat(channel.terms().capacity()),
+            script_pubkey: (&compile(channel).unwrap().address).into(),
         },
     }
 }

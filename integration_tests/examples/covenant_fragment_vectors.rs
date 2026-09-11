@@ -4,7 +4,10 @@ use bitcoin::consensus::encode::serialize_hex;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::{Address, Network, OutPoint, Transaction, Witness};
 use emulator_connect::program::ProgramOracle;
-use sapio_integration_tests::fragment_example::{participant_key, Authorization, FragmentContract};
+use sapio_contrib::contracts::template_authorization::Authorization;
+use sapio_integration_tests::fragment_example::{
+    compile_candidates, example_contract, participant_key, signing_request,
+};
 use sapio_integration_tests::program_example::{bind_candidates, example_root, FUNDING_SATS};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -36,15 +39,16 @@ fn main() -> Result<(), Box<dyn Error>> {
             root.to_keypair(&secp),
         ),
     ] {
-        let source = FragmentContract::new(mode, oracle.public_root());
-        let compiled = source.compile_candidates(&[])?;
+        let source = example_contract(mode, oracle.public_root());
+        let compiled = compile_candidates(&source, &[])?;
         let mut candidates = bind_candidates(&compiled)?;
         assert_eq!(candidates.len(), 1);
         let mut candidate = candidates.remove(0);
         candidate.unsigned_tx.input[0].previous_output =
             funding.get(name).copied().unwrap_or_default();
         candidate.inputs[0].non_witness_utxo = None;
-        let request = source.signing_request(
+        let request = signing_request(
+            &source,
             candidate,
             &authorizer,
             Some(b"\x50sapio-fragments".to_vec()),

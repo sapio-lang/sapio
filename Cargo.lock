@@ -2127,6 +2127,7 @@ dependencies = [
  "rand",
  "sapio",
  "sapio-base",
+ "sapio-contrib",
  "sapio-ctv-emulator-trait",
  "sapio-psbt",
  "schemars",

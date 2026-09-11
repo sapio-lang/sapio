@@ -5,11 +5,15 @@ use bitcoin::secp256k1::{schnorr::Signature, Secp256k1};
 use bitcoin::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::{Address, Network, OutPoint, Transaction, Witness};
 use emulator_connect::program::{ProgramOracle, ProgramSigningRequest, ProgramSpendPath, PSBT};
+use sapio_contrib::contracts::eltoo::{Channel, State};
+use sapio_integration_tests::eltoo_example::fixture;
 use sapio_integration_tests::eltoo_example::recovery::recover_update;
-use sapio_integration_tests::eltoo_example::{
-    attach_inputs, authorize_update, fixture, settlement_request, sign_sponsor, update_request,
-    Channel, Coin, Error, Sponsor, State, SUGGESTED_FEE,
+use sapio_integration_tests::eltoo_example::runner::{
+    attach_inputs, authorize_update, input, settlement_request, sign_sponsor, update_leaf,
+    update_request, update_transaction, Coin, Error, Sponsor,
 };
+
+const SPONSOR_FEE: u64 = 2_000;
 use serde::Deserialize;
 use serde_json::json;
 
@@ -44,16 +48,16 @@ fn non_advancing_update(
     sponsor: Sponsor,
     authorization: &Signature,
 ) -> Result<Transaction, Error> {
-    let script = source.update_leaf()?;
+    let script = update_leaf(source)?;
     let leaf = TapLeafHash::from_script(&script, LeafVersion::TapScript);
-    let input = source.input(&coin)?;
+    let input = input(source, &coin)?;
     let request = ProgramSigningRequest {
         instance: source.terms().update_program().instance().clone(),
         input_index: 0,
         witness: authorization.as_ref().to_vec(),
         path: ProgramSpendPath::ScriptPath(leaf),
         psbt: PSBT(attach_inputs(
-            source.terms().update_transaction(target)?,
+            update_transaction(source.terms(), target)?,
             coin,
             input,
             sponsor,
@@ -109,7 +113,7 @@ fn main() -> Result<(), Error> {
     }
     let sponsors: Vec<_> = (0..3)
         .map(|index| {
-            let mut sponsor = fixture::sponsor(SUGGESTED_FEE, index as u8 + 2);
+            let mut sponsor = fixture::sponsor(SPONSOR_FEE, index as u8 + 2);
             if let Some(supplied) = &supplied {
                 sponsor.coin.outpoint = supplied.sponsors[index];
             }
@@ -186,7 +190,7 @@ fn main() -> Result<(), Error> {
         "{}",
         serde_json::to_string_pretty(&json!({
             "funding": {"address": funding_address.to_string(), "amount_sats": terms.capacity()},
-            "sponsor": {"address": sponsor_address.to_string(), "amount_sats": SUGGESTED_FEE, "count": 3},
+            "sponsor": {"address": sponsor_address.to_string(), "amount_sats": SPONSOR_FEE, "count": 3},
             "delay_blocks": terms.delay(),
             "payouts": [
                 {"address": terms.alice().to_string(), "amount_sats": latest.alice_sats},

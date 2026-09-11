@@ -1,11 +1,12 @@
 //! Recover an update proof without retaining an old state's payout allocation.
 
-use super::{attach_inputs, Coin, Error, Sponsor, State, Terms, LOCK_TIME_BASE, RECOVERY_TAG};
+use super::runner::{attach_inputs, update_transaction, Coin, Error, Sponsor};
 use bitcoin::psbt::Input;
 use bitcoin::secp256k1::{schnorr::Signature, Secp256k1};
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash};
 use bitcoin::{OutPoint, Transaction, XOnlyPublicKey};
 use emulator_connect::program::{ProgramSigningRequest, ProgramSpendPath, PSBT};
+use sapio_contrib::contracts::eltoo::{State, Terms, LOCK_TIME_BASE, RECOVERY_TAG};
 
 /// Public spending data reconstructed from a published update and fixed terms.
 pub struct RecoveredUpdate {
@@ -33,7 +34,7 @@ impl RecoveredUpdate {
             witness: authorization.as_ref().to_vec(),
             path: ProgramSpendPath::ScriptPath(self.leaf_hash),
             psbt: PSBT(attach_inputs(
-                terms.update_transaction(target)?,
+                update_transaction(terms, target)?,
                 self.coin.clone(),
                 self.input.clone(),
                 sponsor,
@@ -79,7 +80,7 @@ pub fn recover_update(terms: &Terms, observed: &Transaction) -> Result<Recovered
         return Err("observed state must be a native P2TR output".into());
     }
     let output_key = XOnlyPublicKey::from_slice(&output.script_pubkey.as_bytes()[2..])?;
-    let script = terms.update_leaf_for(number)?;
+    let script = terms.update_script(number)?;
     let leaf_hash = TapLeafHash::from_script(&script, LeafVersion::TapScript);
     // Both remaining branches have depth one. Recover parity by checking the
     // actual output commitment; no private key or old descriptor is needed.
@@ -120,12 +121,14 @@ mod tests {
     #[test]
     fn recovery_authenticates_the_counter_sibling_and_actual_output() {
         let terms = fixture::terms();
-        let observed = terms
-            .update_transaction(State {
+        let observed = update_transaction(
+            &terms,
+            State {
                 number: 1,
                 alice_sats: 12_345,
-            })
-            .unwrap();
+            },
+        )
+        .unwrap();
         let recovered = recover_update(&terms, &observed).unwrap();
         assert_eq!(recovered.state_number, 1);
         assert_eq!(
@@ -147,12 +150,14 @@ mod tests {
             wrong_publication.output[1].script_pubkey = ScriptBuf::from(script);
             assert!(recover_update(&terms, &wrong_publication).is_err());
         }
-        let other = terms
-            .update_transaction(State {
+        let other = update_transaction(
+            &terms,
+            State {
                 number: 1,
                 alice_sats: 54_321,
-            })
-            .unwrap();
+            },
+        )
+        .unwrap();
         let mut wrong_output = observed.clone();
         wrong_output.output[0] = other.output[0].clone();
         assert!(recover_update(&terms, &wrong_output).is_err());

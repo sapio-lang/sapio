@@ -8,10 +8,13 @@ use emulator_connect::program::{
     ProgramSpendPath, PSBT,
 };
 use sapio_base::fragments::template_hash;
-use sapio_integration_tests::eltoo_example::{
-    attach_inputs, authorize_update, fixture, recovery::recover_update, settlement_request,
-    sign_sponsor, update_request, Channel, State, Terms,
+use sapio_contrib::contracts::eltoo::{Channel, State, Terms};
+use sapio_integration_tests::eltoo_example::runner::{
+    attach_inputs, authorize_update, compile, compile_settlement, compile_update, input,
+    settlement_leaf, settlement_program, settlement_request, settlement_transaction, sign_sponsor,
+    update_leaf, update_request, update_transaction,
 };
+use sapio_integration_tests::eltoo_example::{fixture, recovery::recover_update};
 
 fn state(number: u32) -> State {
     State {
@@ -47,8 +50,8 @@ fn raw_update_request(
     authorization: &Signature,
 ) -> ProgramSigningRequest {
     let coin = fixture::coin(source, 80);
-    let input = source.input(&coin).unwrap();
-    let leaf = source.update_leaf().unwrap();
+    let input = input(source, &coin).unwrap();
+    let leaf = update_leaf(source).unwrap();
     ProgramSigningRequest {
         instance: source.terms().update_program().instance().clone(),
         input_index: 0,
@@ -63,27 +66,27 @@ fn funding_and_maximum_state_have_no_unintended_escape_leaf() {
     let terms = fixture::terms();
     let funding = terms.funding();
     let funding_coin = fixture::coin(&funding, 10);
-    let input = funding.input(&funding_coin).unwrap();
-    assert_eq!(input.tap_internal_key, Some(terms.joint_key()));
-    assert_eq!(input.tap_scripts.len(), 1);
+    let funding_input = input(&funding, &funding_coin).unwrap();
+    assert_eq!(funding_input.tap_internal_key, Some(terms.joint_key()));
+    assert_eq!(funding_input.tap_scripts.len(), 1);
     assert_eq!(
-        input.tap_scripts.values().next().unwrap().0,
-        funding.update_leaf().unwrap()
+        funding_input.tap_scripts.values().next().unwrap().0,
+        update_leaf(&funding).unwrap()
     );
-    assert!(funding.settlement_program().is_none());
-    assert!(funding.compile_settlement().is_err());
+    assert!(settlement_program(&funding).is_err());
+    assert!(compile_settlement(&funding).is_err());
     assert!(settlement_request(&funding, funding_coin, fixture::sponsor(2_000, 11)).is_err());
 
     let last = terms.state(state(terms.max_state())).unwrap();
-    let last_input = last.input(&fixture::coin(&last, 12)).unwrap();
+    let last_input = input(&last, &fixture::coin(&last, 12)).unwrap();
     assert_eq!(last_input.tap_internal_key, Some(terms.joint_key()));
     assert_eq!(last_input.tap_scripts.len(), 1);
     assert_eq!(
         last_input.tap_scripts.values().next().unwrap().0,
-        last.settlement_leaf().unwrap()
+        settlement_leaf(&last).unwrap()
     );
-    assert!(last.update_leaf().is_err());
-    assert!(last.compile_update(state(terms.max_state())).is_err());
+    assert!(update_leaf(&last).is_err());
+    assert!(compile_update(&last, state(terms.max_state())).is_err());
     assert!(terms.state(state(0)).is_err());
     assert!(terms.state(state(terms.max_state() + 1)).is_err());
     assert!(authorize_update(&terms, state(terms.max_state() + 1), &fixture::joint_key()).is_err());
@@ -104,13 +107,13 @@ fn repeated_payouts_do_not_allow_old_settlement_replay() {
     let terms = fixture::terms();
     let old = terms.state(state(1)).unwrap();
     let current = terms.state(state(2)).unwrap();
-    let old_template = terms.settlement_transaction(state(1)).unwrap();
-    let current_template = terms.settlement_transaction(state(2)).unwrap();
+    let old_template = settlement_transaction(&terms, state(1)).unwrap();
+    let current_template = settlement_transaction(&terms, state(2)).unwrap();
     assert_eq!(old_template.output, current_template.output);
     assert_ne!(old_template.lock_time, current_template.lock_time);
     assert_ne!(
-        old.settlement_program().unwrap().instance().id(),
-        current.settlement_program().unwrap().instance().id()
+        settlement_program(&old).unwrap().instance().id(),
+        settlement_program(&current).unwrap().instance().id()
     );
 
     let oracle = oracle();
@@ -159,7 +162,7 @@ fn one_sided_balances_settle_the_full_capacity_without_zero_outputs() {
         );
         assert_eq!(
             transaction.output,
-            terms.settlement_transaction(state).unwrap().output
+            settlement_transaction(&terms, state).unwrap().output
         );
     }
     assert!(terms
@@ -174,11 +177,11 @@ fn one_sided_balances_settle_the_full_capacity_without_zero_outputs() {
 fn unchanged_update_certificate_cannot_bypass_native_state_ordering() {
     let terms = fixture::terms();
     let certificate = authorize_update(&terms, state(1), &fixture::joint_key()).unwrap();
-    let template = terms.update_transaction(state(1)).unwrap();
+    let template = update_transaction(&terms, state(1)).unwrap();
     let oracle = oracle();
     for number in [1, 2] {
         let source = terms.state(state(number)).unwrap();
-        assert!(source.compile_update(state(1)).is_err());
+        assert!(compile_update(&source, state(1)).is_err());
         let request = raw_update_request(&source, template.clone(), &certificate);
         // The certificate remains valid. Native CLTV independently rejects
         // both equality and regression even after fresh ALL signatures.
@@ -209,7 +212,7 @@ fn update_evidence_does_not_authorize_the_cooperative_or_settlement_path() {
     ));
 
     let mut other_leaf = request;
-    let settlement_script = source.settlement_leaf().unwrap();
+    let settlement_script = settlement_leaf(&source).unwrap();
     other_leaf.path = ProgramSpendPath::ScriptPath(TapLeafHash::from_script(
         &settlement_script,
         LeafVersion::TapScript,
@@ -228,7 +231,7 @@ fn certificate_rebinding_preserves_capacity_and_accepts_replaceable_fee_coins() 
     let terms = fixture::terms();
     let source = terms.funding();
     let certificate = authorize_update(&terms, state(3), &fixture::joint_key()).unwrap();
-    let expected = template_hash(&terms.update_transaction(state(3)).unwrap(), 0, None).unwrap();
+    let expected = template_hash(&update_transaction(&terms, state(3)).unwrap(), 0, None).unwrap();
     let oracle = oracle();
     let mut transactions = Vec::new();
     for (fee, tag) in [(2_000, 40), (5_000, 41)] {
@@ -310,7 +313,7 @@ fn certificate_rebinding_preserves_capacity_and_accepts_replaceable_fee_coins() 
     for value in [terms.capacity() - 1, terms.capacity() + 1] {
         let mut wrong_amount = fixture::coin(&source, 43);
         wrong_amount.txout.value = bitcoin::Amount::from_sat(value);
-        assert!(source.input(&wrong_amount).is_err());
+        assert!(input(&source, &wrong_amount).is_err());
     }
 }
 
@@ -329,7 +332,7 @@ fn fresh_channel_internal_key_prevents_cross_channel_certificate_replay() {
     )
     .unwrap();
     assert!(authorize_update(&other_terms, state(3), &fixture::joint_key()).is_err());
-    let template = terms.update_transaction(state(3)).unwrap();
+    let template = update_transaction(&terms, state(3)).unwrap();
     let expected = template_hash(&template, 0, None).unwrap();
     // Preserve channel A's entire authorized transaction while rebinding its
     // input to B. Failure must come from B's authenticated IKEY, not outputs.
@@ -351,8 +354,8 @@ fn latest_certificate_recovers_an_old_state_without_old_payout_metadata() {
     let observed_bytes = {
         let old = State {
             number: 1,
-            // Recovery's dummy allocation is 50/50, so it cannot accidentally
-            // reconstruct the correct tree without the published leaf hash.
+            // The old allocation is unavailable to recovery; only the published
+            // settlement leaf hash can supply the missing sibling commitment.
             alice_sats: 37_000,
         };
         let authorization = authorize_update(&terms, old, &fixture::joint_key()).unwrap();
@@ -393,7 +396,7 @@ fn latest_certificate_recovers_an_old_state_without_old_payout_metadata() {
     );
     assert_eq!(
         transaction.output[0].script_pubkey,
-        ScriptBuf::from(&terms.state(latest).unwrap().compile().unwrap().address)
+        ScriptBuf::from(&compile(&terms.state(latest).unwrap()).unwrap().address)
     );
     assert_eq!(transaction.output[0].value.to_sat(), terms.capacity());
 }
