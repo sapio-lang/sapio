@@ -36,6 +36,7 @@ use std::fmt;
 
 pub use crate::msgs::PSBT;
 
+mod paths;
 mod transport;
 pub use transport::{ProgramClient, ProgramClientError};
 mod wasm;
@@ -242,6 +243,10 @@ pub enum ProgramError {
     KeyPathMismatch,
     /// No supplied tapscript and control block authenticate the selected leaf.
     MissingScriptPath,
+    /// No supplied Miniscript leaf contains the requested program key.
+    MissingProgramLeaf,
+    /// Multiple distinct leaves contain the requested program key.
+    AmbiguousProgramLeaf,
     /// Optional internal-key or Merkle-root metadata contradicts the proof.
     ConflictingTaprootMetadata,
     /// A selected leaf uses unsupported semantics or OP_CODESEPARATOR.
@@ -304,6 +309,11 @@ impl fmt::Display for ProgramError {
             }
             Self::MissingScriptPath => formatter
                 .write_str("selected tapscript has no valid commitment to the spent output"),
+            Self::MissingProgramLeaf => {
+                formatter.write_str("no Miniscript leaf contains the program key")
+            }
+            Self::AmbiguousProgramLeaf => formatter
+                .write_str("multiple leaves contain the program key; select one explicitly"),
             Self::ConflictingTaprootMetadata => formatter
                 .write_str("Taproot metadata conflicts with the authenticated spending context"),
             Self::UnsupportedScriptPath => {
