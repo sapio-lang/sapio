@@ -105,6 +105,19 @@ program source metadata, compiled artifact and three locally finalized spends.
 It uses synthetic funding and a published disposable oracle key; it performs
 no wallet activity or broadcasting. Its tests also exercise the TCP protocol.
 
+For an eltoo-style state update and delayed settlement using the existing v2
+TemplateHash/IKEY/CSFS fragments:
+
+```sh
+cargo run --locked -p sapio_integration_tests --example eltoo
+cargo test --locked -p sapio_integration_tests --test eltoo_security
+```
+
+The [eltoo guide](ELTOO_FRAGMENTS.md) explains reusable joint authorization,
+old-state proof recovery and external fee inputs. Its isolated Core scenario
+confirms a stale update, supersedes it and checks the latest state's full
+contest delay before settlement. The Ubuntu CI job runs that scenario.
+
 The dependency-free `evaluators/` workspace contains the compiled CTV,
 flexible-payment, TemplateHash and template-authorization WASM programs, plus
 the reusable typed [covenant fragment SDK](COVENANT_FRAGMENTS.md). Normal builds

@@ -193,3 +193,8 @@ own temporary node and wallet and does not use existing funds.
 
 The oracle remains responsible for enforcing the evaluated predicate under
 the existing [emulation assumptions](PROGRAM_EMULATION.md#what-the-oracle-guarantees).
+
+The [eltoo-style channel example](ELTOO_FRAGMENTS.md) composes these same v2
+guests with native state-ordering and contest-delay guards. It demonstrates
+reusing one update authorization against stale states, reconstructing old
+Taproot proofs from published data, and settling the latest balances.
