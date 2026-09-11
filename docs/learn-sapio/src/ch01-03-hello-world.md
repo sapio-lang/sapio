@@ -28,16 +28,10 @@ use std::convert::{TryFrom, TryInto};
 /// Trustless Escrow Contract
 #[derive(JsonSchema, Deserialize)]
 pub struct TrustlessEscrow {
-    // TODO: Taproot Fix Encoding
-    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
-    // TODO: Taproot Fix Encoding
-    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
-    #[schemars(with = "String")]
     alice_escrow_address: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     alice_escrow_amount: CoinAmount,
-    #[schemars(with = "String")]
     bob_escrow_address: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     bob_escrow_amount: CoinAmount,
 }

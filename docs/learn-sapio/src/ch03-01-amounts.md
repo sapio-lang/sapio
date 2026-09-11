@@ -75,11 +75,11 @@ impl From<AmountF64> for Amount {
 }
 ```
 
-For ordinary satoshi fields in a `JsonSchema` type, use
-`#[schemars(with = "u64")]` on `Amount`; upstream Bitcoin does not implement
-`schemars::JsonSchema`. `bitcoin::amount::serde::as_sat` can explicitly document
-the satoshi serialization, while `as_btc` changes it to bitcoin. Apply the same
-choice consistently to the serializer, schema and interface documentation.
+Ordinary `Amount` fields derive an integer-satoshi schema directly through
+Sapio's `sapio-jsonschema` fork and its `bitcoin032` feature. Explicit Serde
+adapters still need matching schema annotations: `as_sat` uses `u64`, while
+`as_btc` uses `f64`. Keep the serializer, schema and interface documentation
+consistent when choosing a denomination.
 
 ## Checked arithmetic
 

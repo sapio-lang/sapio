@@ -77,6 +77,11 @@ Arguments `T` implement `Serialize`, `JsonSchema`, and `Clone`; results `R`
 implement `Deserialize` and `JsonSchema`. Resolving the locator makes no claim
 that every value of `T` is accepted by that module.
 
+Plugin APIs explicitly generate JSON Schema Draft 7 for both arguments and
+results. The host accepts that dialect and applies bounded, offline validation.
+The `sapio-jsonschema` fork retains the `schemars` package name and derive
+attributes, with opt-in implementations for Bitcoin and Miniscript types.
+
 The native host validates each actual `CreateArgs<T>` input against the module's
 advertised input schema before calling its create function. It validates each
 successful result against the advertised output schema before returning it,
@@ -97,7 +102,6 @@ pub struct Payment {
     pub amount: bitcoin::Amount,
     /// # Address
     /// The Address to send to
-    #[schemars(with = "String")]
     pub address: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
 }
 #[derive(Serialize, JsonSchema, Deserialize, Clone)]

@@ -199,6 +199,18 @@ Diagnostic logs go to stderr. Emulator protocol JSON frames are bounded to one
 million bytes; [emulator service limits](#emulator-service-limits) cover request
 I/O and admitted connections.
 
+The workspace uses Schemars 1.2.2 from the
+[`sapio-jsonschema`](https://github.com/sapio-lang/sapio-jsonschema) fork. Its optional
+`bitcoin032` and `miniscript13` features describe the dependencies' native JSON
+representations. The fork retains the `schemars` and `schemars_derive` package
+names so the root and plugin workspace patches select one shared schema trait.
+Plugin and continuation interfaces explicitly generate Draft 7 schemas to match
+the host validator. Plugin input schemas describe deserialization; output schemas
+describe serialization, including asymmetric Serde names and skipped fields.
+Denomination adapters still carry their matching schema annotations; ordinary
+keys, addresses, scripts, policies, and transactions do not need local schema
+substitutes.
+
 The native host validates every actual call against the module's advertised
 JSON Schemas, including calls made through raw nested-module imports. It checks
 the complete `CreateArgs` input before invoking the create function, then checks
@@ -208,8 +220,9 @@ compatibility for every value of another interface.
 Validation reads the advertised JSON directly, preserving integer limits above
 the exact range of floating point numbers.
 
-Schemas use Draft 7, matching Schemars 0.8. References must resolve within the
-advertised schema: validation never fetches network resources or local files.
+Plugin API generation explicitly selects Draft 7. References must resolve
+within the advertised schema: validation never fetches network resources or
+local files.
 Patterns use the Rust regex engine, so backreferences and lookaround are not
 supported. A preflight rejects nonproductive reference cycles and excessive
 reference expansion (65,536 schema visits or 128 levels), while allowing

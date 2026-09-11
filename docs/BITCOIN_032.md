@@ -37,8 +37,9 @@ library dependencies. See [development instructions](DEVELOPMENT.md).
   timelock into a policy guard is fallible: valid transaction fields can lie
   outside Miniscript's guard domain.
 - Sapio owns `sapio_base::amount::CoinAmount` and its tagged `Sats`/`Btc` input
-  format. JSON schema descriptions also live in Sapio. `CompiledClause` exposes
-  the upstream policy string format at schema-checked module boundaries.
+  format. The `sapio-jsonschema` fork provides opt-in Bitcoin and Miniscript
+  `JsonSchema` implementations, so module boundaries use `Clause` directly
+  with its upstream policy string format.
 - Human-readable outpoints use `"txid:vout"`. Core fixture drivers and contract
   schemas follow upstream serialization.
 - Host RPC uses upstream `bitcoincore-rpc 0.19`. The synchronous transaction
