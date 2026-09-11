@@ -11,8 +11,17 @@ cargo run --locked -p sapio_integration_tests --example eltoo
 
 The executable uses disposable keys and synthetic funding. It prints compiled
 contracts and an update/settlement demonstration; it does not contact a wallet
-or broadcast transactions. The contract source is
-[`eltoo_example.rs`](../integration_tests/src/eltoo_example.rs).
+or broadcast transactions. The public contract is
+[`Channel`](../sapio-contrib/src/contracts/eltoo/mod.rs), with immutable
+[`Terms`](../sapio-contrib/src/contracts/eltoo/terms.rs). It contains no private
+keys, network selection, PSBT assembly or signing code.
+
+The separate [runner](../integration_tests/src/eltoo_example/runner.rs) chooses
+a compilation context, proposes transitions, binds coins and collects
+signatures. [Fixtures](../integration_tests/src/eltoo_example/fixture.rs) and
+[chain recovery](../integration_tests/src/eltoo_example/recovery.rs) are separate
+modules. A caller constructs source with `terms.funding()` or
+`terms.state(state)?`, then uses Sapio's ordinary `compile(context)` API.
 
 ## Three spending paths
 
@@ -36,10 +45,16 @@ settle:
 ```
 
 Sapio compiles the timelocks into native CLTV/CSV guards. The two predicates
-use `template_authorization_wasm_instance(TemplateKey::InternalKey)` and
-`templatehash_wasm_instance(expected_hash)`. There is no new evaluator or
-runtime version. Both branches are continuations; this example does not use a
-CTV covenant.
+use `template_signed_by(TemplateKey::InternalKey, oracle_root)` and
+`template_hash_eq(expected_hash, oracle_root)`. These return ordinary public
+`EmulatedProgram` policies, composed with the native guards. Both branches
+are continuations using the existing v2 evaluators.
+
+The settlement predicate comes from the same canonical template builder as
+the payout continuation, using the caller's compilation context. Constructing
+a state only validates public terms; it does not run a hidden compilation.
+`compile_policy_leaf` lowers the policy through the checked contract compiler
+when the recovery publication needs its exact script commitment.
 
 The compiler explicitly pins `K`, backed by a separate cooperative key-path
 authorization. IKEY therefore observes the same physical key in every state.
@@ -106,8 +121,10 @@ OP_RETURN <"eltoo/v1" || settlement_tapleaf_hash[32]>
 ```
 
 The payload is exactly 40 bytes. A participant observing an old update can
-rebuild its balance-independent update script from the state number and
-channel terms, combine it with this sibling, and recover a control block.
+rebuild its balance-independent update script with `terms.update_script(n)`,
+combine it with this sibling, and recover a control block. This lowers the
+update policy directly; it does not invent an old allocation or compile a
+throwaway channel.
 Recovery verifies that proof against the actual spent P2TR output before using
 it. The publication is evidence to check, not trusted PSBT metadata.
 
@@ -121,7 +138,8 @@ data or a mismatched output key is rejected.
 Updates preserve channel capacity. Both update and settlement templates reserve
 two inputs before authorization: channel input 0 and a sponsor input 1. The
 sponsor contributes all of its input value as fees; there is no fee-change
-output. An alternative sponsor outpoint or amount can be substituted before
+output. The contract reserves the input without inventing a sponsor amount;
+the runner's chosen coin determines the fee. An alternative sponsor outpoint or amount can be substituted before
 the ordinary transaction signatures are collected.
 
 TemplateHash commits the complete sequence vector. Adding an input after

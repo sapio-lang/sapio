@@ -14,17 +14,15 @@ key, or a key authenticated by a known additive tweak.
 ## Public construction
 
 ```rust,ignore
-use sapio_base::fragments::{
-    template_authorization_wasm_instance, templatehash_wasm_instance,
-    TemplateKey,
-};
-use sapio_base::EmulatedProgram;
+use sapio_base::fragments::{template_hash_eq, template_signed_by, TemplateKey};
 
-let instance = template_authorization_wasm_instance(TemplateKey::KnownTweak);
-let policy = EmulatedProgram::new(instance, oracle_xpub)?;
+let authorized = template_signed_by(TemplateKey::InternalKey, oracle_xpub)?;
+let settlement = template_hash_eq(expected_hash, oracle_xpub)?;
 ```
 
-Both constructors commit the exact distributed module as an inline WASM-v2
+Both helpers return `EmulatedProgram`, ready for a `#[guard(policy)]` method
+or composition with native guards through `ScriptPolicy::And`. The oracle
+root is an explicit public input. They commit the exact distributed module as an inline WASM-v2
 program. The v2 identity is 31 zero bytes followed by `02`. Version one keeps
 the all-zero identity and its existing ABI. Applications can instead register
 the module with `WasmEvaluator::with_version(WasmVersion::V2, module)` and use
@@ -109,11 +107,23 @@ valid; points at infinity and malformed keys fail. CSFS then verifies the
 signature under P over the transaction-derived template hash. Neither the
 anchor Q nor the message is selected by the witness.
 
-`sapio_base::fragments::known_tweak_witness` encodes this evidence. The scalar
-may include public BIP32 derivation tweaks and the final Taproot tweak. The
-caller must account for x-only parity normalization; selecting the negated
-output representative requires negating the corresponding scalar and flipping
-the parity. No signing secret enters the evaluator.
+For a program derived from the authorizer's public BIP32 root, use the public
+proof helper. It includes BIP32 derivation, the final Taproot tweak and both
+x-only parity normalizations:
+
+```rust,ignore
+use sapio_base::fragments::KnownTweakProof;
+
+let proof = KnownTweakProof::for_program(&program, input.tap_merkle_root)?;
+proof.check_output(actual_output_key)?;
+let witness = proof.witness(&template_signature);
+```
+
+The runner obtains `actual_output_key` from the spent P2TR output and signs
+TemplateHash with the untweaked root key. No signing secret enters the proof
+constructor or evaluator. `known_tweak_witness` remains available for callers
+constructing other additive openings; those callers must account for their
+own scalar and parity relationship.
 
 This fragment authenticates a key with a known additive relationship to Q.
 It does not assert that P is the physical BIP341 internal key or that t equals
@@ -147,6 +157,23 @@ Changing, adding, or dropping the annex after signing invalidates the signature.
 Auxiliary CSFS signatures and tweak proofs are off-chain evidence. They are
 not automatically placed in the annex. Applications that need publication
 must deliberately commit and publish the relevant data.
+
+## Contract source and execution
+
+The public [template authorization contract](../sapio-contrib/src/contracts/template_authorization.rs)
+contains the destinations, fee, authorization policy and payment continuation.
+Its constructor takes public keys and addresses; its continuation uses the
+funding amount in the caller's `Context`. With no payment proposal it compiles
+only the spending policy. Proposed amounts never change that policy.
+
+The [example runner](../integration_tests/src/fragment_example.rs) supplies
+fixtures, compilation effects and signatures. The binder uses
+`SupportedDescriptors::update_psbt_input` to copy compiler spending data into
+the PSBT; the runner uses `ProgramSpendPath::script_for` to select a program's unique
+Miniscript leaf even when it shares native guards. Multiple control blocks
+for the same leaf are accepted. Multiple matching leaves require explicit
+selection. The oracle still verifies the selected proof against the prevout.
+Key-path selection is explicit.
 
 ## Execution and verification
 
