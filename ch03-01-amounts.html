@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-40b7e084.js";
+            window.path_to_searchindex_js = "searchindex-7ebe54e0.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-efed9c80.js"></script>
@@ -180,75 +180,89 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="sats-and-coins"><a class="header" href="#sats-and-coins">Sats and Coins</a></h1>
-<p>There are several different ways of expressing amounts in Sapio.</p>
-<p>That there isn’t a single canonical way to represent amounts is unfortunate,
-and hopefully these types can be fully unified in the future. But it’s a
-problem for good reason.</p>
-<h2 id="a-brief-rant"><a class="header" href="#a-brief-rant">A brief rant</a></h2>
-<p>Suppose I tell you to send 10 to Alice. Is that 10 sats? or 10 bitcoin? You
-might think that 10.0 would be unambiguous, but it turns out the lightning
-network is building sub-satoshi support.</p>
-<p>The <em>only</em> way to make context-free unambiguous amounts is to have them
-explicitly tagged, e.g., {denom: “sats”, amount: 10}.</p>
-<p>This would be great, but there are already myriads of services out there
-where the only way to know what unit you have is to RTFM.</p>
-<p>Generally, we know that floating point representations are evil for financial
-transactions, but because we want to be compatible with JSON/Javascript, we
-don’t quite have a choice. Fortunately, 21e6 Bitcoin with 8 places fit
-exactly into floats without loss. However, bets are off when doing arithmetic
-with such values.</p>
-<p>A last wrinkle: Bitcoin’s amount type is a signed integer. Rust-bitcoin uses an Unsigned integer. So in theory there are unrepresentable amounts we’re happy to work with. Great.</p>
-<h2 id="its-up-to-every-programmer"><a class="header" href="#its-up-to-every-programmer">It’s up to every programmer</a></h2>
-<p>Therefore, to get amounts right is a task that is up to the programmer
-largely to get this right. There are a few different amount types to be aware
-of.</p>
-<ol>
-<li>u64 represents sats. may be too big!</li>
-<li>i64 represents sats. may be too small!</li>
-<li><code>bitcoin::Amount</code> represents u64, no standard serialization.</li>
-<li><code>bitcoin::SignedAmount</code> represents i64, no standard serialization.</li>
-<li><code>bitcoin::CoinAmount</code> standard tagged serialization, either u64 or f64.</li>
-</ol>
-<p>These different types have uses in different circumstances.</p>
-<p>Because <code>bitcoin::Amount</code> does not have a standard serializer, in order to
-use it in e.g. a <code>Vec</code>, you have to wrap the type with a serializer. <code>From</code> impls can make life a little easier to work with these.</p>
+<p>Sapio uses integer satoshis for transaction values. At a JSON boundary, the
+interface must also make the denomination clear: <code>10</code> could otherwise mean
+10 satoshis or 10 bitcoin.</p>
+<h2 id="units-and-serialization"><a class="header" href="#units-and-serialization">Units and serialization</a></h2>
+<p>These types serve different purposes:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Type</th><th>Representation and JSON behavior</th></tr>
+</thead>
+<tbody>
+<tr><td><code>u64</code></td><td>An unsigned integer; the interface must specify its unit.</td></tr>
+<tr><td><code>i64</code></td><td>A signed integer; the interface must specify its unit.</td></tr>
+<tr><td><code>bitcoin::Amount</code></td><td>Unsigned integer satoshis. With Bitcoin’s <code>serde</code> feature, its default JSON representation is an integer number of satoshis.</td></tr>
+<tr><td><code>bitcoin::SignedAmount</code></td><td>Signed integer satoshis. Use an explicit <code>bitcoin::amount::serde</code> adapter for JSON fields.</td></tr>
+<tr><td><code>sapio_base::amount::CoinAmount</code></td><td>A tagged input: <code>{"Sats": 1000}</code> or <code>{"Btc": 0.00001}</code>.</td></tr>
+</tbody>
+</table>
+</div>
+<p><code>CoinAmount</code> belongs to Sapio, not Bitcoin. Convert it to <code>Amount</code> before using
+it in a transaction. The <code>Btc</code> variant uses <code>Amount::from_btc</code> to check the
+conversion, including range and fractional-satoshi precision; <code>Sats</code> preserves
+the supplied integer exactly.</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>use bitcoin::util::amount::Amount;
+</span>use bitcoin::Amount;
+use sapio_base::amount::CoinAmount;
 
+let amount = Amount::try_from(CoinAmount::Sats(1000)).unwrap();
+assert_eq!(amount.to_sat(), 1000);
+assert_eq!(serde_json::to_string(&amp;amount).unwrap(), "1000");
+<span class="boring">}</span></code></pre>
+<p>A type’s integer range is not a contract budget or Bitcoin’s monetary limit.
+Validate amounts against the funds available and the rules of the interface.</p>
+<p>Binary floating point cannot represent most decimal bitcoin fractions exactly.
+Prefer integer satoshis for arithmetic and JSON interfaces you control. In
+JavaScript, integers up to <code>2^53 - 1</code> are exact, which covers Bitcoin’s maximum
+supply expressed in satoshis, but does not cover every <code>u64</code> value. JSON itself
+does not require consumers to use floating point.</p>
+<h2 id="choosing-a-different-wire-format"><a class="header" href="#choosing-a-different-wire-format">Choosing a different wire format</a></h2>
+<p><code>Amount</code> already works in a <code>Vec&lt;Amount&gt;</code> without a custom serializer. An
+explicit wrapper is useful when an external interface requires another format,
+such as a floating-point number of bitcoin. Its schema must describe that
+chosen format too:</p>
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use bitcoin::Amount;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// A wrapper around `bitcoin::Amount` to force it to serialize with f64.
+/// Serialize this interface's amounts as a number of bitcoin.
 #[derive(
     Serialize, Deserialize, JsonSchema, Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq,
 )]
 #[serde(transparent)]
 struct AmountF64(
     #[schemars(with = "f64")]
-    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    #[serde(with = "bitcoin::amount::serde::as_btc")]
     Amount,
 );
 
 impl From&lt;Amount&gt; for AmountF64 {
-    fn from(a: Amount) -&gt; AmountF64 {
-        AmountF64(a)
+    fn from(amount: Amount) -&gt; Self {
+        Self(amount)
     }
 }
+
 impl From&lt;AmountF64&gt; for Amount {
-    fn from(a: AmountF64) -&gt; Amount {
-        a.0
+    fn from(amount: AmountF64) -&gt; Self {
+        amount.0
     }
 }
 <span class="boring">}</span></code></pre>
-<p><code>CoinAmount</code> does not have this problem, but it can’t be used in all
-contexts, e.g. external APIs that aren’t tagged.</p>
-<h2 id="dont-panic-or-do"><a class="header" href="#dont-panic-or-do">Don’t Panic (or do)</a></h2>
-<p>A final annoyance is that <code>bitcoin::Amount</code> has arithmetic that may panic
-(unless you use the <code>checked_</code> variants). So one must be careful to ensure
-that any set of values passed in are safe to add.</p>
-<p>Sapio currently does not do a fantastic job of this, but that can be improved
-in the future.</p>
+<p>Ordinary <code>Amount</code> fields derive an integer-satoshi schema directly through
+Sapio’s <code>sapio-jsonschema</code> fork and its <code>bitcoin032</code> feature. Explicit Serde
+adapters still need matching schema annotations: <code>as_sat</code> uses <code>u64</code>, while
+<code>as_btc</code> uses <code>f64</code>. Keep the serializer, schema and interface documentation
+consistent when choosing a denomination.</p>
+<h2 id="checked-arithmetic"><a class="header" href="#checked-arithmetic">Checked arithmetic</a></h2>
+<p><code>Amount</code> arithmetic operators can panic on overflow or underflow. Use
+<code>checked_add</code>, <code>checked_sub</code> and the other checked operations when values come
+from callers, and propagate an error when a calculation cannot be represented.
+Keep calculations in integer satoshis even when the wire format uses bitcoin.</p>
 
                     </main>
 

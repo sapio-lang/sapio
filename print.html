@@ -38,7 +38,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-40b7e084.js";
+            window.path_to_searchindex_js = "searchindex-7ebe54e0.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-efed9c80.js"></script>
@@ -333,32 +333,58 @@ to either agree on an outcome or to default to a pre-fixed outcome after a
 relative timeout.</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>#[derive(JsonSchema, Deserialize)]
+</span>//! Hello World Contract
+
+#![deny(missing_docs)]
+#[cfg(target_arch = "wasm32")]
+use sapio_wasm_plugin::{optional_logo, REGISTER};
+
+use sapio::contract::*;
+use sapio::*;
+use sapio_base::amount::CoinAmount;
+use sapio_base::timelocks::RelTime;
+use sapio_base::Clause;
+use schemars::JsonSchema;
+use serde::Deserialize;
+use std::convert::{TryFrom, TryInto};
+
+/// Trustless Escrow Contract
+#[derive(JsonSchema, Deserialize)]
 pub struct TrustlessEscrow {
-    alice: bitcoin::PublicKey,
-    bob: bitcoin::PublicKey,
-    alice_escrow_address: bitcoin::Address,
+    alice: bitcoin::XOnlyPublicKey,
+    bob: bitcoin::XOnlyPublicKey,
+    alice_escrow_address: bitcoin::Address&lt;bitcoin::address::NetworkUnchecked&gt;,
     alice_escrow_amount: CoinAmount,
-    bob_escrow_address: bitcoin::Address,
+    bob_escrow_address: bitcoin::Address&lt;bitcoin::address::NetworkUnchecked&gt;,
     bob_escrow_amount: CoinAmount,
 }
 
 impl TrustlessEscrow {
     #[guard]
     fn cooperate(self, _ctx: Context) {
-        Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
+        Clause::And(vec![
+            Clause::Key(self.alice).into(),
+            Clause::Key(self.bob).into(),
+        ])
     }
     #[then]
     fn use_escrow(self, ctx: Context) {
+        let network = ctx.network;
         ctx.template()
             .add_output(
                 self.alice_escrow_amount.try_into()?,
-                &amp;Compiled::from_address(self.alice_escrow_address.clone(), None),
+                &amp;Compiled::from_address(
+                    self.alice_escrow_address.clone().require_network(network)?,
+                    bitcoin::Amount::ZERO,
+                ),
                 None,
             )?
             .add_output(
                 self.bob_escrow_amount.try_into()?,
-                &amp;Compiled::from_address(self.bob_escrow_address.clone(), None),
+                &amp;Compiled::from_address(
+                    self.bob_escrow_address.clone().require_network(network)?,
+                    bitcoin::Amount::ZERO,
+                ),
                 None,
             )?
             .set_sequence(
@@ -375,12 +401,26 @@ impl Contract for TrustlessEscrow {
     declare! {non updatable}
 }
 
+#[cfg(target_arch = "wasm32")]
 REGISTER![TrustlessEscrow, "logo.png"];
-
 <span class="boring">}</span></code></pre>
-<p>Navigate to <code>sapio/plugin-example/helloworld/plugin.rs</code> in your code editor.
-You’ll find this code there. You should be able to compile it using
-<code>cargo build --target wasm32-unknown-unknown</code>.</p>
+<p>The implementation is in <code>plugin-example/helloworld/src/plugin.rs</code>. Its
+JSON addresses deserialize as <code>Address&lt;NetworkUnchecked&gt;</code> and are checked
+against <code>ctx.network</code> before becoming outputs. The fixed payout branch uses
+Sapio’s selected covenant backend; signer emulation includes trust in its
+signers.</p>
+<p>From the repository root, build this plugin with:</p>
+<pre><code class="language-sh">cargo build --manifest-path plugin-example/Cargo.toml \
+  --package sapio-wasm-helloworld --release \
+  --target wasm32-unknown-unknown --locked
+</code></pre>
+<p>Use the repository’s pinned Rust toolchain and an LLVM Clang that supports
+<code>wasm32</code> for secp256k1’s C code. On Linux, set
+<code>export CC_wasm32_unknown_unknown=clang</code>; on macOS with Homebrew LLVM installed, set
+<code>export CC_wasm32_unknown_unknown="$(brew --prefix llvm)/bin/clang"</code>.
+The default output is
+<code>plugin-example/target/wasm32-unknown-unknown/release/sapio_wasm_helloworld.wasm</code>
+(unless you override Cargo’s target directory).</p>
 <h2 id="challenges"><a class="header" href="#challenges">Challenges</a></h2>
 <p>For the challenges, you’ll want to modify the helloworld plugin file directly.
 Through this tutorial we’ll use this as a sandbox file.</p>
@@ -584,104 +624,148 @@ includes this index. See the <a href="https://github.com/sapio-lang/sapio/blob/m
 for the complete set of operations.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="time-locks"><a class="header" href="#time-locks">Time Locks</a></h1>
-<p>Sapio provides some utilities for working with both relative and absolute timelocks. See <a href="https://docs.rs/sapio-base/0.1.0/sapio_base/timelocks/index.html">the sapio-base docs</a> for more details.</p>
-<p>The Time Lock Utilities have some nice interfaces for dealing with timelocks generically and converting them into Policy Clauses.</p>
-<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>
-use sapio_base::timelocks::*;
+<p>Sapio provides typed absolute and relative timelocks in
+<code>sapio_base::timelocks</code>. Heights and times have separate constructors so a
+value cannot silently change its interpretation.</p>
+<pre class="playground"><code class="language-rust edition2021">use sapio_base::timelocks::*;
+use sapio_base::Clause;
+use std::convert::{TryFrom, TryInto};
 use std::time::Duration;
 
-AbsHeight::try_from(800_000u32);
-AbsTime::try_from(1_000_000_000u32);
-AbsTime::try_from(Duration::from_secs(1_000_000_000u64));
-// chunks of 512 seconds
-RelTime::from(10u16);
-RelTime::try_from(Duration::from_secs(10*512));
-RelHeight::from(20u16);
+<span class="boring">fn main() -&gt; Result&lt;(), LockTimeError&gt; {
+</span>let height = AbsHeight::try_from(800_000u32)?;
+let timestamp = AbsTime::try_from(1_000_000_000u32)?;
+let same_timestamp = AbsTime::try_from(Duration::from_secs(1_000_000_000))?;
 
+// Relative time is encoded in intervals of 512 seconds.
+let intervals = RelTime::from(10u16);
+let duration = RelTime::try_from(Duration::from_secs(10 * 512))?;
+let blocks = RelHeight::from(20u16);
 
-// Correctly compiles into Clause::Older
-let c: Clause = RelHeight::from(20u16).into();
+// Converting a transaction timelock into a policy is fallible.
+let older: Clause = blocks.try_into()?;
+let after: Clause = height.try_into()?;
 
-let a: AnyRelTimeLock = RelHeight::from(20u16).into();
-let b: AnyTimeLock = RelHeight::from(20u16).into();
-
-<span class="boring">}</span></code></pre>
-<p>These are not required to be used, but care should be taken if not used to
-ensure that correct values are passed to the miniscript compiler since
-Miniscript doesn’t validate these strictly.</p>
-<div style="break-before: page; page-break-before: always;"></div>
-<h1 id="sats-and-coins"><a class="header" href="#sats-and-coins">Sats and Coins</a></h1>
-<p>There are several different ways of expressing amounts in Sapio.</p>
-<p>That there isn’t a single canonical way to represent amounts is unfortunate,
-and hopefully these types can be fully unified in the future. But it’s a
-problem for good reason.</p>
-<h2 id="a-brief-rant"><a class="header" href="#a-brief-rant">A brief rant</a></h2>
-<p>Suppose I tell you to send 10 to Alice. Is that 10 sats? or 10 bitcoin? You
-might think that 10.0 would be unambiguous, but it turns out the lightning
-network is building sub-satoshi support.</p>
-<p>The <em>only</em> way to make context-free unambiguous amounts is to have them
-explicitly tagged, e.g., {denom: “sats”, amount: 10}.</p>
-<p>This would be great, but there are already myriads of services out there
-where the only way to know what unit you have is to RTFM.</p>
-<p>Generally, we know that floating point representations are evil for financial
-transactions, but because we want to be compatible with JSON/Javascript, we
-don’t quite have a choice. Fortunately, 21e6 Bitcoin with 8 places fit
-exactly into floats without loss. However, bets are off when doing arithmetic
-with such values.</p>
-<p>A last wrinkle: Bitcoin’s amount type is a signed integer. Rust-bitcoin uses an Unsigned integer. So in theory there are unrepresentable amounts we’re happy to work with. Great.</p>
-<h2 id="its-up-to-every-programmer"><a class="header" href="#its-up-to-every-programmer">It’s up to every programmer</a></h2>
-<p>Therefore, to get amounts right is a task that is up to the programmer
-largely to get this right. There are a few different amount types to be aware
-of.</p>
-<ol>
-<li>u64 represents sats. may be too big!</li>
-<li>i64 represents sats. may be too small!</li>
-<li><code>bitcoin::Amount</code> represents u64, no standard serialization.</li>
-<li><code>bitcoin::SignedAmount</code> represents i64, no standard serialization.</li>
-<li><code>bitcoin::CoinAmount</code> standard tagged serialization, either u64 or f64.</li>
-</ol>
-<p>These different types have uses in different circumstances.</p>
-<p>Because <code>bitcoin::Amount</code> does not have a standard serializer, in order to
-use it in e.g. a <code>Vec</code>, you have to wrap the type with a serializer. <code>From</code> impls can make life a little easier to work with these.</p>
+let relative: AnyRelTimeLock = blocks.into();
+let any: AnyTimeLock = relative.into();
+let also_older = Clause::try_from(any)?;
+<span class="boring">Ok(())
+</span><span class="boring">}</span></code></pre>
+<p><code>RelTime::try_from(Duration)</code> rounds up to whole 512-second intervals, so a
+fractional interval cannot make the lock mature early. <code>AbsTime</code> rounds a
+fractional timestamp up to a whole second. Both reject durations outside their
+encoded range. The types’ JSON values are their encoded consensus fields;
+relative time includes the time-type flag, not just a count of seconds.</p>
+<h2 id="transaction-fields-and-policy-guards"><a class="header" href="#transaction-fields-and-policy-guards">Transaction fields and policy guards</a></h2>
+<p>Transaction fields and Miniscript predicates have different valid domains.
+Sapio’s absolute transaction locks cover heights <code>0..500_000_000</code> and timestamps
+<code>500_000_000..=u32::MAX</code>. Relative heights and time-interval counts fit in a
+<code>u16</code>. These types can be passed to the template builder without converting
+them into policy clauses.</p>
+<p>Miniscript’s typed absolute guards accept encoded values <code>1..=0x7fff_ffff</code>.
+Its relative guards require an enabled BIP68 encoding and a nonzero encoded
+operand. For example, a zero-block sequence is a valid transaction field, but
+cannot become an <code>Older</code> policy; a timestamp above <code>0x7fff_ffff</code> also cannot
+become an <code>After</code> policy:</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>use bitcoin::util::amount::Amount;
+</span>use sapio_base::timelocks::{AbsTime, RelHeight};
+use sapio_base::Clause;
 
+assert!(Clause::try_from(RelHeight::from(0u16)).is_err());
+let timestamp = AbsTime::try_from(u32::MAX).unwrap();
+assert!(Clause::try_from(timestamp).is_err());
+<span class="boring">}</span></code></pre>
+<p>Use <code>Clause::try_from(lock)</code> or <code>lock.try_into()</code> and propagate
+<code>LockTimeError::InvalidPolicyLockTime</code> when building a guard. The <code>Any*TimeLock</code>
+wrappers use the same fallible conversion. If constructing Miniscript clauses
+directly, use its typed lock constructors; Sapio also rejects the exposed
+<code>RelLockTime::ZERO</code> constant during policy validation.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="sats-and-coins"><a class="header" href="#sats-and-coins">Sats and Coins</a></h1>
+<p>Sapio uses integer satoshis for transaction values. At a JSON boundary, the
+interface must also make the denomination clear: <code>10</code> could otherwise mean
+10 satoshis or 10 bitcoin.</p>
+<h2 id="units-and-serialization"><a class="header" href="#units-and-serialization">Units and serialization</a></h2>
+<p>These types serve different purposes:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Type</th><th>Representation and JSON behavior</th></tr>
+</thead>
+<tbody>
+<tr><td><code>u64</code></td><td>An unsigned integer; the interface must specify its unit.</td></tr>
+<tr><td><code>i64</code></td><td>A signed integer; the interface must specify its unit.</td></tr>
+<tr><td><code>bitcoin::Amount</code></td><td>Unsigned integer satoshis. With Bitcoin’s <code>serde</code> feature, its default JSON representation is an integer number of satoshis.</td></tr>
+<tr><td><code>bitcoin::SignedAmount</code></td><td>Signed integer satoshis. Use an explicit <code>bitcoin::amount::serde</code> adapter for JSON fields.</td></tr>
+<tr><td><code>sapio_base::amount::CoinAmount</code></td><td>A tagged input: <code>{"Sats": 1000}</code> or <code>{"Btc": 0.00001}</code>.</td></tr>
+</tbody>
+</table>
+</div>
+<p><code>CoinAmount</code> belongs to Sapio, not Bitcoin. Convert it to <code>Amount</code> before using
+it in a transaction. The <code>Btc</code> variant uses <code>Amount::from_btc</code> to check the
+conversion, including range and fractional-satoshi precision; <code>Sats</code> preserves
+the supplied integer exactly.</p>
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use bitcoin::Amount;
+use sapio_base::amount::CoinAmount;
+
+let amount = Amount::try_from(CoinAmount::Sats(1000)).unwrap();
+assert_eq!(amount.to_sat(), 1000);
+assert_eq!(serde_json::to_string(&amp;amount).unwrap(), "1000");
+<span class="boring">}</span></code></pre>
+<p>A type’s integer range is not a contract budget or Bitcoin’s monetary limit.
+Validate amounts against the funds available and the rules of the interface.</p>
+<p>Binary floating point cannot represent most decimal bitcoin fractions exactly.
+Prefer integer satoshis for arithmetic and JSON interfaces you control. In
+JavaScript, integers up to <code>2^53 - 1</code> are exact, which covers Bitcoin’s maximum
+supply expressed in satoshis, but does not cover every <code>u64</code> value. JSON itself
+does not require consumers to use floating point.</p>
+<h2 id="choosing-a-different-wire-format"><a class="header" href="#choosing-a-different-wire-format">Choosing a different wire format</a></h2>
+<p><code>Amount</code> already works in a <code>Vec&lt;Amount&gt;</code> without a custom serializer. An
+explicit wrapper is useful when an external interface requires another format,
+such as a floating-point number of bitcoin. Its schema must describe that
+chosen format too:</p>
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use bitcoin::Amount;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// A wrapper around `bitcoin::Amount` to force it to serialize with f64.
+/// Serialize this interface's amounts as a number of bitcoin.
 #[derive(
     Serialize, Deserialize, JsonSchema, Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq,
 )]
 #[serde(transparent)]
 struct AmountF64(
     #[schemars(with = "f64")]
-    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    #[serde(with = "bitcoin::amount::serde::as_btc")]
     Amount,
 );
 
 impl From&lt;Amount&gt; for AmountF64 {
-    fn from(a: Amount) -&gt; AmountF64 {
-        AmountF64(a)
+    fn from(amount: Amount) -&gt; Self {
+        Self(amount)
     }
 }
+
 impl From&lt;AmountF64&gt; for Amount {
-    fn from(a: AmountF64) -&gt; Amount {
-        a.0
+    fn from(amount: AmountF64) -&gt; Self {
+        amount.0
     }
 }
 <span class="boring">}</span></code></pre>
-<p><code>CoinAmount</code> does not have this problem, but it can’t be used in all
-contexts, e.g. external APIs that aren’t tagged.</p>
-<h2 id="dont-panic-or-do"><a class="header" href="#dont-panic-or-do">Don’t Panic (or do)</a></h2>
-<p>A final annoyance is that <code>bitcoin::Amount</code> has arithmetic that may panic
-(unless you use the <code>checked_</code> variants). So one must be careful to ensure
-that any set of values passed in are safe to add.</p>
-<p>Sapio currently does not do a fantastic job of this, but that can be improved
-in the future.</p>
+<p>Ordinary <code>Amount</code> fields derive an integer-satoshi schema directly through
+Sapio’s <code>sapio-jsonschema</code> fork and its <code>bitcoin032</code> feature. Explicit Serde
+adapters still need matching schema annotations: <code>as_sat</code> uses <code>u64</code>, while
+<code>as_btc</code> uses <code>f64</code>. Keep the serializer, schema and interface documentation
+consistent when choosing a denomination.</p>
+<h2 id="checked-arithmetic"><a class="header" href="#checked-arithmetic">Checked arithmetic</a></h2>
+<p><code>Amount</code> arithmetic operators can panic on overflow or underflow. Use
+<code>checked_add</code>, <code>checked_sub</code> and the other checked operations when values come
+from callers, and propagate an error when a calculation cannot be represented.
+Keep calculations in integer satoshis even when the wire format uses bitcoin.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="contract-actions"><a class="header" href="#contract-actions">Contract Actions</a></h1>
 <p>Contracts have a variety of different actions used at different times.</p>
@@ -1374,6 +1458,10 @@ impl Contract for C {
 Arguments <code>T</code> implement <code>Serialize</code>, <code>JsonSchema</code>, and <code>Clone</code>; results <code>R</code>
 implement <code>Deserialize</code> and <code>JsonSchema</code>. Resolving the locator makes no claim
 that every value of <code>T</code> is accepted by that module.</p>
+<p>Plugin APIs explicitly generate JSON Schema Draft 7 for both arguments and
+results. The host accepts that dialect and applies bounded, offline validation.
+The <code>sapio-jsonschema</code> fork retains the <code>schemars</code> package name and derive
+attributes, with opt-in implementations for Bitcoin and Miniscript types.</p>
 <p>The native host validates each actual <code>CreateArgs&lt;T&gt;</code> input against the module’s
 advertised input schema before calling its create function. It validates each
 successful result against the advertised output schema before returning it,
@@ -1388,21 +1476,36 @@ batching interface defines its arguments as follows:</p>
 #[derive(JsonSchema, Serialize, Deserialize, Clone)]
 pub struct Payment {
     /// The amount to send
-    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    #[serde(with = "bitcoin::amount::serde::as_btc")]
     #[schemars(with = "f64")]
-    pub amount: bitcoin::util::amount::Amount,
+    pub amount: bitcoin::Amount,
     /// # Address
     /// The Address to send to
-    pub address: bitcoin::Address,
+    pub address: bitcoin::Address&lt;bitcoin::address::NetworkUnchecked&gt;,
 }
 #[derive(Serialize, JsonSchema, Deserialize, Clone)]
 pub struct BatchingTraitVersion0_1_1 {
     pub payments: Vec&lt;Payment&gt;,
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    #[serde(with = "bitcoin::amount::serde::as_sat")]
     #[schemars(with = "u64")]
-    pub feerate_per_byte: bitcoin::util::amount::Amount,
+    pub feerate_per_byte: bitcoin::Amount,
 }
 <span class="boring">}</span></code></pre>
+<p>The payment amount deliberately uses bitcoin units through <code>as_btc</code>; the fee
+rate uses integer satoshis through <code>as_sat</code>. Upstream <code>Amount</code> defaults to
+integer-satoshi JSON, and the explicit schema annotations describe this
+interface’s chosen representation.</p>
+<p>Addresses received from JSON use <code>Address&lt;NetworkUnchecked&gt;</code> and a string
+schema. A receiving contract must check the address against its compilation
+network before using it as an output, for example:</p>
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let address = payment.address.clone().require_network(ctx.network)?;
+let destination = Compiled::from_address(address, bitcoin::Amount::ZERO);
+<span class="boring">}</span></code></pre>
+<p>The string schema describes the wire format; parsing and <code>require_network</code>
+enforce address validity and the selected network. Already checked <code>Address</code>
+values are used after that boundary.</p>
 <p>The shared interface wraps those arguments in a versioned variant:</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {

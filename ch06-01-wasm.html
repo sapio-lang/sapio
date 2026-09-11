@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-40b7e084.js";
+            window.path_to_searchindex_js = "searchindex-7ebe54e0.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-efed9c80.js"></script>
@@ -245,6 +245,10 @@ impl Contract for C {
 Arguments <code>T</code> implement <code>Serialize</code>, <code>JsonSchema</code>, and <code>Clone</code>; results <code>R</code>
 implement <code>Deserialize</code> and <code>JsonSchema</code>. Resolving the locator makes no claim
 that every value of <code>T</code> is accepted by that module.</p>
+<p>Plugin APIs explicitly generate JSON Schema Draft 7 for both arguments and
+results. The host accepts that dialect and applies bounded, offline validation.
+The <code>sapio-jsonschema</code> fork retains the <code>schemars</code> package name and derive
+attributes, with opt-in implementations for Bitcoin and Miniscript types.</p>
 <p>The native host validates each actual <code>CreateArgs&lt;T&gt;</code> input against the module’s
 advertised input schema before calling its create function. It validates each
 successful result against the advertised output schema before returning it,
@@ -259,21 +263,36 @@ batching interface defines its arguments as follows:</p>
 #[derive(JsonSchema, Serialize, Deserialize, Clone)]
 pub struct Payment {
     /// The amount to send
-    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    #[serde(with = "bitcoin::amount::serde::as_btc")]
     #[schemars(with = "f64")]
-    pub amount: bitcoin::util::amount::Amount,
+    pub amount: bitcoin::Amount,
     /// # Address
     /// The Address to send to
-    pub address: bitcoin::Address,
+    pub address: bitcoin::Address&lt;bitcoin::address::NetworkUnchecked&gt;,
 }
 #[derive(Serialize, JsonSchema, Deserialize, Clone)]
 pub struct BatchingTraitVersion0_1_1 {
     pub payments: Vec&lt;Payment&gt;,
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    #[serde(with = "bitcoin::amount::serde::as_sat")]
     #[schemars(with = "u64")]
-    pub feerate_per_byte: bitcoin::util::amount::Amount,
+    pub feerate_per_byte: bitcoin::Amount,
 }
 <span class="boring">}</span></code></pre>
+<p>The payment amount deliberately uses bitcoin units through <code>as_btc</code>; the fee
+rate uses integer satoshis through <code>as_sat</code>. Upstream <code>Amount</code> defaults to
+integer-satoshi JSON, and the explicit schema annotations describe this
+interface’s chosen representation.</p>
+<p>Addresses received from JSON use <code>Address&lt;NetworkUnchecked&gt;</code> and a string
+schema. A receiving contract must check the address against its compilation
+network before using it as an output, for example:</p>
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>let address = payment.address.clone().require_network(ctx.network)?;
+let destination = Compiled::from_address(address, bitcoin::Amount::ZERO);
+<span class="boring">}</span></code></pre>
+<p>The string schema describes the wire format; parsing and <code>require_network</code>
+enforce address validity and the selected network. Already checked <code>Address</code>
+values are used after that boundary.</p>
 <p>The shared interface wraps those arguments in a versioned variant:</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
