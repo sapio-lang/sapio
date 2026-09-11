@@ -69,9 +69,9 @@ where
     /// Ensures a [`SapioHostAPI`]'s [`LookupFrom`] field is
     /// [`LookupFrom::HashKey`] form.
     pub fn canonicalize(&self) -> Self {
-        use bitcoin::hashes::hex::ToHex;
+        use bitcoin::hex::DisplayHex;
         SapioHostAPI {
-            which_plugin: LookupFrom::HashKey(self.key.to_hex()),
+            which_plugin: LookupFrom::HashKey(self.key.to_lower_hex_string()),
             key: self.key,
             _pd: Default::default(),
         }

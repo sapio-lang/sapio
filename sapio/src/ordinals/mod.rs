@@ -33,7 +33,7 @@ fn sum_amounts(amounts: &[Amount]) -> Result<u64, CompilationError> {
         if *amount == Amount::ZERO {
             return Err(invalid("Payouts and auxiliary inputs must be positive"));
         }
-        sum.checked_add(amount.as_sat())
+        sum.checked_add(amount.to_sat())
             .ok_or_else(|| invalid("Amount sum overflow"))
     })
 }
@@ -156,13 +156,13 @@ impl OrdinalPlanner for OrdinalsInfo {
     }
 
     fn output_plan(&self, spec: &OrdinalSpec) -> Result<Plan, CompilationError> {
-        let known = self.total()?.as_sat();
+        let known = self.total()?.to_sat();
         let payins = sum_amounts(&spec.payins)?;
         let available = known
             .checked_add(payins)
             .ok_or_else(|| invalid("Input total overflow"))?;
         let mut required = sum_amounts(&spec.payouts)?
-            .checked_add(spec.fees.as_sat())
+            .checked_add(spec.fees.to_sat())
             .ok_or_else(|| invalid("Payout and fee total overflow"))?;
         let mut positions = Vec::with_capacity(spec.ordinals.len());
         for ordinal in &spec.ordinals {
@@ -178,7 +178,7 @@ impl OrdinalPlanner for OrdinalsInfo {
             let position = position.ok_or_else(|| invalid("Requested ordinal is absent"))?;
             let size = ordinal
                 .padding()
-                .as_sat()
+                .to_sat()
                 .checked_add(1)
                 .ok_or_else(|| invalid("Ordinal padding overflow"))?;
             required = required
@@ -215,7 +215,7 @@ impl OrdinalPlanner for OrdinalsInfo {
             tail = payins;
         }
         let after_fee = tail
-            .checked_sub(spec.fees.as_sat())
+            .checked_sub(spec.fees.to_sat())
             .ok_or(CompilationError::OutOfFunds)?;
         assign_gap(after_fee, &mut payouts, &mut steps);
         if !payouts.is_empty() {
@@ -230,7 +230,7 @@ impl OrdinalPlanner for OrdinalsInfo {
 
 fn assign_gap(mut available: u64, payouts: &mut VecDeque<Amount>, steps: &mut Vec<PlanStep>) {
     while available > 0 {
-        let fits = payouts.partition_point(|amount| amount.as_sat() <= available);
+        let fits = payouts.partition_point(|amount| amount.to_sat() <= available);
         if fits == 0 {
             steps.push(PlanStep::Change(Amount::from_sat(available)));
             return;
@@ -239,7 +239,7 @@ fn assign_gap(mut available: u64, payouts: &mut VecDeque<Amount>, steps: &mut Ve
             .remove(fits - 1)
             .expect("partition point identifies an existing payout");
         steps.push(PlanStep::Payout(amount));
-        available -= amount.as_sat();
+        available -= amount.to_sat();
     }
 }
 

@@ -5,9 +5,10 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! The Contracts from the sapio README.md
-use bitcoin::util::amount::CoinAmount;
 use sapio::contract::*;
 use sapio::*;
+use sapio_base::amount::CoinAmount;
+use sapio_base::miniscript::Threshold;
 use sapio_base::timelocks::RelTime;
 use sapio_base::Clause;
 use sapio_macros::guard;
@@ -19,7 +20,6 @@ use std::convert::TryInto;
 /// Pay To Public Key Sapio Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct PayToPublicKey {
-    #[schemars(with = "String")]
     key: bitcoin::XOnlyPublicKey,
 }
 
@@ -38,26 +38,41 @@ impl Contract for PayToPublicKey {
 /// Basic Escrowing Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct BasicEscrow {
-    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
-    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
-    #[schemars(with = "String")]
     escrow: bitcoin::XOnlyPublicKey,
 }
 
 impl BasicEscrow {
     #[guard]
     fn redeem(self, _ctx: Context) {
-        Clause::Threshold(
-            1,
-            vec![
-                Clause::Threshold(2, vec![Clause::Key(self.alice), Clause::Key(self.bob)]),
-                Clause::And(vec![
-                    Clause::Key(self.escrow),
-                    Clause::Threshold(1, vec![Clause::Key(self.alice), Clause::Key(self.bob)]),
-                ]),
-            ],
+        Clause::Thresh(
+            Threshold::new(
+                1,
+                vec![
+                    Clause::Thresh(
+                        Threshold::new(
+                            2,
+                            vec![Clause::Key(self.alice).into(), Clause::Key(self.bob).into()],
+                        )
+                        .expect("valid threshold"),
+                    )
+                    .into(),
+                    Clause::And(vec![
+                        Clause::Key(self.escrow).into(),
+                        Clause::Thresh(
+                            Threshold::new(
+                                1,
+                                vec![Clause::Key(self.alice).into(), Clause::Key(self.bob).into()],
+                            )
+                            .expect("valid threshold"),
+                        )
+                        .into(),
+                    ])
+                    .into(),
+                ],
+            )
+            .expect("valid threshold"),
         )
     }
 }
@@ -70,11 +85,8 @@ impl Contract for BasicEscrow {
 /// Basic Escrowing Contract, written more expressively
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct BasicEscrow2 {
-    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
-    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
-    #[schemars(with = "String")]
     escrow: bitcoin::XOnlyPublicKey,
 }
 
@@ -82,13 +94,23 @@ impl BasicEscrow2 {
     #[guard]
     fn use_escrow(self, _ctx: Context) {
         Clause::And(vec![
-            Clause::Key(self.escrow),
-            Clause::Threshold(1, vec![Clause::Key(self.alice), Clause::Key(self.bob)]),
+            Clause::Key(self.escrow).into(),
+            Clause::Thresh(
+                Threshold::new(
+                    1,
+                    vec![Clause::Key(self.alice).into(), Clause::Key(self.bob).into()],
+                )
+                .expect("valid threshold"),
+            )
+            .into(),
         ])
     }
     #[guard]
     fn cooperate(self, _ctx: Context) {
-        Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
+        Clause::And(vec![
+            Clause::Key(self.alice).into(),
+            Clause::Key(self.bob).into(),
+        ])
     }
 }
 
@@ -100,30 +122,44 @@ impl Contract for BasicEscrow2 {
 /// Trustless Escrowing Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct TrustlessEscrow {
-    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
-    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
-    alice_escrow: (CoinAmount, bitcoin::Address),
-    bob_escrow: (CoinAmount, bitcoin::Address),
+    alice_escrow: (
+        CoinAmount,
+        bitcoin::Address<bitcoin::address::NetworkUnchecked>,
+    ),
+    bob_escrow: (
+        CoinAmount,
+        bitcoin::Address<bitcoin::address::NetworkUnchecked>,
+    ),
 }
 
 impl TrustlessEscrow {
     #[guard]
     fn cooperate(self, _ctx: Context) {
-        Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
+        Clause::And(vec![
+            Clause::Key(self.alice).into(),
+            Clause::Key(self.bob).into(),
+        ])
     }
     #[then]
     fn use_escrow(self, ctx: sapio::Context) {
+        let network = ctx.network;
         ctx.template()
             .add_output(
                 self.alice_escrow.0.try_into()?,
-                &Compiled::from_address(self.alice_escrow.1.clone(), bitcoin::Amount::ZERO),
+                &Compiled::from_address(
+                    self.alice_escrow.1.clone().require_network(network)?,
+                    bitcoin::Amount::ZERO,
+                ),
                 None,
             )?
             .add_output(
                 self.bob_escrow.0.try_into()?,
-                &Compiled::from_address(self.bob_escrow.1.clone(), bitcoin::Amount::ZERO),
+                &Compiled::from_address(
+                    self.bob_escrow.1.clone().require_network(network)?,
+                    bitcoin::Amount::ZERO,
+                ),
                 None,
             )?
             .set_sequence(
@@ -169,13 +205,20 @@ mod tests {
         assert_eq!(
             b.guard_use_escrow(context(0)),
             Clause::And(vec![
-                Clause::Key(key(3)),
-                Clause::Threshold(1, vec![Clause::Key(key(1)), Clause::Key(key(2))])
+                Clause::Key(key(3)).into(),
+                Clause::Thresh(
+                    Threshold::new(
+                        1,
+                        vec![Clause::Key(key(1)).into(), Clause::Key(key(2)).into()]
+                    )
+                    .expect("valid threshold")
+                )
+                .into()
             ])
         );
         assert_eq!(
             b.guard_cooperate(context(0)),
-            Clause::And(vec![Clause::Key(key(1)), Clause::Key(key(2))])
+            Clause::And(vec![Clause::Key(key(1)).into(), Clause::Key(key(2)).into()])
         );
     }
 
@@ -184,8 +227,14 @@ mod tests {
         let contract = TrustlessEscrow {
             alice: key(1),
             bob: key(2),
-            alice_escrow: (bitcoin::Amount::from_sat(400).into(), address(1)),
-            bob_escrow: (bitcoin::Amount::from_sat(600).into(), address(2)),
+            alice_escrow: (
+                bitcoin::Amount::from_sat(400).into(),
+                address(1).into_unchecked(),
+            ),
+            bob_escrow: (
+                bitcoin::Amount::from_sat(600).into(),
+                address(2).into_unchecked(),
+            ),
         };
         let object = contract.compile(context(1000)).unwrap();
         object.validate().unwrap();
@@ -195,11 +244,14 @@ mod tests {
                 .tx
                 .output
                 .iter()
-                .map(|o| o.value)
+                .map(|o| o.value.to_sat())
                 .collect::<Vec<_>>(),
             vec![400, 600]
         );
-        assert_ne!(template.tx.input[0].sequence & (1 << 22), 0);
+        assert_ne!(
+            template.tx.input[0].sequence.to_consensus_u32() & (1 << 22),
+            0
+        );
         assert!(contract.compile(context(999)).is_err());
     }
 }

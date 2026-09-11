@@ -2,7 +2,7 @@
 
 use bitcoin::consensus::encode::serialize_hex;
 use bitcoin::secp256k1::{schnorr::Signature, Secp256k1};
-use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
+use bitcoin::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::{Address, Network, OutPoint, Transaction, Witness};
 use emulator_connect::program::{ProgramOracle, ProgramSigningRequest, ProgramSpendPath, PSBT};
 use sapio_integration_tests::eltoo_example::recovery::recover_update;
@@ -24,12 +24,12 @@ fn finish(oracle: &ProgramOracle, request: ProgramSigningRequest) -> Result<Tran
     sign_sponsor(&mut signed, &fixture::sponsor_key())?;
     Ok(sapio_psbt::finalize::finalize(signed, &Secp256k1::new())
         .map_err(|(_, errors)| format!("eltoo vector finalization failed: {errors:?}"))?
-        .extract_tx())
+        .extract_tx()?)
 }
 
 fn output_zero(transaction: &Transaction) -> Coin {
     Coin {
-        outpoint: OutPoint::new(transaction.txid(), 0),
+        outpoint: OutPoint::new(transaction.compute_txid(), 0),
         txout: transaction.output[0].clone(),
     }
 }
@@ -73,12 +73,9 @@ fn non_advancing_update(
         .find(|(_, (candidate, version))| TapLeafHash::from_script(candidate, *version) == leaf)
         .map(|(control, _)| control)
         .ok_or("missing update proof")?;
-    let channel_witness = Witness::from_vec(vec![
-        signature.to_vec(),
-        script.to_bytes(),
-        control.serialize(),
-    ]);
-    let sponsor_witness = Witness::from_vec(vec![signed.inputs[1]
+    let channel_witness =
+        Witness::from_slice(&[signature.to_vec(), script.to_bytes(), control.serialize()]);
+    let sponsor_witness = Witness::from_slice(&[signed.inputs[1]
         .tap_key_sig
         .ok_or("missing sponsor signature")?
         .to_vec()]);
@@ -181,11 +178,10 @@ fn main() -> Result<(), Error> {
         sponsors[2].clone(),
         &certificate_1,
     )?;
-    let funding_address = Address::from_script(&funding_coin.txout.script_pubkey, Network::Regtest)
-        .ok_or("funding output has no standard address")?;
+    let funding_address =
+        Address::from_script(&funding_coin.txout.script_pubkey, Network::Regtest)?;
     let sponsor_address =
-        Address::from_script(&sponsors[0].coin.txout.script_pubkey, Network::Regtest)
-            .ok_or("sponsor output has no standard address")?;
+        Address::from_script(&sponsors[0].coin.txout.script_pubkey, Network::Regtest)?;
     println!(
         "{}",
         serde_json::to_string_pretty(&json!({

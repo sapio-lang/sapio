@@ -15,17 +15,16 @@ description = "An Example Sapio Application based on https://github.com/jamesob/
 serde = "1.0"
 serde_derive = "1.0"
 [dependencies.schemars]
-version = "0.8.0"
-features = ['impl_json_schema']
+version = "=1.2.2"
+features = ["bitcoin032", "miniscript13"]
 
 [dependencies.serde_json]
 version = "1.0"
 features = ["preserve_order"]
 
 [dependencies.bitcoin]
-package = "sapio-bitcoin"
-version = "0.28.0"
-features = ['use-serde']
+version = "=0.32.102"
+features = ['serde']
 [dependencies.sapio]
 path = "../../sapio"
 version = "0.2.0"

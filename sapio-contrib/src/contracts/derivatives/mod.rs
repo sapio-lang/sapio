@@ -6,7 +6,7 @@
 
 //! A collection of modules for creating derivative contracts with Sapio
 use bitcoin;
-use bitcoin::util::amount::Amount;
+use bitcoin::Amount;
 use contract::*;
 use sapio::template::Template;
 use sapio::*;
@@ -49,7 +49,7 @@ impl<'a> TryFrom<GenericBetArguments<'a>> for GenericBet {
         // Make sure the outcomes are sorted for the binary tree
         v.outcomes.sort_by_key(|(i, _)| *i);
         if v.outcomes.is_empty()
-            || v.amount.as_sat() == 0
+            || v.amount.to_sat() == 0
             || v.outcomes.windows(2).any(|p| p[0].0 == p[1].0)
             || v.outcomes
                 .iter()
@@ -181,7 +181,7 @@ fn scaled_amount(
     if denominator == 0 {
         return Err(invalid("Zero price denominator"));
     }
-    let sats = (u128::from(amount.as_sat()) * u128::from(numerator)) / u128::from(denominator);
+    let sats = (u128::from(amount.to_sat()) * u128::from(numerator)) / u128::from(denominator);
     Ok(Amount::from_sat(
         u64::try_from(sats).map_err(|_| invalid("Option amount overflow"))?,
     ))
@@ -195,10 +195,10 @@ fn settlement(
     operator: &dyn apis::OperatorApi,
 ) -> Result<Template, CompilationError> {
     let mut builder = ctx.template();
-    if user_amount.as_sat() > 0 {
+    if user_amount.to_sat() > 0 {
         builder = builder.add_output(user_amount, &user.receive_payment(user_amount), None)?;
     }
-    if operator_amount.as_sat() > 0 {
+    if operator_amount.to_sat() > 0 {
         builder = builder.add_output(
             operator_amount,
             &operator.receive_payment(operator_amount),
@@ -221,6 +221,7 @@ fn price_grid(bottom: u64, top: u64) -> Result<impl Iterator<Item = u64>, Compil
 mod tests {
     use super::*;
     use crate::test_helpers::{address, context, key};
+    use sapio_base::miniscript::Threshold;
     struct PriceOracle;
     impl Oracle for PriceOracle {
         fn get_key_lt_gte(&self, _: &Symbol, price: i64) -> (Clause, Clause) {
@@ -288,19 +289,23 @@ mod tests {
             .iter()
             .map(|(price, template)| {
                 assert!(!template.tx.output.is_empty());
-                assert!(template.tx.output.iter().all(|output| output.value > 0));
+                assert!(template
+                    .tx
+                    .output
+                    .iter()
+                    .all(|output| output.value.to_sat() > 0));
                 let received = |recipient: bitcoin::Address| {
                     template
                         .tx
                         .output
                         .iter()
                         .filter(|output| output.script_pubkey == recipient.script_pubkey())
-                        .map(|output| output.value)
+                        .map(|output| output.value.to_sat())
                         .sum::<u64>()
                 };
                 let user = received(address(2));
                 let operator = received(address(1));
-                assert_eq!(user + operator, args.amount.as_sat());
+                assert_eq!(user + operator, args.amount.to_sat());
                 (*price, user, operator)
             })
             .collect()
@@ -308,7 +313,7 @@ mod tests {
     #[test]
     fn long_and_short_calls_puts_apply_notional_and_price_scale() {
         let long = GenericBetArguments::try_from(call(true, 30_000, 10_000)).unwrap();
-        assert_eq!(long.amount.as_sat(), 10_000);
+        assert_eq!(long.amount.to_sat(), 10_000);
         assert_eq!(
             payouts(&long),
             vec![
@@ -353,7 +358,7 @@ mod tests {
     #[test]
     fn risk_reversal_preserves_purchasing_power_and_collateral() {
         let args = GenericBetArguments::try_from(risk()).unwrap();
-        assert_eq!(args.amount.as_sat(), 9000);
+        assert_eq!(args.amount.to_sat(), 9000);
         assert_eq!(
             payouts(&args),
             vec![
@@ -405,7 +410,7 @@ mod tests {
         assert_eq!(
             scaled_amount(Amount::from_sat(u64::MAX), 2, 2)
                 .unwrap()
-                .as_sat(),
+                .to_sat(),
             u64::MAX
         );
     }
@@ -427,7 +432,9 @@ mod tests {
         assert_eq!(compiled.ctv_to_tx.len(), 1);
         assert!(bet.compile(context(9999)).is_err());
         assert_eq!(
-            compiled.ctv_to_tx.values().next().unwrap().tx.output[0].value,
+            compiled.ctv_to_tx.values().next().unwrap().tx.output[0]
+                .value
+                .to_sat(),
             10_000
         );
     }
@@ -440,8 +447,12 @@ mod tests {
         assert_eq!(
             oracle.get_key_lt_gte(&"price".into(), 10_000),
             (
-                Clause::Threshold(1, vec![Clause::Key(key(11))]),
-                Clause::Threshold(1, vec![Clause::Key(key(21))])
+                Clause::Thresh(
+                    Threshold::new(1, vec![Clause::Key(key(11)).into()]).expect("valid threshold")
+                ),
+                Clause::Thresh(
+                    Threshold::new(1, vec![Clause::Key(key(21)).into()]).expect("valid threshold")
+                )
             )
         );
     }

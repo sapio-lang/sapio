@@ -1,5 +1,5 @@
 use bitcoin::hashes::sha256;
-use bitcoin::psbt::PartiallySignedTransaction;
+use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{Secp256k1, SecretKey};
 use bitcoin::{Address, Amount, Network, OutPoint, Transaction, TxIn, TxOut, Txid};
 use sapio::contract::abi::object::{ArtifactErrorKind, ObjectError};
@@ -27,7 +27,10 @@ fn context(funds: u64, path: &str) -> Context {
 
 fn address() -> Compiled {
     Compiled::from_address(
-        Address::from_str("bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj").unwrap(),
+        Address::from_str("bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj")
+            .unwrap()
+            .require_network(Network::Regtest)
+            .unwrap(),
         Amount::ZERO,
     )
 }
@@ -281,7 +284,7 @@ struct KnownFunding(Arc<Transaction>);
 
 impl TxIndex for KnownFunding {
     fn lookup_tx(&self, txid: &Txid) -> Result<Arc<Transaction>, TxIndexError> {
-        assert_eq!(*txid, self.0.txid());
+        assert_eq!(*txid, self.0.compute_txid());
         Ok(self.0.clone())
     }
 
@@ -295,15 +298,15 @@ fn known_funding_obeys_ensure_amount_even_without_any_templates() {
     let object = MinimumBalance.compile(context(1_000, "minimum")).unwrap();
     for amount in [999, 1_000] {
         let funding = Arc::new(Transaction {
-            version: 2,
-            lock_time: 0,
+            version: bitcoin::transaction::Version(2),
+            lock_time: bitcoin::absolute::LockTime::from_consensus(0),
             input: vec![TxIn::default()],
             output: vec![TxOut {
-                value: amount,
+                value: Amount::from_sat(amount),
                 script_pubkey: object.address.clone().into(),
             }],
         });
-        let outpoint = OutPoint::new(funding.txid(), 0);
+        let outpoint = OutPoint::new(funding.compute_txid(), 0);
         let result = object.bind_psbt(
             outpoint,
             BTreeMap::new(),
@@ -355,10 +358,7 @@ impl CTVEmulator for NoEffects {
         panic!("underfunded child requested a signer");
     }
 
-    fn sign(
-        &self,
-        _: PartiallySignedTransaction,
-    ) -> Result<PartiallySignedTransaction, EmulatorError> {
+    fn sign(&self, _: Psbt) -> Result<Psbt, EmulatorError> {
         panic!("underfunded child reached signing");
     }
 }

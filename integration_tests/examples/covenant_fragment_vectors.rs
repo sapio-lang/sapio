@@ -52,19 +52,21 @@ fn main() -> Result<(), Box<dyn Error>> {
         let signed = oracle.sign(request)?;
         let finalized = sapio_psbt::finalize::finalize(signed, &secp)
             .map_err(|(_, errors)| format!("fragment vector finalization failed: {errors:?}"))?;
-        let transaction = finalized.extract_tx();
+        let transaction = finalized.extract_tx()?;
         let mut amount_changed = transaction.clone();
-        amount_changed.output[0].value -= 1;
+        amount_changed.output[0].value -= bitcoin::Amount::ONE_SAT;
         let mut annex_changed = transaction.clone();
         let mut witness = transaction.input[0].witness.to_vec();
         witness.last_mut().ok_or("missing annex witness")?[1] ^= 1;
-        annex_changed.input[0].witness = Witness::from_vec(witness);
+        annex_changed.input[0].witness = Witness::from_slice(&witness);
         let mut annex_removed = transaction.clone();
         let mut witness = transaction.input[0].witness.to_vec();
         assert_eq!(witness.pop(), Some(b"\x50sapio-fragments".to_vec()));
-        annex_removed.input[0].witness = Witness::from_vec(witness);
-        let address = Address::from_script(&(&compiled.address).into(), Network::Regtest)
-            .ok_or("fragment contract has no standard address")?;
+        annex_removed.input[0].witness = Witness::from_slice(&witness);
+        let address = Address::from_script(
+            &bitcoin::ScriptBuf::from(&compiled.address),
+            Network::Regtest,
+        )?;
         groups.push(json!({
             "name": name,
             "address": address.to_string(),

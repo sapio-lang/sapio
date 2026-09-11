@@ -6,7 +6,7 @@
 
 //! Template Output container
 use super::*;
-use sapio_base::simp::{SIMPError, TemplateOutputLT, SIMP};
+use sapio_base::simp::{SIMPError, TemplateOutputLT};
 use serde::{Deserialize, Serialize};
 /// Metadata for outputs, arbitrary KV set.
 #[derive(Serialize, Deserialize, Clone, JsonSchema, Debug, PartialEq, Eq)]
@@ -64,8 +64,8 @@ impl<const N: usize> From<[(&str, serde_json::Value); N]> for OutputMeta {
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 pub struct Output {
     /// the amount of sats being sent to this contract
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
-    #[schemars(with = "i64")]
+    #[serde(with = "bitcoin::amount::serde::as_sat")]
+    #[schemars(with = "u64")]
     #[serde(rename = "sending_amount_sats")]
     pub amount: Amount,
     /// the compiled contract this output creates

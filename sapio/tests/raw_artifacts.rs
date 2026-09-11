@@ -1,10 +1,11 @@
 use bitcoin::blockdata::opcodes::all::{OP_DROP, OP_NOP4};
 use bitcoin::blockdata::script::Builder;
 use bitcoin::hashes::sha256;
-use bitcoin::psbt::PartiallySignedTransaction as Psbt;
+use bitcoin::hashes::Hash;
+use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{Keypair, Secp256k1, SecretKey};
-use bitcoin::util::taproot::LeafVersion;
-use bitcoin::{Address, Amount, Network, OutPoint, Script, Transaction, TxIn, TxOut, Txid};
+use bitcoin::taproot::LeafVersion;
+use bitcoin::{Address, Amount, Network, OutPoint, ScriptBuf, Transaction, TxIn, TxOut, Txid};
 use sapio::contract::abi::object::{
     ArtifactErrorKind, GuardMetadata, ObjectError, RawTaproot, SupportedDescriptors,
 };
@@ -44,7 +45,7 @@ fn artifact(key_only: bool) -> Compiled {
     .unwrap()
     .into();
     let script = Builder::new()
-        .push_slice(template.hash().as_ref())
+        .push_slice(template.hash().to_byte_array())
         .push_opcode(OP_NOP4);
     let ctv = script.clone().into_script();
     let alternate = script.push_opcode(OP_DROP).push_int(1).into_script();
@@ -70,12 +71,12 @@ fn artifact(key_only: bool) -> Compiled {
 
 fn funding(object: &Compiled) -> Transaction {
     Transaction {
-        version: 2,
-        lock_time: 0,
+        version: bitcoin::transaction::Version(2),
+        lock_time: bitcoin::absolute::LockTime::from_consensus(0),
         input: vec![TxIn::default()],
         output: vec![TxOut {
-            value: 1_000,
-            script_pubkey: Script::from(&object.address),
+            value: bitcoin::Amount::from_sat(1_000),
+            script_pubkey: ScriptBuf::from(&object.address),
         }],
     }
 }
@@ -89,7 +90,7 @@ struct Index {
 impl Index {
     fn with(tx: Transaction) -> Rc<Self> {
         Rc::new(Self {
-            transactions: RefCell::new(BTreeMap::from([(tx.txid(), Arc::new(tx))])),
+            transactions: RefCell::new(BTreeMap::from([(tx.compute_txid(), Arc::new(tx))])),
             lookups: Cell::new(0),
             writes: Cell::new(0),
         })
@@ -108,7 +109,7 @@ impl TxIndex for Index {
 
     fn add_tx(&self, tx: Arc<Transaction>) -> Result<Txid, TxIndexError> {
         self.writes.set(self.writes.get() + 1);
-        let txid = tx.txid();
+        let txid = tx.compute_txid();
         self.transactions.borrow_mut().insert(txid, tx);
         Ok(txid)
     }
@@ -144,7 +145,7 @@ fn serialized_raw_artifacts_bind_all_control_blocks_and_authenticated_funding() 
             panic!("round trip lost raw Taproot spending data");
         };
         let previous = funding(&object);
-        let outpoint = OutPoint::new(previous.txid(), 0);
+        let outpoint = OutPoint::new(previous.compute_txid(), 0);
         let index = Index::with(previous.clone());
         let signer = Signer::default();
         let program = object
@@ -152,7 +153,7 @@ fn serialized_raw_artifacts_bind_all_control_blocks_and_authenticated_funding() 
             .unwrap();
         let SapioStudioFormat::LinkedPSBT { psbt, .. } =
             &program.program.get(&object.root_path).unwrap().txs[0];
-        let psbt: Psbt = bitcoin::consensus::deserialize(&base64::decode(psbt).unwrap()).unwrap();
+        let psbt: Psbt = Psbt::deserialize(&base64::decode(psbt).unwrap()).unwrap();
         let input = &psbt.inputs[0];
         assert_eq!(input.tap_internal_key, Some(raw.internal_key()));
         assert_eq!(input.tap_merkle_root, raw.spend_info().merkle_root());
@@ -169,7 +170,7 @@ fn serialized_raw_artifacts_bind_all_control_blocks_and_authenticated_funding() 
             assert!(raw.leaves().iter().any(|(_, leaf)| leaf == script));
             assert!(control.verify_taproot_commitment(
                 &Secp256k1::verification_only(),
-                raw.spend_info().output_key().to_inner(),
+                raw.spend_info().output_key().to_x_only_public_key(),
                 script,
             ));
         }
@@ -186,15 +187,15 @@ fn raw_artifacts_preserve_descriptor_and_funding_checks_before_signing() {
         match case {
             0 => {
                 object.address =
-                    sapio::util::extended_address::ExtendedAddress::Unknown(Script::from(vec![
+                    sapio::util::extended_address::ExtendedAddress::Unknown(ScriptBuf::from(vec![
                         0x51,
                     ]));
             }
-            1 => previous.output[0].script_pubkey = Script::new(),
-            2 => previous.output[0].value = 999,
+            1 => previous.output[0].script_pubkey = ScriptBuf::new(),
+            2 => previous.output[0].value = bitcoin::Amount::from_sat(999),
             _ => unreachable!(),
         }
-        let outpoint = OutPoint::new(previous.txid(), 0);
+        let outpoint = OutPoint::new(previous.compute_txid(), 0);
         let index = Index::with(previous);
         let signer = Signer::default();
         let error = object
@@ -218,7 +219,7 @@ fn raw_artifacts_preserve_descriptor_and_funding_checks_before_signing() {
 fn a_signer_cannot_strip_raw_spending_data_before_indexing() {
     let object = artifact(false);
     let previous = funding(&object);
-    let outpoint = OutPoint::new(previous.txid(), 0);
+    let outpoint = OutPoint::new(previous.compute_txid(), 0);
     let index = Index::with(previous);
     let signer = Signer {
         strip_scripts: true,
@@ -236,8 +237,8 @@ fn a_signer_cannot_strip_raw_spending_data_before_indexing() {
 fn structured_guard_metadata_round_trips_without_stringifying_policy_sources() {
     let mut object = artifact(false);
     let policy = ScriptPolicy::And(vec![
-        Clause::After(100).into(),
-        ScriptFragment::new(Script::from(vec![0x51]))
+        Clause::After(sapio::miniscript::AbsLockTime::from_consensus(100).unwrap()).into(),
+        ScriptFragment::new(ScriptBuf::from(vec![0x51]))
             .unwrap()
             .into(),
     ]);

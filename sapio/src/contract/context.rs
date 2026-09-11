@@ -41,7 +41,7 @@ fn allocate_ordinals(
     a: Amount,
     ords: &OrdinalsInfo,
 ) -> Result<[OrdinalsInfo; 2], CompilationError> {
-    let mut amt = a.as_sat();
+    let mut amt = a.to_sat();
     let mut ret = [OrdinalsInfo(vec![]), OrdinalsInfo(vec![])];
     for (start, end) in ords.0.iter().copied() {
         let sats = end.0.checked_sub(start.0).ok_or_else(|| {
@@ -189,8 +189,8 @@ impl Context {
     pub fn add_amount(mut self, amount: Amount) -> Result<Self, CompilationError> {
         let available = self
             .available_funds
-            .as_sat()
-            .checked_add(amount.as_sat())
+            .to_sat()
+            .checked_add(amount.to_sat())
             .ok_or_else(|| CompilationError::TerminateWith("Available funds overflow".into()))?;
         if amount != Amount::ZERO {
             if let Some(ordinals) = &self.ordinals_info {

@@ -1,4 +1,4 @@
-use bitcoin::{OutPoint, Script, Transaction, TxIn, TxOut, Txid, Witness};
+use bitcoin::{OutPoint, ScriptBuf, Transaction, TxIn, TxOut, Txid, Witness};
 use sapio_base::txindex::{CachedTxIndex, TxIndex, TxIndexError, TxIndexLogger};
 use std::cell::RefCell;
 use std::io;
@@ -45,12 +45,12 @@ impl TxIndex for StubIndex {
 
 fn transaction(value: u64) -> Arc<Transaction> {
     Arc::new(Transaction {
-        version: 2,
-        lock_time: 0,
+        version: bitcoin::transaction::Version(2),
+        lock_time: bitcoin::absolute::LockTime::from_consensus(0),
         input: vec![TxIn::default()],
         output: vec![TxOut {
-            value,
-            script_pubkey: Script::new(),
+            value: bitcoin::Amount::from_sat(value),
+            script_pubkey: ScriptBuf::new(),
         }],
     })
 }
@@ -80,7 +80,7 @@ fn assert_same_error(actual: TxIndexError, expected: &str) {
 
 #[test]
 fn output_lookup_checks_identity_before_the_output_index() {
-    let expected = transaction(42).txid();
+    let expected = transaction(42).compute_txid();
     let wrong = transaction(43);
     for vout in [0, 1] {
         let index = StubIndex::default().with_lookup(Ok(wrong.clone()));
@@ -90,7 +90,7 @@ fn output_lookup_checks_identity_before_the_output_index() {
                 vout,
             })
             .unwrap_err();
-        assert_mismatch(error, expected, wrong.txid());
+        assert_mismatch(error, expected, wrong.compute_txid());
     }
 
     let tx = transaction(42);
@@ -124,9 +124,9 @@ fn cache_miss_loads_once_and_subsequent_hit_skips_the_primary() {
         cache: TxIndexLogger::new(),
         primary: StubIndex::default().with_lookup(Ok(tx.clone())),
     };
-    assert_eq!(index.lookup_tx(&tx.txid()).unwrap(), tx);
-    assert_eq!(index.lookup_tx(&tx.txid()).unwrap(), tx);
-    assert_eq!(*index.primary.requested.borrow(), vec![tx.txid()]);
+    assert_eq!(index.lookup_tx(&tx.compute_txid()).unwrap(), tx);
+    assert_eq!(index.lookup_tx(&tx.compute_txid()).unwrap(), tx);
+    assert_eq!(*index.primary.requested.borrow(), vec![tx.compute_txid()]);
     assert!(index.primary.added.borrow().is_empty());
 }
 
@@ -134,7 +134,7 @@ fn cache_miss_loads_once_and_subsequent_hit_skips_the_primary() {
 fn cache_errors_do_not_fall_back_during_lookup_or_add() {
     let tx = transaction(42);
     for adding in [false, true] {
-        for error in failures(transaction(43).txid()) {
+        for error in failures(transaction(43).compute_txid()) {
             let expected = error.to_string();
             let index = CachedTxIndex {
                 cache: StubIndex::default().with_lookup(Err(error)),
@@ -143,7 +143,7 @@ fn cache_errors_do_not_fall_back_during_lookup_or_add() {
             let error = if adding {
                 index.add_tx(tx.clone()).unwrap_err()
             } else {
-                index.lookup_tx(&tx.txid()).unwrap_err()
+                index.lookup_tx(&tx.compute_txid()).unwrap_err()
             };
             assert_same_error(error, &expected);
             index.primary.assert_untouched();
@@ -164,9 +164,9 @@ fn wrong_cache_transactions_stop_lookup_and_add() {
         let error = if adding {
             index.add_tx(tx.clone()).unwrap_err()
         } else {
-            index.lookup_tx(&tx.txid()).unwrap_err()
+            index.lookup_tx(&tx.compute_txid()).unwrap_err()
         };
-        assert_mismatch(error, tx.txid(), wrong.txid());
+        assert_mismatch(error, tx.compute_txid(), wrong.compute_txid());
         index.primary.assert_untouched();
         assert!(index.cache.added.borrow().is_empty());
     }
@@ -174,7 +174,7 @@ fn wrong_cache_transactions_stop_lookup_and_add() {
 
 #[test]
 fn wrong_primary_transactions_never_enter_the_cache() {
-    let expected = transaction(42).txid();
+    let expected = transaction(42).compute_txid();
     let wrong = transaction(43);
     let index = CachedTxIndex {
         cache: StubIndex::default().with_lookup(Err(TxIndexError::UnknownTxid(expected))),
@@ -183,14 +183,14 @@ fn wrong_primary_transactions_never_enter_the_cache() {
     assert_mismatch(
         index.lookup_tx(&expected).unwrap_err(),
         expected,
-        wrong.txid(),
+        wrong.compute_txid(),
     );
     assert!(index.cache.added.borrow().is_empty());
 }
 
 #[test]
 fn primary_lookup_errors_leave_the_cache_untouched() {
-    let txid = transaction(42).txid();
+    let txid = transaction(42).compute_txid();
     for error in failures(txid) {
         let expected = error.to_string();
         let index = CachedTxIndex {
@@ -205,14 +205,18 @@ fn primary_lookup_errors_leave_the_cache_untouched() {
 #[test]
 fn lookup_rejects_an_incorrect_cache_add_acknowledgement() {
     let tx = transaction(42);
-    let wrong = transaction(43).txid();
+    let wrong = transaction(43).compute_txid();
     let index = CachedTxIndex {
         cache: StubIndex::default()
-            .with_lookup(Err(TxIndexError::UnknownTxid(tx.txid())))
+            .with_lookup(Err(TxIndexError::UnknownTxid(tx.compute_txid())))
             .with_add(Ok(wrong)),
         primary: StubIndex::default().with_lookup(Ok(tx.clone())),
     };
-    assert_mismatch(index.lookup_tx(&tx.txid()).unwrap_err(), tx.txid(), wrong);
+    assert_mismatch(
+        index.lookup_tx(&tx.compute_txid()).unwrap_err(),
+        tx.compute_txid(),
+        wrong,
+    );
 }
 
 #[test]
@@ -220,10 +224,10 @@ fn add_miss_populates_primary_then_cache() {
     let tx = transaction(42);
     let index = CachedTxIndex {
         cache: TxIndexLogger::new(),
-        primary: StubIndex::default().with_add(Ok(tx.txid())),
+        primary: StubIndex::default().with_add(Ok(tx.compute_txid())),
     };
-    assert_eq!(index.add_tx(tx.clone()).unwrap(), tx.txid());
-    assert_eq!(index.lookup_tx(&tx.txid()).unwrap(), tx);
+    assert_eq!(index.add_tx(tx.clone()).unwrap(), tx.compute_txid());
+    assert_eq!(index.lookup_tx(&tx.compute_txid()).unwrap(), tx);
     assert_eq!(*index.primary.added.borrow(), vec![tx]);
     assert!(index.primary.requested.borrow().is_empty());
 }
@@ -231,35 +235,44 @@ fn add_miss_populates_primary_then_cache() {
 #[test]
 fn incorrect_primary_add_acknowledgements_never_populate_the_cache() {
     let tx = transaction(42);
-    let wrong = transaction(43).txid();
+    let wrong = transaction(43).compute_txid();
     let index = CachedTxIndex {
-        cache: StubIndex::default().with_lookup(Err(TxIndexError::UnknownTxid(tx.txid()))),
+        cache: StubIndex::default().with_lookup(Err(TxIndexError::UnknownTxid(tx.compute_txid()))),
         primary: StubIndex::default().with_add(Ok(wrong)),
     };
-    assert_mismatch(index.add_tx(tx.clone()).unwrap_err(), tx.txid(), wrong);
+    assert_mismatch(
+        index.add_tx(tx.clone()).unwrap_err(),
+        tx.compute_txid(),
+        wrong,
+    );
     assert!(index.cache.added.borrow().is_empty());
 }
 
 #[test]
 fn add_rejects_an_incorrect_cache_acknowledgement() {
     let tx = transaction(42);
-    let wrong = transaction(43).txid();
+    let wrong = transaction(43).compute_txid();
     let index = CachedTxIndex {
         cache: StubIndex::default()
-            .with_lookup(Err(TxIndexError::UnknownTxid(tx.txid())))
+            .with_lookup(Err(TxIndexError::UnknownTxid(tx.compute_txid())))
             .with_add(Ok(wrong)),
-        primary: StubIndex::default().with_add(Ok(tx.txid())),
+        primary: StubIndex::default().with_add(Ok(tx.compute_txid())),
     };
-    assert_mismatch(index.add_tx(tx.clone()).unwrap_err(), tx.txid(), wrong);
+    assert_mismatch(
+        index.add_tx(tx.clone()).unwrap_err(),
+        tx.compute_txid(),
+        wrong,
+    );
 }
 
 #[test]
 fn primary_add_errors_do_not_populate_the_cache() {
     let tx = transaction(42);
-    for error in failures(tx.txid()) {
+    for error in failures(tx.compute_txid()) {
         let expected = error.to_string();
         let index = CachedTxIndex {
-            cache: StubIndex::default().with_lookup(Err(TxIndexError::UnknownTxid(tx.txid()))),
+            cache: StubIndex::default()
+                .with_lookup(Err(TxIndexError::UnknownTxid(tx.compute_txid()))),
             primary: StubIndex::default().with_add(Err(error)),
         };
         assert_same_error(index.add_tx(tx.clone()).unwrap_err(), &expected);
@@ -271,20 +284,20 @@ fn primary_add_errors_do_not_populate_the_cache() {
 fn cache_add_errors_propagate_during_lookup_and_add() {
     let tx = transaction(42);
     for adding in [false, true] {
-        for error in failures(tx.txid()) {
+        for error in failures(tx.compute_txid()) {
             let expected = error.to_string();
             let index = CachedTxIndex {
                 cache: StubIndex::default()
-                    .with_lookup(Err(TxIndexError::UnknownTxid(tx.txid())))
+                    .with_lookup(Err(TxIndexError::UnknownTxid(tx.compute_txid())))
                     .with_add(Err(error)),
                 primary: StubIndex::default()
                     .with_lookup(Ok(tx.clone()))
-                    .with_add(Ok(tx.txid())),
+                    .with_add(Ok(tx.compute_txid())),
             };
             let error = if adding {
                 index.add_tx(tx.clone()).unwrap_err()
             } else {
-                index.lookup_tx(&tx.txid()).unwrap_err()
+                index.lookup_tx(&tx.compute_txid()).unwrap_err()
             };
             assert_same_error(error, &expected);
         }
@@ -298,7 +311,7 @@ fn identical_adds_do_not_rewrite_either_index() {
         cache: StubIndex::default().with_lookup(Ok(tx.clone())),
         primary: StubIndex::default(),
     };
-    assert_eq!(index.add_tx(tx.clone()).unwrap(), tx.txid());
+    assert_eq!(index.add_tx(tx.clone()).unwrap(), tx.compute_txid());
     assert!(index.cache.added.borrow().is_empty());
     index.primary.assert_untouched();
 }
@@ -307,24 +320,27 @@ fn identical_adds_do_not_rewrite_either_index() {
 fn changed_witnesses_update_both_indexes_but_identical_adds_are_deduplicated() {
     let original = transaction(42);
     let mut signed = (*original).clone();
-    signed.input[0].witness = Witness::from_vec(vec![vec![1; 64]]);
+    signed.input[0].witness = Witness::from_slice(&vec![vec![1; 64]]);
     let signed = Arc::new(signed);
-    assert_eq!(original.txid(), signed.txid());
-    assert_ne!(original.wtxid(), signed.wtxid());
+    assert_eq!(original.compute_txid(), signed.compute_txid());
+    assert_ne!(original.compute_wtxid(), signed.compute_wtxid());
 
     let index = CachedTxIndex {
         cache: TxIndexLogger::new(),
-        primary: StubIndex::default().with_add(Ok(signed.txid())),
+        primary: StubIndex::default().with_add(Ok(signed.compute_txid())),
     };
     index.cache.add_tx(original.clone()).unwrap();
-    assert_eq!(index.add_tx(original.clone()).unwrap(), original.txid());
+    assert_eq!(
+        index.add_tx(original.clone()).unwrap(),
+        original.compute_txid()
+    );
     index.primary.assert_untouched();
 
-    assert_eq!(index.add_tx(signed.clone()).unwrap(), signed.txid());
+    assert_eq!(index.add_tx(signed.clone()).unwrap(), signed.compute_txid());
     assert_eq!(*index.primary.added.borrow(), vec![signed.clone()]);
-    assert_eq!(index.lookup_tx(&signed.txid()).unwrap(), signed);
+    assert_eq!(index.lookup_tx(&signed.compute_txid()).unwrap(), signed);
 
-    assert_eq!(index.add_tx(signed.clone()).unwrap(), signed.txid());
+    assert_eq!(index.add_tx(signed.clone()).unwrap(), signed.compute_txid());
     assert_eq!(*index.primary.added.borrow(), vec![signed.clone()]);
-    assert_eq!(index.lookup_tx(&signed.txid()).unwrap(), signed);
+    assert_eq!(index.lookup_tx(&signed.compute_txid()).unwrap(), signed);
 }

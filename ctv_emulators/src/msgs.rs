@@ -5,7 +5,6 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use super::*;
-use bitcoin::consensus::encode::{Decodable, Encodable};
 use miniscript::serde;
 use sapio_base::miniscript;
 use serde::de::Visitor;
@@ -18,7 +17,7 @@ const MAX_MSG: usize = 1_000_000;
 /// a PSBT Wrapper type. Note that Serialize/Deserialize are manually implemented
 /// limited to 1MB in size.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PSBT(pub PartiallySignedTransaction);
+pub struct PSBT(pub Psbt);
 
 /// Wrapper for message serialization
 #[derive(Serialize, Deserialize)]
@@ -62,9 +61,7 @@ impl<'de> Visitor<'de> for SafePSBT {
             v.push(seq.next_element()?.ok_or_else(length_error)?);
         }
 
-        PartiallySignedTransaction::consensus_decode(&v[..])
-            .map_err(de::Error::custom)
-            .map(PSBT)
+        Psbt::deserialize(&v).map_err(de::Error::custom).map(PSBT)
     }
 }
 
@@ -74,9 +71,7 @@ impl Serialize for PSBT {
         S: Serializer,
     {
         let mut m = vec![0u8; 4];
-        self.0
-            .consensus_encode(&mut m)
-            .map_err(ser::Error::custom)?;
+        m.extend_from_slice(&self.0.serialize());
         let len = m.len();
         m[..4].copy_from_slice(&((len - 4) as u32).to_be_bytes()[..]);
         serializer.serialize_bytes(&m)

@@ -1,87 +1,89 @@
 # Sats and Coins
 
-There are several different ways of expressing amounts in Sapio.
+Sapio uses integer satoshis for transaction values. At a JSON boundary, the
+interface must also make the denomination clear: `10` could otherwise mean
+10 satoshis or 10 bitcoin.
 
-That there isn't a single canonical way to represent amounts is unfortunate,
-and hopefully these types can be fully unified in the future. But it's a
-problem for good reason.
+## Units and serialization
 
-## A brief rant
+These types serve different purposes:
 
+| Type | Representation and JSON behavior |
+| --- | --- |
+| `u64` | An unsigned integer; the interface must specify its unit. |
+| `i64` | A signed integer; the interface must specify its unit. |
+| `bitcoin::Amount` | Unsigned integer satoshis. With Bitcoin's `serde` feature, its default JSON representation is an integer number of satoshis. |
+| `bitcoin::SignedAmount` | Signed integer satoshis. Use an explicit `bitcoin::amount::serde` adapter for JSON fields. |
+| `sapio_base::amount::CoinAmount` | A tagged input: `{"Sats": 1000}` or `{"Btc": 0.00001}`. |
 
-Suppose I tell you to send 10 to Alice. Is that 10 sats? or 10 bitcoin? You
-might think that 10.0 would be unambiguous, but it turns out the lightning
-network is building sub-satoshi support.
-
-The *only* way to make context-free unambiguous amounts is to have them
-explicitly tagged, e.g., {denom: "sats", amount: 10}.
-
-This would be great, but there are already myriads of services out there
-where the only way to know what unit you have is to RTFM.
-
-Generally, we know that floating point representations are evil for financial
-transactions, but because we want to be compatible with JSON/Javascript, we
-don't quite have a choice. Fortunately, 21e6 Bitcoin with 8 places fit
-exactly into floats without loss. However, bets are off when doing arithmetic
-with such values.
-
-A last wrinkle: Bitcoin's amount type is a signed integer. Rust-bitcoin uses an Unsigned integer. So in theory there are unrepresentable amounts we're happy to work with. Great.
-
-## It's up to every programmer
-
-Therefore, to get amounts right is a task that is up to the programmer
-largely to get this right. There are a few different amount types to be aware
-of.
-
-1. u64 represents sats. may be too big!
-1. i64 represents sats. may be too small!
-1. `bitcoin::Amount` represents u64, no standard serialization.
-1. `bitcoin::SignedAmount` represents i64, no standard serialization.
-1. `bitcoin::CoinAmount` standard tagged serialization, either u64 or f64.
-
-These different types have uses in different circumstances.
-
-Because `bitcoin::Amount` does not have a standard serializer, in order to
-use it in e.g. a `Vec`, you have to wrap the type with a serializer. `From` impls can make life a little easier to work with these.
+`CoinAmount` belongs to Sapio, not Bitcoin. Convert it to `Amount` before using
+it in a transaction. The `Btc` variant uses `Amount::from_btc` to check the
+conversion, including range and fractional-satoshi precision; `Sats` preserves
+the supplied integer exactly.
 
 ```rust
-use bitcoin::util::amount::Amount;
+use bitcoin::Amount;
+use sapio_base::amount::CoinAmount;
 
+let amount = Amount::try_from(CoinAmount::Sats(1000)).unwrap();
+assert_eq!(amount.to_sat(), 1000);
+assert_eq!(serde_json::to_string(&amount).unwrap(), "1000");
+```
+
+A type's integer range is not a contract budget or Bitcoin's monetary limit.
+Validate amounts against the funds available and the rules of the interface.
+
+Binary floating point cannot represent most decimal bitcoin fractions exactly.
+Prefer integer satoshis for arithmetic and JSON interfaces you control. In
+JavaScript, integers up to `2^53 - 1` are exact, which covers Bitcoin's maximum
+supply expressed in satoshis, but does not cover every `u64` value. JSON itself
+does not require consumers to use floating point.
+
+## Choosing a different wire format
+
+`Amount` already works in a `Vec<Amount>` without a custom serializer. An
+explicit wrapper is useful when an external interface requires another format,
+such as a floating-point number of bitcoin. Its schema must describe that
+chosen format too:
+
+```rust
+use bitcoin::Amount;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-/// A wrapper around `bitcoin::Amount` to force it to serialize with f64.
+/// Serialize this interface's amounts as a number of bitcoin.
 #[derive(
     Serialize, Deserialize, JsonSchema, Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq,
 )]
 #[serde(transparent)]
 struct AmountF64(
     #[schemars(with = "f64")]
-    #[serde(with = "bitcoin::util::amount::serde::as_btc")]
+    #[serde(with = "bitcoin::amount::serde::as_btc")]
     Amount,
 );
 
 impl From<Amount> for AmountF64 {
-    fn from(a: Amount) -> AmountF64 {
-        AmountF64(a)
+    fn from(amount: Amount) -> Self {
+        Self(amount)
     }
 }
+
 impl From<AmountF64> for Amount {
-    fn from(a: AmountF64) -> Amount {
-        a.0
+    fn from(amount: AmountF64) -> Self {
+        amount.0
     }
 }
 ```
 
-`CoinAmount` does not have this problem, but it can't be used in all
-contexts, e.g. external APIs that aren't tagged.
+Ordinary `Amount` fields derive an integer-satoshi schema directly through
+Sapio's `sapio-jsonschema` fork and its `bitcoin032` feature. Explicit Serde
+adapters still need matching schema annotations: `as_sat` uses `u64`, while
+`as_btc` uses `f64`. Keep the serializer, schema and interface documentation
+consistent when choosing a denomination.
 
+## Checked arithmetic
 
-## Don't Panic (or do)
-
-A final annoyance is that `bitcoin::Amount` has arithmetic that may panic
-(unless you use the `checked_` variants). So one must be careful to ensure
-that any set of values passed in are safe to add.
-
-Sapio currently does not do a fantastic job of this, but that can be improved
-in the future.
+`Amount` arithmetic operators can panic on overflow or underflow. Use
+`checked_add`, `checked_sub` and the other checked operations when values come
+from callers, and propagate an error when a calculation cannot be represented.
+Keep calculations in integer satoshis even when the wire format uses bitcoin.

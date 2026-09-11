@@ -1,7 +1,7 @@
 use super::*;
 use crate::host::{store_with_fuel, INSTANCE_FUEL};
+use bitcoin::bip32::Xpriv;
 use bitcoin::secp256k1::{Keypair, SecretKey};
-use bitcoin::util::bip32::ExtendedPrivKey;
 use bitcoin::Network;
 use wasmer::Module;
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints};
@@ -56,8 +56,8 @@ fn remaining(store: &mut Store, instance: &Instance) -> u64 {
     }
 }
 
-fn root() -> ExtendedPrivKey {
-    ExtendedPrivKey::new_master(Network::Bitcoin, &[0, 1, 2, 3, 4, 5, 6, 7]).unwrap()
+fn root() -> Xpriv {
+    Xpriv::new_master(Network::Bitcoin, &[0, 1, 2, 3, 4, 5, 6, 7]).unwrap()
 }
 
 #[test]
@@ -69,13 +69,13 @@ fn hashes_empty_known_and_maximum_inputs_and_allows_overlapping_output() {
         .unwrap();
     assert_eq!(sha.call(&mut store, 0, 0, 128).unwrap(), 0);
     assert_eq!(
-        sha256::Hash::from_inner(bytes(&store, &instance, 128)).to_string(),
+        sha256::Hash::from_byte_array(bytes(&store, &instance, 128)).to_string(),
         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     );
     write(&store, &instance, 32, b"abc");
     assert_eq!(sha.call(&mut store, 32, 3, 128).unwrap(), 0);
     assert_eq!(
-        sha256::Hash::from_inner(bytes(&store, &instance, 128)).to_string(),
+        sha256::Hash::from_byte_array(bytes(&store, &instance, 128)).to_string(),
         "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
     );
     let input = vec![0xa5; MAX_SHA256_BYTES as usize];
@@ -87,7 +87,7 @@ fn hashes_empty_known_and_maximum_inputs_and_allows_overlapping_output() {
     );
     assert_eq!(
         bytes::<32>(&store, &instance, 4096),
-        sha256::Hash::hash(&input).into_inner()
+        sha256::Hash::hash(&input).to_byte_array()
     );
 }
 
@@ -100,7 +100,7 @@ fn native_public_derivation_matches_private_derivation_at_all_depth_boundaries()
         .unwrap();
     let secp = Secp256k1::new();
     let private = root();
-    let public = ExtendedPubKey::from_priv(&secp, &private);
+    let public = Xpub::from_priv(&secp, &private);
     write(&store, &instance, 0, &public.encode());
     for indexes in [vec![], vec![0, 1, 0x7fff_ffff], vec![7; 255]] {
         let path: Vec<_> = indexes
@@ -121,9 +121,7 @@ fn native_public_derivation_matches_private_derivation_at_all_depth_boundaries()
         let expected = private.derive_priv(&secp, &path).unwrap();
         assert_eq!(
             bytes::<33>(&store, &instance, 2048),
-            ExtendedPubKey::from_priv(&secp, &expected)
-                .public_key
-                .serialize()
+            Xpub::from_priv(&secp, &expected).public_key.serialize()
         );
     }
     let mut deep = public;
@@ -146,7 +144,7 @@ fn malformed_roots_and_hardened_paths_do_not_write_outputs() {
         .exports
         .get_typed_function::<(u32, u32, u32, u32), i32>(&store, "derive")
         .unwrap();
-    let root = ExtendedPubKey::from_priv(&Secp256k1::new(), &root()).encode();
+    let root = Xpub::from_priv(&Secp256k1::new(), &root()).encode();
     write(&store, &instance, 2048, &[0x55; 33]);
     let mut bad_version = root;
     bad_version[0] ^= 1;

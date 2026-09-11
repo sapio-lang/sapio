@@ -32,11 +32,11 @@ impl<'a> TryFrom<Put<'a>> for GenericBetArguments<'a> {
         let user = v.user_api.get_key();
         let mut outcomes = vec![];
         let strike = v.strike_x_one_unit;
-        if v.amount.as_sat() == 0 || strike == 0 {
+        if v.amount.to_sat() == 0 || strike == 0 {
             return Err(invalid("Invalid put notional or strike"));
         }
         let max_amount_bitcoin = scaled_amount(v.amount, strike, PRICE_UNIT)?;
-        if max_amount_bitcoin.as_sat() == 0 {
+        if max_amount_bitcoin.to_sat() == 0 {
             return Err(invalid("Option collateral rounds to zero"));
         }
         // Increment one whole oracle-price unit per step
@@ -64,7 +64,7 @@ impl<'a> TryFrom<Put<'a>> for GenericBetArguments<'a> {
             amount: max_amount_bitcoin,
             outcomes,
             oracle: v.operator_api.get_oracle(),
-            cooperate: Clause::And(vec![key, user]),
+            cooperate: Clause::And(vec![key.into(), user.into()]),
             symbol: v.symbol,
         })
     }

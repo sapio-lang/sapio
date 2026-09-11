@@ -1,18 +1,18 @@
 use super::*;
-use bitcoin::{Network, Script, Transaction, TxIn, TxOut};
+use bitcoin::{Network, ScriptBuf, Transaction, TxIn, TxOut};
 use std::{future::Future, io::ErrorKind, pin::Pin, task::Poll};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 const DEADLINE: Duration = Duration::from_secs(10);
 
-fn request() -> PartiallySignedTransaction {
-    PartiallySignedTransaction::from_unsigned_tx(Transaction {
-        version: 2,
-        lock_time: 0,
+fn request() -> Psbt {
+    Psbt::from_unsigned_tx(Transaction {
+        version: bitcoin::transaction::Version(2),
+        lock_time: bitcoin::absolute::LockTime::from_consensus(0),
         input: vec![TxIn::default()],
         output: vec![TxOut {
-            value: 1_000,
-            script_pubkey: Script::new(),
+            value: bitcoin::Amount::from_sat(1_000),
+            script_pubkey: ScriptBuf::new(),
         }],
     })
     .unwrap()
@@ -22,9 +22,9 @@ async fn connected() -> (HDOracleEmulatorConnection, TcpListener, TcpStream) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let secp = Arc::new(Secp256k1::new());
-    let root = ExtendedPubKey::from_priv(
+    let root = Xpub::from_priv(
         &secp,
-        &ExtendedPrivKey::new_master(Network::Regtest, &[7; 32]).unwrap(),
+        &Xpriv::new_master(Network::Regtest, &[7; 32]).unwrap(),
     );
     let connection = HDOracleEmulatorConnection::new(address, root, None, secp)
         .await
@@ -46,7 +46,7 @@ async fn assert_pending(mut future: Pin<&mut impl Future>) {
     .await;
 }
 
-fn assert_timeout(result: Result<PartiallySignedTransaction, EmulatorError>) {
+fn assert_timeout(result: Result<Psbt, EmulatorError>) {
     assert!(matches!(
         result,
         Err(EmulatorError::NetworkIssue(error)) if error.kind() == ErrorKind::TimedOut
@@ -187,7 +187,7 @@ async fn cancellation_discards_an_inflight_socket_and_allows_reconnect() {
 async fn invalid_response_discards_the_socket_before_reconnecting() {
     let (connection, listener, mut peer) = connected().await;
     let mut changed = request();
-    changed.unsigned_tx.output[0].value -= 1;
+    changed.unsigned_tx.output[0].value -= bitcoin::Amount::ONE_SAT;
     crate::wire::write_message(&mut peer, &msgs::PSBT(changed))
         .await
         .unwrap();

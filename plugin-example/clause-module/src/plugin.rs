@@ -20,10 +20,8 @@ use serde::Deserialize;
 #[derive(JsonSchema, Deserialize)]
 pub struct GetClause {
     // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
     alice: bitcoin::XOnlyPublicKey,
     // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
     bob: bitcoin::XOnlyPublicKey,
 }
 
@@ -31,8 +29,8 @@ impl Callable for GetClause {
     type Output = Clause;
     fn call(&self, _ctx: Context) -> Result<Clause, CompilationError> {
         Ok(Clause::And(vec![
-            Clause::Key(self.alice),
-            Clause::Key(self.bob),
+            Clause::Key(self.alice).into(),
+            Clause::Key(self.bob).into(),
         ]))
     }
 }

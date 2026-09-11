@@ -1,5 +1,5 @@
-use bitcoin::util::amount::Amount;
 use bitcoin::Address;
+use bitcoin::Amount;
 use bitcoin::XOnlyPublicKey;
 use sapio::contract::CompilationError;
 use sapio::contract::Compiled;
@@ -17,7 +17,6 @@ use serde::*;
 /// A really Ordinal  Bearing Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct InscribingStep {
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
     owner: XOnlyPublicKey,
     data: Vec<u8>,
     content_type: String,
@@ -73,14 +72,14 @@ impl InscribingStep {
             Some(self.content_type.as_bytes().into()),
             Some(self.data.clone()),
         );
-        Clause::Inscribe(Box::new(insc), Box::new(Clause::Trivial))
+        Clause::Inscribe(Box::new(insc), Clause::Trivial.into())
     }
 }
 
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct Reveal {
     fee: AmountU64,
-    alternative: Option<Address>,
+    alternative: Option<Address<bitcoin::address::NetworkUnchecked>>,
 }
 impl Reveal {
     fn parse(
@@ -105,6 +104,7 @@ impl InscribingStep {
         coerce_args = "Reveal::parse"
     )]
     fn reveal(self, ctx: Context, reveal: Reveal) {
+        let network = ctx.network;
         let (ord, _) = Self::ordinal_info(&ctx)?;
         let send_with = ctx
             .funds()
@@ -117,7 +117,7 @@ impl InscribingStep {
         if let Some(address) = reveal.alternative {
             tmpl.add_output(
                 send_with,
-                &Compiled::from_address(address, bitcoin::Amount::ZERO),
+                &Compiled::from_address(address.require_network(network)?, bitcoin::Amount::ZERO),
                 None,
             )
         } else {

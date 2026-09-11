@@ -15,7 +15,7 @@ use crate::contract::actions::conditional_compile::CCILWrapper;
 use crate::contract::actions::CallableAsFoF;
 use crate::contract::object::CovenantRequirements;
 use crate::contract::TxTmplIt;
-use bitcoin::schnorr::TweakedPublicKey;
+use bitcoin::key::TweakedPublicKey;
 use bitcoin::XOnlyPublicKey;
 use miniscript::*;
 use sapio_base::covenant::{Ctv, Emulatable};
@@ -380,7 +380,7 @@ where
                 .collect();
             let tree = branches_to_tree(native);
             let descriptor = Descriptor::Tr(descriptor::Tr::new(some_key, tree)?);
-            let weight = descriptor.max_satisfaction_weight()?;
+            let weight = descriptor.max_weight_to_satisfy()?;
             (descriptor.clone().into(), descriptor.into(), Some(weight))
         };
         let descriptor = Some(descriptor);
@@ -406,12 +406,16 @@ where
             let Some(estimated_max_size) = estimated_max_size else {
                 return true;
             };
-            let vsize = (a.tx.weight() + estimated_max_size + 2).div_ceil(4) as u64;
+            // The unsigned transaction has no Segwit serialization yet. Add
+            // marker/flag and the empty witness count before the satisfaction
+            // delta, which is measured against an empty Segwit input.
+            let vsize =
+                (a.tx.weight() + estimated_max_size + bitcoin::Weight::from_wu(3)).to_vbytes_ceil();
             // Only this template's reserved fees count. A larger funding
             // requirement in another branch cannot subsidize this spend.
             let fees = a.max.checked_sub(a.total_amount());
-            match (fees, rate.as_sat().checked_mul(vsize)) {
-                (Some(fees), Some(required)) => fees.as_sat() < required,
+            match (fees, rate.to_sat().checked_mul(vsize)) {
+                (Some(fees), Some(required)) => fees.to_sat() < required,
                 _ => true,
             }
         });
@@ -443,9 +447,8 @@ pub(crate) fn conjoin_guards<'a>(guards: impl Iterator<Item = &'a Clause>) -> Cl
     fn contains_inscription(guard: &Clause) -> bool {
         match guard {
             Clause::Inscribe(..) => true,
-            Clause::And(guards) | Clause::Threshold(_, guards) => {
-                guards.iter().any(contains_inscription)
-            }
+            Clause::And(guards) => guards.iter().any(|guard| contains_inscription(guard)),
+            Clause::Thresh(threshold) => threshold.iter().any(|guard| contains_inscription(guard)),
             Clause::Or(guards) => guards.iter().any(|(_, guard)| contains_inscription(guard)),
             _ => false,
         }
@@ -466,8 +469,10 @@ pub(crate) fn conjoin_guards<'a>(guards: impl Iterator<Item = &'a Clause>) -> Cl
     match combined.len() {
         0 => Clause::Trivial,
         1 => combined.pop().unwrap(),
-        2 => Clause::And(combined),
-        count => Clause::Threshold(count, combined),
+        2 => Clause::And(combined.into_iter().map(Arc::new).collect()),
+        _ => Clause::Thresh(miniscript::Threshold::and_n(
+            combined.into_iter().map(Arc::new).collect(),
+        )),
     }
 }
 
@@ -534,22 +539,23 @@ fn source_alternatives(policy: ScriptPolicy) -> Vec<ScriptPolicy> {
 }
 
 fn disjoin_source(policies: BTreeSet<ScriptPolicy>) -> ScriptPolicy {
-    if policies.len() == 1 {
+    if policies.is_empty() {
+        Clause::Unsatisfiable.into()
+    } else if policies.len() == 1 {
         policies.into_iter().next().unwrap()
     } else if policies
         .iter()
         .all(|p| matches!(p, ScriptPolicy::Miniscript(_)))
     {
-        Clause::Threshold(
-            1,
+        Clause::Thresh(miniscript::Threshold::or_n(
             policies
                 .into_iter()
                 .filter_map(|p| match p {
-                    ScriptPolicy::Miniscript(clause) => Some(clause),
+                    ScriptPolicy::Miniscript(clause) => Some(Arc::new(clause)),
                     _ => None,
                 })
                 .collect(),
-        )
+        ))
         .into()
     } else {
         ScriptPolicy::Or(policies.into_iter().collect())
@@ -613,7 +619,7 @@ fn optimizer_flatten_and_compile(
 
 enum CompiledBranch {
     Miniscript(Miniscript<XOnlyPublicKey, Tap>),
-    Script(bitcoin::Script),
+    Script(bitcoin::ScriptBuf),
 }
 
 fn compile_branches(policy: ScriptPolicy) -> Result<Vec<CompiledBranch>, CompilationError> {
@@ -663,11 +669,13 @@ fn optimizer_flatten_policy(p: Clause) -> Vec<Clause> {
     match p {
         policy::Concrete::Or(v) => v
             .into_iter()
-            .flat_map(|(_, b)| optimizer_flatten_policy(b))
+            .flat_map(|(_, b)| optimizer_flatten_policy(Arc::unwrap_or_clone(b)))
             .collect(),
-        policy::Concrete::Threshold(1, v) => {
-            v.into_iter().flat_map(optimizer_flatten_policy).collect()
-        }
+        policy::Concrete::Thresh(threshold) if threshold.k() == 1 => threshold
+            .into_data()
+            .into_iter()
+            .flat_map(|child| optimizer_flatten_policy(Arc::unwrap_or_clone(child)))
+            .collect(),
         p => vec![p],
     }
 }

@@ -7,21 +7,20 @@ commit `Cargo.lock`; use `--locked` for builds and tests. The supported compiler
 minimum is the tested pinned version. Upgrade the compiler and lockfiles in
 reviewed commits rather than regenerating dependencies in CI.
 
-The native and compiler-plugin workspaces pin the repaired `sapio-miniscript`
-Git source at `04b69f69459fe3b043ca61fb649cf546d5a241b6` and `sapio-bitcoin` at
-`16c1b0059ecb420eaed089da28f8d24f99e36cf8`. Keep both revisions aligned between
-workspaces when updating dependencies. The Bitcoin repair rejects noncanonical
-Taproot signature encodings and reserved sighash values. The Miniscript
-registry release at historical revision
-`3f23950459f3424ccfeecc0bb14579ec2aec9820` does not contain these correctness
-repairs. The [repair record](CTV_FORK_AUDIT.md) documents the covered behavior and
-remaining limits.
+The native and compiler-plugin workspaces use Bitcoin 0.32.102, its upstream
+secp256k1 0.29.1 dependency, and Miniscript 13.1.0. The Git revisions are pinned
+in both workspace manifests and lockfiles. Bitcoin carries two narrow parser
+repairs: canonical Taproot signature encodings and complete PSBT slice decoding.
+Miniscript retains Sapio's CTV/inscription extensions and transaction-wide PSBT
+finalization checks. See the [migration guide](BITCOIN_032.md) for API changes
+and the [historical repair record](CTV_FORK_AUDIT.md) for their origins.
 
 Cargo reads `[patch]` only from the top-level workspace. An external application
-or plugin workspace using Sapio must copy both `[patch.crates-io]` entries from
-this repository's `Cargo.toml`; the patch does not propagate through library
-dependencies. See [Cargo's patch rules][cargo-patch]. Publishing supported Sapio
-crates requires repaired Bitcoin and Miniscript releases and updated dependency
+or plugin workspace using Sapio must copy the complete `[patch.crates-io]` table
+from this repository's `Cargo.toml`; patches do not propagate through library
+dependencies. The `bitcoin_hashes` entry keeps Bitcoin and secp256k1 on one
+identical hash implementation. See [Cargo's patch rules][cargo-patch]. Publishing
+supported Sapio crates requires repaired dependency releases and updated
 requirements.
 
 A native C compiler is required for secp256k1. The WASM build additionally needs
@@ -74,7 +73,9 @@ the mining payout compiler and the payment example. For custom build directories
 run the same commands with `CARGO_TARGET_DIR` and pass the resulting binary and
 WASM paths to `contrib/check_examples.py` and `contrib/check_wasm.py`.
 
-The pinned fork's Rust suite passes 157 tests, including 51 inscription tests.
+The pinned Miniscript fork passes 227 library/integration tests, including 51
+inscription tests, and four differential-fuzzer regressions. Bitcoin's library
+suite passes 429 tests.
 Its dedicated node job separately checks reveals against Bitcoin Core 31.1:
 five valid transactions are accepted and 21 invalid variants are rejected.
 These ordinary Taproot checks run in the fork repository and do not require a
@@ -198,6 +199,18 @@ Diagnostic logs go to stderr. Emulator protocol JSON frames are bounded to one
 million bytes; [emulator service limits](#emulator-service-limits) cover request
 I/O and admitted connections.
 
+The workspace uses Schemars 1.2.2 from the
+[`sapio-jsonschema`](https://github.com/sapio-lang/sapio-jsonschema) fork. Its optional
+`bitcoin032` and `miniscript13` features describe the dependencies' native JSON
+representations. The fork retains the `schemars` and `schemars_derive` package
+names so the root and plugin workspace patches select one shared schema trait.
+Plugin and continuation interfaces explicitly generate Draft 7 schemas to match
+the host validator. Plugin input schemas describe deserialization; output schemas
+describe serialization, including asymmetric Serde names and skipped fields.
+Denomination adapters still carry their matching schema annotations; ordinary
+keys, addresses, scripts, policies, and transactions do not need local schema
+substitutes.
+
 The native host validates every actual call against the module's advertised
 JSON Schemas, including calls made through raw nested-module imports. It checks
 the complete `CreateArgs` input before invoking the create function, then checks
@@ -207,8 +220,9 @@ compatibility for every value of another interface.
 Validation reads the advertised JSON directly, preserving integer limits above
 the exact range of floating point numbers.
 
-Schemas use Draft 7, matching Schemars 0.8. References must resolve within the
-advertised schema: validation never fetches network resources or local files.
+Plugin API generation explicitly selects Draft 7. References must resolve
+within the advertised schema: validation never fetches network resources or
+local files.
 Patterns use the Rust regex engine, so backreferences and lookaround are not
 supported. A preflight rejects nonproductive reference cycles and excessive
 reference expansion (65,536 schema visits or 128 levels), while allowing
@@ -441,4 +455,4 @@ See [CONTRIBUTING](../CONTRIBUTING) for the existing contribution terms.
 No license or ownership transfer policy was changed in this branch.
 
 [cargo-patch]: https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html#the-patch-section
-[fork-inscriptions]: https://github.com/sapio-lang/rust-miniscript/blob/04b69f69459fe3b043ca61fb649cf546d5a241b6/docs/INSCRIPTIONS.md
+[fork-inscriptions]: https://github.com/sapio-lang/rust-miniscript/blob/d9f9176a68a93efbfb303f24da154f9c72829892/SAPIO_EXTENSIONS.md

@@ -14,34 +14,37 @@ use sapio_base::Clause;
 /// Duplicate-key and combined timelock checks belong to each eventual script:
 /// separate alternatives may legitimately repeat a key.
 pub(crate) fn validate_policy(policy: &Clause) -> Result<(), CompilationError> {
-    fn validate(policy: &Clause) -> Result<(), PolicyError> {
-        match policy {
-            Clause::And(children) => {
-                if children.len() != 2 {
-                    return Err(PolicyError::NonBinaryArgAnd);
-                }
-                children.iter().try_for_each(validate)
+    match policy {
+        Clause::And(children) => {
+            if children.len() != 2 {
+                return Err(CompilerError::NonBinaryArgAnd.into());
             }
-            Clause::Or(children) => {
-                if children.len() != 2 {
-                    return Err(PolicyError::NonBinaryArgOr);
-                }
-                children.iter().try_for_each(|(_, child)| validate(child))
-            }
-            Clause::Threshold(required, children) => {
-                if *required == 0 || *required > children.len() {
-                    return Err(PolicyError::IncorrectThresh);
-                }
-                children.iter().try_for_each(validate)
-            }
-            Clause::Inscribe(inscription, child) => {
-                inscription
-                    .validate()
-                    .map_err(|_| PolicyError::InvalidInscription)?;
-                validate(child)
-            }
-            leaf => leaf.is_valid(),
+            children.iter().try_for_each(|child| validate_policy(child))
         }
+        Clause::Or(children) => {
+            if children.len() != 2 {
+                return Err(CompilerError::NonBinaryArgOr.into());
+            }
+            children
+                .iter()
+                .try_for_each(|(_, child)| validate_policy(child))
+        }
+        Clause::Thresh(threshold) => threshold
+            .iter()
+            .try_for_each(|child| validate_policy(child)),
+        Clause::Inscribe(inscription, child) => {
+            inscription
+                .validate()
+                .map_err(|_| CompilerError::PolicyError(PolicyError::InvalidInscription))?;
+            validate_policy(child)
+        }
+        Clause::Older(lock) if lock.to_consensus_u32() == 0 => {
+            // Upstream exposes RelLockTime::ZERO, but Miniscript uses the
+            // CSV operand as a Boolean and requires it to be nonzero.
+            Err(sapio_base::timelocks::LockTimeError::InvalidPolicyLockTime(0).into())
+        }
+        leaf => leaf
+            .is_valid()
+            .map_err(|error| CompilerError::PolicyError(error).into()),
     }
-    validate(policy).map_err(|error| CompilerError::PolicyError(error).into())
 }

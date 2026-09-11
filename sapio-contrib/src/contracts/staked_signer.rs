@@ -8,7 +8,7 @@
 use bitcoin::XOnlyPublicKey;
 use sapio::contract::*;
 use sapio::*;
-use sapio_base::timelocks::AnyRelTimeLock;
+use sapio_base::timelocks::{AnyRelTimeLock, LockTimeError};
 use sapio_base::Clause;
 use sapio_macros::guard;
 use schemars::*;
@@ -44,11 +44,9 @@ pub struct Staker<T: StakingState> {
     timeout: AnyRelTimeLock,
     /// # Signing Key
     /// The key that if leaked can burn funds
-    #[schemars(with = "String")]
     signing_key: XOnlyPublicKey,
     /// # Redemption Key
     /// The key that will be used to control & return the redeemed funds
-    #[schemars(with = "String")]
     redeeming_key: XOnlyPublicKey,
     /// current contract state.
     #[serde(skip, default)]
@@ -70,7 +68,7 @@ where
     );
     decl_guard!(
         /// the clause to finish a close process
-        finish_redeem_key
+        policy finish_redeem_key<Result<Clause, LockTimeError>>
     );
     decl_then!(
         /// The transition from Operational to Closing
@@ -118,9 +116,12 @@ impl StakerInterface for Staker<Operational> {
 }
 
 impl StakerInterface for Staker<Closing> {
-    #[guard]
-    fn finish_redeem_key(self, _ctx: Context) {
-        Clause::And(vec![Clause::Key(self.redeeming_key), self.timeout.into()])
+    #[guard(policy)]
+    fn finish_redeem_key(self, _ctx: Context) -> Result<Clause, LockTimeError> {
+        Ok(Clause::And(vec![
+            Clause::Key(self.redeeming_key).into(),
+            Clause::try_from(self.timeout)?.into(),
+        ]))
     }
     #[guard]
     fn staking_key(self, _ctx: Context) {
@@ -165,23 +166,31 @@ mod tests {
             .values()
             .find(|t| t.tx.output[0].script_pubkey.is_op_return())
             .unwrap();
-        assert_eq!(burn.tx.output[0].value, 1000);
+        assert_eq!(burn.tx.output[0].value.to_sat(), 1000);
         let close = object
             .ctv_to_tx
             .values()
             .find(|t| !t.tx.output[0].script_pubkey.is_op_return())
             .unwrap();
-        assert_eq!(close.tx.output[0].value, 1000);
-        let closing = Staker::<Closing> {
+        assert_eq!(close.tx.output[0].value.to_sat(), 1000);
+        let mut closing = Staker::<Closing> {
             timeout: contract.timeout,
             signing_key: key(1),
             redeeming_key: key(2),
             state: PhantomData,
         };
         assert_eq!(
-            closing.guard_finish_redeem_key(context(0)),
-            Clause::And(vec![Clause::Key(key(2)), Clause::Older(20)])
+            closing.guard_finish_redeem_key(context(0)).unwrap(),
+            Clause::And(vec![
+                Clause::Key(key(2)).into(),
+                Clause::try_from(sapio_base::timelocks::RelHeight::from(20))
+                    .expect("positive constant locktime")
+                    .into()
+            ])
         );
         assert_eq!(close.outputs[0].contract.ctv_to_tx.len(), 1);
+        closing.timeout = RelHeight::from(0).into();
+        assert!(closing.guard_finish_redeem_key(context(0)).is_err());
+        assert!(closing.compile(context(1000)).is_err());
     }
 }

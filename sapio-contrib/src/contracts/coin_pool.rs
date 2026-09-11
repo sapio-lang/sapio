@@ -9,6 +9,7 @@ use bitcoin::Amount;
 use sapio::contract::*;
 use sapio::util::amountrange::AmountF64;
 use sapio::*;
+use sapio_base::miniscript::{Threshold, ThresholdError};
 use sapio_base::timelocks::AnyRelTimeLock;
 use sapio_base::Clause;
 
@@ -67,10 +68,13 @@ impl CoinPool {
             builder.into()
         }
     }
-    #[guard]
+    #[guard(policy)]
     /// everyone has signed off on the transaction
-    fn all_approve(self, _ctx: Context) {
-        Clause::Threshold(self.clauses.len(), self.clauses.clone())
+    fn all_approve(self, _ctx: Context) -> Result<Clause, ThresholdError> {
+        Ok(Clause::Thresh(Threshold::new(
+            self.clauses.len(),
+            self.clauses.clone().into_iter().map(Into::into).collect(),
+        )?))
     }
     /// move the coins to the next state -- payouts may recursively contain pools itself
     #[continuation(
@@ -125,7 +129,6 @@ pub enum UpdateTypes {
     Basic {
         /// the contracts to pay into
         #[serde(skip_serializing_if = "Option::is_none", default)]
-        #[schemars(with = "Option<Vec<(String, AmountF64)>>")]
         payouts: Option<Vec<(bitcoin::XOnlyPublicKey, AmountF64)>>,
         /// If the external inputs are contributing funds -- this allows two
         /// coinpools to merge.
@@ -212,13 +215,22 @@ mod tests {
             split
                 .outputs
                 .iter()
-                .map(|o| o.amount.as_sat())
+                .map(|o| o.amount.to_sat())
                 .collect::<Vec<_>>(),
             vec![1000, 2000]
         );
         assert_eq!(
-            pool(3).guard_all_approve(context(3000)),
-            Clause::Threshold(3, (1..=3).map(|n| Clause::Key(key(n))).collect())
+            pool(3).guard_all_approve(context(3000)).unwrap(),
+            Clause::Thresh(
+                Threshold::new(
+                    3,
+                    (1..=3)
+                        .map(|n| Clause::Key(key(n)))
+                        .map(Into::into)
+                        .collect()
+                )
+                .expect("valid threshold")
+            )
         );
     }
 

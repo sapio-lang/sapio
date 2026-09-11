@@ -7,7 +7,7 @@
 
 //! NFT Auction
 
-use bitcoin::util::amount::Amount;
+use bitcoin::Amount;
 use sapio::contract::CompilationError;
 use sapio::contract::Contract;
 use sapio::util::amountrange::AmountU64;

@@ -49,8 +49,8 @@ fn splits_ordinal_ranges_without_losing_or_duplicating_satoshis() {
             .unwrap();
         assert_eq!(sats(&allocated), original[..amount as usize]);
         assert_eq!(sats(&remaining), original[amount as usize..]);
-        assert_eq!(allocated.funds().as_sat(), amount);
-        assert_eq!(remaining.funds().as_sat(), 10 - amount);
+        assert_eq!(allocated.funds().to_sat(), amount);
+        assert_eq!(remaining.funds().to_sat(), 10 - amount);
     }
 }
 
@@ -81,7 +81,7 @@ fn external_funds_follow_all_tracked_input_sats() {
     assert_eq!(sats(&exhausted), Vec::<u64>::new());
     let external = exhausted.add_amount(Amount::from_sat(7)).unwrap();
     assert!(external.get_ordinals().is_none());
-    assert_eq!(external.funds().as_sat(), 7);
+    assert_eq!(external.funds().to_sat(), 7);
     assert_eq!(
         external.spend_amount(Amount::from_sat(7)).unwrap().funds(),
         Amount::ZERO
@@ -164,7 +164,7 @@ fn builder_outputs_receive_input_order_ordinals_and_fees_consume_only_the_tail()
             .tx
             .output
             .iter()
-            .map(|out| out.value)
+            .map(|out| out.value.to_sat())
             .collect::<Vec<_>>(),
         [6, 2]
     );

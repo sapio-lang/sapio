@@ -6,6 +6,7 @@
 
 //! base sapio library functionality and definitions, not particular to sapio compiler
 #![deny(missing_docs)]
+pub mod amount;
 /// Extra functionality for working with Bitcoin types
 pub mod util;
 use bitcoin::XOnlyPublicKey;

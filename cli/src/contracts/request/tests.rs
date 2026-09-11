@@ -1,10 +1,8 @@
 use super::*;
-use bitcoin::consensus::{deserialize, encode::serialize_hex, serialize};
+use bitcoin::consensus::encode::serialize_hex;
 use bitcoin::psbt::raw::Key;
 use bitcoin::secp256k1::{Message, Secp256k1, SecretKey};
-use bitcoin::{
-    Address, EcdsaSig, EcdsaSighashType, Network, PublicKey, Script, Transaction, TxIn, TxOut,
-};
+use bitcoin::{Address, EcdsaSighashType, Network, PublicKey, ScriptBuf, Transaction, TxIn, TxOut};
 use emulator_connect::CTVAvailable;
 use sapio::contract::abi::studio::SapioStudioFormat;
 use sapio_base::covenant::{Ctv, LoweringPlan};
@@ -106,19 +104,15 @@ impl CTVEmulator for TestSigner {
             .map_err(|error| std::io::Error::other(error).into())
     }
 
-    fn sign(
-        &self,
-        psbt: PartiallySignedTransaction,
-    ) -> Result<PartiallySignedTransaction, emulator_connect::EmulatorError> {
+    fn sign(&self, psbt: Psbt) -> Result<Psbt, emulator_connect::EmulatorError> {
         self.signatures.fetch_add(1, Ordering::SeqCst);
         Ok(psbt)
     }
 }
 
 fn signer_config() -> CovenantConfig {
-    let secret =
-        bitcoin::util::bip32::ExtendedPrivKey::new_master(Network::Regtest, &[1; 32]).unwrap();
-    let root = bitcoin::util::bip32::ExtendedPubKey::from_priv(&Secp256k1::new(), &secret);
+    let secret = bitcoin::bip32::Xpriv::new_master(Network::Regtest, &[1; 32]).unwrap();
+    let root = bitcoin::bip32::Xpub::from_priv(&Secp256k1::new(), &secret);
     CovenantConfig::SignerEmulation(crate::config::EmulatorConfig {
         emulators: vec![(root, "127.0.0.1:0".into())],
         threshold: 1,
@@ -268,10 +262,11 @@ async fn mixed_signer_and_native_policy_requires_both_explicit_assumptions() {
         unreachable!()
     };
     let research = CovenantConfig::SignerEmulationWithNativeCtvResearch(config);
-    let expected_address = Address::from_script(&Script::from(&compiled.address), Network::Regtest)
-        .unwrap()
-        .to_string();
-    let expected_amount = compiled.required_input_amount.as_btc();
+    let expected_address =
+        Address::from_script(&ScriptBuf::from(&compiled.address), Network::Regtest)
+            .unwrap()
+            .to_string();
+    let expected_amount = compiled.required_input_amount.to_btc();
     let mut bind = request(compiled, &[]);
     bind.use_txn = None;
     bind.client_url = format!("http://{address}");
@@ -339,7 +334,7 @@ async fn raw_native_checks_require_the_research_mode_before_funding() {
 
     let signer = TestSigner::new();
     let script = bitcoin::blockdata::script::Builder::new()
-        .push_slice(&[1; 32])
+        .push_slice([1; 32])
         .push_opcode(OP_NOP4)
         .push_opcode(OP_DROP)
         .push_int(1)
@@ -364,7 +359,7 @@ async fn raw_native_checks_require_the_research_mode_before_funding() {
     assert_eq!(signer.signatures.load(Ordering::SeqCst), 0);
 
     let psbt = funding_psbt(&compiled);
-    request(compiled, &serialize(&psbt))
+    request(compiled, &psbt.serialize())
         .call(
             Network::Regtest,
             Arc::new(CTVAvailable),
@@ -376,28 +371,35 @@ async fn raw_native_checks_require_the_research_mode_before_funding() {
 
 fn contract() -> Compiled {
     Compiled::from_address(
-        Address::from_str("bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj").unwrap(),
+        Address::from_str("bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj")
+            .unwrap()
+            .require_network(Network::Regtest)
+            .unwrap(),
         bitcoin::Amount::ZERO,
     )
 }
 
-fn funding_psbt(compiled: &Compiled) -> PartiallySignedTransaction {
+fn funding_psbt(compiled: &Compiled) -> Psbt {
     let tx = Transaction {
-        version: 2,
-        lock_time: 0,
+        version: bitcoin::transaction::Version(2),
+        lock_time: bitcoin::absolute::LockTime::from_consensus(0),
         input: vec![TxIn::default()],
         output: vec![
             TxOut {
-                value: 500,
-                script_pubkey: Script::new(),
+                value: bitcoin::Amount::from_sat(500),
+                script_pubkey: ScriptBuf::new(),
             },
             TxOut {
-                value: 1_000,
+                value: bitcoin::Amount::from_sat(1_000),
                 script_pubkey: (&compiled.address).into(),
             },
         ],
     };
-    let mut psbt = PartiallySignedTransaction::from_unsigned_tx(tx).unwrap();
+    let mut psbt = Psbt::from_unsigned_tx(tx).unwrap();
+    psbt.inputs[0].witness_utxo = Some(TxOut {
+        value: bitcoin::Amount::from_sat(2_000),
+        script_pubkey: ScriptBuf::new(),
+    });
     let unknown = |key| Key {
         type_value: 0xfa,
         key: vec![key],
@@ -421,15 +423,11 @@ fn request(compiled: Compiled, psbt: &[u8]) -> Bind {
     }
 }
 
-fn assert_preserved_funding(
-    bound: &Program,
-    compiled: &Compiled,
-    expected: &PartiallySignedTransaction,
-) {
-    let expected_tx = expected.clone().extract_tx();
+fn assert_preserved_funding(bound: &Program, compiled: &Compiled, expected: &Psbt) {
+    let expected_tx = expected.clone().extract_tx().unwrap();
     assert_eq!(
         bound.program.get(&compiled.root_path).unwrap().out,
-        OutPoint::new(expected_tx.txid(), 1)
+        OutPoint::new(expected_tx.compute_txid(), 1)
     );
     let funding = bound
         .program
@@ -441,7 +439,7 @@ fn assert_preserved_funding(
         })
         .unwrap();
     let SapioStudioFormat::LinkedPSBT { psbt, hex, .. } = funding;
-    let restored: PartiallySignedTransaction = deserialize(&base64::decode(psbt).unwrap()).unwrap();
+    let restored: Psbt = Psbt::deserialize(&base64::decode(psbt).unwrap()).unwrap();
     assert_eq!(restored, *expected);
     assert_eq!(*hex, serialize_hex(&expected_tx));
 }
@@ -455,12 +453,12 @@ async fn supplied_funding_keeps_partial_signatures_and_all_psbt_maps() {
     let key = PublicKey::new(bitcoin::secp256k1::PublicKey::from_secret_key(
         &secp, &secret,
     ));
-    let sig = EcdsaSig {
-        sig: secp.sign_ecdsa(&Message::from_digest_slice(&[2; 32]).unwrap(), &secret),
-        hash_ty: EcdsaSighashType::All,
+    let sig = bitcoin::ecdsa::Signature {
+        signature: secp.sign_ecdsa(&Message::from_digest_slice(&[2; 32]).unwrap(), &secret),
+        sighash_type: EcdsaSighashType::All,
     };
     psbt.inputs[0].partial_sigs.insert(key, sig);
-    let bound = request(compiled.clone(), &serialize(&psbt))
+    let bound = request(compiled.clone(), &psbt.serialize())
         .call(
             Network::Regtest,
             Arc::new(CTVAvailable),
@@ -475,9 +473,12 @@ async fn supplied_funding_keeps_partial_signatures_and_all_psbt_maps() {
 async fn finalized_legacy_funding_keeps_its_psbt_and_binds_the_extracted_txid() {
     let compiled = contract();
     let mut psbt = funding_psbt(&compiled);
-    psbt.inputs[0].final_script_sig = Some(Script::from(vec![1, 0x42]));
-    assert_ne!(psbt.unsigned_tx.txid(), psbt.clone().extract_tx().txid());
-    let bound = request(compiled.clone(), &serialize(&psbt))
+    psbt.inputs[0].final_script_sig = Some(ScriptBuf::from(vec![1, 0x42]));
+    assert_ne!(
+        psbt.unsigned_tx.compute_txid(),
+        psbt.clone().extract_tx().unwrap().compute_txid()
+    );
+    let bound = request(compiled.clone(), &psbt.serialize())
         .call(
             Network::Regtest,
             Arc::new(CTVAvailable),
@@ -494,7 +495,7 @@ async fn zero_input_funding_psbt_returns_a_validation_error() {
     let mut psbt = funding_psbt(&compiled);
     psbt.unsigned_tx.input.clear();
     psbt.inputs.clear();
-    let error = request(compiled, &serialize(&psbt))
+    let error = request(compiled, &psbt.serialize())
         .call(
             Network::Regtest,
             Arc::new(CTVAvailable),
@@ -511,7 +512,7 @@ async fn zero_input_funding_psbt_returns_a_validation_error() {
 #[tokio::test]
 async fn supplied_funding_rejects_trailing_psbt_bytes() {
     let compiled = contract();
-    let mut bytes = serialize(&funding_psbt(&compiled));
+    let mut bytes = funding_psbt(&compiled).serialize();
     bytes.push(0);
     assert!(request(compiled, &bytes)
         .call(
@@ -526,14 +527,14 @@ async fn supplied_funding_rejects_trailing_psbt_bytes() {
 #[test]
 fn funding_output_uses_the_contract_script_and_rejects_missing_outputs() {
     let compiled = contract();
-    let script = bitcoin::Script::from(&compiled.address);
+    let script = bitcoin::ScriptBuf::from(&compiled.address);
     let mut psbt = funding_psbt(&compiled);
     assert_eq!(funding_output(&psbt, &script).unwrap(), 1);
     psbt.unsigned_tx.output.swap(0, 1);
     psbt.outputs.swap(0, 1);
     assert_eq!(funding_output(&psbt, &script).unwrap(), 0);
 
-    psbt.unsigned_tx.output[0].script_pubkey = Script::new();
+    psbt.unsigned_tx.output[0].script_pubkey = ScriptBuf::new();
     assert!(funding_output(&psbt, &script)
         .unwrap_err()
         .is::<RequestError>());
@@ -549,7 +550,7 @@ fn funding_output_validates_psbt_maps_before_extraction() {
     use sapio_psbt::PSBTValidationError;
 
     let compiled = contract();
-    let script = bitcoin::Script::from(&compiled.address);
+    let script = bitcoin::ScriptBuf::from(&compiled.address);
     let mut psbt = funding_psbt(&compiled);
     psbt.inputs.clear();
     assert_eq!(
@@ -577,21 +578,21 @@ fn funding_output_validates_psbt_maps_before_extraction() {
 
 #[test]
 fn rpc_funding_must_match_the_requested_txid_and_output_index() {
-    let tx = funding_psbt(&contract()).extract_tx();
-    let requested = OutPoint::new(tx.txid(), 1);
+    let tx = funding_psbt(&contract()).extract_tx().unwrap();
+    let requested = OutPoint::new(tx.compute_txid(), 1);
     validate_funding_outpoint(&tx, requested).unwrap();
     assert!(matches!(
-        validate_funding_outpoint(&tx, OutPoint::new(tx.txid(), 2)),
+        validate_funding_outpoint(&tx, OutPoint::new(tx.compute_txid(), 2)),
         Err(TxIndexError::IndexTooHigh(2))
     ));
 
     let mut wrong = tx;
-    wrong.output[1].value += 1;
+    wrong.output[1].value += bitcoin::Amount::ONE_SAT;
     for vout in [1, 2] {
         assert!(matches!(
             validate_funding_outpoint(&wrong, OutPoint { vout, ..requested }),
             Err(TxIndexError::TxidMismatch { expected, actual })
-                if expected == requested.txid && actual == wrong.txid()
+                if expected == requested.txid && actual == wrong.compute_txid()
         ));
     }
 }
@@ -599,7 +600,7 @@ fn rpc_funding_must_match_the_requested_txid_and_output_index() {
 #[tokio::test]
 async fn mock_funding_still_includes_a_funding_psbt() {
     let compiled = contract();
-    let mut bind = request(compiled.clone(), &serialize(&funding_psbt(&compiled)));
+    let mut bind = request(compiled.clone(), &funding_psbt(&compiled).serialize());
     bind.use_txn = None;
     bind.use_mock = true;
     let bound = bind
@@ -617,7 +618,7 @@ async fn mock_funding_still_includes_a_funding_psbt() {
         .next()
         .unwrap();
     let SapioStudioFormat::LinkedPSBT { psbt, .. } = funding;
-    let psbt: PartiallySignedTransaction = deserialize(&base64::decode(psbt).unwrap()).unwrap();
+    let psbt: Psbt = Psbt::deserialize(&base64::decode(psbt).unwrap()).unwrap();
     sapio_psbt::validate_psbt(&psbt).unwrap();
     assert_eq!(
         psbt.unsigned_tx.input[0].previous_output,
@@ -626,11 +627,11 @@ async fn mock_funding_still_includes_a_funding_psbt() {
     assert_eq!(psbt.unsigned_tx.output.len(), 1);
     assert_eq!(
         psbt.unsigned_tx.output[0].script_pubkey,
-        bitcoin::Script::from(&compiled.address)
+        bitcoin::ScriptBuf::from(&compiled.address)
     );
     assert_eq!(
         bound.program.get(&compiled.root_path).unwrap().out,
-        OutPoint::new(psbt.unsigned_tx.txid(), 0)
+        OutPoint::new(psbt.unsigned_tx.compute_txid(), 0)
     );
 }
 
@@ -640,7 +641,7 @@ async fn funding_entry_cannot_overwrite_a_contract_named_funding() {
         let mut compiled = contract();
         compiled.root_path = SArc(Arc::new(root.try_into().unwrap()));
         let psbt = funding_psbt(&compiled);
-        let bound = request(compiled.clone(), &serialize(&psbt))
+        let bound = request(compiled.clone(), &psbt.serialize())
             .call(
                 Network::Regtest,
                 Arc::new(CTVAvailable),
@@ -666,5 +667,27 @@ async fn funding_entry_cannot_overwrite_a_contract_named_funding() {
             .unwrap()
             .source_path
             .is_none());
+    }
+}
+
+#[tokio::test]
+async fn supplied_funding_must_pass_checked_extraction_before_binding() {
+    let compiled = contract();
+    for missing_utxo in [false, true] {
+        let mut psbt = funding_psbt(&compiled);
+        if missing_utxo {
+            psbt.inputs[0].witness_utxo = None;
+        } else {
+            psbt.unsigned_tx.output[0].value = bitcoin::Amount::from_sat(2_001);
+        }
+        let error = request(compiled.clone(), &psbt.serialize())
+            .call(
+                Network::Regtest,
+                Arc::new(CTVAvailable),
+                &CovenantConfig::NativeCtvResearch {},
+            )
+            .await
+            .unwrap_err();
+        assert!(error.is::<bitcoin::psbt::ExtractTxError>(), "{error}");
     }
 }

@@ -28,11 +28,9 @@ pub struct IpfsNFT {
     pub of_edition_count: u64,
     /// The Artist's Public Key
     // TODO: fixup representation with patches to add more Schemars to bitcoin
-    #[schemars(with = "Option::<String>")]
     pub artist: Option<bitcoin::secp256k1::XOnlyPublicKey>,
     /// The signature of artist
     // TODO: fixup representation with patches to add more Schemars to bitcoin
-    #[schemars(with = "Option::<String>")]
     pub blessing: Option<bitcoin::secp256k1::schnorr::Signature>,
     /// If the NFT has a webpage (legacy web)
     pub softlink: Option<URL>,
@@ -44,13 +42,13 @@ use bitcoin::hashes::HashEngine;
 impl IpfsNFT {
     /// Canonicalized commitment to IpfsNFT data
     pub fn commitment(&self) -> sha256 {
-        let h1 = sha256::hash(self.cid.as_bytes()).into_inner();
+        let h1 = sha256::hash(self.cid.as_bytes()).to_byte_array();
         let artist = self.artist.map(|b| b.serialize()).unwrap_or([0u8; 32]);
         let blessing = self.blessing.map(|b| *b.as_ref()).unwrap_or([0u8; 64]);
         let softlink = self
             .softlink
             .as_ref()
-            .map(|s| sha256::hash(s.url.as_bytes()).into_inner())
+            .map(|s| sha256::hash(s.url.as_bytes()).to_byte_array())
             .unwrap_or([0u8; 32]);
         let mut eng = engine::default();
         eng.input(&self.version.to_be_bytes());

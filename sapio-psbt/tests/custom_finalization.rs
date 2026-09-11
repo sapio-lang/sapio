@@ -1,12 +1,12 @@
 use bitcoin::blockdata::opcodes::all::{OP_ADD, OP_CHECKSIG, OP_NUMEQUALVERIFY};
 use bitcoin::blockdata::script::Builder;
 use bitcoin::consensus::deserialize;
-use bitcoin::hashes::hex::FromHex;
+use bitcoin::hex::FromHex;
+use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{Keypair, Message, Secp256k1, SecretKey};
-use bitcoin::util::psbt::PartiallySignedTransaction;
-use bitcoin::util::sighash::{Prevouts, SighashCache};
-use bitcoin::util::taproot::{LeafVersion, TapLeafHash, TaprootBuilder};
-use bitcoin::{OutPoint, SchnorrSig, SchnorrSighashType, Script, Transaction, TxIn, TxOut};
+use bitcoin::sighash::{Prevouts, SighashCache};
+use bitcoin::taproot::{LeafVersion, TapLeafHash, TaprootBuilder};
+use bitcoin::{OutPoint, ScriptBuf, TapSighashType, Transaction, TxIn, TxOut};
 use miniscript::{Miniscript, Tap};
 use sapio_psbt::external_api::{finalize_psbt_format_api, PSBTApi};
 use sapio_psbt::PSBTValidationError;
@@ -17,7 +17,7 @@ fn keypair(byte: u8) -> Keypair {
         .keypair(&Secp256k1::new())
 }
 
-fn fixture(include_native_leaf: bool) -> (PartiallySignedTransaction, Script, Script) {
+fn fixture(include_native_leaf: bool) -> (Psbt, ScriptBuf, ScriptBuf) {
     let secp = Secp256k1::new();
     let signer = keypair(1).x_only_public_key().0;
     // Witness [signature, 2, 3] satisfies this script, but the arithmetic
@@ -26,15 +26,15 @@ fn fixture(include_native_leaf: bool) -> (PartiallySignedTransaction, Script, Sc
         .push_opcode(OP_ADD)
         .push_int(5)
         .push_opcode(OP_NUMEQUALVERIFY)
-        .push_slice(&signer.serialize())
+        .push_slice(signer.serialize())
         .push_opcode(OP_CHECKSIG)
         .into_script();
     let native = Builder::new()
-        .push_slice(&signer.serialize())
+        .push_slice(signer.serialize())
         .push_opcode(OP_CHECKSIG)
         .into_script();
-    assert!(Miniscript::<bitcoin::XOnlyPublicKey, Tap>::parse_insane(&raw).is_err());
-    assert!(Miniscript::<bitcoin::XOnlyPublicKey, Tap>::parse_insane(&native).is_ok());
+    assert!(Miniscript::<bitcoin::XOnlyPublicKey, Tap>::decode_consensus(&raw).is_err());
+    assert!(Miniscript::<bitcoin::XOnlyPublicKey, Tap>::decode_consensus(&native).is_ok());
     let scripts = if include_native_leaf {
         vec![raw.clone(), native.clone()]
     } else {
@@ -51,22 +51,22 @@ fn fixture(include_native_leaf: bool) -> (PartiallySignedTransaction, Script, Sc
         .finalize(&secp, keypair(2).x_only_public_key().0)
         .unwrap();
     let prevout = TxOut {
-        value: 1_000,
-        script_pubkey: Script::new_v1_p2tr_tweaked(spend.output_key()),
+        value: bitcoin::Amount::from_sat(1_000),
+        script_pubkey: ScriptBuf::new_p2tr_tweaked(spend.output_key()),
     };
     let tx = Transaction {
-        version: 2,
-        lock_time: 0,
+        version: bitcoin::transaction::Version(2),
+        lock_time: bitcoin::absolute::LockTime::from_consensus(0),
         input: vec![TxIn {
             previous_output: OutPoint::default(),
             ..Default::default()
         }],
         output: vec![TxOut {
-            value: 900,
-            script_pubkey: native.clone().to_v0_p2wsh(),
+            value: bitcoin::Amount::from_sat(900),
+            script_pubkey: native.clone().to_p2wsh(),
         }],
     };
-    let mut psbt = PartiallySignedTransaction::from_unsigned_tx(tx).unwrap();
+    let mut psbt = Psbt::from_unsigned_tx(tx).unwrap();
     let input = &mut psbt.inputs[0];
     input.witness_utxo = Some(prevout);
     input.tap_internal_key = Some(spend.internal_key());
@@ -80,7 +80,7 @@ fn fixture(include_native_leaf: bool) -> (PartiallySignedTransaction, Script, Sc
     (psbt, raw, native)
 }
 
-fn sign_leaf(psbt: &mut PartiallySignedTransaction, script: &Script) -> SchnorrSig {
+fn sign_leaf(psbt: &mut Psbt, script: &ScriptBuf) -> bitcoin::taproot::Signature {
     let secp = Secp256k1::new();
     let key = keypair(1);
     let leaf = TapLeafHash::from_script(script, LeafVersion::TapScript);
@@ -90,15 +90,15 @@ fn sign_leaf(psbt: &mut PartiallySignedTransaction, script: &Script) -> SchnorrS
             0,
             &Prevouts::All(&prevouts),
             leaf,
-            SchnorrSighashType::Default,
+            TapSighashType::Default,
         )
         .unwrap();
     let message = Message::from_digest_slice(&digest[..]).unwrap();
-    let signature = SchnorrSig {
-        sig: secp.sign_schnorr_no_aux_rand(&message, &key),
-        hash_ty: SchnorrSighashType::Default,
+    let signature = bitcoin::taproot::Signature {
+        signature: secp.sign_schnorr_no_aux_rand(&message, &key),
+        sighash_type: TapSighashType::Default,
     };
-    secp.verify_schnorr(&signature.sig, &message, &key.x_only_public_key().0)
+    secp.verify_schnorr(&signature.signature, &message, &key.x_only_public_key().0)
         .unwrap();
     psbt.inputs[0]
         .tap_script_sigs
@@ -120,7 +120,7 @@ fn unsupported_custom_leaf_keeps_its_script_proof_and_valid_partial_signature() 
         panic!("custom arithmetic leaf must require an external satisfier");
     };
     assert!(!completed);
-    let restored: PartiallySignedTransaction = deserialize(&base64::decode(psbt).unwrap()).unwrap();
+    let restored: Psbt = Psbt::deserialize(&base64::decode(psbt).unwrap()).unwrap();
     assert_eq!(restored, original);
     let leaf = TapLeafHash::from_script(&raw, LeafVersion::TapScript);
     assert!(errors.contains(&format!(
@@ -158,4 +158,26 @@ fn custom_leaves_do_not_hide_structurally_malformed_psbt_maps() {
         ),
         Ok(_) => panic!("malformed maps must fail structural validation"),
     }
+}
+
+#[test]
+fn finalization_api_retains_psbt_when_transaction_extraction_rejects_fees() {
+    let (mut psbt, _, native) = fixture(true);
+    psbt.unsigned_tx.output[0].value = bitcoin::Amount::from_sat(2_000);
+    sign_leaf(&mut psbt, &native);
+    let unsigned = psbt.unsigned_tx.clone();
+    let PSBTApi::NotFinished {
+        completed,
+        psbt,
+        errors,
+        ..
+    } = finalize_psbt_format_api(psbt).unwrap()
+    else {
+        panic!("an output exceeding the supplied input must not be exported");
+    };
+    assert!(!completed);
+    assert!(!errors.is_empty());
+    let retained = Psbt::deserialize(&base64::decode(psbt).unwrap()).unwrap();
+    assert_eq!(retained.unsigned_tx, unsigned);
+    assert!(retained.inputs[0].final_script_witness.is_some());
 }

@@ -1,10 +1,10 @@
+use bitcoin::bip32::{DerivationPath, Fingerprint, Xpriv, Xpub};
 use bitcoin::hashes::{sha256, Hash};
+use bitcoin::psbt::{raw, Psbt};
 use bitcoin::secp256k1::{Keypair, Message, Secp256k1, SecretKey};
-use bitcoin::util::bip32::{DerivationPath, ExtendedPrivKey, ExtendedPubKey, Fingerprint};
-use bitcoin::util::psbt::{raw, PartiallySignedTransaction as Psbt};
-use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
-use bitcoin::{EcdsaSig, EcdsaSighashType, PublicKey, SchnorrSig, SchnorrSighashType};
-use bitcoin::{Network, Script, Transaction, TxIn, TxOut, Witness};
+use bitcoin::taproot::{LeafVersion, TapLeafHash};
+use bitcoin::{EcdsaSighashType, PublicKey, TapSighashType};
+use bitcoin::{Network, ScriptBuf, Transaction, TxIn, TxOut, Witness};
 use sapio_ctv_emulator_trait::{
     sign_checked, validate_signing_response, CTVAvailable, CTVEmulator, Clause, EmulatorError,
 };
@@ -16,22 +16,22 @@ fn add_signatures(psbt: &mut Psbt, input: usize, byte: u8) {
     let secret = SecretKey::from_slice(&[byte; 32]).unwrap();
     let keypair = Keypair::from_secret_key(&secp, &secret);
     let message = Message::from_digest_slice(&[byte; 32]).unwrap();
-    let schnorr = SchnorrSig {
-        sig: secp.sign_schnorr_no_aux_rand(&message, &keypair),
-        hash_ty: SchnorrSighashType::Default,
+    let schnorr = bitcoin::taproot::Signature {
+        signature: secp.sign_schnorr_no_aux_rand(&message, &keypair),
+        sighash_type: TapSighashType::Default,
     };
     psbt.inputs[input].partial_sigs.insert(
         PublicKey::new(keypair.public_key()),
-        EcdsaSig {
-            sig: secp.sign_ecdsa(&message, &secret),
-            hash_ty: EcdsaSighashType::All,
+        bitcoin::ecdsa::Signature {
+            signature: secp.sign_ecdsa(&message, &secret),
+            sighash_type: EcdsaSighashType::All,
         },
     );
     psbt.inputs[input].tap_key_sig.get_or_insert(schnorr);
     psbt.inputs[input].tap_script_sigs.insert(
         (
             keypair.x_only_public_key().0,
-            TapLeafHash::from_script(&Script::from(vec![byte]), LeafVersion::TapScript),
+            TapLeafHash::from_script(&ScriptBuf::from(vec![byte]), LeafVersion::TapScript),
         ),
         schnorr,
     );
@@ -39,25 +39,25 @@ fn add_signatures(psbt: &mut Psbt, input: usize, byte: u8) {
 
 fn request() -> Psbt {
     let mut psbt = Psbt::from_unsigned_tx(Transaction {
-        version: 2,
-        lock_time: 0,
+        version: bitcoin::transaction::Version(2),
+        lock_time: bitcoin::absolute::LockTime::from_consensus(0),
         input: vec![TxIn::default(), TxIn::default()],
         output: vec![TxOut {
-            value: 9_000,
-            script_pubkey: Script::from(vec![0x51]),
+            value: bitcoin::Amount::from_sat(9_000),
+            script_pubkey: ScriptBuf::from(vec![0x51]),
         }],
     })
     .unwrap();
     psbt.inputs[0].witness_utxo = Some(TxOut {
-        value: 10_000,
-        script_pubkey: Script::from(vec![0x51]),
+        value: bitcoin::Amount::from_sat(10_000),
+        script_pubkey: ScriptBuf::from(vec![0x51]),
     });
     psbt.inputs[0].non_witness_utxo = Some(psbt.unsigned_tx.clone());
-    psbt.inputs[0].sighash_type = Some(SchnorrSighashType::Default.into());
-    psbt.inputs[0].witness_script = Some(Script::from(vec![0x51]));
-    psbt.inputs[0].redeem_script = Some(Script::from(vec![0x51]));
-    psbt.inputs[0].final_script_sig = Some(Script::new());
-    psbt.inputs[0].final_script_witness = Some(Witness::from_vec(vec![vec![1]]));
+    psbt.inputs[0].sighash_type = Some(TapSighashType::Default.into());
+    psbt.inputs[0].witness_script = Some(ScriptBuf::from(vec![0x51]));
+    psbt.inputs[0].redeem_script = Some(ScriptBuf::from(vec![0x51]));
+    psbt.inputs[0].final_script_sig = Some(ScriptBuf::new());
+    psbt.inputs[0].final_script_witness = Some(Witness::from_slice(&vec![vec![1]]));
     let unknown = raw::Key {
         type_value: 0x80,
         key: vec![1],
@@ -117,7 +117,9 @@ fn checked_signing_preserves_complete_requests_and_accepts_only_signature_additi
 #[test]
 fn checked_signing_rejects_changes_to_each_protected_psbt_field_family() {
     let changes: &[(&str, Mutation)] = &[
-        ("transaction", |p| p.unsigned_tx.output[0].value -= 1),
+        ("transaction", |p| {
+            p.unsigned_tx.output[0].value -= bitcoin::Amount::ONE_SAT
+        }),
         ("input count", |p| {
             p.inputs.pop();
         }),
@@ -129,18 +131,18 @@ fn checked_signing_rejects_changes_to_each_protected_psbt_field_family() {
         ("PSBT version", |p| p.version += 1),
         ("global xpub", |p| {
             let secp = Secp256k1::new();
-            let root = ExtendedPrivKey::new_master(Network::Regtest, &[3; 32]).unwrap();
+            let root = Xpriv::new_master(Network::Regtest, &[3; 32]).unwrap();
             p.xpub.insert(
-                ExtendedPubKey::from_priv(&secp, &root),
+                Xpub::from_priv(&secp, &root),
                 (Fingerprint::default(), DerivationPath::default()),
             );
         }),
         ("witness UTXO", |p| {
-            p.inputs[0].witness_utxo.as_mut().unwrap().value -= 1
+            p.inputs[0].witness_utxo.as_mut().unwrap().value -= bitcoin::Amount::ONE_SAT
         }),
         ("nonwitness UTXO", |p| p.inputs[0].non_witness_utxo = None),
         ("sighash", |p| {
-            p.inputs[0].sighash_type = Some(SchnorrSighashType::None.into())
+            p.inputs[0].sighash_type = Some(TapSighashType::None.into())
         }),
         ("redeem script", |p| p.inputs[0].redeem_script = None),
         ("witness script", |p| p.inputs[0].witness_script = None),
@@ -168,10 +170,10 @@ fn checked_signing_rejects_changes_to_each_protected_psbt_field_family() {
         ("output unknown", |p| p.outputs[0].unknown.clear()),
         ("output proprietary", |p| p.outputs[0].proprietary.clear()),
         ("output script", |p| {
-            p.outputs[0].witness_script = Some(Script::new())
+            p.outputs[0].witness_script = Some(ScriptBuf::new())
         }),
         ("second input", |p| {
-            p.inputs[1].sighash_type = Some(SchnorrSighashType::All.into())
+            p.inputs[1].sighash_type = Some(TapSighashType::All.into())
         }),
     ];
     for (name, change) in changes {
@@ -196,10 +198,10 @@ fn checked_signing_rejects_removing_or_replacing_existing_signatures() {
                 .values_mut()
                 .next()
                 .unwrap()
-                .hash_ty = EcdsaSighashType::None
+                .sighash_type = EcdsaSighashType::None
         },
         |p| p.inputs[0].tap_key_sig = None,
-        |p| p.inputs[0].tap_key_sig.as_mut().unwrap().hash_ty = SchnorrSighashType::All,
+        |p| p.inputs[0].tap_key_sig.as_mut().unwrap().sighash_type = TapSighashType::All,
         |p| p.inputs[0].tap_script_sigs.clear(),
         |p| {
             p.inputs[0]
@@ -207,7 +209,7 @@ fn checked_signing_rejects_removing_or_replacing_existing_signatures() {
                 .values_mut()
                 .next()
                 .unwrap()
-                .hash_ty = SchnorrSighashType::All
+                .sighash_type = TapSighashType::All
         },
     ];
     for change in changes {

@@ -19,10 +19,9 @@ async fn numeric_peers_resolve_without_opening_a_connection() {
     let emulator = config.get_emulator().await.unwrap();
     let hash = bitcoin::hashes::Hash::from_slice(&[7; 32]).unwrap();
     assert!(emulator.get_signer_for(hash).is_ok());
-    let root = ExtendedPubKey::from_priv(
+    let root = Xpub::from_priv(
         &bitcoin::secp256k1::Secp256k1::new(),
-        &bitcoin::util::bip32::ExtendedPrivKey::new_master(bitcoin::Network::Regtest, &[8; 32])
-            .unwrap(),
+        &bitcoin::bip32::Xpriv::new_master(bitcoin::Network::Regtest, &[8; 32]).unwrap(),
     );
     config.emulators.push((root, "127.0.0.1:0".into()));
     config.threshold = 2;
@@ -235,4 +234,72 @@ async fn wizard_requires_an_explicit_choice_and_collects_signer_configuration() 
     };
     assert_eq!(config.emulators, vec![(key, "127.0.0.1:8367".into())]);
     assert_eq!(config.threshold, 1);
+}
+
+fn all_networks_inactive() -> serde_json::Value {
+    let original: serde_json::Value =
+        serde_json::from_str(include_str!("../../../contrib/vectors/basic_config.json")).unwrap();
+    let mut networks = serde_json::Map::new();
+    for name in ["main", "testnet", "testnet4", "signet", "regtest"] {
+        let mut config = original["regtest"].clone();
+        config["active"] = false.into();
+        config["api_node"]["url"] = format!("http://{name}.invalid").into();
+        networks.insert(name.into(), config);
+    }
+    networks.into()
+}
+
+#[test]
+fn every_network_can_be_selected_with_other_configurations_inactive() {
+    use bitcoin::Network;
+
+    for (name, network) in [
+        ("main", Network::Bitcoin),
+        ("testnet", Network::Testnet),
+        ("testnet4", Network::Testnet4),
+        ("signet", Network::Signet),
+        ("regtest", Network::Regtest),
+    ] {
+        let mut value = all_networks_inactive();
+        value[name]["active"] = true.into();
+        let config: Config = serde_json::from_value(value).unwrap();
+        assert_eq!(config.network, network);
+        assert_eq!(config.active.api_node.url, format!("http://{name}.invalid"));
+        let verifier = ConfigVerifier::from(config);
+        assert_eq!(
+            verifier
+                .networks()
+                .iter()
+                .filter(|(_, config)| config.is_some())
+                .count(),
+            1
+        );
+        let roundtrip: Config =
+            serde_json::from_value(serde_json::to_value(verifier).unwrap()).unwrap();
+        assert_eq!(roundtrip.network, network);
+        assert!(roundtrip.active.active);
+    }
+}
+
+#[test]
+fn network_selection_rejects_absent_or_multiple_active_configurations() {
+    let value = all_networks_inactive();
+    let verifier: ConfigVerifier = serde_json::from_value(value.clone()).unwrap();
+    assert!(matches!(
+        Config::try_from(verifier),
+        Err(ConfigError::NoActiveConfig)
+    ));
+    let names = ["main", "testnet", "testnet4", "signet", "regtest"];
+    for (index, first) in names.iter().enumerate() {
+        for second in &names[index + 1..] {
+            let mut value = value.clone();
+            value[*first]["active"] = true.into();
+            value[*second]["active"] = true.into();
+            let verifier: ConfigVerifier = serde_json::from_value(value).unwrap();
+            assert!(matches!(
+                Config::try_from(verifier),
+                Err(ConfigError::TooManyActiveNetworks)
+            ));
+        }
+    }
 }

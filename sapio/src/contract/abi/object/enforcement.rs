@@ -23,8 +23,8 @@ fn descriptor_requires_native_ctv<Pk: MiniscriptKey + ToPublicKey>(
 ) -> bool {
     match descriptor {
         Descriptor::Tr(tree) => tree
-            .iter_scripts()
-            .any(|(_, miniscript)| contains_native_ctv(&miniscript.encode())),
+            .leaves()
+            .any(|leaf| contains_native_ctv(&leaf.compute_script())),
         Descriptor::Wsh(wsh) => contains_native_ctv(&wsh.inner_script()),
         Descriptor::Sh(sh) => contains_native_ctv(&sh.inner_script()),
         Descriptor::Bare(bare) => contains_native_ctv(&bare.inner_script()),
@@ -82,12 +82,12 @@ mod tests {
     use crate::contract::actions::Guard;
     use crate::contract::{Compilable, Context, DynamicContract};
     use crate::template::Template;
+    use bitcoin::bip32::{Xpriv, Xpub};
     use bitcoin::blockdata::opcodes::all;
     use bitcoin::blockdata::script::Builder;
     use bitcoin::hashes::{sha256, Hash};
     use bitcoin::secp256k1::{Keypair, Secp256k1, SecretKey};
-    use bitcoin::util::bip32::{ExtendedPrivKey, ExtendedPubKey};
-    use bitcoin::{Amount, Network, PublicKey, XOnlyPublicKey};
+    use bitcoin::{Amount, Network, PublicKey, ScriptBuf, XOnlyPublicKey};
     use sapio_base::miniscript::{policy::Concrete, Segwitv0};
     use sapio_base::Clause;
     use sapio_base::{Ctv, LoweringPlan};
@@ -104,9 +104,9 @@ mod tests {
             Network::Regtest,
             Amount::from_sat(1000),
             LoweringPlan::CtvEmulation {
-                signers: vec![ExtendedPubKey::from_priv(
+                signers: vec![Xpub::from_priv(
                     &Secp256k1::new(),
-                    &ExtendedPrivKey::new_master(Network::Regtest, &[7; 32]).unwrap(),
+                    &Xpriv::new_master(Network::Regtest, &[7; 32]).unwrap(),
                 )],
                 threshold: 1,
             },
@@ -116,11 +116,11 @@ mod tests {
         )
     }
 
-    fn raw(script: Script) -> Object {
+    fn raw(script: ScriptBuf) -> Object {
         raw_leaves(vec![script])
     }
 
-    fn raw_leaves(scripts: Vec<Script>) -> Object {
+    fn raw_leaves(scripts: Vec<ScriptBuf>) -> Object {
         let tree = RawTaproot::from_scripts(key(), scripts).unwrap();
         let mut object =
             Object::from_script(tree.script_pubkey(), Amount::ZERO, Network::Regtest).unwrap();
@@ -128,7 +128,7 @@ mod tests {
         object
     }
 
-    fn ctv_script() -> Script {
+    fn ctv_script() -> ScriptBuf {
         Builder::new()
             .push_slice(&[42; 32])
             .push_opcode(OP_NOP4)
@@ -140,7 +140,7 @@ mod tests {
     #[test]
     fn raw_scripts_distinguish_opcodes_from_data_and_inspect_untaken_branches() {
         let pushed_byte = Builder::new()
-            .push_slice(&[OP_NOP4.into_u8()])
+            .push_slice(&[OP_NOP4.to_u8()])
             .push_opcode(all::OP_DROP)
             .push_int(1)
             .into_script();
@@ -203,13 +203,10 @@ mod tests {
         assert!(object.requires_native_ctv());
         assert!(!finish(Clause::Key(key())).requires_native_ctv());
         // A signature-only alternative does not hide a CTV-bearing leaf.
-        assert!(finish(Clause::Threshold(
-            1,
-            vec![
-                Clause::Key(key()),
-                Clause::TxTemplate(sha256::Hash::hash(b"template")),
-            ],
-        ))
+        assert!(finish(Clause::Thresh(sapio_base::miniscript::Threshold::or(
+            Arc::new(Clause::Key(key())),
+            Arc::new(Clause::TxTemplate(sha256::Hash::hash(b"template"))),
+        )))
         .requires_native_ctv());
     }
 

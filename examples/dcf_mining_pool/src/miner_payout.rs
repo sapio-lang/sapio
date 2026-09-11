@@ -8,6 +8,7 @@ use bitcoin::secp256k1::Secp256k1;
 use bitcoin::{Address, Amount, XOnlyPublicKey};
 use sapio::contract::*;
 use sapio::*;
+use sapio_base::miniscript::{Threshold, ThresholdError};
 use sapio_base::Clause;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -16,10 +17,9 @@ use std::collections::{BTreeSet, VecDeque};
 /// One miner's payout, in integer satoshis, to an internal Taproot key.
 #[derive(JsonSchema, Serialize, Deserialize, Clone)]
 pub struct PoolShare {
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    #[serde(with = "bitcoin::amount::serde::as_sat")]
     #[schemars(with = "u64")]
     pub amount: Amount,
-    #[schemars(with = "String")]
     pub key: XOnlyPublicKey,
 }
 
@@ -29,7 +29,7 @@ pub struct MiningPayout {
     pub participants: Vec<PoolShare>,
     /// Maximum children per transaction; must be at least two.
     pub radix: usize,
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    #[serde(with = "bitcoin::amount::serde::as_sat")]
     #[schemars(with = "u64")]
     pub fee_sats_per_tx: Amount,
 }
@@ -65,11 +65,11 @@ impl MiningPayout {
             return Err(invalid("A miner key may appear only once"));
         }
         let fees = fee_sats_per_tx
-            .as_sat()
+            .to_sat()
             .checked_mul(count)
             .ok_or_else(|| invalid("Payout fees overflow"))?;
         let available = reward
-            .as_sat()
+            .to_sat()
             .checked_sub(fees)
             .ok_or(CompilationError::OutOfFunds)?;
         let miners = u64::try_from(keys.len()).map_err(|_| invalid("Too many miners"))?;
@@ -99,7 +99,7 @@ impl MiningPayout {
         let mut keys = BTreeSet::new();
         let mut total = self
             .fee_sats_per_tx
-            .as_sat()
+            .to_sat()
             .checked_mul(count)
             .ok_or_else(|| invalid("Payout fees overflow"))?;
         for participant in &self.participants {
@@ -109,20 +109,23 @@ impl MiningPayout {
                 ));
             }
             total = total
-                .checked_add(participant.amount.as_sat())
+                .checked_add(participant.amount.to_sat())
                 .ok_or_else(|| invalid("Payout amount overflow"))?;
         }
         Ok(Amount::from_sat(total))
     }
 
-    #[guard]
-    fn cooperate(self, _ctx: Context) {
+    #[guard(policy)]
+    fn cooperate(self, _ctx: Context) -> Result<Clause, ThresholdError> {
         let keys: Vec<_> = self
             .participants
             .iter()
             .map(|p| Clause::Key(p.key))
             .collect();
-        Clause::Threshold(keys.len(), keys)
+        Ok(Clause::Thresh(Threshold::new(
+            keys.len(),
+            keys.into_iter().map(Into::into).collect(),
+        )?))
     }
 
     #[then]
@@ -213,16 +216,19 @@ impl PayoutBundle {
     fn total_to_pay(&self) -> Result<Amount, CompilationError> {
         self.contracts
             .iter()
-            .try_fold(self.fees.as_sat(), |sum, (amount, _)| {
-                sum.checked_add(amount.as_sat())
+            .try_fold(self.fees.to_sat(), |sum, (amount, _)| {
+                sum.checked_add(amount.to_sat())
                     .ok_or_else(|| invalid("Payout bundle overflow"))
             })
             .map(Amount::from_sat)
     }
-    #[guard]
-    fn cooperate(self, _ctx: Context) {
+    #[guard(policy)]
+    fn cooperate(self, _ctx: Context) -> Result<Clause, ThresholdError> {
         let keys: Vec<_> = self.keys().into_iter().map(Clause::Key).collect();
-        Clause::Threshold(keys.len(), keys)
+        Ok(Clause::Thresh(Threshold::new(
+            keys.len(),
+            keys.into_iter().map(Into::into).collect(),
+        )?))
     }
     #[then]
     fn expand(self, ctx: Context) {

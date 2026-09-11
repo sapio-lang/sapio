@@ -5,9 +5,10 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! A Contract that offers peg-in functionality for sidechains
-use bitcoin::util::amount::CoinAmount;
 use sapio::contract::*;
 use sapio::*;
+use sapio_base::amount::CoinAmount;
+use sapio_base::miniscript::{Threshold, ThresholdError};
 use sapio_base::Clause;
 use sapio_macros::guard;
 use schemars::*;
@@ -32,12 +33,10 @@ impl RecoveryState for CanBeginRecovery {}
 /// A contract for depositing into a federated side chain.
 pub struct FederatedPegIn<T: RecoveryState> {
     /// # Normal Operation Keys
-    #[schemars(with = "Vec<String>")]
     keys: Vec<bitcoin::XOnlyPublicKey>,
     /// # Normal Operation Threshold
     thresh_normal: usize,
     /// # Recovery Operation Keys
-    #[schemars(with = "Vec<String>")]
     keys_recovery: Vec<bitcoin::XOnlyPublicKey>,
     /// # Recovery Operation Threshold
     thresh_recovery: usize,
@@ -54,7 +53,7 @@ where
 {
     decl_guard! {
     /// Should only be defined when RecoveryState is in CanFinishRecovery
-    finish_recovery}
+    policy finish_recovery<Result<Clause, ThresholdError>>}
 
     decl_then! {
     /// Should only be defined when RecoveryState is in CanBeginRecovery
@@ -80,41 +79,51 @@ impl StateDependentActions for FederatedPegIn<CanBeginRecovery> {
     }
 }
 impl StateDependentActions for FederatedPegIn<CanFinishRecovery> {
-    #[guard]
-    fn finish_recovery(self, _ctx: Context) {
-        Clause::And(vec![
-            Clause::Older(4725 /* 4 weeks? */),
-            Clause::Threshold(
+    #[guard(policy)]
+    fn finish_recovery(self, _ctx: Context) -> Result<Clause, ThresholdError> {
+        Ok(Clause::And(vec![
+            Clause::try_from(sapio_base::timelocks::RelHeight::from(4725))
+                .expect("positive constant locktime")
+                .into(),
+            Clause::Thresh(Threshold::new(
                 self.thresh_recovery,
                 self.keys_recovery
                     .iter()
                     .cloned()
                     .map(Clause::Key)
+                    .map(Into::into)
                     .collect(),
-            ),
-        ])
+            )?)
+            .into(),
+        ]))
     }
 }
 
 impl<T: RecoveryState> FederatedPegIn<T> {
-    #[guard]
-    fn recovery_signed(self, _ctx: Context) {
-        Clause::Threshold(
+    #[guard(policy)]
+    fn recovery_signed(self, _ctx: Context) -> Result<Clause, ThresholdError> {
+        Ok(Clause::Thresh(Threshold::new(
             self.thresh_recovery,
             self.keys_recovery
                 .iter()
                 .cloned()
                 .map(Clause::Key)
+                .map(Into::into)
                 .collect(),
-        )
+        )?))
     }
 
-    #[guard]
-    fn normal_signed(self, _ctx: Context) {
-        Clause::Threshold(
+    #[guard(policy)]
+    fn normal_signed(self, _ctx: Context) -> Result<Clause, ThresholdError> {
+        Ok(Clause::Thresh(Threshold::new(
             self.thresh_normal,
-            self.keys.iter().cloned().map(Clause::Key).collect(),
-        )
+            self.keys
+                .iter()
+                .cloned()
+                .map(Clause::Key)
+                .map(Into::into)
+                .collect(),
+        )?))
     }
 }
 
@@ -165,10 +174,16 @@ mod tests {
         let object = contract.compile(context(1000)).unwrap();
         object.validate().unwrap();
         let recovery = object.ctv_to_tx.values().next().unwrap();
-        assert_eq!(recovery.tx.output[0].value, 1000);
+        assert_eq!(recovery.tx.output[0].value.to_sat(), 1000);
         assert_eq!(
-            contract.guard_recovery_signed(context(0)),
-            Clause::Threshold(1, vec![Clause::Key(key(3)), Clause::Key(key(4))])
+            contract.guard_recovery_signed(context(0)).unwrap(),
+            Clause::Thresh(
+                Threshold::new(
+                    1,
+                    vec![Clause::Key(key(3)).into(), Clause::Key(key(4)).into()]
+                )
+                .expect("valid threshold")
+            )
         );
         let finish = FederatedPegIn::<CanFinishRecovery> {
             keys: contract.keys.clone(),
@@ -179,10 +194,12 @@ mod tests {
             _pd: PhantomData,
         };
         assert_eq!(
-            finish.guard_finish_recovery(context(0)),
+            finish.guard_finish_recovery(context(0)).unwrap(),
             Clause::And(vec![
-                Clause::Older(4725),
-                contract.guard_recovery_signed(context(0))
+                Clause::try_from(sapio_base::timelocks::RelHeight::from(4725))
+                    .expect("positive constant locktime")
+                    .into(),
+                contract.guard_recovery_signed(context(0)).unwrap().into()
             ])
         );
         assert!(recovery.outputs[0].contract.ctv_to_tx.is_empty());
@@ -192,9 +209,11 @@ mod tests {
     fn invalid_thresholds_and_missing_funds_fail() {
         let mut contract = peg();
         contract.thresh_normal = 0;
+        assert!(contract.guard_normal_signed(context(1000)).is_err());
         assert!(contract.compile(context(1000)).is_err());
         contract.thresh_normal = 2;
         contract.thresh_recovery = 3;
+        assert!(contract.guard_recovery_signed(context(1000)).is_err());
         assert!(contract.compile(context(1000)).is_err());
         assert!(peg().compile(context(999)).is_err());
     }
@@ -214,7 +233,7 @@ mod tests {
         object.validate().unwrap();
         assert_eq!(object.ctv_to_tx.len(), 1);
         let recovery = object.ctv_to_tx.values().next().unwrap();
-        assert_eq!(recovery.tx.output[0].value, 1000);
+        assert_eq!(recovery.tx.output[0].value.to_sat(), 1000);
         let recovered = &recovery.outputs[0].contract;
         assert!(recovered.ctv_to_tx.is_empty());
         recovered.validate().unwrap();

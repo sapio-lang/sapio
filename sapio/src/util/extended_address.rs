@@ -9,9 +9,10 @@
 //! stuff.
 
 use crate::contract::object::ObjectError;
-use crate::miniscript::{Descriptor, DescriptorTrait};
-use bitcoin::{Address, Script, XOnlyPublicKey};
-use sapio_base::miniscript;
+use crate::miniscript::Descriptor;
+use bitcoin::address::NetworkUnchecked;
+use bitcoin::script::PushBytesBuf;
+use bitcoin::{Address, ScriptBuf, XOnlyPublicKey};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -21,14 +22,15 @@ use std::convert::TryFrom;
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum ExtendedAddress {
-    /// A regular standard address type
-    Address(Address),
+    /// A parsed address. Artifact decoding has no expected network; contract
+    /// arguments must check their network before constructing a destination.
+    Address(Address<NetworkUnchecked>),
     /// When we know the descriptor
     Descriptor(Descriptor<XOnlyPublicKey>),
     /// An OP_RETURN
     OpReturn(OpReturn),
     /// Unknown
-    Unknown(bitcoin::Script),
+    Unknown(bitcoin::ScriptBuf),
 }
 impl ExtendedAddress {
     /// create an OP_RETURN address type
@@ -41,20 +43,22 @@ impl ExtendedAddress {
             return Err(ObjectError::OpReturnTooLong);
         }
         Ok(ExtendedAddress::OpReturn(OpReturn(
-            bitcoin::Script::new_op_return(slice),
+            bitcoin::ScriptBuf::new_op_return(
+                PushBytesBuf::try_from(slice.to_vec()).expect("at most forty bytes"),
+            ),
         )))
     }
 }
 
 /// Internal type for processing OpReturn through serde
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
-#[serde(try_from = "Script")]
-#[serde(into = "Script")]
-pub struct OpReturn(Script);
+#[serde(try_from = "ScriptBuf")]
+#[serde(into = "ScriptBuf")]
+pub struct OpReturn(ScriptBuf);
 
-impl TryFrom<Script> for OpReturn {
+impl TryFrom<ScriptBuf> for OpReturn {
     type Error = &'static str;
-    fn try_from(s: Script) -> std::result::Result<Self, Self::Error> {
+    fn try_from(s: ScriptBuf) -> std::result::Result<Self, Self::Error> {
         if s.is_op_return() {
             Ok(OpReturn(s))
         } else {
@@ -63,14 +67,14 @@ impl TryFrom<Script> for OpReturn {
     }
 }
 
-impl From<OpReturn> for Script {
+impl From<OpReturn> for ScriptBuf {
     fn from(o: OpReturn) -> Self {
         o.0
     }
 }
 impl From<Address> for ExtendedAddress {
     fn from(a: Address) -> Self {
-        ExtendedAddress::Address(a)
+        ExtendedAddress::Address(a.into_unchecked())
     }
 }
 impl From<Descriptor<XOnlyPublicKey>> for ExtendedAddress {
@@ -79,10 +83,12 @@ impl From<Descriptor<XOnlyPublicKey>> for ExtendedAddress {
     }
 }
 
-impl From<ExtendedAddress> for Script {
+// Script bytes are network-independent; deriving them does not validate or
+// promote the stored address to a network-checked contract argument.
+impl From<ExtendedAddress> for ScriptBuf {
     fn from(s: ExtendedAddress) -> Self {
         match s {
-            ExtendedAddress::Address(a) => a.script_pubkey(),
+            ExtendedAddress::Address(a) => a.assume_checked_ref().script_pubkey(),
             ExtendedAddress::OpReturn(OpReturn(s)) => s,
             ExtendedAddress::Unknown(s) => s,
             ExtendedAddress::Descriptor(d) => d.script_pubkey(),
@@ -90,10 +96,10 @@ impl From<ExtendedAddress> for Script {
     }
 }
 
-impl From<&ExtendedAddress> for Script {
+impl From<&ExtendedAddress> for ScriptBuf {
     fn from(s: &ExtendedAddress) -> Self {
         match s {
-            ExtendedAddress::Address(a) => a.script_pubkey(),
+            ExtendedAddress::Address(a) => a.assume_checked_ref().script_pubkey(),
             ExtendedAddress::OpReturn(OpReturn(s)) => s.clone(),
             ExtendedAddress::Unknown(s) => s.clone(),
             ExtendedAddress::Descriptor(d) => {

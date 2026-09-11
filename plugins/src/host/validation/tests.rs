@@ -139,6 +139,101 @@ fn output_schema(schema: Value) -> Result<CallSchema, CompilationError> {
 }
 
 #[test]
+fn generated_plugin_schemas_enforce_draft_seven_and_bitcoin_wire_types() {
+    #[derive(schemars::JsonSchema, serde::Serialize)]
+    struct Payments {
+        network: bitcoin::Network,
+        payments: Vec<(bitcoin::XOnlyPublicKey, bitcoin::Amount)>,
+    }
+
+    type Receipt = (bitcoin::Amount, bitcoin::XOnlyPublicKey);
+    let api = crate::API::<Payments, Receipt>::new();
+    for schema in [api.input(), api.output()] {
+        assert_eq!(
+            schema.as_value()["$schema"],
+            "http://json-schema.org/draft-07/schema#"
+        );
+    }
+    let compiled = CallSchema::from_json(&serde_json::to_vec(&api).unwrap()).unwrap();
+    let key: bitcoin::XOnlyPublicKey =
+        "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
+            .parse()
+            .unwrap();
+    let payment = Payments {
+        network: bitcoin::Network::Testnet4,
+        payments: vec![(key, bitcoin::Amount::from_sat(u64::MAX))],
+    };
+    let valid = serde_json::to_value(payment).unwrap();
+    assert!(compiled.validate_input(&valid).is_ok());
+    assert!(compiled.validate_output(&json!([u64::MAX, key])).is_ok());
+
+    for invalid_payment in [
+        json!([1, key]),
+        json!([key, -1]),
+        json!([key, 0.5]),
+        json!(["invalid key", 1]),
+        json!([key]),
+        json!([key, 1, 2]),
+    ] {
+        let mut invalid = valid.clone();
+        invalid["payments"][0] = invalid_payment;
+        assert_schema_error(compiled.validate_input(&invalid).unwrap_err(), "Input");
+    }
+    let mut invalid_network = valid;
+    invalid_network["network"] = json!("Testnet4");
+    assert_schema_error(
+        compiled.validate_input(&invalid_network).unwrap_err(),
+        "Input",
+    );
+    for invalid in [json!([key, 1]), json!([-1, key]), json!([1, "bad"])] {
+        assert_schema_error(compiled.validate_output(&invalid).unwrap_err(), "Output");
+    }
+}
+
+#[test]
+fn generated_plugin_schemas_follow_each_sides_serde_contract() {
+    #[derive(schemars::JsonSchema, serde::Serialize, serde::Deserialize)]
+    struct Argument {
+        #[serde(rename(serialize = "outgoing", deserialize = "incoming"))]
+        value: u64,
+    }
+
+    #[derive(schemars::JsonSchema, serde::Serialize)]
+    struct Result {
+        #[serde(rename(serialize = "actual_result", deserialize = "unused_input"))]
+        value: u64,
+        #[serde(skip_serializing)]
+        _private: u64,
+    }
+
+    let api = crate::API::<Argument, Result>::new();
+    let compiled = CallSchema::from_json(&serde_json::to_vec(&api).unwrap()).unwrap();
+    let input = json!({"incoming": 7});
+    let argument: Argument = serde_json::from_value(input.clone()).unwrap();
+    assert!(compiled.validate_input(&input).is_ok());
+    assert_schema_error(
+        compiled
+            .validate_input(&serde_json::to_value(argument).unwrap())
+            .unwrap_err(),
+        "Input",
+    );
+
+    let output = serde_json::to_value(Result {
+        value: 8,
+        _private: 9,
+    })
+    .unwrap();
+    assert_eq!(output, json!({"actual_result": 8}));
+    assert!(compiled.validate_output(&output).is_ok());
+    assert_schema_error(
+        compiled
+            .validate_output(&json!({"unused_input": 8, "_private": 9}))
+            .unwrap_err(),
+        "Output",
+    );
+}
+
+#[test]
 fn integer_comparisons_preserve_precision_above_two_to_the_53() {
     let boundary = 9_007_199_254_740_993u64;
     for (keyword, valid, invalid) in [

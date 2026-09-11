@@ -15,6 +15,7 @@ use bitcoin::{Amount, XOnlyPublicKey};
 use sapio::contract::*;
 use sapio::template::Template;
 use sapio::*;
+use sapio_base::miniscript::Threshold;
 use sapio_base::Clause;
 use std::collections::BTreeSet;
 
@@ -54,7 +55,7 @@ fn allocate(funds: Amount, weights: &[u64]) -> Result<Vec<Amount>, CompilationEr
         .map(|weight| {
             cumulative += weight;
             let through_here =
-                (u128::from(funds.as_sat()) * u128::from(cumulative) / u128::from(total)) as u64;
+                (u128::from(funds.to_sat()) * u128::from(cumulative) / u128::from(total)) as u64;
             let amount = Amount::from_sat(through_here - paid);
             paid = through_here;
             amount
@@ -64,7 +65,14 @@ fn allocate(funds: Amount, weights: &[u64]) -> Result<Vec<Amount>, CompilationEr
 impl SignatureAttested {
     #[guard]
     fn cooperate(self, _ctx: Context) {
-        Clause::And(self.parties.iter().copied().map(Clause::Key).collect())
+        Clause::And(
+            self.parties
+                .iter()
+                .copied()
+                .map(Clause::Key)
+                .map(Into::into)
+                .collect(),
+        )
     }
     #[then]
     fn payout(self, mut ctx: Context) {
@@ -87,11 +95,16 @@ impl SignatureAttested {
                 return Err(invalid("Payout count must match the parties"));
             }
             let payouts = allocate(funds, &weights)?;
-            let guard =
-                Clause::Threshold(self.oracles.0, keys.into_iter().map(Clause::Key).collect());
+            let guard = Clause::Thresh(
+                Threshold::new(
+                    self.oracles.0,
+                    keys.into_iter().map(Clause::Key).map(Into::into).collect(),
+                )
+                .map_err(|error| CompilationError::Custom(error.into()))?,
+            );
             let mut builder = ctx.derive_num(point)?.template().add_guard(guard);
             for (party, amount) in self.parties.iter().zip(payouts) {
-                if amount.as_sat() > 0 {
+                if amount.to_sat() > 0 {
                     builder = builder.add_output(amount, party, None)?;
                 }
             }
@@ -107,7 +120,7 @@ impl Contract for SignatureAttested {
             || self.parties.iter().collect::<BTreeSet<_>>().len() != self.parties.len()
             || self.oracles.0 == 0
             || self.oracles.0 > self.oracles.1.len()
-            || ctx.funds().as_sat() == 0
+            || ctx.funds().to_sat() == 0
         {
             return Err(invalid("Invalid parties, oracle threshold, or collateral"));
         }
@@ -196,14 +209,20 @@ mod tests {
         let mut distributions = vec![];
         for template in compiled.ctv_to_tx.values() {
             assert_eq!(
-                template.tx.output.iter().map(|o| o.value).sum::<u64>(),
+                template
+                    .tx
+                    .output
+                    .iter()
+                    .map(|o| o.value.to_sat())
+                    .sum::<u64>(),
                 1001
             );
             let point = if template.tx.output.len() == 2 {
                 1
             } else {
                 let recipient = key(1).compile(context(1001)).unwrap();
-                if template.tx.output[0].script_pubkey == bitcoin::Script::from(&recipient.address)
+                if template.tx.output[0].script_pubkey
+                    == bitcoin::ScriptBuf::from(&recipient.address)
                 {
                     2
                 } else {
@@ -212,9 +231,15 @@ mod tests {
             };
             assert_eq!(
                 template.guards,
-                vec![Clause::Threshold(
-                    2,
-                    vec![Clause::Key(key(10 + point)), Clause::Key(key(20 + point))]
+                vec![Clause::Thresh(
+                    Threshold::new(
+                        2,
+                        vec![
+                            Clause::Key(key(10 + point)).into(),
+                            Clause::Key(key(20 + point)).into()
+                        ]
+                    )
+                    .expect("valid threshold")
                 )
                 .into()]
             );
@@ -223,7 +248,7 @@ mod tests {
                     .tx
                     .output
                     .iter()
-                    .map(|o| o.value)
+                    .map(|o| o.value.to_sat())
                     .collect::<Vec<_>>(),
             );
         }
@@ -240,7 +265,7 @@ mod tests {
             allocate(Amount::from_sat(10), &[1, 1, 1])
                 .unwrap()
                 .iter()
-                .map(|amount| amount.as_sat())
+                .map(|amount| amount.to_sat())
                 .collect::<Vec<_>>(),
             vec![3, 3, 4]
         );
@@ -257,20 +282,30 @@ mod tests {
                 .tx
                 .output
                 .iter()
-                .map(|o| o.value)
+                .map(|o| o.value.to_sat())
                 .collect::<Vec<_>>(),
             vec![500, 501]
         );
-        let expected = Clause::Threshold(
-            1,
-            (0..=2)
-                .map(|point| {
-                    Clause::Threshold(
-                        2,
-                        vec![Clause::Key(key(10 + point)), Clause::Key(key(20 + point))],
-                    )
-                })
-                .collect(),
+        let expected = Clause::Thresh(
+            Threshold::new(
+                1,
+                (0..=2)
+                    .map(|point| {
+                        Clause::Thresh(
+                            Threshold::new(
+                                2,
+                                vec![
+                                    Clause::Key(key(10 + point)).into(),
+                                    Clause::Key(key(20 + point)).into(),
+                                ],
+                            )
+                            .expect("valid threshold"),
+                        )
+                    })
+                    .map(Into::into)
+                    .collect(),
+            )
+            .expect("valid threshold"),
         );
         use sapio_base::miniscript::policy::Liftable;
         assert_eq!(template.guards.len(), 1);

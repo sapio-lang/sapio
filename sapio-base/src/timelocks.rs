@@ -24,6 +24,8 @@ pub enum LockTimeError {
     HeightTooHigh(u32),
     /// sequence type is unknown
     UnknownSeqType(u32),
+    /// A valid transaction field cannot be represented by a Miniscript guard.
+    InvalidPolicyLockTime(u32),
 }
 
 /// Type Tags used for creating lock time variants. The module lets us keep them
@@ -86,7 +88,7 @@ impl<'de, A: Absolutivity, TT: TimeType> Deserialize<'de> for LockTime<A, TT> {
     }
 }
 impl<A: Absolutivity, TT: TimeType> JsonSchema for LockTime<A, TT> {
-    fn schema_name() -> String {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
         match (A::IS_ABSOLUTE, TT::IS_HEIGHT) {
             (false, true) => "RelativeHeight",
             (false, false) => "RelativeTime",
@@ -95,17 +97,12 @@ impl<A: Absolutivity, TT: TimeType> JsonSchema for LockTime<A, TT> {
         }
         .into()
     }
-    fn json_schema(_gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
-        use schemars::schema::{InstanceType, NumberValidation, Schema, SchemaObject};
+    fn json_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
         let (min, max) = encoded_bounds::<A, TT>();
-        Schema::Object(SchemaObject {
-            instance_type: Some(InstanceType::Integer.into()),
-            number: Some(Box::new(NumberValidation {
-                minimum: Some(min as f64),
-                maximum: Some(max as f64),
-                ..Default::default()
-            })),
-            ..Default::default()
+        schemars::json_schema!({
+            "type": "integer",
+            "minimum": min,
+            "maximum": max
         })
     }
 }
@@ -215,17 +212,22 @@ mod trait_impls {
         }
     }
 
-    impl<A, TT> From<LockTime<A, TT>> for Clause
+    impl<A, TT> TryFrom<LockTime<A, TT>> for Clause
     where
         A: Absolutivity,
         TT: TimeType,
     {
-        fn from(lt: LockTime<A, TT>) -> Clause {
-            match (A::IS_ABSOLUTE, TT::IS_HEIGHT) {
-                (true, true) => Clause::After(lt.0),
-                (true, false) => Clause::After(lt.0),
-                (false, true) => Clause::Older(lt.0),
-                (false, false) => Clause::Older(lt.0),
+        type Error = LockTimeError;
+
+        fn try_from(lt: LockTime<A, TT>) -> Result<Self, Self::Error> {
+            if A::IS_ABSOLUTE {
+                miniscript::AbsLockTime::from_consensus(lt.0)
+                    .map(Clause::After)
+                    .map_err(|_| LockTimeError::InvalidPolicyLockTime(lt.0))
+            } else {
+                miniscript::RelLockTime::from_consensus(lt.0)
+                    .map(Clause::Older)
+                    .map_err(|_| LockTimeError::InvalidPolicyLockTime(lt.0))
             }
         }
     }
@@ -294,27 +296,30 @@ mod trait_impls {
         }
     }
 
-    impl From<AnyRelTimeLock> for Clause {
-        fn from(lt: AnyRelTimeLock) -> Self {
+    impl TryFrom<AnyRelTimeLock> for Clause {
+        type Error = LockTimeError;
+        fn try_from(lt: AnyRelTimeLock) -> Result<Self, Self::Error> {
             match lt {
-                AnyRelTimeLock::RH(a) => a.into(),
-                AnyRelTimeLock::RT(a) => a.into(),
+                AnyRelTimeLock::RH(a) => a.try_into(),
+                AnyRelTimeLock::RT(a) => a.try_into(),
             }
         }
     }
-    impl From<AnyAbsTimeLock> for Clause {
-        fn from(lt: AnyAbsTimeLock) -> Self {
+    impl TryFrom<AnyAbsTimeLock> for Clause {
+        type Error = LockTimeError;
+        fn try_from(lt: AnyAbsTimeLock) -> Result<Self, Self::Error> {
             match lt {
-                AnyAbsTimeLock::AH(a) => a.into(),
-                AnyAbsTimeLock::AT(a) => a.into(),
+                AnyAbsTimeLock::AH(a) => a.try_into(),
+                AnyAbsTimeLock::AT(a) => a.try_into(),
             }
         }
     }
-    impl From<AnyTimeLock> for Clause {
-        fn from(lt: AnyTimeLock) -> Self {
+    impl TryFrom<AnyTimeLock> for Clause {
+        type Error = LockTimeError;
+        fn try_from(lt: AnyTimeLock) -> Result<Self, Self::Error> {
             match lt {
-                AnyTimeLock::A(a) => a.into(),
-                AnyTimeLock::R(a) => a.into(),
+                AnyTimeLock::A(a) => a.try_into(),
+                AnyTimeLock::R(a) => a.try_into(),
             }
         }
     }
@@ -369,14 +374,8 @@ mod wire_tests {
         }
         assert!(serde_json::from_str::<T>("-1").is_err());
         let schema = schemars::schema_for!(T);
-        assert_eq!(
-            schema.schema.number.as_ref().unwrap().minimum,
-            Some(min as f64)
-        );
-        assert_eq!(
-            schema.schema.number.as_ref().unwrap().maximum,
-            Some(max as f64)
-        );
+        assert_eq!(schema.as_value()["minimum"], min);
+        assert_eq!(schema.as_value()["maximum"], max);
     }
     #[test]
     fn all_four_encoded_domains_match_the_schema() {
@@ -384,6 +383,30 @@ mod wire_tests {
         bounds::<RelTime>(1 << 22, (1 << 22) | 65_535);
         bounds::<AbsHeight>(0, 499_999_999);
         bounds::<AbsTime>(500_000_000, u32::MAX);
+    }
+    #[test]
+    fn transaction_fields_and_policy_guards_have_distinct_domains() {
+        for value in [0, 1, 65_535] {
+            let lock = RelHeight::from(value as u16);
+            let policy = Clause::try_from(lock);
+            assert_eq!(policy.is_ok(), value != 0);
+            if let Ok(Clause::Older(relative)) = policy {
+                assert_eq!(relative.to_consensus_u32(), value);
+            }
+        }
+        for value in [500_000_000, i32::MAX as u32, u32::MAX] {
+            let lock: AbsTime = serde_json::from_value(value.into()).unwrap();
+            assert_eq!(lock.get(), value);
+            let policy = Clause::try_from(lock);
+            assert_eq!(policy.is_ok(), value <= i32::MAX as u32);
+            if let Ok(Clause::After(absolute)) = policy {
+                assert_eq!(absolute.to_consensus_u32(), value);
+            }
+        }
+        assert!(Clause::try_from(AbsHeight::try_from(0).unwrap()).is_err());
+        let time = RelTime::from(42);
+        assert!(matches!(Clause::try_from(time), Ok(Clause::Older(lock))
+            if lock.to_consensus_u32() == (1 << 22) | 42));
     }
     #[test]
     fn duration_conversion_never_rounds_a_lock_earlier() {

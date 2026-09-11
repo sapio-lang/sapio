@@ -59,7 +59,6 @@ impl AnyContract for D<'static> {
 #[derive(JsonSchema, Deserialize)]
 pub struct DynamicExample {
     /// Key controlling both dynamically constructed outputs.
-    #[schemars(with = "String")]
     key: bitcoin::XOnlyPublicKey,
 }
 impl DynamicExample {
@@ -95,7 +94,7 @@ impl Contract for DynamicExample {
     declare! {non updatable}
 
     fn ensure_amount(&self, ctx: Context) -> Result<Amount, CompilationError> {
-        if ctx.funds().as_sat() < 2 {
+        if ctx.funds().to_sat() < 2 {
             return Err(CompilationError::OutOfFunds);
         }
         Ok(ctx.funds())
@@ -117,7 +116,7 @@ mod tests {
         assert_eq!(
             outputs
                 .iter()
-                .map(|o| o.amount.as_sat())
+                .map(|o| o.amount.to_sat())
                 .collect::<Vec<_>>(),
             vec![500, 501]
         );

@@ -28,7 +28,9 @@ impl Contract for Payment {
 }
 
 fn compile_payment(funding: u64) -> Result<Compiled, Box<dyn std::error::Error>> {
-    let destination: Address = "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj".parse()?;
+    let destination = "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj"
+        .parse::<Address<bitcoin::address::NetworkUnchecked>>()?
+        .require_network(Network::Regtest)?;
     let contract = Payment {
         destination: Compiled::from_address(destination, bitcoin::Amount::ZERO),
     };
@@ -65,14 +67,16 @@ fn payment_preserves_destination_value_and_fee_reserve() {
     let template = compiled.ctv_to_tx.values().next().unwrap();
     assert_eq!(template.tx.input.len(), 1);
     assert_eq!(template.tx.output.len(), 1);
-    assert_eq!(template.tx.output[0].value, 1_000);
-    let destination: Address = "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj"
-        .parse()
+    assert_eq!(template.tx.output[0].value.to_sat(), 1_000);
+    let destination = "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj"
+        .parse::<Address<bitcoin::address::NetworkUnchecked>>()
+        .unwrap()
+        .require_network(Network::Regtest)
         .unwrap();
     assert_eq!(
         template.tx.output[0].script_pubkey,
         destination.script_pubkey()
     );
-    assert_eq!(template.required_input_amount.as_sat(), 1_500);
+    assert_eq!(template.required_input_amount.to_sat(), 1_500);
     assert!(compile_payment(1_499).is_err());
 }

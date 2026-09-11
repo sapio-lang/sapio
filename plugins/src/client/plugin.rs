@@ -81,7 +81,7 @@ where
         // TODO: In theory, these trampoline bounds are robust/serialization safe...
         // But the API needs stiching to the parent in a sane way...
         let caller = lookup_this_module_name()
-            .map(|s| bitcoin::hashes::hex::ToHex::to_hex(&s[..]))
+            .map(|s| bitcoin::hex::DisplayHex::to_lower_hex_string(&s[..]))
             .ok_or_else(|| {
                 CompilationError::InternalModuleError(
                     "Host Error: Should always be able to identify module's own ID".into(),

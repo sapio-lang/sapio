@@ -1,6 +1,6 @@
+use bitcoin::bip32::{ChildNumber, Xpriv, Xpub};
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::Secp256k1;
-use bitcoin::util::bip32::{ChildNumber, ExtendedPrivKey, ExtendedPubKey};
 use bitcoin::Network;
 use sapio_base::covenant::hash_to_child_vec;
 use sapio_base::policy::{PolicyCompiler, ScriptPolicy};
@@ -26,12 +26,12 @@ fn instance() -> ProgramInstance {
     .unwrap()
 }
 
-fn root(byte: u8) -> ExtendedPrivKey {
-    ExtendedPrivKey::new_master(Network::Testnet, &[byte; 32]).unwrap()
+fn root(byte: u8) -> Xpriv {
+    Xpriv::new_master(Network::Testnet, &[byte; 32]).unwrap()
 }
 
-fn public_root(byte: u8) -> ExtendedPubKey {
-    ExtendedPubKey::from_priv(&Secp256k1::new(), &root(byte))
+fn public_root(byte: u8) -> Xpub {
+    Xpub::from_priv(&Secp256k1::new(), &root(byte))
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn wasm_identities_distinguish_inline_programs_from_registered_interpreters() {
     assert!(!id.is_wasm());
     assert_eq!(
         EvaluatorId::default(),
-        EvaluatorId(sha256::Hash::from_inner([0; 32]))
+        EvaluatorId(sha256::Hash::from_byte_array([0; 32]))
     );
     let inline = ProgramInstance::wasm(module.to_vec(), vec![7]).unwrap();
     assert!(inline.evaluator().is_wasm());
@@ -104,7 +104,7 @@ fn exact_instance_commitment_matches_independent_tagged_hash_vectors() {
         )
     );
     let empty = ProgramInstance::new(
-        EvaluatorId(sha256::Hash::from_inner([0; 32])),
+        EvaluatorId(sha256::Hash::from_byte_array([0; 32])),
         vec![],
         vec![],
     )

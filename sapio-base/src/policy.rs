@@ -13,7 +13,7 @@
 use crate::{Clause, Ctv, Emulatable};
 use bitcoin::blockdata::opcodes::{all, Class, ClassifyContext};
 use bitcoin::blockdata::script::{Error as ScriptError, Instruction};
-use bitcoin::Script;
+use bitcoin::ScriptBuf;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt;
@@ -120,37 +120,37 @@ impl<P: PolicyCompiler, E: fmt::Display> PolicyCompiler for Result<P, E> {
 /// implied. Deserialization performs the same validation as construction.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, JsonSchema)]
 #[serde(transparent)]
-pub struct ScriptFragment(Script);
+pub struct ScriptFragment(ScriptBuf);
 
 impl ScriptFragment {
     /// Check the fragment's instruction and composition boundaries.
-    pub fn new(script: Script) -> Result<Self, PolicyError> {
+    pub fn new(script: ScriptBuf) -> Result<Self, PolicyError> {
         validate_tapscript(&script)?;
         Ok(Self(script))
     }
 
     /// Borrow the checked script without exposing mutation.
-    pub fn as_script(&self) -> &Script {
+    pub fn as_script(&self) -> &bitcoin::Script {
         &self.0
     }
 
     /// Consume the fragment and recover its script.
-    pub fn into_script(self) -> Script {
+    pub fn into_script(self) -> ScriptBuf {
         self.0
     }
 }
 
-impl TryFrom<Script> for ScriptFragment {
+impl TryFrom<ScriptBuf> for ScriptFragment {
     type Error = PolicyError;
 
-    fn try_from(script: Script) -> Result<Self, Self::Error> {
+    fn try_from(script: ScriptBuf) -> Result<Self, Self::Error> {
         Self::new(script)
     }
 }
 
 impl<'de> Deserialize<'de> for ScriptFragment {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        Self::new(Script::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+        Self::new(ScriptBuf::deserialize(deserializer)?).map_err(serde::de::Error::custom)
     }
 }
 
@@ -242,7 +242,7 @@ impl std::error::Error for PolicyError {
 /// merge at the same alternative-stack depth; without `ELSE`, the untaken arm
 /// retains the entry depth. Pushed bytes are data, including opcode byte values.
 /// This is a composition check, not proof of consensus validity or satisfaction.
-pub fn validate_tapscript(script: &Script) -> Result<(), PolicyError> {
+pub fn validate_tapscript(script: &bitcoin::Script) -> Result<(), PolicyError> {
     struct Conditional {
         offset: usize,
         other_alt_depth: usize,
@@ -273,7 +273,7 @@ pub fn validate_tapscript(script: &Script) -> Result<(), PolicyError> {
                 {
                     return Err(PolicyError::ForbiddenOpcode {
                         offset,
-                        opcode: opcode.into_u8(),
+                        opcode: opcode.to_u8(),
                     });
                 }
                 match opcode {
@@ -287,7 +287,7 @@ pub fn validate_tapscript(script: &Script) -> Result<(), PolicyError> {
                                 .last_mut()
                                 .ok_or(PolicyError::UnexpectedConditional {
                                     offset,
-                                    opcode: opcode.into_u8(),
+                                    opcode: opcode.to_u8(),
                                 })?;
                         // Repeated ELSE is legal: switch back to the saved depth
                         // of the other execution path each time.
@@ -299,7 +299,7 @@ pub fn validate_tapscript(script: &Script) -> Result<(), PolicyError> {
                                 .pop()
                                 .ok_or(PolicyError::UnexpectedConditional {
                                     offset,
-                                    opcode: opcode.into_u8(),
+                                    opcode: opcode.to_u8(),
                                 })?;
                         if alt_depth != conditional.other_alt_depth {
                             return Err(PolicyError::AltStackImbalance { offset });
@@ -331,10 +331,9 @@ pub fn validate_tapscript(script: &Script) -> Result<(), PolicyError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use schemars::schema::{InstanceType, SingleOrVec};
 
-    fn script(bytes: &[u8]) -> Script {
-        Script::from(bytes.to_vec())
+    fn script(bytes: &[u8]) -> ScriptBuf {
+        ScriptBuf::from(bytes.to_vec())
     }
 
     #[test]
@@ -445,17 +444,14 @@ mod tests {
             assert!(serde_json::from_str::<ScriptFragment>(invalid).is_err());
         }
         let schema = schemars::schema_for!(ScriptFragment);
-        assert_eq!(
-            schema.schema.instance_type,
-            Some(SingleOrVec::Single(Box::new(InstanceType::String)))
-        );
+        assert_eq!(schema.as_value()["type"], "string");
     }
 
     #[test]
     fn policy_interchange_preserves_source_and_validates_nested_fragments() {
         // Compiling this alone as a safe Miniscript would fail; translation
         // retains it so the enclosing branch can supply authorization.
-        let clause = Clause::Older(10);
+        let clause = Clause::Older(miniscript::RelLockTime::from_height(10));
         assert_eq!(
             clause.compile_policy().unwrap(),
             ScriptPolicy::Miniscript(clause.clone())
@@ -470,9 +466,10 @@ mod tests {
             policy
         );
         assert_eq!(policy.compile_policy().unwrap(), policy);
-        assert!(serde_json::from_value::<ScriptPolicy>(serde_json::json!({
+        let error = serde_json::from_value::<ScriptPolicy>(serde_json::json!({
             "And": [{"Miniscript": "older(10)"}, {"Script": "50"}]
         }))
-        .is_err());
+        .unwrap_err();
+        assert!(error.to_string().contains("unsupported opcode 0x50"));
     }
 }

@@ -3,7 +3,7 @@
 //! WASM guests delegate the expensive curve operations to the versioned,
 //! metered host API. Native compilation uses the same Bitcoin library directly.
 
-use bitcoin::util::bip32::{self, ChildNumber, ExtendedPubKey};
+use bitcoin::bip32::{self, ChildNumber, Xpub};
 use bitcoin::XOnlyPublicKey;
 
 /// Derive an exact non-hardened BIP32 path and return its x-only public key.
@@ -11,7 +11,7 @@ use bitcoin::XOnlyPublicKey;
 /// Invalid paths fail without selecting an alternate child. No secret key or
 /// oracle runtime participates in public policy compilation.
 pub(crate) fn derive_public_key(
-    root: &ExtendedPubKey,
+    root: &Xpub,
     path: &[ChildNumber],
 ) -> Result<XOnlyPublicKey, bip32::Error> {
     if path.len() > usize::from(u8::MAX - root.depth) {

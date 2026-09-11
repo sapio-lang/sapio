@@ -7,8 +7,8 @@
 
 //! concrete emulators for CTV
 
+use bitcoin::bip32::*;
 use bitcoin::hashes::sha256::Hash as Sha256;
-use bitcoin::util::bip32::*;
 use sapio_base::covenant::hash_to_child_vec;
 use sapio_ctv_emulator_trait::Clause;
 pub use sapio_ctv_emulator_trait::{CTVAvailable, CTVEmulator, EmulatorError};
@@ -29,8 +29,8 @@ pub(crate) fn validate_request_timeout(timeout: std::time::Duration) -> std::io:
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 
+use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{All, Secp256k1};
-use bitcoin::util::psbt::PartiallySignedTransaction;
 
 use sapio_base::CTVHash;
 use std::sync::Arc;

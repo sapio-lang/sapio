@@ -325,7 +325,12 @@ mod tests {
             value: u32,
             children: Vec<Node>,
         }
-        let schema = serde_json::to_value(schemars::schema_for!(Node)).unwrap();
+        let schema = serde_json::to_value(
+            schemars::generate::SchemaSettings::draft07()
+                .into_generator()
+                .into_root_schema_for::<Node>(),
+        )
+        .unwrap();
         check(&schema).unwrap();
         let validator = jsonschema::options()
             .with_draft(Draft::Draft7)

@@ -15,7 +15,9 @@ fn context(amount: u64) -> Context {
 }
 fn address() -> bitcoin::Address {
     "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj"
-        .parse()
+        .parse::<bitcoin::Address<bitcoin::address::NetworkUnchecked>>()
+        .unwrap()
+        .require_network(bitcoin::Network::Regtest)
         .unwrap()
 }
 fn key(byte: u8) -> bitcoin::XOnlyPublicKey {
@@ -44,7 +46,7 @@ fn update(amount: u64, fee: u64) -> DoTx {
             PaymentRequest {
                 hex_sig: String::new(),
                 fee: fee.into(),
-                payments: [(address(), Amount::from_sat(amount).into())].into(),
+                payments: [(address().into_unchecked(), Amount::from_sat(amount).into())].into(),
             },
         )]
         .into(),
@@ -59,7 +61,7 @@ fn withdrawal_accounts_for_fees_and_omits_empty_change_pool() {
         .unwrap()
         .unwrap();
     assert_eq!(template.tx.output.len(), 1);
-    assert_eq!(template.tx.output[0].value, 900);
+    assert_eq!(template.tx.output[0].value.to_sat(), 900);
     assert_eq!(template.max, Amount::from_sat(1000));
     let template = pool(1)
         .continue_do_tx(context(1000), update(500, 100))
@@ -72,7 +74,7 @@ fn withdrawal_accounts_for_fees_and_omits_empty_change_pool() {
             .tx
             .output
             .iter()
-            .map(|o| o.value)
+            .map(|o| o.value.to_sat())
             .collect::<Vec<_>>(),
         vec![400, 500]
     );
@@ -138,7 +140,7 @@ fn signed_request_authenticates_fee_sequence_payments_and_sender() {
         .get_mut(&key(1))
         .unwrap()
         .payments
-        .insert(address(), Amount::from_sat(501).into());
+        .insert(address().into_unchecked(), Amount::from_sat(501).into());
     assert!(contract.continue_do_tx(context(1000), changed).is_err());
     let mut changed = copy();
     changed.payments.get_mut(&key(1)).unwrap().hex_sig = sign(2);

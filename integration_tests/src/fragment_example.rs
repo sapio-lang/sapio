@@ -5,12 +5,12 @@
 //! auxiliary TemplateHash message.
 
 use crate::program_example::{recipient, FUNDING_SATS, PROGRAM_METADATA};
+use bitcoin::bip32::Xpub;
 use bitcoin::blockdata::{opcodes::all::OP_CHECKSIG, script::Builder};
-use bitcoin::psbt::PartiallySignedTransaction;
-use bitcoin::secp256k1::{Message, Parity, Scalar, Secp256k1, SecretKey};
-use bitcoin::util::bip32::ExtendedPubKey;
-use bitcoin::util::taproot::{TapLeafHash, TapTweakHash};
-use bitcoin::{Amount, KeyPair, Network, XOnlyPublicKey};
+use bitcoin::psbt::Psbt;
+use bitcoin::secp256k1::{Keypair, Message, Parity, Scalar, Secp256k1, SecretKey};
+use bitcoin::taproot::{TapLeafHash, TapTweakHash};
+use bitcoin::{Amount, Network, XOnlyPublicKey};
 use emulator_connect::program::{ProgramSigningRequest, ProgramSpendPath, PSBT};
 use sapio::contract::abi::object::ObjectMetadata;
 use sapio::contract::*;
@@ -26,8 +26,8 @@ use std::error::Error;
 use std::sync::Arc;
 
 /// Disposable participant key used by the physical-internal-key example.
-pub fn participant_key() -> KeyPair {
-    KeyPair::from_secret_key(
+pub fn participant_key() -> Keypair {
+    Keypair::from_secret_key(
         &Secp256k1::new(),
         &SecretKey::from_slice(&[96; 32]).unwrap(),
     )
@@ -50,7 +50,7 @@ pub struct FragmentContract {
 
 impl FragmentContract {
     /// Construct public contract source without registering or contacting an oracle.
-    pub fn new(authorization: Authorization, oracle_root: ExtendedPubKey) -> Self {
+    pub fn new(authorization: Authorization, oracle_root: Xpub) -> Self {
         let key = match authorization {
             Authorization::InternalKey(_) => TemplateKey::InternalKey,
             Authorization::KnownTweak => TemplateKey::KnownTweak,
@@ -130,8 +130,8 @@ impl FragmentContract {
     /// root. The private key argument only signs the TemplateHash message.
     pub fn signing_request(
         &self,
-        mut psbt: PartiallySignedTransaction,
-        untweaked_authorizer: &KeyPair,
+        mut psbt: Psbt,
+        untweaked_authorizer: &Keypair,
         annex: Option<Vec<u8>>,
     ) -> Result<ProgramSigningRequest, Box<dyn Error>> {
         sapio_psbt::annex::set(&mut psbt.inputs[0], annex)?;

@@ -10,9 +10,9 @@ crate-type = ["cdylib", "rlib"]
 path = "src/plugin.rs"
 
 [dependencies]
-bitcoin = { package = "sapio-bitcoin", version = "0.28.2", features = ["use-serde"] }
+bitcoin = { version = "=0.32.102", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
-schemars = "0.8.22"
+schemars = { version = "=1.2.2", features = ["bitcoin032", "miniscript13"] }
 sapio = { path = "../../sapio" }
 sapio-base = { path = "../../sapio-base" }
 sapio-ctv-emulator-trait = { path = "../../emulator-trait" }

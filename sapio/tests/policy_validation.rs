@@ -7,7 +7,7 @@ use sapio::miniscript::ord::Inscription;
 use sapio::miniscript::policy::{
     compiler::CompilerError, concrete::PolicyError, semantic::Policy, Liftable,
 };
-use sapio::miniscript::MiniscriptKey;
+use sapio::miniscript::{AbsLockTime, RelLockTime, Threshold};
 use sapio::{continuation, declare, guard, then, Context};
 use sapio_base::covenant::LoweringPlan;
 use sapio_base::Clause;
@@ -54,16 +54,16 @@ impl<const CONTINUATION: bool> Contract for SinglePolicy<CONTINUATION> {
     declare! {non updatable}
 }
 
-fn assert_policy_error(result: Result<Compiled, CompilationError>, expected: PolicyError) {
+fn assert_policy_error(result: Result<Compiled, CompilationError>, expected: CompilerError) {
     match result {
-        Err(CompilationError::Miniscript(CompilerError::PolicyError(actual))) => {
+        Err(CompilationError::Miniscript(actual)) => {
             assert_eq!(actual, expected);
         }
         other => panic!("expected policy error {expected:?}, received {other:?}"),
     }
 }
 
-fn assert_finish_and_continuation_error(policy: Clause, expected: PolicyError) {
+fn assert_finish_and_continuation_error(policy: Clause, expected: CompilerError) {
     assert_policy_error(
         SinglePolicy::<false>(policy.clone()).compile(context()),
         expected,
@@ -74,33 +74,27 @@ fn assert_finish_and_continuation_error(policy: Clause, expected: PolicyError) {
 #[test]
 fn malformed_policy_roots_fail_before_alternatives_are_flattened() {
     let cases = [
-        (Clause::And(vec![]), PolicyError::NonBinaryArgAnd),
+        (Clause::And(vec![]), CompilerError::NonBinaryArgAnd),
         (
-            Clause::And(vec![Clause::Key(key(1))]),
-            PolicyError::NonBinaryArgAnd,
+            Clause::And(vec![Arc::new(Clause::Key(key(1)))]),
+            CompilerError::NonBinaryArgAnd,
         ),
         (
-            Clause::And((1..=3).map(|i| Clause::Key(key(i))).collect()),
-            PolicyError::NonBinaryArgAnd,
+            Clause::And((1..=3).map(|i| Arc::new(Clause::Key(key(i)))).collect()),
+            CompilerError::NonBinaryArgAnd,
         ),
-        (Clause::Or(vec![]), PolicyError::NonBinaryArgOr),
+        (Clause::Or(vec![]), CompilerError::NonBinaryArgOr),
         (
-            Clause::Or(vec![(1, Clause::Key(key(1)))]),
-            PolicyError::NonBinaryArgOr,
-        ),
-        (
-            Clause::Or((1..=3).map(|i| (1, Clause::Key(key(i)))).collect()),
-            PolicyError::NonBinaryArgOr,
-        ),
-        (Clause::Threshold(0, vec![]), PolicyError::IncorrectThresh),
-        (Clause::Threshold(1, vec![]), PolicyError::IncorrectThresh),
-        (
-            Clause::Threshold(0, vec![Clause::Key(key(1))]),
-            PolicyError::IncorrectThresh,
+            Clause::Or(vec![(1, Arc::new(Clause::Key(key(1))))]),
+            CompilerError::NonBinaryArgOr,
         ),
         (
-            Clause::Threshold(2, vec![Clause::Key(key(1))]),
-            PolicyError::IncorrectThresh,
+            Clause::Or(
+                (1..=3)
+                    .map(|i| (1, Arc::new(Clause::Key(key(i)))))
+                    .collect(),
+            ),
+            CompilerError::NonBinaryArgOr,
         ),
     ];
     for (policy, expected) in cases {
@@ -113,16 +107,40 @@ fn malformed_nested_nodes_cannot_disappear_during_simplification() {
     let malformed = Clause::Or(vec![]);
     let inscription = Inscription::new(Some(b"text/plain".to_vec()), Some(b"body".to_vec()));
     for policy in [
-        Clause::And(vec![Clause::Trivial, malformed.clone()]),
-        Clause::And(vec![Clause::Unsatisfiable, malformed.clone()]),
-        Clause::And(vec![malformed.clone(), Clause::Unsatisfiable]),
-        Clause::Or(vec![(1, Clause::Trivial), (1, malformed.clone())]),
-        Clause::Or(vec![(1, Clause::Key(key(1))), (1, malformed.clone())]),
-        Clause::Threshold(1, vec![Clause::Key(key(1)), malformed.clone()]),
-        Clause::Threshold(2, vec![Clause::Unsatisfiable, malformed.clone()]),
-        Clause::Inscribe(Box::new(inscription), Box::new(malformed)),
+        Clause::And(vec![Arc::new(Clause::Trivial), Arc::new(malformed.clone())]),
+        Clause::And(vec![
+            Arc::new(Clause::Unsatisfiable),
+            Arc::new(malformed.clone()),
+        ]),
+        Clause::And(vec![
+            Arc::new(malformed.clone()),
+            Arc::new(Clause::Unsatisfiable),
+        ]),
+        Clause::Or(vec![
+            (1, Arc::new(Clause::Trivial)),
+            (1, Arc::new(malformed.clone())),
+        ]),
+        Clause::Or(vec![
+            (1, Arc::new(Clause::Key(key(1)))),
+            (1, Arc::new(malformed.clone())),
+        ]),
+        Clause::Thresh(
+            sapio::miniscript::Threshold::new(
+                1,
+                vec![Arc::new(Clause::Key(key(1))), Arc::new(malformed.clone())],
+            )
+            .unwrap(),
+        ),
+        Clause::Thresh(
+            sapio::miniscript::Threshold::new(
+                2,
+                vec![Arc::new(Clause::Unsatisfiable), Arc::new(malformed.clone())],
+            )
+            .unwrap(),
+        ),
+        Clause::Inscribe(Box::new(inscription), Arc::new(malformed)),
     ] {
-        assert_finish_and_continuation_error(policy, PolicyError::NonBinaryArgOr);
+        assert_finish_and_continuation_error(policy, CompilerError::NonBinaryArgOr);
     }
 }
 
@@ -155,11 +173,11 @@ impl Contract for ConjoinedPolicies {
 #[test]
 fn every_source_guard_is_validated_before_conjunction_shortcuts() {
     for literal in [Clause::Trivial, Clause::Unsatisfiable] {
-        let malformed = Clause::Threshold(1, vec![]);
+        let malformed = Clause::And(vec![]);
         for (first, second) in [(literal.clone(), malformed.clone()), (malformed, literal)] {
             assert_policy_error(
                 ConjoinedPolicies { first, second }.compile(context()),
-                PolicyError::IncorrectThresh,
+                CompilerError::NonBinaryArgAnd,
             );
         }
     }
@@ -168,20 +186,17 @@ fn every_source_guard_is_validated_before_conjunction_shortcuts() {
 #[test]
 fn invalid_terminals_are_rejected_even_in_dead_conjunctions() {
     let invalid_inscription = Inscription::new(Some(vec![b'x'; 521]), Some(b"body".to_vec()));
-    let cases = [
-        (Clause::After(0), PolicyError::ZeroTime),
-        (Clause::Older(0), PolicyError::ZeroTime),
-        (Clause::After(u32::MAX), PolicyError::TimeTooFar),
-        (Clause::Older(u32::MAX), PolicyError::TimeTooFar),
-        (
-            Clause::Inscribe(Box::new(invalid_inscription), Box::new(Clause::Trivial)),
-            PolicyError::InvalidInscription,
-        ),
-    ];
+    let cases = [(
+        Clause::Inscribe(Box::new(invalid_inscription), Arc::new(Clause::Trivial)),
+        CompilerError::PolicyError(PolicyError::InvalidInscription),
+    )];
     for (terminal, expected) in cases {
         assert_finish_and_continuation_error(terminal.clone(), expected);
         assert_finish_and_continuation_error(
-            Clause::And(vec![Clause::Unsatisfiable, terminal.clone()]),
+            Clause::And(vec![
+                Arc::new(Clause::Unsatisfiable),
+                Arc::new(terminal.clone()),
+            ]),
             expected,
         );
         for (first, second) in [
@@ -192,6 +207,40 @@ fn invalid_terminals_are_rejected_even_in_dead_conjunctions() {
                 ConjoinedPolicies { first, second }.compile(context()),
                 expected,
             );
+        }
+    }
+}
+
+#[test]
+fn typed_thresholds_and_timelocks_reject_invalid_source_values() {
+    for (k, n) in [(0, 0), (1, 0), (0, 1), (2, 1)] {
+        assert!(Threshold::<Clause, 0>::new(k, vec![Clause::Key(key(1)); n]).is_err());
+    }
+    for value in [0, u32::MAX] {
+        assert!(AbsLockTime::from_consensus(value).is_err());
+        assert!(RelLockTime::from_consensus(value).is_err());
+    }
+    // Upstream exposes ZERO independently of its checked constructor. Sapio
+    // still rejects it before dead branches can hide the invalid CSV Boolean.
+    for terminal in [
+        Clause::Older(RelLockTime::ZERO),
+        Clause::Older(RelLockTime::from_height(0)),
+    ] {
+        for policy in [
+            terminal.clone(),
+            Clause::And(vec![Arc::new(Clause::Unsatisfiable), Arc::new(terminal)]),
+        ] {
+            for result in [
+                SinglePolicy::<false>(policy.clone()).compile(context()),
+                SinglePolicy::<true>(policy).compile(context()),
+            ] {
+                assert!(matches!(
+                    result,
+                    Err(CompilationError::TimeLockError(
+                        sapio_base::timelocks::LockTimeError::InvalidPolicyLockTime(0)
+                    ))
+                ));
+            }
         }
     }
 }
@@ -226,7 +275,7 @@ fn template_guard_simplification_also_rejects_hidden_malformed_nodes() {
         ] {
             assert_policy_error(
                 TemplatePolicies(guards).compile(context()),
-                PolicyError::NonBinaryArgAnd,
+                CompilerError::NonBinaryArgAnd,
             );
         }
     }
@@ -236,11 +285,11 @@ fn accepts(policy: &Policy<XOnlyPublicKey>, signers: u8) -> bool {
     match policy {
         Policy::Unsatisfiable => false,
         Policy::Trivial => true,
-        Policy::KeyHash(hash) => {
-            (1..=3).any(|i| signers & (1 << (i - 1)) != 0 && key(i).to_pubkeyhash() == *hash)
+        Policy::Key(required) => {
+            (1..=3).any(|i| signers & (1 << (i - 1)) != 0 && key(i) == *required)
         }
-        Policy::Threshold(required, children) => {
-            children.iter().filter(|p| accepts(p, signers)).count() >= *required
+        Policy::Thresh(threshold) => {
+            threshold.iter().filter(|p| accepts(p, signers)).count() >= threshold.k()
         }
         other => panic!("unexpected policy in signer fixture: {other:?}"),
     }
@@ -264,12 +313,33 @@ fn assert_shared_key_authorization(compiled: Compiled) {
 #[test]
 fn separately_spendable_alternatives_can_share_a_signer() {
     let alternatives = vec![
-        Clause::And(vec![Clause::Key(key(1)), Clause::Key(key(2))]),
-        Clause::And(vec![Clause::Key(key(1)), Clause::Key(key(3))]),
+        Clause::And(vec![
+            Arc::new(Clause::Key(key(1))),
+            Arc::new(Clause::Key(key(2))),
+        ]),
+        Clause::And(vec![
+            Arc::new(Clause::Key(key(1))),
+            Arc::new(Clause::Key(key(3))),
+        ]),
     ];
     for policy in [
-        Clause::Or(alternatives.iter().cloned().map(|p| (1, p)).collect()),
-        Clause::Threshold(1, alternatives),
+        Clause::Or(
+            (alternatives
+                .iter()
+                .cloned()
+                .map(|p| (1, p))
+                .collect::<Vec<_>>())
+            .into_iter()
+            .map(|(weight, child)| (weight, Arc::new(child)))
+            .collect(),
+        ),
+        Clause::Thresh(
+            sapio::miniscript::Threshold::new(
+                1,
+                (alternatives).into_iter().map(Arc::new).collect(),
+            )
+            .unwrap(),
+        ),
     ] {
         assert_shared_key_authorization(
             SinglePolicy::<false>(policy.clone())

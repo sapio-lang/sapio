@@ -4,10 +4,10 @@
 //! continuation supplies candidate transactions; its witness only selects an
 //! output to check. The oracle is trusted to evaluate this predicate honestly.
 
-use bitcoin::psbt::PartiallySignedTransaction;
+use bitcoin::bip32::{Xpriv, Xpub};
+use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{Secp256k1, SecretKey};
-use bitcoin::util::bip32::{ExtendedPrivKey, ExtendedPubKey};
-use bitcoin::{Address, Amount, Network, OutPoint, Script, Transaction, TxIn, TxOut};
+use bitcoin::{Address, Amount, Network, OutPoint, Transaction, TxIn, TxOut};
 use emulator_connect::program::{ProgramSigningRequest, ProgramSpendPath, WasmEvaluator, PSBT};
 use emulator_connect::CTVAvailable;
 use sapio::contract::abi::object::ObjectMetadata;
@@ -47,7 +47,7 @@ pub fn pay_at_least_evaluator() -> WasmEvaluator {
 }
 
 /// Fully specified predicate parameters with an unambiguous binary encoding.
-pub fn parameters(minimum: u64, recipient: &Script) -> Vec<u8> {
+pub fn parameters(minimum: u64, recipient: &bitcoin::Script) -> Vec<u8> {
     let mut encoded = minimum.to_le_bytes().to_vec();
     encoded.extend_from_slice(&(recipient.len() as u32).to_le_bytes());
     encoded.extend_from_slice(recipient.as_bytes());
@@ -55,7 +55,7 @@ pub fn parameters(minimum: u64, recipient: &Script) -> Vec<u8> {
 }
 
 /// The public instance needed to reproduce both evaluation and key derivation.
-pub fn instance(minimum: u64, recipient: &Script) -> ProgramInstance {
+pub fn instance(minimum: u64, recipient: &bitcoin::Script) -> ProgramInstance {
     ProgramInstance::new(
         evaluator_id(),
         PAY_AT_LEAST.to_vec(),
@@ -67,7 +67,7 @@ pub fn instance(minimum: u64, recipient: &Script) -> ProgramInstance {
 /// Create an explicit program request for one candidate's key-path signature.
 pub fn signing_request(
     program: &EmulatedProgram,
-    psbt: PartiallySignedTransaction,
+    psbt: Psbt,
     output_index: u32,
 ) -> ProgramSigningRequest {
     ProgramSigningRequest {
@@ -80,19 +80,19 @@ pub fn signing_request(
 }
 
 /// Deterministic, disposable keys for this research example only.
-pub fn example_root() -> ExtendedPrivKey {
+pub fn example_root() -> Xpriv {
     // Testnet is the canonical BIP32 serialization network shared by regtest.
-    ExtendedPrivKey::new_master(Network::Testnet, &[91; 32]).unwrap()
+    Xpriv::new_master(Network::Testnet, &[91; 32]).unwrap()
 }
 
 /// A standard destination used in the example.
 pub fn recipient(seed: u8) -> Address {
     let secp = Secp256k1::new();
-    let key = bitcoin::PublicKey::new(bitcoin::secp256k1::PublicKey::from_secret_key(
+    let key = bitcoin::CompressedPublicKey(bitcoin::secp256k1::PublicKey::from_secret_key(
         &secp,
         &SecretKey::from_slice(&[seed; 32]).unwrap(),
     ));
-    Address::p2wpkh(&key, Network::Regtest).unwrap()
+    Address::p2wpkh(&key, Network::Regtest)
 }
 
 /// Values supplied by a continuation, with no authority to change the guard.
@@ -113,7 +113,7 @@ pub struct PaymentContract {
 
 impl PaymentContract {
     /// Build source data and its guard together so they cannot disagree.
-    pub fn new(minimum: u64, recipient: Address, root: ExtendedPubKey) -> Self {
+    pub fn new(minimum: u64, recipient: Address, root: Xpub) -> Self {
         Self {
             emulation: EmulatedProgram::new(instance(minimum, &recipient.script_pubkey()), root)
                 .expect("valid example root"),
@@ -197,16 +197,14 @@ impl Contract for PaymentContract {
 }
 
 /// Attach candidates to a known synthetic funding transaction, without signing.
-pub fn bind_candidates(
-    compiled: &Compiled,
-) -> Result<Vec<PartiallySignedTransaction>, Box<dyn Error>> {
+pub fn bind_candidates(compiled: &Compiled) -> Result<Vec<Psbt>, Box<dyn Error>> {
     let txindex: Rc<dyn TxIndex> = Rc::new(TxIndexLogger::new());
     let funding = Transaction {
-        version: 2,
-        lock_time: 0,
+        version: bitcoin::transaction::Version::TWO,
+        lock_time: bitcoin::absolute::LockTime::from_consensus(0),
         input: vec![TxIn::default()],
         output: vec![TxOut {
-            value: FUNDING_SATS,
+            value: bitcoin::Amount::from_sat(FUNDING_SATS),
             script_pubkey: (&compiled.address).into(),
         }],
     };
@@ -217,7 +215,7 @@ pub fn bind_candidates(
         .iter()
         .map(|tx| {
             let SapioStudioFormat::LinkedPSBT { psbt, .. } = tx;
-            PartiallySignedTransaction::from_str(psbt).map_err(Into::into)
+            Psbt::from_str(psbt).map_err(Into::into)
         })
         .collect()
 }

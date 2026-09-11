@@ -106,7 +106,7 @@ impl<'a> TryFrom<RiskReversal<'a>> for GenericBetArguments<'a> {
         let current_price = v.current_price_x_one_unit;
         let ((down, down_den), (up, up_den)) = v.range;
         if current_price == 0
-            || v.amount.as_sat() == 0
+            || v.amount.to_sat() == 0
             || down_den == 0
             || up_den == 0
             || down >= down_den
@@ -154,7 +154,7 @@ impl<'a> TryFrom<RiskReversal<'a>> for GenericBetArguments<'a> {
             amount: max_amount_bitcoin,
             outcomes,
             oracle: v.operator_api.get_oracle(),
-            cooperate: Clause::And(vec![key, user]),
+            cooperate: Clause::And(vec![key.into(), user.into()]),
             symbol: v.symbol,
         })
     }

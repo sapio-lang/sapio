@@ -139,17 +139,20 @@ fn check(
                 .tx
                 .output
                 .iter()
-                .map(|o| o.value)
+                .map(|o| o.value.to_sat())
                 .collect::<Vec<_>>(),
             values
         );
     }
     if let Some(lock_time) = expected.root_lock_time {
         assert_eq!(templates.len(), 1);
-        assert_eq!(templates[0].tx.lock_time, lock_time);
+        assert_eq!(templates[0].tx.lock_time.to_consensus_u32(), lock_time);
     }
     if let Some(lock_times) = &expected.root_lock_times {
-        let mut actual: Vec<_> = templates.iter().map(|t| t.tx.lock_time).collect();
+        let mut actual: Vec<_> = templates
+            .iter()
+            .map(|t| t.tx.lock_time.to_consensus_u32())
+            .collect();
         actual.sort_unstable();
         assert_eq!(&actual, lock_times);
     }
@@ -158,8 +161,11 @@ fn check(
             .iter()
             .map(|t| {
                 (
-                    t.tx.lock_time,
-                    t.tx.output.iter().map(|o| o.value).collect::<Vec<_>>(),
+                    t.tx.lock_time.to_consensus_u32(),
+                    t.tx.output
+                        .iter()
+                        .map(|o| o.value.to_sat())
+                        .collect::<Vec<_>>(),
                 )
             })
             .collect();
@@ -169,9 +175,9 @@ fn check(
     if let Some(required) = expected.root_required_input_amount {
         assert!(!templates.is_empty());
         for template in templates {
-            assert_eq!(template.required_input_amount.as_sat(), required);
+            assert_eq!(template.required_input_amount.to_sat(), required);
         }
-        assert_eq!(compiled.required_input_amount.as_sat(), required);
+        assert_eq!(compiled.required_input_amount.to_sat(), required);
     }
     Ok(())
 }
@@ -193,7 +199,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let case = catalog.get(&args[3]).ok_or("unknown catalog case")?;
     let lowering = if signer {
         LoweringPlan::CtvEmulation {
-            signers: vec![bitcoin::util::bip32::ExtendedPubKey::from_str(
+            signers: vec![bitcoin::bip32::Xpub::from_str(
                 "tpubD6NzVbkrYhZ4Wf398td3H8YhWBsXx9Sxa4W3cQWkNW3N3DHSNB2qtPoUMXrA6JNaPxodQfRpoZNE5tGM9iZ4xfUEFRJEJvfs8W5paUagYCE",
             )?],
             threshold: 1,

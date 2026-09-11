@@ -7,6 +7,7 @@
 //! Some basic examples showing a kitchen sink of functionality
 use super::*;
 use sapio::contract::actions::ConditionalCompileType;
+use sapio_base::miniscript::{Threshold, ThresholdError};
 use sapio_base::timelocks::RelTime;
 use sapio_macros::compile_if;
 use sapio_macros::guard;
@@ -16,20 +17,26 @@ use std::marker::PhantomData;
 
 #[derive(JsonSchema, Serialize, Deserialize)]
 struct ExampleA {
-    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
-    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
 }
 
 impl ExampleA {
     #[guard]
     fn timeout(self, _ctx: sapio::Context) {
-        Clause::And(vec![Clause::Key(self.bob), Clause::Older(100)])
+        Clause::And(vec![
+            Clause::Key(self.bob).into(),
+            Clause::try_from(sapio_base::timelocks::RelHeight::from(100))
+                .expect("positive constant locktime")
+                .into(),
+        ])
     }
     #[guard(cached)]
     fn signed(self) {
-        Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
+        Clause::And(vec![
+            Clause::Key(self.alice).into(),
+            Clause::Key(self.bob).into(),
+        ])
     }
 }
 
@@ -63,7 +70,6 @@ where
 
 #[derive(JsonSchema, Serialize, Deserialize)]
 struct ExampleB<T: BState> {
-    #[schemars(with = "Vec<String>")]
     participants: Vec<bitcoin::XOnlyPublicKey>,
     threshold: u8,
     amount: CoinAmount,
@@ -72,12 +78,16 @@ struct ExampleB<T: BState> {
 }
 
 impl<T: BState> ExampleB<T> {
-    #[guard(cached)]
-    fn all_signed(self) {
-        Clause::Threshold(
+    #[guard(policy, cached)]
+    fn all_signed(self) -> Result<Clause, ThresholdError> {
+        Ok(Clause::Thresh(Threshold::new(
             T::get_n(self.threshold as usize, self.participants.len()),
-            self.participants.iter().map(|k| Clause::Key(*k)).collect(),
-        )
+            self.participants
+                .iter()
+                .map(|k| Clause::Key(*k))
+                .map(Into::into)
+                .collect(),
+        )?))
     }
 }
 
@@ -121,12 +131,16 @@ where
 /// Trustless Escrowing Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct ExampleCompileIf {
-    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
-    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
-    alice_escrow: (CoinAmount, bitcoin::Address),
-    bob_escrow: (CoinAmount, bitcoin::Address),
+    alice_escrow: (
+        CoinAmount,
+        bitcoin::Address<bitcoin::address::NetworkUnchecked>,
+    ),
+    bob_escrow: (
+        CoinAmount,
+        bitcoin::Address<bitcoin::address::NetworkUnchecked>,
+    ),
     escrow_disable: bool,
     escrow_required_no_conflict_disabled: bool,
     escrow_required_conflict_disabled: bool,
@@ -137,7 +151,10 @@ pub struct ExampleCompileIf {
 impl ExampleCompileIf {
     #[guard]
     fn cooperate(self, _ctx: Context) {
-        Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
+        Clause::And(vec![
+            Clause::Key(self.alice).into(),
+            Clause::Key(self.bob).into(),
+        ])
     }
     /// `should_escrow` disables any branch depending on it. If not set,
     /// it checks to make the branch required. This is done in a conflict-free way;
@@ -190,15 +207,22 @@ impl ExampleCompileIf {
         compile_if = "[Self::should_escrow, Self::must_escrow, Self::escrow_nullable_ok, Self::escrow_error_chk]"
     )]
     fn use_escrow(self, ctx: sapio::Context) {
+        let network = ctx.network;
         ctx.template()
             .add_output(
                 self.alice_escrow.0.try_into()?,
-                &Compiled::from_address(self.alice_escrow.1.clone(), bitcoin::Amount::ZERO),
+                &Compiled::from_address(
+                    self.alice_escrow.1.clone().require_network(network)?,
+                    bitcoin::Amount::ZERO,
+                ),
                 None,
             )?
             .add_output(
                 self.bob_escrow.0.try_into()?,
-                &Compiled::from_address(self.bob_escrow.1.clone(), bitcoin::Amount::ZERO),
+                &Compiled::from_address(
+                    self.bob_escrow.1.clone().require_network(network)?,
+                    bitcoin::Amount::ZERO,
+                ),
                 None,
             )?
             .set_sequence(
@@ -224,8 +248,14 @@ mod tests {
         ExampleCompileIf {
             alice: key(1),
             bob: key(2),
-            alice_escrow: (bitcoin::Amount::from_sat(400).into(), address(1)),
-            bob_escrow: (bitcoin::Amount::from_sat(600).into(), address(2)),
+            alice_escrow: (
+                bitcoin::Amount::from_sat(400).into(),
+                address(1).into_unchecked(),
+            ),
+            bob_escrow: (
+                bitcoin::Amount::from_sat(600).into(),
+                address(2).into_unchecked(),
+            ),
             escrow_disable: false,
             escrow_required_no_conflict_disabled: false,
             escrow_required_conflict_disabled: false,
@@ -242,11 +272,16 @@ mod tests {
         };
         assert_eq!(
             a.guard_signed(),
-            Clause::And(vec![Clause::Key(key(1)), Clause::Key(key(2))])
+            Clause::And(vec![Clause::Key(key(1)).into(), Clause::Key(key(2)).into()])
         );
         assert_eq!(
             a.guard_timeout(context(0)),
-            Clause::And(vec![Clause::Key(key(2)), Clause::Older(100)])
+            Clause::And(vec![
+                Clause::Key(key(2)).into(),
+                Clause::try_from(sapio_base::timelocks::RelHeight::from(100))
+                    .expect("positive constant locktime")
+                    .into()
+            ])
         );
         a.compile(context(1000)).unwrap().validate().unwrap();
         let b = ExampleB::<Start> {
@@ -258,12 +293,20 @@ mod tests {
         let object = b.compile(context(1000)).unwrap();
         object.validate().unwrap();
         assert_eq!(
-            object.ctv_to_tx.values().next().unwrap().tx.output[0].value,
+            object.ctv_to_tx.values().next().unwrap().tx.output[0]
+                .value
+                .to_sat(),
             1000
         );
         assert_eq!(
-            b.guard_all_signed(),
-            Clause::Threshold(2, vec![Clause::Key(key(1)), Clause::Key(key(2))])
+            b.guard_all_signed().unwrap(),
+            Clause::Thresh(
+                Threshold::new(
+                    2,
+                    vec![Clause::Key(key(1)).into(), Clause::Key(key(2)).into()]
+                )
+                .expect("valid threshold")
+            )
         );
     }
 
@@ -275,12 +318,16 @@ mod tests {
             amount: bitcoin::Amount::from_sat(1000).into(),
             pd: PhantomData,
         };
-        assert!(matches!(b.guard_all_signed(), Clause::Threshold(256, _)));
+        assert!(
+            matches!(b.guard_all_signed().unwrap(), Clause::Thresh(ref quorum) if quorum.k() == 256)
+        );
         b.threshold = 0;
         assert!(b.compile(context(1000)).is_err());
         b.threshold = 2;
         b.participants.truncate(1);
         assert!(b.compile(context(1000)).is_err());
+        b.participants.clear();
+        assert!(b.guard_all_signed().is_err());
     }
 
     #[test]

@@ -39,11 +39,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         signed
             .finalize_mut(&Secp256k1::new())
             .map_err(|errors| format!("sample spend failed finalization: {errors:?}"))?;
-        let transaction = signed.extract_tx();
+        let transaction = signed.extract_tx()?;
         transactions.push(serde_json::json!({
             "output_witness": output_index,
             "transaction": serialize_hex(&transaction),
-            "txid": transaction.txid(),
+            "txid": transaction.compute_txid(),
         }));
     }
     println!(

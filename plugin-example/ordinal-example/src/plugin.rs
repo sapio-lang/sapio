@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use bitcoin::util::amount::Amount;
+use bitcoin::Amount;
 use bitcoin::XOnlyPublicKey;
 use sapio::contract::empty;
 use sapio::contract::Compilable;
@@ -21,12 +21,11 @@ use serde::*;
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct SimpleOrdinal {
     ordinal: u64,
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
     owner: XOnlyPublicKey,
 }
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct Sell {
-    purchaser: bitcoin::Address,
+    purchaser: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     amount: AmountF64,
     change: AmountF64,
     fee: AmountF64,
@@ -85,7 +84,7 @@ impl SimpleOrdinal {
                 "Ordinal ranges must not overlap".into(),
             ));
         }
-        if total != ctx.funds().as_sat() {
+        if total != ctx.funds().to_sat() {
             return Err(CompilationError::OrdinalsError(
                 "Ordinal ranges must cover available funds exactly".into(),
             ));
@@ -104,6 +103,7 @@ impl SimpleOrdinal {
 
     #[continuation(guarded_by = "[Self::signed]", web_api, coerce_args = "default_coerce")]
     fn sell_with_planner(self, ctx: Context, opt_sale: Sale) {
+        let network = ctx.network;
         if let Sale(Some(sale)) = opt_sale {
             self.ordinal_offset(&ctx)?;
             if let Some(ords) = ctx.get_ordinals().clone() {
@@ -119,8 +119,10 @@ impl SimpleOrdinal {
                     fees: sale.fee.into(),
                     ordinals: [Ordinal(self.ordinal)].into(),
                 })?;
-                let buyer: &dyn Compilable =
-                    &Compiled::from_address(sale.purchaser, bitcoin::Amount::ZERO);
+                let buyer: &dyn Compilable = &Compiled::from_address(
+                    sale.purchaser.require_network(network)?,
+                    bitcoin::Amount::ZERO,
+                );
                 return plan
                     .build_plan(
                         ctx,
@@ -141,6 +143,7 @@ impl SimpleOrdinal {
     }
     #[continuation(guarded_by = "[Self::signed]", web_api, coerce_args = "default_coerce")]
     fn sell(self, ctx: Context, opt_sale: Sale) {
+        let network = ctx.network;
         if let Sale(Some(sale)) = opt_sale {
             let index = self.ordinal_offset(&ctx)?;
             let payin = sale.payin()?;
@@ -148,7 +151,10 @@ impl SimpleOrdinal {
             if index != 0 {
                 t = t.add_output(Amount::from_sat(index), &self.owner, None)?;
             }
-            let buyer = Compiled::from_address(sale.purchaser, bitcoin::Amount::ZERO);
+            let buyer = Compiled::from_address(
+                sale.purchaser.require_network(network)?,
+                bitcoin::Amount::ZERO,
+            );
             t = t.add_output(Amount::from_sat(501), &buyer, None)?;
             let remaining = t.ctx().funds();
             if remaining != Amount::ZERO {

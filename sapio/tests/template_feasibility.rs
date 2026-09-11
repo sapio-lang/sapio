@@ -75,9 +75,9 @@ impl Payment {
             .add_output(Amount::from_sat(1_000), &key(9), None)?
             .add_guard(self.template_guard.clone())
             .into();
-        template.tx.version = self.version;
-        template.tx.lock_time = self.lock_time;
-        template.tx.input[0].sequence = self.sequence;
+        template.tx.version = bitcoin::transaction::Version(self.version);
+        template.tx.lock_time = bitcoin::absolute::LockTime::from_consensus(self.lock_time);
+        template.tx.input[0].sequence = bitcoin::Sequence(self.sequence);
         template.ctv = template.tx.get_ctv_hash(0);
         Ok(Box::new(std::iter::once(Ok(template))))
     }
@@ -100,7 +100,10 @@ fn impossible(payment: &Payment, emulated: bool) {
 fn fixed_transaction_must_meet_action_and_template_timelocks() {
     for emulated in [false, true] {
         for on_template in [false, true] {
-            for guard in [Clause::Older(10), Clause::After(100)] {
+            for guard in [
+                Clause::Older(sapio::miniscript::RelLockTime::from_consensus(10).unwrap()),
+                Clause::After(sapio::miniscript::AbsLockTime::from_consensus(100).unwrap()),
+            ] {
                 let mut payment = Payment::with_guard(guard.clone(), on_template);
                 payment
                     .compile(context(emulated))
@@ -137,17 +140,39 @@ fn fixed_transaction_must_meet_action_and_template_timelocks() {
 fn viable_alternatives_remain_available_without_requiring_every_timelock() {
     for emulated in [false, true] {
         for on_template in [false, true] {
-            let children = vec![Clause::Older(11), Clause::Key(key(1)), Clause::After(100)];
+            let children = vec![
+                Clause::Older(sapio::miniscript::RelLockTime::from_consensus(11).unwrap()),
+                Clause::Key(key(1)),
+                Clause::After(sapio::miniscript::AbsLockTime::from_consensus(100).unwrap()),
+            ];
             for policy in [
-                Clause::Or(vec![(1, children[0].clone()), (1, children[1].clone())]),
-                Clause::Threshold(2, children.clone()),
+                Clause::Or(vec![
+                    (1, Arc::new(children[0].clone())),
+                    (1, Arc::new(children[1].clone())),
+                ]),
+                Clause::Thresh(
+                    sapio::miniscript::Threshold::new(
+                        2,
+                        (children.clone()).into_iter().map(Arc::new).collect(),
+                    )
+                    .unwrap(),
+                ),
             ] {
                 Payment::with_guard(policy, on_template)
                     .compile(context(emulated))
                     .unwrap();
             }
             impossible(
-                &Payment::with_guard(Clause::Threshold(3, children), on_template),
+                &Payment::with_guard(
+                    Clause::Thresh(
+                        sapio::miniscript::Threshold::new(
+                            3,
+                            (children).into_iter().map(Arc::new).collect(),
+                        )
+                        .unwrap(),
+                    ),
+                    on_template,
+                ),
                 emulated,
             );
         }

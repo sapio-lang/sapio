@@ -8,7 +8,6 @@ use sapio::contract::actions::ThenFuncAsFinishOrFunc;
 use sapio::contract::object::SupportedDescriptors;
 use sapio::contract::{Compilable, CompilationError, Contract};
 use sapio::miniscript::policy::{semantic::Policy, Liftable};
-use sapio::miniscript::MiniscriptKey;
 use sapio::template::Template;
 use sapio::{continuation, declare, guard, then, Context};
 use sapio_base::covenant::LoweringPlan;
@@ -89,17 +88,16 @@ fn accepts(
     match policy {
         Policy::Unsatisfiable => false,
         Policy::Trivial => true,
-        Policy::KeyHash(hash) => {
-            (1..=3)
-                .any(|index| mask & (1 << (index - 1)) != 0 && key(index).to_pubkeyhash() == *hash)
-                || mask & 8 != 0 && covenant_key.to_pubkeyhash() == *hash
+        Policy::Key(required) => {
+            (1..=3).any(|index| mask & (1 << (index - 1)) != 0 && key(index) == *required)
+                || mask & 8 != 0 && covenant_key == *required
         }
-        Policy::Threshold(required, children) => {
-            children
+        Policy::Thresh(threshold) => {
+            threshold
                 .iter()
                 .filter(|child| accepts(child, mask, commitment, covenant_key))
                 .count()
-                >= *required
+                >= threshold.k()
         }
         Policy::TxTemplate(hash) => *hash == commitment,
         _ => panic!("unexpected policy in authorization fixture"),

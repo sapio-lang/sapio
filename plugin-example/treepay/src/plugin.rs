@@ -30,18 +30,18 @@ pub struct TreePay {
     /// the radix of the tree to build. Optimal for users should be around 4 or
     /// 5 (with CTV, not emulators).
     pub radix: usize,
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    #[serde(with = "bitcoin::amount::serde::as_sat")]
     #[schemars(with = "u64")]
     /// # Fee Sats (per tx)
     /// The amount of fees per transaction to allocate.
-    pub fee_sats_per_tx: bitcoin::util::amount::Amount,
+    pub fee_sats_per_tx: bitcoin::Amount,
     /// # Relative Timelock Backpressure
     /// When enabled, exert backpressure by slowing down tree expansion node by
     /// node either by time or blocks
     pub timelock_backpressure: Option<AnyRelTimeLock>,
 }
 
-use bitcoin::util::amount::Amount;
+use bitcoin::Amount;
 struct PayThese {
     contracts: Vec<(Amount, Box<dyn Compilable>)>,
     fees: Amount,
@@ -83,12 +83,12 @@ impl TreePay {
             .iter()
             .map(|payment| {
                 let b: Box<dyn Compilable> = Box::new(Compiled::from_address(
-                    payment.address.clone(),
+                    payment.address.clone().require_network(ctx.network)?,
                     payment.amount,
                 ));
-                (payment.amount, b)
+                Ok((payment.amount, b))
             })
-            .collect();
+            .collect::<Result<_, CompilationError>>()?;
 
         loop {
             let v: Vec<_> = queue

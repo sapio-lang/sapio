@@ -104,7 +104,9 @@ pub enum CompilationError {
     /// Error if a sequence at index j >= inputs.len() is attempted to be set
     NoSuchSequence,
     /// Error if parsing an Amount failed
-    ParseAmountError(bitcoin::util::amount::ParseAmountError),
+    ParseAmountError(bitcoin::amount::ParseAmountError),
+    /// An address is invalid or does not belong to the compilation network.
+    Address(bitcoin::address::ParseError),
     /// Error from the Policy Compiler
     Miniscript(miniscript::policy::compiler::CompilerError),
     /// Error from the miniscript system
@@ -217,9 +219,15 @@ impl CompilationError {
     }
 }
 
-impl From<bitcoin::util::amount::ParseAmountError> for CompilationError {
-    fn from(b: bitcoin::util::amount::ParseAmountError) -> Self {
+impl From<bitcoin::amount::ParseAmountError> for CompilationError {
+    fn from(b: bitcoin::amount::ParseAmountError) -> Self {
         CompilationError::ParseAmountError(b)
+    }
+}
+
+impl From<bitcoin::address::ParseError> for CompilationError {
+    fn from(error: bitcoin::address::ParseError) -> Self {
+        Self::Address(error)
     }
 }
 

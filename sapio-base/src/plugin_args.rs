@@ -19,6 +19,8 @@ pub enum NetworkDef {
     Bitcoin,
     /// Bitcoin's testnet
     Testnet,
+    /// Bitcoin's fourth test network.
+    Testnet4,
     /// Bitcoin's signet
     Signet,
     /// Bitcoin's regtest
@@ -44,10 +46,10 @@ pub struct ContextualArguments {
     #[serde(with = "NetworkDef")]
     /// # The Network the contract should be created for.
     pub network: bitcoin::Network,
-    #[serde(with = "bitcoin::util::amount::serde::as_sat")]
+    #[serde(with = "bitcoin::amount::serde::as_sat")]
     #[schemars(with = "u64")]
     /// # The Amount of Funds Available to the Contract in Satoshis.
-    pub amount: bitcoin::util::amount::Amount,
+    pub amount: bitcoin::amount::Amount,
 
     /// # Effects to augment compilations with
     #[serde(skip_serializing_if = "MapEffectDB::skip_serializing", default)]

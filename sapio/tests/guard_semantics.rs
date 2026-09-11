@@ -337,9 +337,9 @@ fn more_than_two_guards_require_every_distinct_signer() {
     else {
         panic!("expected a Taproot descriptor");
     };
-    let leaves: Vec<_> = tree.iter_scripts().collect();
+    let leaves: Vec<_> = tree.leaves().collect();
     assert_eq!(leaves.len(), 1);
-    let policy = leaves[0].1.lift().unwrap();
+    let policy = leaves[0].miniscript().lift().unwrap();
     assert_eq!(policy.minimum_n_keys(), Some(4));
     for key in contract.keys {
         assert!(policy

@@ -166,7 +166,7 @@ where
 fn checked_collateral(first: Amount, second: Amount) -> Result<Amount, CompilationError> {
     first
         .checked_add(second)
-        .filter(|amount| amount.as_sat() > 0)
+        .filter(|amount| amount.to_sat() > 0)
         .ok_or_else(|| invalid("Exploding option collateral overflows or is empty"))
 }
 
@@ -194,7 +194,10 @@ mod tests {
                 amount,
                 outcomes: vec![(0, template)],
                 oracle: &PriceOracle,
-                cooperate: Clause::And(vec![Clause::Key(key(1)), Clause::Key(key(2))]),
+                cooperate: Clause::And(vec![
+                    Clause::Key(key(1)).into(),
+                    Clause::Key(key(2)).into(),
+                ]),
                 symbol: "price".into(),
             }
             .try_into()
@@ -223,7 +226,7 @@ mod tests {
     #[test]
     fn prepared_bets_compose_without_cloning_a_context() {
         let prepared = GenericBet::try_from(OptionFixture(3000)).unwrap();
-        let expected = bitcoin::Script::from(&prepared.compile(context(3000)).unwrap().address);
+        let expected = bitcoin::ScriptBuf::from(&prepared.compile(context(3000)).unwrap().address);
         let funded = ExplodingOption {
             party_one: Amount::from_sat(1000),
             party_two: Amount::from_sat(2000),
@@ -247,10 +250,10 @@ mod tests {
             let exercise = compiled
                 .ctv_to_tx
                 .values()
-                .find(|t| t.tx.lock_time == 0)
+                .find(|t| t.tx.lock_time.to_consensus_u32() == 0)
                 .unwrap();
             assert_eq!(exercise.tx.output[0].script_pubkey, expected);
-            assert_eq!(exercise.tx.output[0].value, 3000);
+            assert_eq!(exercise.tx.output[0].value.to_sat(), 3000);
         }
     }
 
@@ -261,10 +264,15 @@ mod tests {
         let refund = compiled
             .ctv_to_tx
             .values()
-            .find(|t| t.tx.lock_time == 100)
+            .find(|t| t.tx.lock_time.to_consensus_u32() == 100)
             .unwrap();
         assert_eq!(
-            refund.tx.output.iter().map(|o| o.value).collect::<Vec<_>>(),
+            refund
+                .tx
+                .output
+                .iter()
+                .map(|o| o.value.to_sat())
+                .collect::<Vec<_>>(),
             vec![1000, 2000]
         );
         assert_eq!(
@@ -278,31 +286,31 @@ mod tests {
         let strike = compiled
             .ctv_to_tx
             .values()
-            .find(|t| t.tx.lock_time == 0)
+            .find(|t| t.tx.lock_time.to_consensus_u32() == 0)
             .unwrap();
         assert_eq!(strike.tx.input.len(), 1);
-        assert_eq!(strike.tx.output[0].value, 3000);
+        assert_eq!(strike.tx.output[0].value.to_sat(), 3000);
         assert_eq!(strike.outputs[0].contract.ctv_to_tx.len(), 1);
     }
     #[test]
     fn underfunded_exercise_requires_an_additional_input() {
         let compiled = underfunded().compile(context(1000)).unwrap();
-        assert_eq!(compiled.required_input_amount.as_sat(), 1000);
+        assert_eq!(compiled.required_input_amount.to_sat(), 1000);
         let strike = compiled
             .ctv_to_tx
             .values()
             .find(|t| t.tx.input.len() == 2)
             .unwrap();
-        assert_eq!(strike.tx.output[0].value, 3000);
-        assert_eq!(strike.required_input_amount.as_sat(), 1000);
-        assert_eq!(strike.max.as_sat(), 3000);
+        assert_eq!(strike.tx.output[0].value.to_sat(), 3000);
+        assert_eq!(strike.required_input_amount.to_sat(), 1000);
+        assert_eq!(strike.max.to_sat(), 3000);
         let refund = compiled
             .ctv_to_tx
             .values()
             .find(|t| t.tx.input.len() == 1)
             .unwrap();
-        assert_eq!(refund.tx.output[0].value, 1000);
-        assert_eq!(refund.tx.lock_time, 100);
+        assert_eq!(refund.tx.output[0].value.to_sat(), 1000);
+        assert_eq!(refund.tx.lock_time.to_consensus_u32(), 100);
         let mut bad = funded();
         bad.opt = OptionFixture(2000);
         assert!(bad.compile(context(3000)).is_err());

@@ -125,7 +125,7 @@ impl PowSwap {
                 ));
             }
             for payment in &outcome.outcome {
-                let value = Amount::from(payment.sats.clone()).as_sat();
+                let value = Amount::from(payment.sats.clone()).to_sat();
                 if value == 0 {
                     return Err(CompilationError::TerminateWith(
                         "Zero PowSwap payment".into(),
@@ -175,7 +175,7 @@ impl PowSwap {
         Clause::And(
             self.coop
                 .iter()
-                .map(|k| Clause::Key(k.inner.into()))
+                .map(|k| Clause::Key(k.inner.into()).into())
                 .collect(),
         )
     }
@@ -240,20 +240,20 @@ mod tests {
         assert_eq!(compiled.ctv_to_tx.len(), 2);
         for template in compiled.ctv_to_tx.values() {
             assert_eq!(template.tx.output.len(), 1);
-            assert_eq!(template.tx.output[0].value, 2000);
-            let (sequence, signer) = if template.tx.lock_time == 600_000_000 {
+            assert_eq!(template.tx.output[0].value.to_sat(), 2000);
+            let (sequence, signer) = if template.tx.lock_time.to_consensus_u32() == 600_000_000 {
                 (10, key(1))
             } else {
-                assert_eq!(template.tx.lock_time, 100);
+                assert_eq!(template.tx.lock_time.to_consensus_u32(), 100);
                 ((1 << 22) | 3, key(2))
             };
-            assert_eq!(template.tx.input[0].sequence, sequence);
+            assert_eq!(template.tx.input[0].sequence.to_consensus_u32(), sequence);
             let recipient = bitcoin::XOnlyPublicKey::from(signer.inner)
                 .compile(context(2000))
                 .unwrap();
             assert_eq!(
                 template.tx.output[0].script_pubkey,
-                bitcoin::Script::from(&recipient.address)
+                bitcoin::ScriptBuf::from(&recipient.address)
             );
         }
         assert!(swap.compile(context(1999)).is_err());

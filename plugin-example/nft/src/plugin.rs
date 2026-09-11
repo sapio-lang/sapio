@@ -1,7 +1,7 @@
-use bitcoin::hashes::hex::ToHex;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::Hash;
-use bitcoin::util::amount::Amount;
+use bitcoin::hex::DisplayHex;
+use bitcoin::Amount;
 use bitcoin::XOnlyPublicKey;
 use sapio::contract::empty;
 use sapio::contract::object::ObjectMetadata;
@@ -49,10 +49,11 @@ impl SimpleNFT {
     fn metadata_commit(self, _ctx: Context) {
         Clause::And(vec![
             Clause::Key(
-                XOnlyPublicKey::from_slice(&Sha256::hash(&[1u8; 32]).into_inner())
+                XOnlyPublicKey::from_slice(&Sha256::hash(&[1u8; 32]).to_byte_array())
                     .expect("constant"),
-            ),
-            Clause::Sha256(self.data.ipfs_nft.commitment()),
+            )
+            .into(),
+            Clause::Sha256(self.data.ipfs_nft.commitment()).into(),
         ])
     }
     /// # signed
@@ -142,7 +143,7 @@ impl TryFrom<Versions> for SimpleNFT {
             }
             _ => Err(CompilationError::TerminateWith(format!(
                 "Minting module must be None or equal to {}",
-                this.key.to_hex()
+                this.key.as_hex()
             ))),
         }
     }

@@ -13,7 +13,7 @@ use sapio::contract::error::CompilationError;
 
 use sapio::template::Output;
 use sapio::*;
-use sapio_base::timelocks::RelHeight;
+use sapio_base::timelocks::{LockTimeError, RelHeight};
 use sapio_base::Clause;
 use sapio_macros::compile_if;
 
@@ -61,20 +61,20 @@ impl OpenChannel {
     }
     #[guard]
     fn signed_update(self, _ctx: Context) {
-        Clause::And(vec![Clause::Key(self.alice_u), Clause::Key(self.bob_u)])
+        Clause::And(vec![
+            Clause::Key(self.alice_u).into(),
+            Clause::Key(self.bob_u).into(),
+        ])
     }
-    #[guard]
-    fn newer_sequence_check(self, _ctx: Context) {
+    #[guard(policy)]
+    fn newer_sequence_check(self, _ctx: Context) -> Result<Clause, LockTimeError> {
         if let Some(prior) = self.pending_update.as_ref() {
-            prior
-                .sequence
-                .get()
-                .checked_add(1)
-                .and_then(|next| AbsTime::try_from(next).ok())
-                .map(Clause::from)
-                .unwrap_or(Clause::Unsatisfiable)
+            let Some(next) = prior.sequence.get().checked_add(1) else {
+                return Ok(Clause::Unsatisfiable);
+            };
+            AbsTime::try_from(next)?.try_into()
         } else {
-            START_OF_TIME.into()
+            START_OF_TIME.try_into()
         }
     }
     #[continuation(
@@ -127,9 +127,9 @@ impl OpenChannel {
             .map(|u| std::cmp::max(u.maturity, self.min_maturity))
             .unwrap_or(self.min_maturity)
     }
-    #[guard]
-    fn timeout(self, _ctx: Context) {
-        self.get_maturity().into()
+    #[guard(policy)]
+    fn timeout(self, _ctx: Context) -> Result<Clause, LockTimeError> {
+        self.get_maturity().try_into()
     }
     #[then(compile_if = "[Self::triggered]", guarded_by = "[Self::timeout]")]
     fn complete_update(self, ctx: sapio::Context) {
@@ -151,7 +151,10 @@ impl OpenChannel {
 
     #[guard]
     fn sign_cooperative_close(self, _ctx: Context) {
-        Clause::And(vec![Clause::Key(self.alice), Clause::Key(self.bob)])
+        Clause::And(vec![
+            Clause::Key(self.alice).into(),
+            Clause::Key(self.bob).into(),
+        ])
     }
 
     #[compile_if]
@@ -241,15 +244,18 @@ mod tests {
             .next()
             .unwrap()
             .unwrap();
-        assert_eq!(template.tx.lock_time, START_OF_TIME.get() + 1);
+        assert_eq!(
+            template.tx.lock_time.to_consensus_u32(),
+            START_OF_TIME.get() + 1
+        );
         let child = &template.outputs[0].contract;
         child.validate().unwrap();
         let payout = child.ctv_to_tx.values().next().unwrap();
-        assert_eq!(payout.tx.input[0].sequence, 10);
-        assert_eq!(payout.tx.output[0].value, 1000);
+        assert_eq!(payout.tx.input[0].sequence.to_consensus_u32(), 10);
+        assert_eq!(payout.tx.output[0].value.to_sat(), 1000);
         assert_eq!(
             contract.guard_signed_update(context(0)),
-            Clause::And(vec![Clause::Key(key(3)), Clause::Key(key(4))])
+            Clause::And(vec![Clause::Key(key(3)).into(), Clause::Key(key(4)).into()])
         );
     }
 
@@ -263,9 +269,12 @@ mod tests {
         assert!(contract
             .continue_update_state(context(1000), Some(update(START_OF_TIME.get() + 3, 999)))
             .is_err());
+        contract.pending_update.as_mut().unwrap().sequence =
+            AbsTime::try_from(0x7fff_ffff).unwrap();
+        assert!(contract.guard_newer_sequence_check(context(0)).is_err());
         contract.pending_update.as_mut().unwrap().sequence = AbsTime::try_from(u32::MAX).unwrap();
         assert_eq!(
-            contract.guard_newer_sequence_check(context(0)),
+            contract.guard_newer_sequence_check(context(0)).unwrap(),
             Clause::Unsatisfiable
         );
         let close = channel()
@@ -274,6 +283,6 @@ mod tests {
             .next()
             .unwrap()
             .unwrap();
-        assert_eq!(close.tx.output[0].value, 1000);
+        assert_eq!(close.tx.output[0].value.to_sat(), 1000);
     }
 }

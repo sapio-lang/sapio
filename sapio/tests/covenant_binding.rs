@@ -2,8 +2,8 @@
 mod covenant;
 
 use bitcoin::hashes::{sha256, Hash};
+use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{Secp256k1, SecretKey};
-use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
 use bitcoin::{Amount, Network, OutPoint, Transaction, Txid, XOnlyPublicKey};
 use sapio::contract::abi::object::{ArtifactErrorKind, ObjectError};
 use sapio::contract::{Compilable, CompilationError, Compiled, Context, Contract};
@@ -490,7 +490,7 @@ fn compiled_reuse_preserves_equal_and_equivalent_plans_without_skipping_validati
     let LoweringPlan::CtvEmulation { signers, .. } = &mut relabeled else {
         unreachable!();
     };
-    signers[0].network = Network::Bitcoin;
+    signers[0].network = bitcoin::NetworkKind::Main;
     signers[0].depth = 10;
     assert_ne!(plan, relabeled);
     for selected in [plan.clone(), relabeled] {

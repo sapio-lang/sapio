@@ -16,10 +16,10 @@ use std::convert::TryInto;
 #[derive(JsonSchema, Serialize, Deserialize, Clone)]
 pub struct Payment {
     /// The amount of coin to send
-    pub amount: bitcoin::util::amount::CoinAmount,
+    pub amount: sapio_base::amount::CoinAmount,
     /// # Address
     /// The Address to send to
-    pub address: bitcoin::Address,
+    pub address: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
 }
 /// Create a tree of payments with a given radix
 #[derive(JsonSchema, Serialize, Deserialize)]
@@ -33,11 +33,12 @@ pub struct TreePay {
 impl TreePay {
     #[then]
     fn expand(self, ctx: sapio::Context) {
+        let network = ctx.network;
         let mut builder = ctx.template();
         if self.participants.len() > self.radix {
             let chunk_size = self.participants.len().div_ceil(self.radix);
             for c in self.participants.chunks(chunk_size) {
-                let mut amt = bitcoin::util::amount::Amount::from_sat(0);
+                let mut amt = bitcoin::Amount::from_sat(0);
                 for Payment { amount, .. } in c {
                     amt = amt
                         .checked_add((*amount).try_into()?)
@@ -56,7 +57,10 @@ impl TreePay {
             for Payment { amount, address } in self.participants.iter() {
                 builder = builder.add_output(
                     (*amount).try_into()?,
-                    &Compiled::from_address(address.clone(), bitcoin::Amount::ZERO),
+                    &Compiled::from_address(
+                        address.clone().require_network(network)?,
+                        bitcoin::Amount::ZERO,
+                    ),
                     None,
                 )?;
             }
@@ -100,7 +104,7 @@ mod tests {
         (0..count)
             .map(|_| Payment {
                 amount: bitcoin::Amount::from_sat(1000).into(),
-                address: address(1),
+                address: address(1).into_unchecked(),
             })
             .collect()
     }
@@ -117,7 +121,7 @@ mod tests {
                 .iter()
                 .fold((0, 0), |(count, total), output| {
                     if output.contract.ctv_to_tx.is_empty() {
-                        (count + 1, total + output.amount.as_sat())
+                        (count + 1, total + output.amount.to_sat())
                     } else {
                         let (n, sats) = leaves(&output.contract, radix);
                         (count + n, total + sats)

@@ -7,17 +7,17 @@ use tokio::task::JoinHandle;
 use tokio::time::{advance, timeout};
 
 fn oracle() -> HDOracleEmulator {
-    HDOracleEmulator::new(ExtendedPrivKey::new_master(Network::Regtest, &[17; 32]).unwrap())
+    HDOracleEmulator::new(Xpriv::new_master(Network::Regtest, &[17; 32]).unwrap())
 }
 
-fn request() -> PartiallySignedTransaction {
-    let mut psbt = PartiallySignedTransaction::from_unsigned_tx(Transaction {
-        version: 2,
-        lock_time: 0,
+fn request() -> Psbt {
+    let mut psbt = Psbt::from_unsigned_tx(Transaction {
+        version: bitcoin::transaction::Version(2),
+        lock_time: bitcoin::absolute::LockTime::from_consensus(0),
         input: vec![TxIn::default()],
         output: vec![TxOut {
-            value: 9_000,
-            script_pubkey: Script::new(),
+            value: bitcoin::Amount::from_sat(9_000),
+            script_pubkey: ScriptBuf::new(),
         }],
     })
     .unwrap();
@@ -29,8 +29,8 @@ fn request() -> PartiallySignedTransaction {
         .x_only_public_key()
         .0;
     psbt.inputs[0].witness_utxo = Some(TxOut {
-        value: 10_000,
-        script_pubkey: Script::new_v1_p2tr(&secp, key, None),
+        value: bitcoin::Amount::from_sat(10_000),
+        script_pubkey: ScriptBuf::new_p2tr(&secp, key, None),
     });
     psbt
 }

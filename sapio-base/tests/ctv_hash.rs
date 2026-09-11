@@ -28,7 +28,7 @@ fn matches_bip119_hash_vectors() {
         for (index, expected) in vector.spend_index.into_iter().zip(vector.result) {
             assert_eq!(
                 tx.get_ctv_hash(index),
-                sha256::Hash::from_hex(&expected).unwrap(),
+                expected.parse::<sha256::Hash>().unwrap(),
                 "BIP-119 hash for input {index} of {}",
                 vector.hex_tx,
             );

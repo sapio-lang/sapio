@@ -1,9 +1,9 @@
 use super::*;
 use crate::program::{ProgramSpendPath, WasmEvaluator};
+use bitcoin::bip32::Xpriv;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::Secp256k1;
-use bitcoin::util::bip32::ExtendedPrivKey;
-use bitcoin::{Network, Script, Transaction, TxIn, TxOut};
+use bitcoin::{Network, ScriptBuf, Transaction, TxIn, TxOut};
 use sapio_base::program::{EvaluatorId, ProgramInstance};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -24,12 +24,12 @@ fn evaluator() -> WasmEvaluator {
     .unwrap()
 }
 
-fn root() -> ExtendedPrivKey {
-    ExtendedPrivKey::new_master(Network::Testnet, &[73; 32]).unwrap()
+fn root() -> Xpriv {
+    Xpriv::new_master(Network::Testnet, &[73; 32]).unwrap()
 }
 
-fn public_root() -> ExtendedPubKey {
-    ExtendedPubKey::from_priv(&Secp256k1::new(), &root())
+fn public_root() -> Xpub {
+    Xpub::from_priv(&Secp256k1::new(), &root())
 }
 
 fn oracle() -> ProgramOracle {
@@ -39,19 +39,19 @@ fn oracle() -> ProgramOracle {
 fn request() -> ProgramSigningRequest {
     let instance = ProgramInstance::new(evaluator().id(), vec![1], vec![]).unwrap();
     let key = instance.derive_public_key(&public_root()).unwrap();
-    let mut psbt = PartiallySignedTransaction::from_unsigned_tx(Transaction {
-        version: 2,
-        lock_time: 0,
+    let mut psbt = Psbt::from_unsigned_tx(Transaction {
+        version: bitcoin::transaction::Version(2),
+        lock_time: bitcoin::absolute::LockTime::from_consensus(0),
         input: vec![TxIn::default()],
         output: vec![TxOut {
-            value: 900,
-            script_pubkey: Script::new(),
+            value: bitcoin::Amount::from_sat(900),
+            script_pubkey: ScriptBuf::new(),
         }],
     })
     .unwrap();
     psbt.inputs[0].witness_utxo = Some(TxOut {
-        value: 1_000,
-        script_pubkey: Script::new_v1_p2tr(&Secp256k1::new(), key, None),
+        value: bitcoin::Amount::from_sat(1_000),
+        script_pubkey: ScriptBuf::new_p2tr(&Secp256k1::new(), key, None),
     });
     psbt.inputs[0].tap_internal_key = Some(key);
     ProgramSigningRequest {

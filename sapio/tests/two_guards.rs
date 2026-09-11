@@ -5,7 +5,7 @@ use sapio::contract::{Compilable, Context, Contract};
 use sapio::{declare, guard, then};
 use sapio_base::covenant::LoweringPlan;
 use sapio_base::effects::EffectPath;
-use sapio_base::miniscript::{ForEach, ForEachKey};
+use sapio_base::miniscript::ForEachKey;
 use sapio_base::Clause;
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -66,9 +66,7 @@ fn compiles_both_guards_with_distinct_metadata_paths() {
     };
     let mut keys = BTreeSet::new();
     descriptor.for_each_key(|key| {
-        if let ForEach::Key(key) = key {
-            keys.insert(*key);
-        }
+        keys.insert(*key);
         true
     });
     assert!(keys.contains(&contract.first));

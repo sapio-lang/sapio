@@ -45,7 +45,8 @@ impl Server {
                         break 'terminate;
                     }
                     Some((req, resp)) = self.chan.recv() => {
-                        resp.send(req.handle().await);
+                        // The requester may disconnect while its work runs.
+                        let _ = resp.send(req.handle().await);
                     }
                 }
             }

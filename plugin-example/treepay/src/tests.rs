@@ -15,7 +15,9 @@ fn context(amount: u64) -> Context {
 }
 fn address() -> bitcoin::Address {
     "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj"
-        .parse()
+        .parse::<bitcoin::Address<bitcoin::address::NetworkUnchecked>>()
+        .unwrap()
+        .require_network(bitcoin::Network::Regtest)
         .unwrap()
 }
 
@@ -24,7 +26,7 @@ fn tree(count: usize, radix: usize) -> TreePay {
         participants: (0..count)
             .map(|_| Payment {
                 amount: Amount::from_sat(1000),
-                address: address(),
+                address: address().into_unchecked(),
             })
             .collect(),
         radix,
@@ -67,7 +69,7 @@ fn uneven_tree_preserves_every_payment_and_transaction_fee() {
         result
     }
     let tree = tree(11, 3);
-    assert_eq!(tree.validate().unwrap().as_sat(), 11500);
+    assert_eq!(tree.validate().unwrap().to_sat(), 11500);
     let compiled = tree.compile(context(11500)).unwrap();
     compiled.validate().unwrap();
     assert_eq!(inspect(&compiled), (11, 500));

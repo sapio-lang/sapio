@@ -60,7 +60,7 @@ fn compiled_fragment_contracts_authorize_both_paths_and_preserve_annexes() {
             ));
             let signed = oracle.sign(request).unwrap();
             let finalized = sapio_psbt::finalize::finalize(signed, &secp).unwrap();
-            let tx = finalized.extract_tx();
+            let tx = finalized.extract_tx().unwrap();
             assert_eq!(tx.input[0].witness.last(), Some(&b"\x50fragments-test"[..]));
             assert_eq!(tx.input[0].witness.len(), if script_path { 4 } else { 2 });
         }

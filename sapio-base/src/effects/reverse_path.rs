@@ -23,13 +23,13 @@ pub struct ReversePath<T, Y = String> {
 }
 
 // Serde converts the path to Y; the linked representation is never wire JSON.
-// Schemars 0.8 does not infer this from serde's into/try_from attributes.
+// Forward the schema identity as well as its contents to the wire type.
 impl<T, Y: JsonSchema> JsonSchema for ReversePath<T, Y> {
-    fn is_referenceable() -> bool {
-        Y::is_referenceable()
+    fn inline_schema() -> bool {
+        Y::inline_schema()
     }
 
-    fn schema_name() -> String {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
         Y::schema_name()
     }
 
@@ -37,13 +37,13 @@ impl<T, Y: JsonSchema> JsonSchema for ReversePath<T, Y> {
         Y::schema_id()
     }
 
-    fn json_schema(generator: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
         Y::json_schema(generator)
     }
 
     fn _schemars_private_non_optional_json_schema(
-        generator: &mut schemars::gen::SchemaGenerator,
-    ) -> schemars::schema::Schema {
+        generator: &mut schemars::SchemaGenerator,
+    ) -> schemars::Schema {
         Y::_schemars_private_non_optional_json_schema(generator)
     }
 

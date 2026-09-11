@@ -221,7 +221,7 @@ impl Contract for TicTacToe {
                 "Invalid TicTacToe state or player keys".into(),
             ));
         }
-        if ctx.funds().as_sat() < 2 {
+        if ctx.funds().to_sat() < 2 {
             return Err(CompilationError::OutOfFunds);
         }
         Ok(ctx.funds())
@@ -301,7 +301,7 @@ mod tests {
                 .tx
                 .output
                 .iter()
-                .map(|o| o.value)
+                .map(|o| o.value.to_sat())
                 .collect::<Vec<_>>(),
             vec![500, 501]
         );
@@ -330,11 +330,11 @@ mod tests {
             assert!(object
                 .ctv_to_tx
                 .values()
-                .all(|t| t.total_amount().as_sat() == funds));
+                .all(|t| t.total_amount().to_sat() == funds));
             assert!(object
                 .ctv_to_tx
                 .values()
-                .any(|t| t.tx.input[0].sequence == 144));
+                .any(|t| t.tx.input[0].sequence.to_consensus_u32() == 144));
         }
         assert!(make_game(Board([[None; 3]; 3]), O)
             .compile(context(1000))

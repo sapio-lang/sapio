@@ -27,7 +27,12 @@ pub(crate) fn miniscript_policy_possible(
     let Some(input) = tx.input.get(input_index as usize) else {
         return false;
     };
-    policy_possible(policy, tx, input.sequence, tx.get_ctv_hash(input_index))
+    policy_possible(
+        policy,
+        tx,
+        input.sequence.to_consensus_u32(),
+        tx.get_ctv_hash(input_index),
+    )
 }
 
 fn policy_possible(policy: &Clause, tx: &Transaction, sequence: u32, ctv: sha256::Hash) -> bool {
@@ -41,24 +46,24 @@ fn policy_possible(policy: &Clause, tx: &Transaction, sequence: u32, ctv: sha256
         | Clause::Ripemd160(_)
         | Clause::Hash160(_) => true,
         Clause::After(required) => {
+            let required = required.to_consensus_u32();
             sequence != u32::MAX
-                && (tx.lock_time < LOCK_TIME_THRESHOLD) == (*required < LOCK_TIME_THRESHOLD)
-                && *required <= tx.lock_time
+                && (tx.lock_time.to_consensus_u32() < LOCK_TIME_THRESHOLD)
+                    == (required < LOCK_TIME_THRESHOLD)
+                && required <= tx.lock_time.to_consensus_u32()
         }
         Clause::Older(required) => {
-            // BIP 112 treats an operand with its disable bit set as a NOP,
-            // before inspecting transaction version or input sequence.
-            required & SEQUENCE_DISABLE_FLAG != 0
-                || (tx.version >= 2
-                    && sequence & SEQUENCE_DISABLE_FLAG == 0
-                    && (required & SEQUENCE_TYPE_FLAG) == (sequence & SEQUENCE_TYPE_FLAG)
-                    && (required & SEQUENCE_LOCK_MASK) <= (sequence & SEQUENCE_LOCK_MASK))
+            let required = required.to_consensus_u32();
+            tx.version.0 >= 2
+                && sequence & SEQUENCE_DISABLE_FLAG == 0
+                && (required & SEQUENCE_TYPE_FLAG) == (sequence & SEQUENCE_TYPE_FLAG)
+                && (required & SEQUENCE_LOCK_MASK) <= (sequence & SEQUENCE_LOCK_MASK)
         }
         Clause::TxTemplate(required) => *required == ctv,
-        Clause::And(children) => children.iter().all(possible),
+        Clause::And(children) => children.iter().all(|child| possible(child)),
         Clause::Or(children) => children.iter().any(|(_, child)| possible(child)),
-        Clause::Threshold(required, children) => {
-            children.iter().filter(|child| possible(child)).count() >= *required
+        Clause::Thresh(threshold) => {
+            threshold.iter().filter(|child| possible(child)).count() >= threshold.k()
         }
         Clause::Inscribe(_, child) => possible(child),
     }
@@ -67,23 +72,25 @@ fn policy_possible(policy: &Clause, tx: &Transaction, sequence: u32, ctv: sha256
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitcoin::hashes::{hash160, ripemd160, sha256d, Hash};
+    use bitcoin::hashes::{hash160, ripemd160, Hash};
     use bitcoin::secp256k1::{Keypair, Secp256k1, SecretKey};
     use bitcoin::{TxIn, TxOut, Witness};
     use sapio_base::miniscript::ord::Inscription;
+    use sapio_base::miniscript::{AbsLockTime, RelLockTime, Threshold};
+    use std::sync::Arc;
 
     fn transaction(version: i32, lock_time: u32, sequence: u32) -> Transaction {
         Transaction {
-            version,
-            lock_time,
+            version: bitcoin::transaction::Version(version),
+            lock_time: bitcoin::absolute::LockTime::from_consensus(lock_time),
             input: vec![TxIn {
                 previous_output: Default::default(),
                 script_sig: Default::default(),
-                sequence,
+                sequence: bitcoin::Sequence(sequence),
                 witness: Witness::new(),
             }],
             output: vec![TxOut {
-                value: 1_000,
+                value: bitcoin::Amount::from_sat(1_000),
                 script_pubkey: Default::default(),
             }],
         }
@@ -104,7 +111,9 @@ mod tests {
             Clause::Trivial,
             key_policy(),
             Clause::Sha256(sha256::Hash::hash(b"unknown preimage")),
-            Clause::Hash256(sha256d::Hash::hash(b"unknown preimage")),
+            Clause::Hash256(sapio_base::miniscript::hash256::Hash::hash(
+                b"unknown preimage",
+            )),
             Clause::Ripemd160(ripemd160::Hash::hash(b"unknown preimage")),
             Clause::Hash160(hash160::Hash::hash(b"unknown preimage")),
         ] {
@@ -126,11 +135,11 @@ mod tests {
             (LOCK_TIME_THRESHOLD, LOCK_TIME_THRESHOLD - 1, 0, false),
             (LOCK_TIME_THRESHOLD, LOCK_TIME_THRESHOLD, 0, true),
             (LOCK_TIME_THRESHOLD + 1, LOCK_TIME_THRESHOLD, 0, false),
-            (u32::MAX, u32::MAX, 0, true),
+            (0x7fff_ffff, 0x7fff_ffff, 0, true),
         ] {
             assert_eq!(
                 miniscript_policy_possible(
-                    &Clause::After(required),
+                    &Clause::After(AbsLockTime::from_consensus(required).unwrap()),
                     &transaction(1, lock_time, sequence),
                     0,
                 ),
@@ -144,13 +153,17 @@ mod tests {
     fn relative_locktime_requires_enabled_version_and_sequence() {
         for version in [i32::MIN, -1, 0, 1, 2, 3, i32::MAX] {
             assert_eq!(
-                miniscript_policy_possible(&Clause::Older(1), &transaction(version, 0, 1), 0),
+                miniscript_policy_possible(
+                    &Clause::Older(RelLockTime::from_height(1)),
+                    &transaction(version, 0, 1),
+                    0
+                ),
                 version >= 2,
                 "version={version}"
             );
             for sequence in [SEQUENCE_DISABLE_FLAG | 1, u32::MAX] {
                 assert!(!miniscript_policy_possible(
-                    &Clause::Older(1),
+                    &Clause::Older(RelLockTime::from_height(1)),
                     &transaction(version, 0, sequence),
                     0,
                 ));
@@ -159,17 +172,9 @@ mod tests {
     }
 
     #[test]
-    fn disabled_csv_operand_is_a_nop() {
+    fn disabled_csv_operands_are_outside_the_policy_type() {
         for required in [SEQUENCE_DISABLE_FLAG, u32::MAX] {
-            for version in [-1, 1, 2] {
-                for sequence in [0, SEQUENCE_TYPE_FLAG, SEQUENCE_DISABLE_FLAG, u32::MAX] {
-                    assert!(miniscript_policy_possible(
-                        &Clause::Older(required),
-                        &transaction(version, 0, sequence),
-                        0,
-                    ));
-                }
-            }
+            assert!(RelLockTime::from_consensus(required).is_err());
         }
     }
 
@@ -197,7 +202,7 @@ mod tests {
         ] {
             assert_eq!(
                 miniscript_policy_possible(
-                    &Clause::Older(required),
+                    &Clause::Older(RelLockTime::from_consensus(required).unwrap()),
                     &transaction(2, 0, sequence),
                     0,
                 ),
@@ -211,18 +216,21 @@ mod tests {
     fn template_commitment_and_timelocks_use_the_selected_input() {
         let mut tx = transaction(2, 100, u32::MAX);
         let mut second_input = tx.input[0].clone();
-        second_input.sequence = 10;
+        second_input.sequence = bitcoin::Sequence(10);
         tx.input.push(second_input);
         let committed_to_zero = Clause::TxTemplate(tx.get_ctv_hash(0));
         let committed_to_one = Clause::TxTemplate(tx.get_ctv_hash(1));
         assert!(miniscript_policy_possible(&committed_to_zero, &tx, 0));
         assert!(!miniscript_policy_possible(&committed_to_zero, &tx, 1));
         assert!(miniscript_policy_possible(&committed_to_one, &tx, 1));
-        for policy in [Clause::After(100), Clause::Older(10)] {
+        for policy in [
+            Clause::After(AbsLockTime::from_consensus(100).unwrap()),
+            Clause::Older(RelLockTime::from_height(10)),
+        ] {
             assert!(!miniscript_policy_possible(&policy, &tx, 0));
             assert!(miniscript_policy_possible(&policy, &tx, 1));
         }
-        tx.output[0].value += 1;
+        tx.output[0].value += bitcoin::Amount::ONE_SAT;
         assert!(!miniscript_policy_possible(&committed_to_zero, &tx, 0));
         assert!(!miniscript_policy_possible(&committed_to_one, &tx, 1));
     }
@@ -239,23 +247,33 @@ mod tests {
     #[test]
     fn alternatives_thresholds_and_inscriptions_preserve_possible_authorizations() {
         let tx = transaction(2, 100, 10);
-        let impossible = Clause::Older(11);
+        let impossible = Clause::Older(RelLockTime::from_height(11));
         let possible = key_policy();
-        let alternatives = Clause::Or(vec![(1, impossible.clone()), (0, possible.clone())]);
+        let alternatives = Clause::Or(vec![
+            (1, Arc::new(impossible.clone())),
+            (0, Arc::new(possible.clone())),
+        ]);
         assert!(miniscript_policy_possible(&alternatives, &tx, 0));
         assert!(!miniscript_policy_possible(
-            &Clause::And(vec![impossible.clone(), possible.clone()]),
+            &Clause::And(vec![
+                Arc::new(impossible.clone()),
+                Arc::new(possible.clone())
+            ]),
             &tx,
             0,
         ));
-        let children = vec![impossible.clone(), possible, Clause::After(100)];
+        let children = vec![
+            Arc::new(impossible.clone()),
+            Arc::new(possible),
+            Arc::new(Clause::After(AbsLockTime::from_consensus(100).unwrap())),
+        ];
         assert!(miniscript_policy_possible(
-            &Clause::Threshold(2, children.clone()),
+            &Clause::Thresh(Threshold::new(2, children.clone()).unwrap()),
             &tx,
             0,
         ));
         assert!(!miniscript_policy_possible(
-            &Clause::Threshold(3, children),
+            &Clause::Thresh(Threshold::new(3, children).unwrap()),
             &tx,
             0,
         ));
@@ -265,7 +283,7 @@ mod tests {
                     Some(b"application/octet-stream".to_vec()),
                     Some(vec![0, 1, 255]),
                 )),
-                Box::new(inner),
+                Arc::new(inner),
             );
             assert_eq!(miniscript_policy_possible(&inscription, &tx, 0), expected);
         }

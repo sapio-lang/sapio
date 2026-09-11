@@ -17,7 +17,7 @@ pub mod compiler;
 pub mod error;
 pub use error::CompilationError;
 pub mod context;
-use bitcoin::util::amount::Amount;
+use bitcoin::amount::Amount;
 use bitcoin::XOnlyPublicKey;
 pub use compiler::Compilable;
 pub use context::Context;
@@ -83,9 +83,9 @@ pub struct DynamicContract<'a, T, S> {
     /// the list of `Guard` for this contract to finish.
     pub finish: Vec<fn() -> Option<actions::Guard<S>>>,
     /// A metadata generator function
-    pub metadata_f: Box<dyn (Fn(&S, Context) -> Result<ObjectMetadata, CompilationError>)>,
+    pub metadata_f: Box<dyn Fn(&S, Context) -> Result<ObjectMetadata, CompilationError>>,
     /// A min amount generator function
-    pub ensure_amount_f: Box<dyn (Fn(&S, Context) -> Result<Amount, CompilationError>)>,
+    pub ensure_amount_f: Box<dyn Fn(&S, Context) -> Result<Amount, CompilationError>>,
 
     /// The contract data argument to pass to functions
     pub data: S,
@@ -204,7 +204,7 @@ where
     fn finish_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::Guard<Self::Ref>>] {
         Self::FINISH_FNS
     }
-    fn get_inner_ref<'a>(&'a self) -> &Self::Ref {
+    fn get_inner_ref<'a>(&'a self) -> &'a Self::Ref {
         self
     }
 

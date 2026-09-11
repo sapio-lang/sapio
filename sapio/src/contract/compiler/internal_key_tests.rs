@@ -2,17 +2,15 @@ use super::*;
 use crate::contract::actions::Guard;
 use crate::contract::object::{Object, SupportedDescriptors};
 use crate::contract::Contract;
+use bitcoin::bip32::{Xpriv, Xpub};
 use bitcoin::blockdata::opcodes::all::{OP_CHECKSIG, OP_DROP};
 use bitcoin::blockdata::script::Builder;
 use bitcoin::hashes::{sha256, Hash};
-use bitcoin::psbt::PartiallySignedTransaction as Psbt;
+use bitcoin::key::TapTweak;
+use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{Keypair, Message, Secp256k1, SecretKey};
-use bitcoin::util::bip32::{ExtendedPrivKey, ExtendedPubKey};
-use bitcoin::util::schnorr::TapTweak;
-use bitcoin::util::sighash::{Prevouts, SighashCache};
-use bitcoin::{
-    Amount, Network, OutPoint, SchnorrSig, SchnorrSighashType, Script, Transaction, TxIn, TxOut,
-};
+use bitcoin::sighash::{Prevouts, SighashCache};
+use bitcoin::{Amount, Network, OutPoint, ScriptBuf, TapSighashType, Transaction, TxIn, TxOut};
 use sapio_base::miniscript::ord::Inscription;
 use sapio_base::miniscript::psbt::{interpreter_check, PsbtExt};
 use sapio_base::policy::ScriptFragment;
@@ -104,12 +102,12 @@ fn pin_overrides_competing_bare_keys_and_removes_only_its_redundant_leaf() {
     let policies = [Clause::Key(owner).into(), Clause::Key(other).into()];
     let automatic = compile(None, policies.clone(), LoweringPlan::Native).unwrap();
     assert_eq!(*tree(&automatic).internal_key(), other);
-    assert_eq!(tree(&automatic).iter_scripts().count(), 2);
+    assert_eq!(tree(&automatic).leaves().count(), 2);
     let explicit = compile(Some(owner), policies.clone(), LoweringPlan::Native).unwrap();
     assert_eq!(*tree(&explicit).internal_key(), owner);
     let scripts: Vec<_> = tree(&explicit)
-        .iter_scripts()
-        .map(|(_, script)| script.encode())
+        .leaves()
+        .map(|leaf| leaf.compute_script())
         .collect();
     assert_eq!(
         scripts,
@@ -140,38 +138,38 @@ fn pinned_key_only_output_has_no_redundant_tree_and_authorizes_a_real_spend() {
     .unwrap();
     let tree = tree(&object);
     assert_eq!(*tree.internal_key(), key(1));
-    assert_eq!(tree.iter_scripts().count(), 0);
+    assert_eq!(tree.leaves().count(), 0);
     assert_eq!(tree.spend_info().merkle_root(), None);
     object.validate().unwrap();
     let previous = TxOut {
-        value: 10_000,
+        value: Amount::from_sat(10_000),
         script_pubkey: tree.script_pubkey(),
     };
     let transaction = Transaction {
-        version: 2,
-        lock_time: 0,
+        version: bitcoin::transaction::Version::TWO,
+        lock_time: bitcoin::absolute::LockTime::ZERO,
         input: vec![TxIn {
             previous_output: OutPoint::default(),
             ..TxIn::default()
         }],
         output: vec![TxOut {
-            value: 9_000,
-            script_pubkey: Script::new(),
+            value: Amount::from_sat(9_000),
+            script_pubkey: ScriptBuf::new(),
         }],
     };
     let mut psbt = Psbt::from_unsigned_tx(transaction).unwrap();
     psbt.inputs[0].witness_utxo = Some(previous.clone());
     psbt.inputs[0].tap_internal_key = Some(key(1));
-    let hash_ty = SchnorrSighashType::All;
+    let hash_ty = TapSighashType::All;
     let hash = SighashCache::new(&psbt.unsigned_tx)
         .taproot_key_spend_signature_hash(0, &Prevouts::All(&[previous]), hash_ty)
         .unwrap();
     let secp = Secp256k1::new();
-    let tweaked = keypair(1).tap_tweak(&secp, None).into_inner();
-    psbt.inputs[0].tap_key_sig = Some(SchnorrSig {
-        sig: secp
+    let tweaked = keypair(1).tap_tweak(&secp, None).to_keypair();
+    psbt.inputs[0].tap_key_sig = Some(bitcoin::taproot::Signature {
+        signature: secp
             .sign_schnorr_no_aux_rand(&Message::from_digest_slice(&hash[..]).unwrap(), &tweaked),
-        hash_ty,
+        sighash_type: hash_ty,
     });
     psbt.finalize_mut(&secp).unwrap();
     interpreter_check(&psbt, &secp).unwrap();
@@ -183,12 +181,24 @@ fn missing_constrained_and_opaque_keys_cannot_gain_key_path_authority() {
     let hash = sha256::Hash::hash(b"hashlock");
     let policies = [
         Clause::Key(key(2)).into(),
-        Clause::And(vec![Clause::Key(key(1)), Clause::Older(16)]).into(),
-        Clause::And(vec![Clause::Key(key(1)), Clause::Sha256(hash)]).into(),
-        Clause::Threshold(2, vec![Clause::Key(key(1)), Clause::Key(key(2))]).into(),
+        Clause::And(vec![
+            Arc::new(Clause::Key(key(1))),
+            Arc::new(Clause::Older(miniscript::RelLockTime::from_height(16))),
+        ])
+        .into(),
+        Clause::And(vec![
+            Arc::new(Clause::Key(key(1))),
+            Arc::new(Clause::Sha256(hash)),
+        ])
+        .into(),
+        Clause::Thresh(miniscript::Threshold::and(
+            Arc::new(Clause::Key(key(1))),
+            Arc::new(Clause::Key(key(2))),
+        ))
+        .into(),
         Clause::Inscribe(
             Box::new(Inscription::new(None, Some(b"reveal".to_vec()))),
-            Box::new(Clause::Key(key(1))),
+            Arc::new(Clause::Key(key(1))),
         )
         .into(),
         raw_key(key(1)),
@@ -213,7 +223,7 @@ fn mixed_raw_tree_honors_pin_and_preserves_raw_and_constrained_leaves() {
     let ScriptPolicy::Script(fragment) = &raw else {
         unreachable!()
     };
-    let expected = fragment.as_script().clone();
+    let expected = fragment.as_script().to_owned();
     let compiled = compile(
         Some(key(1)),
         [Clause::Key(key(1)).into(), raw],
@@ -227,7 +237,10 @@ fn mixed_raw_tree_honors_pin_and_preserves_raw_and_constrained_leaves() {
     assert_eq!(raw_tree.leaves(), &[(0, expected)]);
     compiled.validate().unwrap();
 
-    let constrained = Clause::And(vec![Clause::Key(key(1)), Clause::Older(16)]);
+    let constrained = Clause::And(vec![
+        Arc::new(Clause::Key(key(1))),
+        Arc::new(Clause::Older(miniscript::RelLockTime::from_height(16))),
+    ]);
     let expected = constrained.compile::<Tap>().unwrap().encode();
     let compiled = compile(
         Some(key(1)),
@@ -237,7 +250,7 @@ fn mixed_raw_tree_honors_pin_and_preserves_raw_and_constrained_leaves() {
     .unwrap();
     assert_eq!(*tree(&compiled).internal_key(), key(1));
     assert_eq!(
-        tree(&compiled).iter_scripts().next().unwrap().1.encode(),
+        tree(&compiled).leaves().next().unwrap().compute_script(),
         expected
     );
 }
@@ -245,9 +258,9 @@ fn mixed_raw_tree_honors_pin_and_preserves_raw_and_constrained_leaves() {
 #[test]
 fn explicit_owner_pin_survives_native_and_emulated_covenant_lowering() {
     let secp = Secp256k1::new();
-    let root = ExtendedPubKey::from_priv(
+    let root = Xpub::from_priv(
         &secp,
-        &ExtendedPrivKey::new_master(Network::Regtest, &[9; 32]).unwrap(),
+        &Xpriv::new_master(Network::Regtest, &[9; 32]).unwrap(),
     );
     let predicate = Ctv(sha256::Hash::hash(b"a template"));
     for lowering in [
@@ -268,7 +281,7 @@ fn explicit_owner_pin_survives_native_and_emulated_covenant_lowering() {
         )
         .unwrap();
         assert_eq!(*tree(&compiled).internal_key(), key(1));
-        assert_eq!(tree(&compiled).iter_scripts().count(), 1);
+        assert_eq!(tree(&compiled).leaves().count(), 1);
         assert_eq!(compiled.requires_native_ctv(), native);
         assert!(compiled
             .covenant_requirements

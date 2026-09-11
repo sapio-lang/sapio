@@ -10,10 +10,8 @@ pub use crate::contract::abi::studio::*;
 use crate::contract::object::Object;
 use crate::contract::object::ObjectError;
 use bitcoin::hashes::sha256::Hash as Sha256;
-use bitcoin::util::psbt::PartiallySignedTransaction;
-use bitcoin::util::taproot::ControlBlock;
-use bitcoin::util::taproot::TaprootBuilder;
-use bitcoin::util::taproot::TaprootSpendInfo;
+use bitcoin::psbt::Psbt;
+use bitcoin::taproot::ControlBlock;
 use bitcoin::{OutPoint, Transaction};
 use miniscript::*;
 use sapio_base::covenant::{Ctv, LoweringPlan};
@@ -165,7 +163,6 @@ impl Object {
             vout: 0,
             ..OutPoint::default()
         };
-        let secp = bitcoin::secp256k1::Secp256k1::new();
         while let Some((out, object, bound_path, funding)) = stack.pop() {
             let invalid_funding = |outpoint, reason: String| ObjectError::InvalidFunding {
                 path: object.root_path.clone(),
@@ -174,20 +171,20 @@ impl Object {
             };
             if let Some(previous) = &funding {
                 if previous.output[out.vout as usize].script_pubkey
-                    != bitcoin::Script::from(&object.address)
+                    != bitcoin::ScriptBuf::from(&object.address)
                 {
                     return Err(invalid_funding(
                         out,
                         "output script does not match the contract".into(),
                     ));
                 }
-                let available = previous.output[out.vout as usize].value;
-                if available < object.required_input_amount.as_sat() {
+                let available = previous.output[out.vout as usize].value.to_sat();
+                if available < object.required_input_amount.to_sat() {
                     return Err(invalid_funding(
                         out,
                         format!(
                             "contract input provides {available} sat but requires {} sat",
-                            object.required_input_amount.as_sat()
+                            object.required_input_amount.to_sat()
                         ),
                     ));
                 }
@@ -236,7 +233,7 @@ impl Object {
                     }
                     prev_txs.push(previous);
                 }
-                let mut psbt = PartiallySignedTransaction::from_unsigned_tx(tx.clone())?;
+                let mut psbt = Psbt::from_unsigned_tx(tx.clone())?;
                 let mut amount = 0u64;
                 let mut complete = true;
                 for ((input, tx_in), previous) in
@@ -244,7 +241,7 @@ impl Object {
                 {
                     if let Some(previous) = previous {
                         let output = &previous.output[tx_in.previous_output.vout as usize];
-                        amount = amount.checked_add(output.value).ok_or_else(|| {
+                        amount = amount.checked_add(output.value.to_sat()).ok_or_else(|| {
                             invalid_funding(
                                 tx_in.previous_output,
                                 "input amount sum overflows".into(),
@@ -260,12 +257,12 @@ impl Object {
                         complete = false;
                     }
                 }
-                if complete && amount < template.max.as_sat() {
+                if complete && amount < template.max.to_sat() {
                     return Err(invalid_funding(
                         out,
                         format!(
                         "inputs provide {amount} sat but outputs and reserved fees require {} sat",
-                        template.max.as_sat()
+                        template.max.to_sat()
                     ),
                     ));
                 }
@@ -274,21 +271,11 @@ impl Object {
                         psbt.inputs[0].witness_script = Some(d.explicit_script()?);
                     }
                     Some(SupportedDescriptors::XOnly(Descriptor::Tr(t))) => {
-                        let mut builder = TaprootBuilder::new();
-                        let mut added = false;
-                        for (depth, ms) in t.iter_scripts() {
-                            added = true;
-                            builder = builder.add_leaf(depth, ms.encode())?;
-                        }
-                        let info = if added {
-                            builder.finalize(&secp, *t.internal_key())?
-                        } else {
-                            TaprootSpendInfo::new_key_spend(&secp, *t.internal_key(), None)
-                        };
+                        let info = t.spend_info();
                         let input = &mut psbt.inputs[0];
-                        for item in info.as_script_map().keys() {
-                            let cb = info.control_block(item).expect("Must be present");
-                            input.tap_scripts.insert(cb, item.clone());
+                        for leaf in info.leaves() {
+                            let script = (leaf.script().to_owned(), leaf.leaf_version());
+                            input.tap_scripts.insert(leaf.into_control_block(), script);
                         }
                         input.tap_merkle_root = info.merkle_root();
                         input.tap_internal_key = Some(info.internal_key());
@@ -296,7 +283,7 @@ impl Object {
                     Some(SupportedDescriptors::Taproot(tree)) => {
                         let info = tree.spend_info();
                         let input = &mut psbt.inputs[0];
-                        for ((script, version), branches) in info.as_script_map() {
+                        for ((script, version), branches) in info.script_map() {
                             // Preserve every proof when the same script occurs
                             // at different positions in the explicit tree.
                             for branch in branches {
@@ -316,7 +303,7 @@ impl Object {
                     }
                     _ => (),
                 }
-                let txid = tx.txid();
+                let txid = tx.compute_txid();
                 let parent = Arc::new(tx);
                 // Source paths can be reused. An occurrence is identified by
                 // its parent transition and output, independently of metadata.
@@ -349,8 +336,10 @@ impl Object {
         for (out, object, bound_path, transactions) in prepared {
             let mut txs = Vec::with_capacity(transactions.len());
             for (template, psbt) in transactions {
-                let tx = Arc::new(psbt.clone().extract_tx());
-                let expected = tx.txid();
+                // Binding indexes candidate transactions before finalization;
+                // export of a completed spend applies fee-checked extraction.
+                let tx = Arc::new(psbt.clone().extract_tx_unchecked_fee_rate());
+                let expected = tx.compute_txid();
                 let actual = blockdata.add_tx(tx)?;
                 if actual != expected {
                     return Err(TxIndexError::TxidMismatch { expected, actual }.into());
@@ -399,7 +388,7 @@ fn lookup_funding(
         Err(TxIndexError::UnknownTxid(txid)) if txid == out.txid => return Ok(None),
         Err(error) => return Err(error),
     };
-    let actual = tx.txid();
+    let actual = tx.compute_txid();
     if actual != out.txid {
         return Err(TxIndexError::TxidMismatch {
             expected: out.txid,

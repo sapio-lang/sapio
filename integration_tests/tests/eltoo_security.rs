@@ -1,8 +1,8 @@
 use bitcoin::consensus::{deserialize, serialize};
-use bitcoin::psbt::PartiallySignedTransaction as Psbt;
+use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{schnorr::Signature, Secp256k1};
-use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
-use bitcoin::{SchnorrSig, Script, Transaction};
+use bitcoin::taproot::{LeafVersion, TapLeafHash};
+use bitcoin::{taproot, ScriptBuf, Transaction};
 use emulator_connect::program::{
     validate_program_response, ProgramError, ProgramOracle, ProgramSigningRequest,
     ProgramSpendPath, PSBT,
@@ -36,6 +36,7 @@ fn finish(oracle: &ProgramOracle, request: ProgramSigningRequest) -> Transaction
     sapio_psbt::finalize::finalize(sign(oracle, request), &Secp256k1::new())
         .unwrap()
         .extract_tx()
+        .unwrap()
 }
 
 // Bypass only the candidate builder's monotonicity check, allowing tests to
@@ -92,7 +93,10 @@ fn funding_and_maximum_state_have_no_unintended_escape_leaf() {
     let request =
         settlement_request(&last, fixture::coin(&last, 13), fixture::sponsor(2_000, 14)).unwrap();
     let finalized = finish(&oracle(), request);
-    assert_eq!(finalized.input[0].sequence, u32::from(terms.delay()));
+    assert_eq!(
+        finalized.input[0].sequence.to_consensus_u32(),
+        u32::from(terms.delay())
+    );
 }
 
 #[test]
@@ -148,7 +152,7 @@ fn one_sided_balances_settle_the_full_capacity_without_zero_outputs() {
             .unwrap(),
         );
         assert_eq!(transaction.output.len(), 1);
-        assert_eq!(transaction.output[0].value, terms.capacity());
+        assert_eq!(transaction.output[0].value.to_sat(), terms.capacity());
         assert_eq!(
             transaction.output[0].script_pubkey,
             recipient.script_pubkey()
@@ -246,7 +250,8 @@ fn certificate_rebinding_preserves_capacity_and_accepts_replaceable_fee_coins() 
                 .witness_utxo
                 .as_ref()
                 .unwrap()
-                .value,
+                .value
+                .to_sat(),
             terms.capacity()
         );
         assert_eq!(
@@ -254,7 +259,8 @@ fn certificate_rebinding_preserves_capacity_and_accepts_replaceable_fee_coins() 
                 .witness_utxo
                 .as_ref()
                 .unwrap()
-                .value,
+                .value
+                .to_sat(),
             fee
         );
         let transaction = finish(&oracle, request);
@@ -262,13 +268,16 @@ fn certificate_rebinding_preserves_capacity_and_accepts_replaceable_fee_coins() 
             transaction
                 .output
                 .iter()
-                .map(|output| output.value)
+                .map(|output| output.value.to_sat())
                 .sum::<u64>(),
             terms.capacity()
         );
         transactions.push(transaction);
     }
-    assert_ne!(transactions[0].txid(), transactions[1].txid());
+    assert_ne!(
+        transactions[0].compute_txid(),
+        transactions[1].compute_txid()
+    );
     assert_ne!(
         transactions[0].input[0].witness,
         transactions[1].input[0].witness
@@ -290,7 +299,8 @@ fn certificate_rebinding_preserves_capacity_and_accepts_replaceable_fee_coins() 
     };
     reused_signature.psbt.0.inputs[0].tap_script_sigs.insert(
         (terms.update_program().derive_public_key().unwrap(), leaf),
-        SchnorrSig::from_slice(transactions[0].input[0].witness.iter().next().unwrap()).unwrap(),
+        taproot::Signature::from_slice(transactions[0].input[0].witness.iter().next().unwrap())
+            .unwrap(),
     );
     assert!(matches!(
         oracle.sign(reused_signature),
@@ -299,7 +309,7 @@ fn certificate_rebinding_preserves_capacity_and_accepts_replaceable_fee_coins() 
 
     for value in [terms.capacity() - 1, terms.capacity() + 1] {
         let mut wrong_amount = fixture::coin(&source, 43);
-        wrong_amount.txout.value = value;
+        wrong_amount.txout.value = bitcoin::Amount::from_sat(value);
         assert!(source.input(&wrong_amount).is_err());
     }
 }
@@ -362,7 +372,7 @@ fn latest_certificate_recovers_an_old_state_without_old_payout_metadata() {
     let observed: Transaction = deserialize(&observed_bytes).unwrap();
     let recovered = recover_update(&terms, &observed).unwrap();
     assert_eq!(recovered.state_number, 1);
-    assert_eq!(recovered.coin.outpoint.txid, observed.txid());
+    assert_eq!(recovered.coin.outpoint.txid, observed.compute_txid());
     let latest = state(3);
     let authorization = authorize_update(&terms, latest, &fixture::joint_key()).unwrap();
     assert!(recovered
@@ -377,10 +387,13 @@ fn latest_certificate_recovers_an_old_state_without_old_payout_metadata() {
         .request(&terms, latest, fixture::sponsor(5_000, 52), &authorization)
         .unwrap();
     let transaction = finish(&oracle, request);
-    assert_eq!(transaction.input[0].previous_output.txid, observed.txid());
+    assert_eq!(
+        transaction.input[0].previous_output.txid,
+        observed.compute_txid()
+    );
     assert_eq!(
         transaction.output[0].script_pubkey,
-        Script::from(&terms.state(latest).unwrap().compile().unwrap().address)
+        ScriptBuf::from(&terms.state(latest).unwrap().compile().unwrap().address)
     );
-    assert_eq!(transaction.output[0].value, terms.capacity());
+    assert_eq!(transaction.output[0].value.to_sat(), terms.capacity());
 }

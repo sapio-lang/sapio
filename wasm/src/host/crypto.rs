@@ -4,10 +4,10 @@ use crate::{
     CRYPTO_NAMESPACE, CRYPTO_NAMESPACE_V2, MAX_DERIVATION_CHILDREN, MAX_SCHNORR_MESSAGE_BYTES,
     MAX_SHA256_BYTES,
 };
+use bitcoin::bip32::{ChildNumber, Xpub};
 use bitcoin::hashes::{sha256, Hash, HashEngine};
 use bitcoin::secp256k1::ffi::{self, CPtr};
 use bitcoin::secp256k1::{schnorr, Message, Parity, Scalar, Secp256k1, VerifyOnly, XOnlyPublicKey};
-use bitcoin::util::bip32::{ChildNumber, ExtendedPubKey};
 use std::sync::OnceLock;
 use wasmer::{
     AsStoreMut, Function, FunctionEnv, FunctionEnvMut, Global, Imports, Instance, Memory,
@@ -236,7 +236,7 @@ fn bip32_derive_import(
     memory
         .read(u64::from(path), &mut encoded_path[..count as usize * 4])
         .map_err(error)?;
-    let Ok(root) = ExtendedPubKey::decode(&encoded_root) else {
+    let Ok(root) = Xpub::decode(&encoded_root) else {
         return Ok(1);
     };
     if u32::from(root.depth) + count > 255 {

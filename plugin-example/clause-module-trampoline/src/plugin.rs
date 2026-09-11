@@ -22,10 +22,8 @@ use serde::Serialize;
 #[derive(JsonSchema, Deserialize, Serialize, Clone)]
 pub struct GetClause {
     // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
     alice: bitcoin::XOnlyPublicKey,
     // TODO: Taproot Fix Encoding
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
     bob: bitcoin::XOnlyPublicKey,
 }
 

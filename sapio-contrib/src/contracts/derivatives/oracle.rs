@@ -5,6 +5,7 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //! A Price Oracle trait for Derivatives
+use sapio_base::miniscript::Threshold;
 use sapio_base::Clause;
 /// Placeholder type for a standard way of looking up a stock symbol; can be defined more
 /// concretely but should have a human readable string representation.
@@ -45,14 +46,20 @@ impl ThresholdOracle {
 
 impl Oracle for ThresholdOracle {
     fn get_key_lt_gte(&self, t: &Symbol, price: i64) -> (Clause, Clause) {
-        let (l, r) = self
+        let (l, r): (Vec<Clause>, Vec<Clause>) = self
             .oracles
             .iter()
             .map(|o| o.get_key_lt_gte(t, price))
             .unzip();
         (
-            Clause::Threshold(self.thresh, l),
-            Clause::Threshold(self.thresh, r),
+            Clause::Thresh(
+                Threshold::new(self.thresh, l.into_iter().map(Into::into).collect())
+                    .expect("quorum checked by constructor"),
+            ),
+            Clause::Thresh(
+                Threshold::new(self.thresh, r.into_iter().map(Into::into).collect())
+                    .expect("quorum checked by constructor"),
+            ),
         )
     }
 }

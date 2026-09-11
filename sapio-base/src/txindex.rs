@@ -51,7 +51,7 @@ pub trait TxIndex {
     /// lookup a particular output
     fn lookup_output(&self, b: &bitcoin::OutPoint) -> Result<bitcoin::TxOut> {
         let tx = self.lookup_tx(&b.txid)?;
-        check_txid(b.txid, tx.txid())?;
+        check_txid(b.txid, tx.compute_txid())?;
         tx.output
             .get(b.vout as usize)
             .cloned()
@@ -89,7 +89,7 @@ impl TxIndex for TxIndexLogger {
             .ok_or(TxIndexError::UnknownTxid(*b))
     }
     fn add_tx(&self, tx: Arc<bitcoin::Transaction>) -> Result<Txid> {
-        let txid = tx.txid();
+        let txid = tx.compute_txid();
         self.map.lock().unwrap().insert(txid, tx);
         Ok(txid)
     }
@@ -115,12 +115,12 @@ where
     fn lookup_tx(&self, b: &Txid) -> Result<Arc<bitcoin::Transaction>> {
         match self.cache.lookup_tx(b) {
             Ok(tx) => {
-                check_txid(*b, tx.txid())?;
+                check_txid(*b, tx.compute_txid())?;
                 Ok(tx)
             }
             Err(TxIndexError::UnknownTxid(txid)) if txid == *b => {
                 let tx = self.primary.lookup_tx(b)?;
-                check_txid(*b, tx.txid())?;
+                check_txid(*b, tx.compute_txid())?;
                 check_txid(*b, self.cache.add_tx(tx.clone())?)?;
                 Ok(tx)
             }
@@ -128,10 +128,10 @@ where
         }
     }
     fn add_tx(&self, tx: Arc<bitcoin::Transaction>) -> Result<Txid> {
-        let txid = tx.txid();
+        let txid = tx.compute_txid();
         match self.cache.lookup_tx(&txid) {
             Ok(cached) => {
-                check_txid(txid, cached.txid())?;
+                check_txid(txid, cached.compute_txid())?;
                 if cached == tx {
                     return Ok(txid);
                 }

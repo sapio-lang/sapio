@@ -14,7 +14,6 @@ pub use simp_pack::IpfsNFT;
 pub struct Mint_NFT_Trait_Version_0_1_0 {
     /// # Initial Owner
     /// The key that will own this NFT
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
     pub owner: bitcoin::XOnlyPublicKey,
     /// # IPFS Sapio Interactive Metadata Protocol
     /// The Data for the NFT
@@ -52,7 +51,7 @@ impl Mint_NFT_Trait_Version_0_1_0 {
     pub fn compute_royalty_for_artist(&self, amount: Amount) -> Result<Amount, CompilationError> {
         self.validate()?;
         let fraction = (PRECISION as f64 * self.royalty).round() as u64;
-        let sats = u128::from(amount.as_sat()) * u128::from(fraction) / u128::from(PRECISION);
+        let sats = u128::from(amount.to_sat()) * u128::from(fraction) / u128::from(PRECISION);
         Ok(Amount::from_sat(sats as u64))
     }
 }
@@ -75,7 +74,6 @@ pub mod mint_impl {
 pub struct NFT_Sale_Trait_Version_0_1_0 {
     /// # Owner
     /// The key that will own this NFT
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
     pub sell_to: bitcoin::XOnlyPublicKey,
     /// # Price
     /// The price in Sats
@@ -113,7 +111,6 @@ pub trait SellableNFT: Contract {
 pub struct NFT_Sale_Trait_Version_0_1_0_Partial {
     /// # Owner
     /// The key that will own this NFT
-    #[schemars(with = "bitcoin::hashes::sha256::Hash")]
     pub sell_to: bitcoin::XOnlyPublicKey,
     /// # Price
     /// The price in Sats

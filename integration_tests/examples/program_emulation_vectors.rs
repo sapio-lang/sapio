@@ -6,10 +6,10 @@
 use bitcoin::blockdata::opcodes::all::OP_CHECKSIG;
 use bitcoin::blockdata::script::Builder;
 use bitcoin::consensus::encode::serialize_hex;
+use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::Secp256k1;
-use bitcoin::util::psbt::PartiallySignedTransaction;
-use bitcoin::util::taproot::{LeafVersion, TapLeafHash, TaprootBuilder};
-use bitcoin::{Address, Network, OutPoint, Script, Transaction, TxIn, TxOut};
+use bitcoin::taproot::{LeafVersion, TapLeafHash, TaprootBuilder};
+use bitcoin::{Address, Network, OutPoint, ScriptBuf, Transaction, TxIn, TxOut};
 use emulator_connect::program::{ProgramOracle, ProgramSigningRequest, ProgramSpendPath, PSBT};
 use miniscript::psbt::PsbtExt;
 use sapio_base::program::ctv_wasm_instance;
@@ -41,8 +41,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             recipient_first: false,
         },
     ])?;
-    let address = Address::from_script(&(&compiled.address).into(), Network::Regtest)
-        .ok_or("compiled program has no standard address")?;
+    let address = Address::from_script(
+        &bitcoin::ScriptBuf::from(&compiled.address),
+        Network::Regtest,
+    )?;
     let name = "program_pay_at_least";
     let outpoint = funding.get(name).copied().unwrap_or_default();
     let mut cases = vec![];
@@ -53,7 +55,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             .iter()
             .position(|output| output.script_pubkey == destination.script_pubkey())
             .ok_or("candidate does not pay the fixed recipient")?;
-        let amount = candidate.unsigned_tx.output[index].value;
+        let amount = candidate.unsigned_tx.output[index].value.to_sat();
         if amount == 5_000 {
             continue;
         }
@@ -62,7 +64,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         // that Core will check against that output during signature validation.
         assert_eq!(candidate.inputs.len(), 1);
         assert_eq!(
-            candidate.inputs[0].witness_utxo.as_ref().unwrap().value,
+            candidate.inputs[0]
+                .witness_utxo
+                .as_ref()
+                .unwrap()
+                .value
+                .to_sat(),
             FUNDING_SATS,
         );
         candidate.inputs[0].non_witness_utxo = None;
@@ -75,11 +82,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         signed
             .finalize_mut(&Secp256k1::new())
             .map_err(|errors| format!("program spend failed finalization: {errors:?}"))?;
-        let transaction = signed.extract_tx();
+        let transaction = signed.extract_tx()?;
         let label = format!("pay_{amount}_at_{index}");
         cases.push(case(label.clone(), true, transaction.clone()));
         let mut amount_changed = transaction.clone();
-        amount_changed.output[index].value -= 1;
+        amount_changed.output[index].value -= bitcoin::Amount::ONE_SAT;
         cases.push(case(
             format!("{label}_amount_changed"),
             false,
@@ -119,22 +126,22 @@ fn main() -> Result<(), Box<dyn Error>> {
         .add_leaf(0, script.clone())?
         .finalize(&secp, internal)
         .expect("single-leaf example tree");
-    let script_pubkey = Script::new_v1_p2tr_tweaked(spend.output_key());
-    let mut psbt = PartiallySignedTransaction::from_unsigned_tx(Transaction {
-        version: 2,
-        lock_time: 0,
+    let script_pubkey = ScriptBuf::new_p2tr_tweaked(spend.output_key());
+    let mut psbt = Psbt::from_unsigned_tx(Transaction {
+        version: bitcoin::transaction::Version::TWO,
+        lock_time: bitcoin::absolute::LockTime::from_consensus(0),
         input: vec![TxIn {
             previous_output: funding.get(name).copied().unwrap_or_default(),
-            sequence: 0xffff_fffd,
+            sequence: bitcoin::Sequence(0xffff_fffd),
             ..TxIn::default()
         }],
         output: vec![
             TxOut {
-                value: 6_000,
+                value: bitcoin::Amount::from_sat(6_000),
                 script_pubkey: destination.script_pubkey(),
             },
             TxOut {
-                value: 13_500,
+                value: bitcoin::Amount::from_sat(13_500),
                 script_pubkey: recipient(94).script_pubkey(),
             },
         ],
@@ -143,7 +150,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let leaf_hash = TapLeafHash::from_script(&leaf.0, leaf.1);
     let input = &mut psbt.inputs[0];
     input.witness_utxo = Some(TxOut {
-        value: FUNDING_SATS,
+        value: bitcoin::Amount::from_sat(FUNDING_SATS),
         script_pubkey,
     });
     input.tap_internal_key = Some(internal);
@@ -161,10 +168,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     signed
         .finalize_mut(&secp)
         .map_err(|errors| format!("program script-path spend failed finalization: {errors:?}"))?;
-    let transaction = signed.extract_tx();
+    let transaction = signed.extract_tx()?;
     assert_eq!(transaction.input[0].witness.len(), 3);
     let mut changed = transaction.clone();
-    changed.output[0].value -= 1;
+    changed.output[0].value -= bitcoin::Amount::ONE_SAT;
     let script_path_group = json!({
         "name": name,
         "address": Address::p2tr_tweaked(spend.output_key(), Network::Regtest).to_string(),
@@ -179,14 +186,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     // does not depend on the funding outpoint or the derived program key.
     let name = "program_inline_ctv";
     let mut transaction = Transaction {
-        version: 2,
-        lock_time: 0,
+        version: bitcoin::transaction::Version::TWO,
+        lock_time: bitcoin::absolute::LockTime::from_consensus(0),
         input: vec![TxIn {
-            sequence: 0xffff_fffd,
+            sequence: bitcoin::Sequence(0xffff_fffd),
             ..TxIn::default()
         }],
         output: vec![TxOut {
-            value: FUNDING_SATS - 500,
+            value: bitcoin::Amount::from_sat(FUNDING_SATS - 500),
             script_pubkey: recipient(95).script_pubkey(),
         }],
     };
@@ -194,10 +201,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let key = instance.derive_public_key(&oracle.public_root())?;
     let address = Address::p2tr(&secp, key, None, Network::Regtest);
     transaction.input[0].previous_output = funding.get(name).copied().unwrap_or_default();
-    let mut psbt = PartiallySignedTransaction::from_unsigned_tx(transaction)?;
+    let mut psbt = Psbt::from_unsigned_tx(transaction)?;
     psbt.inputs[0].tap_internal_key = Some(key);
     psbt.inputs[0].witness_utxo = Some(TxOut {
-        value: FUNDING_SATS,
+        value: bitcoin::Amount::from_sat(FUNDING_SATS),
         script_pubkey: address.script_pubkey(),
     });
     let mut signed = oracle.sign(ProgramSigningRequest {
@@ -210,12 +217,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     signed
         .finalize_mut(&secp)
         .map_err(|errors| format!("inline CTV spend failed finalization: {errors:?}"))?;
-    let transaction = signed.extract_tx();
+    let transaction = signed.extract_tx()?;
     assert_eq!(transaction.input[0].witness.len(), 1);
     let mut amount_changed = transaction.clone();
-    amount_changed.output[0].value -= 1;
+    amount_changed.output[0].value -= bitcoin::Amount::ONE_SAT;
     let mut sequence_changed = transaction.clone();
-    sequence_changed.input[0].sequence -= 1;
+    sequence_changed.input[0].sequence =
+        bitcoin::Sequence(sequence_changed.input[0].sequence.to_consensus_u32() - 1);
     let ctv_group = json!({
         "name": name,
         "address": address.to_string(),

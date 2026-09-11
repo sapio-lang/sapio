@@ -1,14 +1,14 @@
 use super::federated::FederatedEmulatorConnection;
 use super::hd::HDOracleEmulatorConnection;
 use crate::{msgs, wire, CTVEmulator, Clause, EmulatorError};
+use bitcoin::bip32::{Xpriv, Xpub};
 use bitcoin::hashes::sha256;
+use bitcoin::psbt::{raw, Psbt};
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::secp256k1::{Keypair, Message, SecretKey};
-use bitcoin::util::bip32::{ExtendedPrivKey, ExtendedPubKey};
-use bitcoin::util::psbt::{raw, PartiallySignedTransaction as Psbt};
-use bitcoin::util::taproot::{LeafVersion, TapLeafHash};
-use bitcoin::{Network, Script, Transaction, TxIn, TxOut};
-use bitcoin::{SchnorrSig, SchnorrSighashType};
+use bitcoin::taproot::{LeafVersion, TapLeafHash};
+use bitcoin::TapSighashType;
+use bitcoin::{Network, ScriptBuf, Transaction, TxIn, TxOut};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -17,18 +17,18 @@ type Mutation = fn(&mut Psbt);
 
 fn request() -> Psbt {
     let mut psbt = Psbt::from_unsigned_tx(Transaction {
-        version: 2,
-        lock_time: 0,
+        version: bitcoin::transaction::Version(2),
+        lock_time: bitcoin::absolute::LockTime::from_consensus(0),
         input: vec![TxIn::default()],
         output: vec![TxOut {
-            value: 9_000,
-            script_pubkey: Script::new(),
+            value: bitcoin::Amount::from_sat(9_000),
+            script_pubkey: ScriptBuf::new(),
         }],
     })
     .unwrap();
     psbt.inputs[0].witness_utxo = Some(TxOut {
-        value: 10_000,
-        script_pubkey: Script::new(),
+        value: bitcoin::Amount::from_sat(10_000),
+        script_pubkey: ScriptBuf::new(),
     });
     psbt.inputs[0].unknown.insert(
         raw::Key {
@@ -54,6 +54,29 @@ impl CTVEmulator for ChangeResponse {
 }
 
 struct ObserveResponse(Arc<AtomicUsize>);
+
+#[test]
+fn federation_rejects_invalid_policy_thresholds() {
+    use bitcoin::hashes::Hash;
+    for (count, threshold, valid) in [
+        (0, 0, false),
+        (1, 0, false),
+        (1, 2, false),
+        (2, 1, true),
+        (2, 2, true),
+    ] {
+        let peers = (0..count)
+            .map(|_| Arc::new(ChangeResponse(|_| {})) as Arc<dyn CTVEmulator>)
+            .collect();
+        let result = FederatedEmulatorConnection::new(peers, threshold)
+            .get_signer_for(sha256::Hash::all_zeros());
+        if valid {
+            assert!(result.is_ok());
+        } else {
+            assert!(matches!(result, Err(EmulatorError::InvalidThreshold(_))));
+        }
+    }
+}
 
 impl CTVEmulator for ObserveResponse {
     fn get_signer_for(&self, _: sha256::Hash) -> Result<Clause, EmulatorError> {
@@ -89,14 +112,14 @@ fn add_signature(psbt: &mut Psbt, byte: u8) {
     psbt.inputs[0].tap_script_sigs.insert(
         (
             keypair.x_only_public_key().0,
-            TapLeafHash::from_script(&Script::from(vec![0x51]), LeafVersion::TapScript),
+            TapLeafHash::from_script(&ScriptBuf::from(vec![0x51]), LeafVersion::TapScript),
         ),
-        SchnorrSig {
-            sig: secp.sign_schnorr_no_aux_rand(
+        bitcoin::taproot::Signature {
+            signature: secp.sign_schnorr_no_aux_rand(
                 &Message::from_digest_slice(&[byte; 32]).unwrap(),
                 &keypair,
             ),
-            hash_ty: SchnorrSighashType::All,
+            sighash_type: TapSighashType::All,
         },
     );
 }
@@ -141,11 +164,11 @@ async fn hd_rejects_raw_metadata_changes_instead_of_hiding_them_in_a_merge() {
     let mutations: [(Mutation, bool); 5] = [
         (|psbt| psbt.inputs[0].unknown.clear(), false),
         (
-            |psbt| psbt.inputs[0].witness_utxo.as_mut().unwrap().value -= 1,
+            |psbt| psbt.inputs[0].witness_utxo.as_mut().unwrap().value -= bitcoin::Amount::ONE_SAT,
             false,
         ),
         (
-            |psbt| psbt.outputs[0].witness_script = Some(Script::from(vec![0x51])),
+            |psbt| psbt.outputs[0].witness_script = Some(ScriptBuf::from(vec![0x51])),
             false,
         ),
         (|_| {}, true),
@@ -164,9 +187,9 @@ async fn hd_rejects_raw_metadata_changes_instead_of_hiding_them_in_a_merge() {
                 .unwrap();
         });
         let secp = Arc::new(Secp256k1::new());
-        let root = ExtendedPubKey::from_priv(
+        let root = Xpub::from_priv(
             &secp,
-            &ExtendedPrivKey::new_master(Network::Regtest, &[7; 32]).unwrap(),
+            &Xpriv::new_master(Network::Regtest, &[7; 32]).unwrap(),
         );
         let connection = HDOracleEmulatorConnection::new(address, root, None, secp)
             .await

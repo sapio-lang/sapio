@@ -14,16 +14,19 @@
 //! in the spending transaction. Evaluation has no signing keys, plugin imports,
 //! filesystem, network, or clock access.
 
+use bitcoin::bip32::{Xpriv, Xpub};
 use bitcoin::blockdata::opcodes::all::OP_CODESEPARATOR;
 use bitcoin::blockdata::script::Instruction;
-use bitcoin::hashes::{sha256, Hash};
-use bitcoin::schnorr::TapTweak;
+#[cfg(test)]
+use bitcoin::hashes::Hash;
+use bitcoin::key::TapTweak;
+use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{Message, Secp256k1};
-use bitcoin::util::bip32::{ExtendedPrivKey, ExtendedPubKey};
-use bitcoin::util::psbt::PartiallySignedTransaction;
-use bitcoin::util::sighash::{Annex, Prevouts, SighashCache};
-use bitcoin::util::taproot::{LeafVersion, TapBranchHash, TapLeafHash};
-use bitcoin::{OutPoint, SchnorrSig, SchnorrSighashType, Script, TxOut, XOnlyPublicKey};
+use bitcoin::sighash::{Annex, Prevouts, SighashCache};
+use bitcoin::taproot::{LeafVersion, TapLeafHash, TapNodeHash};
+#[cfg(test)]
+use bitcoin::ScriptBuf;
+use bitcoin::{OutPoint, TapSighashType, TxOut, XOnlyPublicKey};
 use sapio_base::program::{
     program_derivation_path, EvaluatorId, ProgramInstance, WasmVersion, MAX_PROGRAM_ROOT_DEPTH,
 };
@@ -101,13 +104,13 @@ pub struct SignedOutput<'a> {
     /// Amount in satoshis.
     pub value: u64,
     /// The output's scriptPubKey.
-    pub script_pubkey: &'a Script,
+    pub script_pubkey: &'a bitcoin::Script,
 }
 
 impl<'a> From<&'a TxOut> for SignedOutput<'a> {
     fn from(output: &'a TxOut) -> Self {
         Self {
-            value: output.value,
+            value: output.value.to_sat(),
             script_pubkey: &output.script_pubkey,
         }
     }
@@ -141,12 +144,12 @@ pub struct SignedTransactionView<'a> {
 impl SignedTransactionView<'_> {
     /// Signed transaction version.
     pub fn version(&self) -> i32 {
-        self.transaction.version
+        self.transaction.version.0
     }
 
     /// Signed transaction lock time.
     pub fn lock_time(&self) -> u32 {
-        self.transaction.lock_time
+        self.transaction.lock_time.to_consensus_u32()
     }
 
     /// The input selected for this signature.
@@ -175,7 +178,7 @@ impl SignedTransactionView<'_> {
             .zip(self.prevouts.iter())
             .map(|(input, prevout)| SignedInput {
                 previous_output: &input.previous_output,
-                sequence: input.sequence,
+                sequence: input.sequence.to_consensus_u32(),
                 prevout: (*prevout).into(),
             })
     }
@@ -248,9 +251,9 @@ pub enum ProgramError {
     /// The response changed unauthorized fields or lacks a valid signature.
     InvalidResponse(&'static str),
     /// The requested BIP32 private path could not be derived.
-    Derivation(bitcoin::util::bip32::Error),
+    Derivation(bitcoin::bip32::Error),
     /// The signature hash could not be constructed.
-    Sighash(bitcoin::util::sighash::Error),
+    Sighash(bitcoin::sighash::TaprootError),
 }
 
 impl fmt::Display for ProgramError {
@@ -336,8 +339,8 @@ impl std::error::Error for ProgramError {
 /// A signing root and immutable registry of WASM predicate interpreters.
 #[derive(Clone)]
 pub struct ProgramOracle {
-    root: ExtendedPrivKey,
-    public_root: ExtendedPubKey,
+    root: Xpriv,
+    public_root: Xpub,
     evaluators: BTreeMap<EvaluatorId, WasmEvaluator>,
 }
 
@@ -346,10 +349,7 @@ impl ProgramOracle {
     ///
     /// Reserved identities execute the instance's own program bytes under
     /// their fixed WASM version and cannot be replaced by an interpreter.
-    pub fn new(
-        root: ExtendedPrivKey,
-        evaluators: Vec<WasmEvaluator>,
-    ) -> Result<Self, ProgramError> {
+    pub fn new(root: Xpriv, evaluators: Vec<WasmEvaluator>) -> Result<Self, ProgramError> {
         if root.depth > MAX_PROGRAM_ROOT_DEPTH {
             return Err(ProgramError::RootDepth(root.depth));
         }
@@ -364,14 +364,14 @@ impl ProgramOracle {
             }
         }
         Ok(Self {
-            public_root: ExtendedPubKey::from_priv(&Secp256k1::new(), &root),
+            public_root: Xpub::from_priv(&Secp256k1::new(), &root),
             root,
             evaluators: registry,
         })
     }
 
     /// The public root used for offline program-policy derivation.
-    pub fn public_root(&self) -> ExtendedPubKey {
+    pub fn public_root(&self) -> Xpub {
         self.public_root
     }
 
@@ -379,10 +379,7 @@ impl ProgramOracle {
     ///
     /// All existing PSBT data is preserved. A valid existing target signature
     /// is returned unchanged; an incompatible signature is an error.
-    pub fn sign(
-        &self,
-        request: ProgramSigningRequest,
-    ) -> Result<PartiallySignedTransaction, ProgramError> {
+    pub fn sign(&self, request: ProgramSigningRequest) -> Result<Psbt, ProgramError> {
         let (module, program, version) =
             if let Some(version) = request.instance.evaluator().inline_wasm_version() {
                 (request.instance.program(), &[][..], version)
@@ -439,12 +436,12 @@ impl ProgramOracle {
                     &secp,
                     request.psbt.0.inputs[request.input_index as usize].tap_merkle_root,
                 )
-                .into_inner(),
+                .to_keypair(),
             ProgramSpendPath::ScriptPath(_) => key,
         };
-        let signature = SchnorrSig {
-            sig: secp.sign_schnorr_no_aux_rand(&prepared.message, &key),
-            hash_ty: SchnorrSighashType::All,
+        let signature = bitcoin::taproot::Signature {
+            signature: secp.sign_schnorr_no_aux_rand(&prepared.message, &key),
+            sighash_type: TapSighashType::All,
         };
         let program_key = prepared.program_key;
         let mut psbt = request.psbt.0;
@@ -469,15 +466,15 @@ struct Prepared<'a> {
 }
 
 impl Prepared<'_> {
-    fn verify(&self, signature: &SchnorrSig) -> bool {
-        signature.hash_ty == SchnorrSighashType::All
+    fn verify(&self, signature: &bitcoin::taproot::Signature) -> bool {
+        signature.sighash_type == TapSighashType::All
             && Secp256k1::verification_only()
-                .verify_schnorr(&signature.sig, &self.message, &self.verification_key)
+                .verify_schnorr(&signature.signature, &self.message, &self.verification_key)
                 .is_ok()
     }
 }
 
-fn previous_outputs(psbt: &PartiallySignedTransaction) -> Result<Vec<&TxOut>, ProgramError> {
+fn previous_outputs(psbt: &Psbt) -> Result<Vec<&TxOut>, ProgramError> {
     psbt.inputs
         .iter()
         .zip(&psbt.unsigned_tx.input)
@@ -487,7 +484,7 @@ fn previous_outputs(psbt: &PartiallySignedTransaction) -> Result<Vec<&TxOut>, Pr
                 .non_witness_utxo
                 .as_ref()
                 .map(|transaction| {
-                    if transaction.txid() != txin.previous_output.txid {
+                    if transaction.compute_txid() != txin.previous_output.txid {
                         return Err(ProgramError::InvalidNonWitnessPrevout(index));
                     }
                     transaction
@@ -509,7 +506,7 @@ fn previous_outputs(psbt: &PartiallySignedTransaction) -> Result<Vec<&TxOut>, Pr
 
 fn prepare<'a>(
     request: &'a ProgramSigningRequest,
-    root: &ExtendedPubKey,
+    root: &Xpub,
 ) -> Result<Prepared<'a>, ProgramError> {
     if request.witness.len() > MAX_WITNESS_BYTES {
         return Err(ProgramError::WitnessTooLarge(request.witness.len()));
@@ -526,13 +523,13 @@ fn prepare<'a>(
     }
     if input
         .sighash_type
-        .is_some_and(|sighash| sighash.schnorr_hash_ty() != Ok(SchnorrSighashType::All))
+        .is_some_and(|sighash| sighash.taproot_hash_ty() != Ok(TapSighashType::All))
     {
         return Err(ProgramError::UnsupportedSighash);
     }
     let prevouts = previous_outputs(psbt)?;
     let output_script = &prevouts[index].script_pubkey;
-    if !output_script.is_v1_p2tr() {
+    if !output_script.is_p2tr() {
         return Err(ProgramError::NotTaproot);
     }
     let output_key = XOnlyPublicKey::from_slice(&output_script.as_bytes()[2..])
@@ -545,7 +542,7 @@ fn prepare<'a>(
     let (verification_key, internal_key) = match request.path {
         ProgramSpendPath::KeyPath => {
             let (tweaked, _) = program_key.tap_tweak(&secp, input.tap_merkle_root);
-            if tweaked.to_inner() != output_key {
+            if tweaked.to_x_only_public_key() != output_key {
                 return Err(ProgramError::KeyPathMismatch);
             }
             (output_key, program_key)
@@ -566,12 +563,9 @@ fn prepare<'a>(
                 }
                 if control.verify_taproot_commitment(&secp, output_key, script) {
                     if let Some(expected_root) = input.tap_merkle_root {
-                        let mut root = TapBranchHash::from_inner(leaf.into_inner());
-                        for node in control.merkle_branch.as_inner() {
-                            root = TapBranchHash::from_node_hashes(
-                                sha256::Hash::from_inner(root.into_inner()),
-                                *node,
-                            );
+                        let mut root = TapNodeHash::from(leaf);
+                        for node in control.merkle_branch.as_slice() {
+                            root = TapNodeHash::from_node_hashes(root, *node);
                         }
                         if root != expected_root {
                             return Err(ProgramError::ConflictingTaprootMetadata);
@@ -603,12 +597,9 @@ fn prepare<'a>(
         .taproot_signature_hash(
             index,
             &Prevouts::All(&prevouts),
-            annex
-                .map(Annex::new)
-                .transpose()
-                .map_err(ProgramError::Sighash)?,
+            annex.map(|bytes| Annex::new(bytes).expect("PSBT annex prefix was validated")),
             path,
-            SchnorrSighashType::All,
+            TapSighashType::All,
         )
         .map_err(ProgramError::Sighash)?;
     let message = Message::from_digest_slice(&hash[..])
@@ -624,10 +615,10 @@ fn prepare<'a>(
 }
 
 fn target_signature<'a>(
-    psbt: &'a PartiallySignedTransaction,
+    psbt: &'a Psbt,
     request: &ProgramSigningRequest,
     program_key: XOnlyPublicKey,
-) -> Option<&'a SchnorrSig> {
+) -> Option<&'a bitcoin::taproot::Signature> {
     let input = psbt.inputs.get(request.input_index as usize)?;
     match request.path {
         ProgramSpendPath::KeyPath => input.tap_key_sig.as_ref(),
@@ -636,11 +627,11 @@ fn target_signature<'a>(
 }
 
 fn put_signature(
-    psbt: &mut PartiallySignedTransaction,
+    psbt: &mut Psbt,
     index: u32,
     path: ProgramSpendPath,
     program_key: XOnlyPublicKey,
-    signature: SchnorrSig,
+    signature: bitcoin::taproot::Signature,
 ) {
     let input = &mut psbt.inputs[index as usize];
     match path {
@@ -658,8 +649,8 @@ fn put_signature(
 /// the program honestly; that remains the emulation trust assumption.
 pub fn validate_program_response(
     request: &ProgramSigningRequest,
-    response: &PartiallySignedTransaction,
-    root: &ExtendedPubKey,
+    response: &Psbt,
+    root: &Xpub,
 ) -> Result<(), ProgramError> {
     let prepared = prepare(request, root)?;
     let signature = target_signature(response, request, prepared.program_key).ok_or(

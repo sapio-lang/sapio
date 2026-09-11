@@ -1,9 +1,9 @@
 use super::*;
+use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{Keypair, Message, Secp256k1, SecretKey};
-use bitcoin::util::psbt::PartiallySignedTransaction as Psbt;
-use bitcoin::util::sighash::{Prevouts, SighashCache};
-use bitcoin::util::taproot::TapLeafHash;
-use bitcoin::{Network, OutPoint, SchnorrSig, SchnorrSighashType, Transaction, TxOut};
+use bitcoin::sighash::{Prevouts, SighashCache};
+use bitcoin::taproot::{Signature, TapLeafHash};
+use bitcoin::{Network, OutPoint, TapSighashType, Transaction, TxOut};
 use sapio::contract::abi::object::SupportedDescriptors;
 use sapio::contract::abi::studio::SapioStudioFormat;
 use sapio::contract::Compilable;
@@ -101,7 +101,7 @@ fn reveal_fee_preserves_the_inscribed_sat_and_padding() {
         .next()
         .unwrap()
         .unwrap();
-    assert_eq!(template.tx.output[0].value, 501);
+    assert_eq!(template.tx.output[0].value.to_sat(), 501);
 }
 
 #[test]
@@ -126,11 +126,11 @@ fn owner_reveal_preserves_inscription_through_artifact_and_psbt_round_trips() {
     assert_ne!(*descriptor.internal_key(), contract.owner);
 
     let funding = Transaction {
-        version: 2,
-        lock_time: 0,
+        version: bitcoin::transaction::Version::TWO,
+        lock_time: bitcoin::absolute::LockTime::ZERO,
         input: vec![bitcoin::TxIn::default()],
         output: vec![TxOut {
-            value: 10_000,
+            value: Amount::from_sat(10_000),
             script_pubkey: compiled.address.clone().into(),
         }],
     };
@@ -161,15 +161,15 @@ fn owner_reveal_preserves_inscription_through_artifact_and_psbt_round_trips() {
             0,
             &Prevouts::All(&prevouts),
             leaf_hash,
-            SchnorrSighashType::Default,
+            TapSighashType::Default,
         )
         .unwrap();
     let message = Message::from_digest_slice(&sighash[..]).unwrap();
     assert!(psbt.clone().finalize_mut(&secp).is_err());
 
-    let signature = |key| SchnorrSig {
-        sig: secp.sign_schnorr_no_aux_rand(&message, &keypair(key)),
-        hash_ty: SchnorrSighashType::Default,
+    let signature = |key| Signature {
+        signature: secp.sign_schnorr_no_aux_rand(&message, &keypair(key)),
+        sighash_type: TapSighashType::Default,
     };
     let mut wrong_owner = psbt.clone();
     wrong_owner.inputs[0]
@@ -177,14 +177,14 @@ fn owner_reveal_preserves_inscription_through_artifact_and_psbt_round_trips() {
         .insert((contract.owner, leaf_hash), signature(2));
     assert!(wrong_owner.finalize_mut(&secp).is_err());
     let owner_signature = signature(1);
-    secp.verify_schnorr(&owner_signature.sig, &message, &contract.owner)
+    secp.verify_schnorr(&owner_signature.signature, &message, &contract.owner)
         .unwrap();
     psbt.inputs[0]
         .tap_script_sigs
         .insert((contract.owner, leaf_hash), owner_signature);
     psbt.finalize_mut(&secp).unwrap();
     let revealed = psbt.extract(&secp).unwrap();
-    assert_eq!(revealed.output[0].value, 9_500);
+    assert_eq!(revealed.output[0].value.to_sat(), 9_500);
     let envelopes = Envelope::<Inscription>::from_transaction(&revealed);
     assert_eq!(envelopes.len(), 1);
     assert_eq!(envelopes[0].payload.body.as_ref(), Some(&contract.data));

@@ -34,7 +34,9 @@ fn context(ranges: OrdinalsInfo) -> Context {
 fn destination() -> Compiled {
     Compiled::from_address(
         "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj"
-            .parse::<Address>()
+            .parse::<Address<bitcoin::address::NetworkUnchecked>>()
+            .unwrap()
+            .require_network(Network::Regtest)
             .unwrap(),
         bitcoin::Amount::ZERO,
     )
@@ -75,14 +77,14 @@ fn ordinal_outputs_follow_input_order_and_preserve_complete_accounting() {
     let mut offset = 0usize;
     let mut observed = Vec::new();
     for output in &template.tx.output {
-        if output.value == 501 {
+        if output.value == Amount::from_sat(501) {
             observed.push(input_sats[offset]);
         }
-        offset += output.value as usize;
+        offset += output.value.to_sat() as usize;
     }
     assert_eq!(observed, [1010, 10]);
     assert_eq!(offset, 1990);
-    assert_eq!(template.max.as_sat(), 2000);
+    assert_eq!(template.max.to_sat(), 2000);
 }
 
 #[test]
@@ -118,11 +120,11 @@ fn auxiliary_inputs_pay_the_seller_change_and_fee_after_known_sats() {
             .tx
             .output
             .iter()
-            .map(|out| out.value)
+            .map(|out| out.value.to_sat())
             .collect::<Vec<_>>(),
         [10, 501, 489, 800, 100]
     );
-    assert_eq!(template.max.as_sat(), 2000);
+    assert_eq!(template.max.to_sat(), 2000);
 }
 
 #[test]

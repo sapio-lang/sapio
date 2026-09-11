@@ -42,6 +42,7 @@ with upstream crates would remove semantics, not complete a migration.
 
 | Area | Change and evidence |
 | --- | --- |
+| Bitcoin dependencies | [Bitcoin 0.32.102, upstream secp256k1 0.29.1 and Miniscript 13.1.0](BITCOIN_032.md); preserve CTV, inscriptions and strict PSBT/signature parsing while moving amount/schema types into Sapio |
 | Stable builds | Rust 1.98.1 pin, explicit compiler minimum, both dependency locks, resolver 2, removal of the nightly associated-type default |
 | Linux runtime compatibility | Upgrade Wasmer and its cache to 6.1.0, which provides the stack probe removed from Rust's x86 runtime; remove unused direct CLI runtime dependencies |
 | PSBT signing | Use the selected input index for key and script paths; reject sighash errors; verify signatures independently on a two-input transaction |
