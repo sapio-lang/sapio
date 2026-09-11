@@ -25,8 +25,8 @@ lazy_static = "1.4.0"
 version = "1.0"
 
 [dependencies.schemars]
-version = "0.8.5"
-features = ['impl_json_schema', 'derive']
+version = "=1.2.2"
+features = ["derive", "bitcoin032", "miniscript13"]
 
 [dependencies.bitcoin]
 version = "=0.32.102"

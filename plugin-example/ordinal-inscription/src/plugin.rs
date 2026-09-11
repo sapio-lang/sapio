@@ -17,7 +17,6 @@ use serde::*;
 /// A really Ordinal  Bearing Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct InscribingStep {
-    #[schemars(with = "String")]
     owner: XOnlyPublicKey,
     data: Vec<u8>,
     content_type: String,
@@ -80,7 +79,6 @@ impl InscribingStep {
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct Reveal {
     fee: AmountU64,
-    #[schemars(with = "Option<String>")]
     alternative: Option<Address<bitcoin::address::NetworkUnchecked>>,
 }
 impl Reveal {

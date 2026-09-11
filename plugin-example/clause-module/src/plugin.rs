@@ -9,7 +9,6 @@
 #![deny(missing_docs)]
 use sapio::contract::*;
 use sapio::*;
-use sapio_base::policy::CompiledClause;
 use sapio_base::Clause;
 use sapio_wasm_plugin::client::plugin::Callable;
 #[cfg(target_arch = "wasm32")]
@@ -21,20 +20,18 @@ use serde::Deserialize;
 #[derive(JsonSchema, Deserialize)]
 pub struct GetClause {
     // TODO: Taproot Fix Encoding
-    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
     // TODO: Taproot Fix Encoding
-    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
 }
 
 impl Callable for GetClause {
-    type Output = CompiledClause;
-    fn call(&self, _ctx: Context) -> Result<CompiledClause, CompilationError> {
-        Ok(CompiledClause(Clause::And(vec![
+    type Output = Clause;
+    fn call(&self, _ctx: Context) -> Result<Clause, CompilationError> {
+        Ok(Clause::And(vec![
             Clause::Key(self.alice).into(),
             Clause::Key(self.bob).into(),
-        ])))
+        ]))
     }
 }
 

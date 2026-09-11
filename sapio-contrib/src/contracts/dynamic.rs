@@ -59,7 +59,6 @@ impl AnyContract for D<'static> {
 #[derive(JsonSchema, Deserialize)]
 pub struct DynamicExample {
     /// Key controlling both dynamically constructed outputs.
-    #[schemars(with = "String")]
     key: bitcoin::XOnlyPublicKey,
 }
 impl DynamicExample {

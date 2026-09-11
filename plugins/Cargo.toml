@@ -17,7 +17,7 @@ host = ["wasmer", "wasmer-cache", "wasmer-middlewares", "wasmer-types", "jsonsch
 client = []
 
 [dependencies]
-schemars = "0.8.0"
+schemars = { version = "=1.2.2", features = ["bitcoin032", "miniscript13"] }
 serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"

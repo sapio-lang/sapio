@@ -54,9 +54,7 @@ pub struct HodlChickenInner(HodlChickenChecks);
 pub struct HodlChickenChecks {
     alice_contract: Payouts,
     bob_contract: Payouts,
-    #[schemars(with = "String")]
     alice_key: bitcoin::XOnlyPublicKey,
-    #[schemars(with = "String")]
     bob_key: bitcoin::XOnlyPublicKey,
     alice_deposit: u64,
     bob_deposit: u64,

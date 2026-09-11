@@ -18,7 +18,6 @@ use serde::*;
 /// Chain of OpReturns
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct ChainReturn {
-    #[schemars(with = "String")]
     pk: bitcoin::XOnlyPublicKey,
 }
 /// Helper

@@ -18,7 +18,6 @@ use std::convert::TryFrom;
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
 pub struct Hanukkiah {
     /// Who receives the funds in the candles
-    #[schemars(with = "String")]
     recipient: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     /// Amount of Coin per Candle
     amount_per_candle: AmountF64,
@@ -101,10 +100,8 @@ pub struct Hanukkiah2 {
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
 #[serde(try_from = "String")]
 #[serde(into = "String")]
-#[schemars(transparent)]
-struct Recipients(
-    #[schemars(with = "String")] [bitcoin::Address<bitcoin::address::NetworkUnchecked>; 36],
-);
+#[schemars(with = "String")]
+struct Recipients([bitcoin::Address<bitcoin::address::NetworkUnchecked>; 36]);
 
 use std::convert::TryInto;
 use std::str::FromStr;
@@ -134,7 +131,6 @@ impl Into<String> for Recipients {
 #[derive(Serialize, Deserialize, JsonSchema, Clone)]
 struct Hanukkiah2Night {
     /// Who receives the funds in the candles
-    #[schemars(with = "Vec<String>")]
     recipients: Vec<bitcoin::Address<bitcoin::address::NetworkUnchecked>>,
     /// Amount of Coin per Candle
     amount_per_candle: AmountF64,

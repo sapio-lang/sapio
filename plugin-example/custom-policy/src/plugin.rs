@@ -35,10 +35,8 @@ impl PolicyCompiler for ArithmeticSigner {
 #[serde(deny_unknown_fields)]
 pub struct CustomPolicyPayment {
     /// Signer expressed through the custom arithmetic language.
-    #[schemars(with = "String", regex(pattern = "^[0-9a-fA-F]{64}$"))]
     owner: XOnlyPublicKey,
     /// Native Miniscript signer, also receiving the payment.
-    #[schemars(with = "String", regex(pattern = "^[0-9a-fA-F]{64}$"))]
     co_signer: XOnlyPublicKey,
 }
 

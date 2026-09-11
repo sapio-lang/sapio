@@ -17,8 +17,8 @@ serde_derive = "1.0"
 path = "../../simp-pack"
 version = "0.2.4"
 [dependencies.schemars]
-version = "0.8.0"
-features = ['impl_json_schema']
+version = "=1.2.2"
+features = ["bitcoin032", "miniscript13"]
 
 [dependencies.bitcoin]
 version = "=0.32.102"

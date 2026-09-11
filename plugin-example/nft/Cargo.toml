@@ -23,8 +23,8 @@ serde_derive = "1.0"
 
 
 [dependencies.schemars]
-version = "0.8.0"
-features = ['impl_json_schema']
+version = "=1.2.2"
+features = ["bitcoin032", "miniscript13"]
 [dependencies.bitcoin]
 version = "=0.32.102"
 features = ['serde']

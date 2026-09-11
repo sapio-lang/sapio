@@ -34,10 +34,8 @@ pub struct TapBet {
     /// be > period)
     pub cancel_timeout: AnyRelTimeLock,
     /// An externally generated Taproot script (not address) to send the funds to
-    #[schemars(with = "String")]
     pub taproot_script: ScriptBuf,
     /// An arbitrary bitcoin address to send the funds to on cancellation
-    #[schemars(with = "String")]
     pub cancel_to: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
 }
 

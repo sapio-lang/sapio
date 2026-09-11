@@ -20,7 +20,6 @@ use std::convert::TryInto;
 /// Pay To Public Key Sapio Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct PayToPublicKey {
-    #[schemars(with = "String")]
     key: bitcoin::XOnlyPublicKey,
 }
 
@@ -39,11 +38,8 @@ impl Contract for PayToPublicKey {
 /// Basic Escrowing Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct BasicEscrow {
-    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
-    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
-    #[schemars(with = "String")]
     escrow: bitcoin::XOnlyPublicKey,
 }
 
@@ -89,11 +85,8 @@ impl Contract for BasicEscrow {
 /// Basic Escrowing Contract, written more expressively
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct BasicEscrow2 {
-    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
-    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
-    #[schemars(with = "String")]
     escrow: bitcoin::XOnlyPublicKey,
 }
 
@@ -129,16 +122,12 @@ impl Contract for BasicEscrow2 {
 /// Trustless Escrowing Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct TrustlessEscrow {
-    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
-    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
-    #[schemars(with = "(CoinAmount, String)")]
     alice_escrow: (
         CoinAmount,
         bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     ),
-    #[schemars(with = "(CoinAmount, String)")]
     bob_escrow: (
         CoinAmount,
         bitcoin::Address<bitcoin::address::NetworkUnchecked>,

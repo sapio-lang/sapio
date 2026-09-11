@@ -17,9 +17,7 @@ use std::marker::PhantomData;
 
 #[derive(JsonSchema, Serialize, Deserialize)]
 struct ExampleA {
-    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
-    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
 }
 
@@ -72,7 +70,6 @@ where
 
 #[derive(JsonSchema, Serialize, Deserialize)]
 struct ExampleB<T: BState> {
-    #[schemars(with = "Vec<String>")]
     participants: Vec<bitcoin::XOnlyPublicKey>,
     threshold: u8,
     amount: CoinAmount,
@@ -134,16 +131,12 @@ where
 /// Trustless Escrowing Contract
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct ExampleCompileIf {
-    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
-    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
-    #[schemars(with = "(CoinAmount, String)")]
     alice_escrow: (
         CoinAmount,
         bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     ),
-    #[schemars(with = "(CoinAmount, String)")]
     bob_escrow: (
         CoinAmount,
         bitcoin::Address<bitcoin::address::NetworkUnchecked>,

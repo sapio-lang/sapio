@@ -88,7 +88,7 @@ impl<'de, A: Absolutivity, TT: TimeType> Deserialize<'de> for LockTime<A, TT> {
     }
 }
 impl<A: Absolutivity, TT: TimeType> JsonSchema for LockTime<A, TT> {
-    fn schema_name() -> String {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
         match (A::IS_ABSOLUTE, TT::IS_HEIGHT) {
             (false, true) => "RelativeHeight",
             (false, false) => "RelativeTime",
@@ -97,17 +97,12 @@ impl<A: Absolutivity, TT: TimeType> JsonSchema for LockTime<A, TT> {
         }
         .into()
     }
-    fn json_schema(_gen: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
-        use schemars::schema::{InstanceType, NumberValidation, Schema, SchemaObject};
+    fn json_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
         let (min, max) = encoded_bounds::<A, TT>();
-        Schema::Object(SchemaObject {
-            instance_type: Some(InstanceType::Integer.into()),
-            number: Some(Box::new(NumberValidation {
-                minimum: Some(min as f64),
-                maximum: Some(max as f64),
-                ..Default::default()
-            })),
-            ..Default::default()
+        schemars::json_schema!({
+            "type": "integer",
+            "minimum": min,
+            "maximum": max
         })
     }
 }
@@ -379,14 +374,8 @@ mod wire_tests {
         }
         assert!(serde_json::from_str::<T>("-1").is_err());
         let schema = schemars::schema_for!(T);
-        assert_eq!(
-            schema.schema.number.as_ref().unwrap().minimum,
-            Some(min as f64)
-        );
-        assert_eq!(
-            schema.schema.number.as_ref().unwrap().maximum,
-            Some(max as f64)
-        );
+        assert_eq!(schema.as_value()["minimum"], min);
+        assert_eq!(schema.as_value()["maximum"], max);
     }
     #[test]
     fn all_four_encoded_domains_match_the_schema() {

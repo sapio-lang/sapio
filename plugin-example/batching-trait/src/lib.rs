@@ -10,7 +10,6 @@ pub struct Payment {
     pub amount: bitcoin::Amount,
     /// # Address
     /// The Address to send to
-    #[schemars(with = "String")]
     pub address: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
 }
 #[derive(Serialize, JsonSchema, Deserialize, Clone)]

@@ -22,7 +22,6 @@ use std::fmt;
 #[schemars(transparent)]
 pub struct Ctv(
     /// The expected default CTV hash.
-    #[schemars(with = "String", regex(pattern = "^[0-9a-fA-F]{64}$"))]
     pub sha256::Hash,
 );
 
@@ -52,7 +51,6 @@ pub enum LoweringPlan {
     /// Emit the existing CTV-specific BIP32 signer policy.
     CtvEmulation {
         /// Public roots in policy order; endpoint and transport settings are absent.
-        #[schemars(with = "Vec<String>")]
         signers: Vec<Xpub>,
         /// Required signer count, from one through the number of distinct roots.
         #[schemars(range(min = 1))]

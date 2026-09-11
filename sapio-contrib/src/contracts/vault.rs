@@ -109,10 +109,8 @@ impl Contract for Vault {
 /// A specialization of `Vault` where cold storage is a regular `bitcoin::Address`
 pub struct VaultAddress {
     /// # Address for Cold Storage
-    #[schemars(with = "String")]
     cold_storage: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     /// # Address for Hot Storage
-    #[schemars(with = "String")]
     hot_storage: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     /// # Number of Steps
     n_steps: u64,
@@ -151,14 +149,12 @@ impl From<VaultAddress> for Vault {
 /// split up based on a max amount per address
 pub struct VaultTree {
     /// # Cold Storage Target
-    #[schemars(with = "String")]
     cold_storage: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     /// # Max Funds per Cold Storage Addreess
     max_per_address: CoinAmount,
     /// # Radix for the split tree
     radix: usize,
     /// # A Hot Storage Address
-    #[schemars(with = "String")]
     hot_storage: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     /// # How many iterations of the contract to run
     n_steps: u64,

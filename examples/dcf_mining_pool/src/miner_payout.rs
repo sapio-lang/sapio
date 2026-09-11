@@ -20,7 +20,6 @@ pub struct PoolShare {
     #[serde(with = "bitcoin::amount::serde::as_sat")]
     #[schemars(with = "u64")]
     pub amount: Amount,
-    #[schemars(with = "String")]
     pub key: XOnlyPublicKey,
 }
 

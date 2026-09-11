@@ -11,7 +11,7 @@ use crate::plugin_handle::PluginHandle;
 use core::convert::TryFrom;
 use sapio::contract::CompilationError;
 use sapio_base::effects::EffectPath;
-use sapio_base::policy::CompiledClause;
+use sapio_base::Clause;
 use std::marker::PhantomData;
 
 /// A resolved module key with typed call arguments and results.
@@ -35,8 +35,8 @@ pub struct SapioHostAPI<T: Serialize + JsonSchema + Clone, R: for<'a> Deserializ
 
 /// Convenience Label for [`SapioHostAPI<T, Compiled>`]
 pub type ContractModule<T> = SapioHostAPI<T, Compiled>;
-/// Convenience Label for [`SapioHostAPI<T, CompiledClause>`]
-pub type ClauseModule<T> = SapioHostAPI<T, CompiledClause>;
+/// Convenience Label for [`SapioHostAPI<T, Clause>`]
+pub type ClauseModule<T> = SapioHostAPI<T, Clause>;
 
 impl<T: Serialize + JsonSchema + Clone, R> PluginHandle for SapioHostAPI<T, R>
 where

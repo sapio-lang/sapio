@@ -28,9 +28,8 @@ pub const MAX_TAPROOT_LEAVES: usize = 1024;
 #[derive(Serialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct RawTaproot {
-    #[schemars(with = "String", regex(pattern = "^[0-9a-fA-F]{64}$"))]
     internal_key: XOnlyPublicKey,
-    #[schemars(with = "Vec<(u8, String)>", length(max = "MAX_TAPROOT_LEAVES"))]
+    #[schemars(length(max = "MAX_TAPROOT_LEAVES"))]
     leaves: Vec<(u8, ScriptBuf)>,
     #[serde(skip)]
     #[schemars(skip)]

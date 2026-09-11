@@ -113,8 +113,8 @@ lazy_static::lazy_static! {
 static ref SCHEMA_MAP: Mutex<BTreeMap<TypeId, Arc<Value>>> =
 Mutex::new(BTreeMap::new());
 }
-/// `get_schema_for` returns a cached RootSchema for a given type.  this is
-/// useful because we might expect to generate the same RootSchema many times,
+/// `get_schema_for` returns a cached schema for a given type.  this is
+/// useful because we might expect to generate the same schema many times,
 /// and they can use a decent amount of memory.
 pub fn get_schema_for<T: schemars::JsonSchema + 'static + Sized>() -> Arc<Value> {
     SCHEMA_MAP
@@ -123,8 +123,13 @@ pub fn get_schema_for<T: schemars::JsonSchema + 'static + Sized>() -> Arc<Value>
         .entry(TypeId::of::<T>())
         .or_insert_with(|| {
             Arc::new(
-                serde_json::to_value(schemars::schema_for!(T))
-                    .expect("Schema must be able to convert to JSON"),
+                serde_json::to_value(
+                    schemars::generate::SchemaSettings::draft07()
+                        .for_deserialize()
+                        .into_generator()
+                        .into_root_schema_for::<T>(),
+                )
+                .expect("Schema must be able to convert to JSON"),
             )
         })
         .clone()

@@ -98,7 +98,7 @@ pub trait CallableAsFoF<ContractSelf, StatefulArguments> {
     fn get_guard(&self) -> GuardList<'_, ContractSelf>;
     /// Get the name for this function
     fn get_name(&self) -> &Arc<String>;
-    /// Get the RootSchema for calling this with an update
+    /// Get the JSON schema for calling this with an update
     fn get_schema(&self) -> &Option<Arc<Value>>;
     /// Whether the compiler must attach a covenant to returned templates.
     fn template_kind(&self) -> TemplateKind;

@@ -67,7 +67,6 @@ impl State for Redeeming {
 struct Output {
     /// # Address
     /// The address to pay to
-    #[schemars(with = "String")]
     address: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     /// # Amount
     /// How much funds to pay in Bitcoin
@@ -83,16 +82,13 @@ struct Vault<S: State> {
     /// # Hot Spending Key
     /// key which can be used to spend from the vault <timeout> after claim
     /// initiated.
-    #[schemars(with = "String")]
     hot_key: Xpub,
     /// # Backup Direct
     /// If available, this key can be used immediately as a single sig cold
     /// multisig option. usable with a musig key.
-    #[schemars(with = "Option<String>")]
     backup: Option<Xpub>,
     /// # Backup Address
     /// Where funds should land if they are backed up
-    #[schemars(with = "String")]
     backup_addr: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     /// # Default Fee
     /// Fee rate in satoshis per 1000 weight units.

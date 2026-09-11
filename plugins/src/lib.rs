@@ -8,8 +8,9 @@
 //! module interfaces for sapio clients and hosts
 use sapio::contract::{Compilable, Context};
 pub use sapio_base::plugin_args::*;
-use schemars::schema::RootSchema;
+use schemars::generate::SchemaSettings;
 use schemars::JsonSchema;
+use schemars::Schema;
 use serde::{Deserialize, Serialize};
 use std::ffi::CString;
 use std::marker::PhantomData;
@@ -26,9 +27,9 @@ pub mod plugin_handle;
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct API<Input, Output> {
     /// What is expected to be passed to the module
-    arguments: RootSchema,
+    arguments: Schema,
     /// What is expected to be returned from the module
-    returns: RootSchema,
+    returns: Schema,
     #[serde(skip, default)]
     _pd: PhantomData<(Input, Output)>,
 }
@@ -40,17 +41,23 @@ where
     /// Create a new API for this type with freshly generated schemas
     pub fn new() -> Self {
         API {
-            arguments: schemars::schema_for!(Input),
-            returns: schemars::schema_for!(Output),
+            arguments: SchemaSettings::draft07()
+                .for_deserialize()
+                .into_generator()
+                .into_root_schema_for::<Input>(),
+            returns: SchemaSettings::draft07()
+                .for_serialize()
+                .into_generator()
+                .into_root_schema_for::<Output>(),
             _pd: Default::default(),
         }
     }
     /// get the input schema for this type as a reference
-    pub fn input(&self) -> &RootSchema {
+    pub fn input(&self) -> &Schema {
         &self.arguments
     }
     /// get the output schema for this type as a reference
-    pub fn output(&self) -> &RootSchema {
+    pub fn output(&self) -> &Schema {
         &self.returns
     }
 }

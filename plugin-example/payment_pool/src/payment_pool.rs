@@ -37,7 +37,6 @@ use std::str::FromStr;
 struct PaymentPool {
     /// # Pool Members
     /// map of all initial balances as PK to BTC
-    #[schemars(with = "BTreeMap<String, AmountF64>")]
     members: BTreeMap<XOnlyPublicKey, AmountF64>,
     /// The current sequence number (for authenticating state updates)
     sequence: u64,
@@ -80,7 +79,6 @@ struct PaymentRequest {
     fee: AmountU64,
     /// # Payments
     /// Mapping of Address to Bitcoin Amount (btc)
-    #[schemars(with = "BTreeMap<String, AmountF64>")]
     payments: BTreeMap<Address<bitcoin::address::NetworkUnchecked>, AmountF64>,
 }
 /// New Update message for generating a transaction from.
@@ -88,7 +86,6 @@ struct PaymentRequest {
 struct DoTx {
     /// # Payments
     /// A mapping of public key in members to signed list of payouts with a fee rate.
-    #[schemars(with = "BTreeMap<String, PaymentRequest>")]
     payments: BTreeMap<XOnlyPublicKey, PaymentRequest>,
 }
 /// required...

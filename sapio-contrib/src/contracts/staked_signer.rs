@@ -44,11 +44,9 @@ pub struct Staker<T: StakingState> {
     timeout: AnyRelTimeLock,
     /// # Signing Key
     /// The key that if leaked can burn funds
-    #[schemars(with = "String")]
     signing_key: XOnlyPublicKey,
     /// # Redemption Key
     /// The key that will be used to control & return the redeemed funds
-    #[schemars(with = "String")]
     redeeming_key: XOnlyPublicKey,
     /// current contract state.
     #[serde(skip, default)]

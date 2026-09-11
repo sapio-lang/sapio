@@ -219,9 +219,7 @@ impl State for Stop {}
 struct Channel<T: State, ArgsT: TryInto<Update>> {
     #[serde(skip, default)]
     pd: PhantomData<(T, ArgsT)>,
-    #[schemars(with = "String")]
     alice: bitcoin::XOnlyPublicKey,
-    #[schemars(with = "String")]
     bob: bitcoin::XOnlyPublicKey,
     amount: CoinAmount,
     resolution: Compiled,

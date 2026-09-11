@@ -33,12 +33,10 @@ impl RecoveryState for CanBeginRecovery {}
 /// A contract for depositing into a federated side chain.
 pub struct FederatedPegIn<T: RecoveryState> {
     /// # Normal Operation Keys
-    #[schemars(with = "Vec<String>")]
     keys: Vec<bitcoin::XOnlyPublicKey>,
     /// # Normal Operation Threshold
     thresh_normal: usize,
     /// # Recovery Operation Keys
-    #[schemars(with = "Vec<String>")]
     keys_recovery: Vec<bitcoin::XOnlyPublicKey>,
     /// # Recovery Operation Threshold
     thresh_recovery: usize,

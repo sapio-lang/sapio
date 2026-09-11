@@ -45,7 +45,6 @@ pub struct Common {
     pub path: PathBuf,
     pub covenant: CovenantConfig,
     pub module_locator: Option<ModuleLocator>,
-    #[schemars(with = "String")]
     pub net: bitcoin::Network,
     pub plugin_map: Option<BTreeMap<Vec<u8>, [u8; 32]>>,
 }
@@ -71,7 +70,6 @@ pub struct Bind {
     pub client_auth: rpc::Auth,
     pub use_base64: bool,
     pub use_mock: bool,
-    #[schemars(with = "Option<String>")]
     pub outpoint: Option<OutPoint>,
     pub use_txn: Option<String>,
     pub compiled: Compiled,
@@ -221,12 +219,11 @@ impl Request {
                     name: sph.get_name()?,
                     description: api
                         .input()
-                        .schema
-                        .metadata
-                        .as_ref()
-                        .and_then(|m| m.description.as_ref())
-                        .unwrap()
-                        .clone(),
+                        .as_value()
+                        .get("description")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_owned(),
                 }))
             }
             Command::Load(_load) => {

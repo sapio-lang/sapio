@@ -21,12 +21,10 @@ use serde::*;
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct SimpleOrdinal {
     ordinal: u64,
-    #[schemars(with = "String")]
     owner: XOnlyPublicKey,
 }
 #[derive(JsonSchema, Serialize, Deserialize)]
 pub struct Sell {
-    #[schemars(with = "String")]
     purchaser: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
     amount: AmountF64,
     change: AmountF64,

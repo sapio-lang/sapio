@@ -19,7 +19,6 @@ pub struct Payment {
     pub amount: sapio_base::amount::CoinAmount,
     /// # Address
     /// The Address to send to
-    #[schemars(with = "String")]
     pub address: bitcoin::Address<bitcoin::address::NetworkUnchecked>,
 }
 /// Create a tree of payments with a given radix

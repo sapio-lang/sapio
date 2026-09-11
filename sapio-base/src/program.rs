@@ -76,7 +76,6 @@ pub fn ctv_wasm_instance(Ctv(hash): Ctv) -> ProgramInstance {
 #[schemars(transparent)]
 pub struct EvaluatorId(
     /// The evaluator protocol's identifier.
-    #[schemars(with = "String", regex(pattern = "^[0-9a-fA-F]{64}$"))]
     pub sha256::Hash,
 );
 
@@ -157,7 +156,6 @@ impl Default for EvaluatorId {
 #[schemars(transparent)]
 pub struct ProgramId(
     /// The committed instance hash.
-    #[schemars(with = "String", regex(pattern = "^[0-9a-fA-F]{64}$"))]
     pub sha256::Hash,
 );
 
@@ -337,7 +335,6 @@ pub fn program_derivation_path(id: ProgramId) -> Vec<ChildNumber> {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, JsonSchema)]
 pub struct EmulatedProgram {
     instance: ProgramInstance,
-    #[schemars(with = "String")]
     root: Xpub,
 }
 

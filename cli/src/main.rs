@@ -31,7 +31,7 @@ use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::CTVEmulator;
 use sapio::contract::Compiled;
 use sapio_wasm_plugin::host::plugin_handle::ModuleLocator;
-use schemars::schema_for;
+use schemars::generate::SchemaSettings;
 use serde_json::Deserializer;
 use std::error::Error;
 use std::str::FromStr;
@@ -362,7 +362,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Some(("schemas", _args)) => {
                 println!(
                     "{}",
-                    serde_json::to_string_pretty(&schema_for!((Request, Response)))?,
+                    serde_json::to_string_pretty(
+                        &SchemaSettings::draft07()
+                            .into_generator()
+                            .into_root_schema_for::<(Request, Response)>()
+                    )?,
                 );
             }
             _ => unreachable!(),

@@ -32,7 +32,6 @@ mod tests;
 #[serde(deny_unknown_fields)]
 pub struct EmulatorConfig {
     /// list of emulators to use & how to contact them
-    #[schemars(with = "Vec<(String, String)>")]
     pub emulators: Vec<(Xpub, String)>,
     /// threshold could be larger than u8, but that seems very unlikely/an error.
     pub threshold: u8,

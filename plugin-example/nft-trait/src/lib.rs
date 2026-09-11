@@ -14,7 +14,6 @@ pub use simp_pack::IpfsNFT;
 pub struct Mint_NFT_Trait_Version_0_1_0 {
     /// # Initial Owner
     /// The key that will own this NFT
-    #[schemars(with = "String")]
     pub owner: bitcoin::XOnlyPublicKey,
     /// # IPFS Sapio Interactive Metadata Protocol
     /// The Data for the NFT
@@ -75,7 +74,6 @@ pub mod mint_impl {
 pub struct NFT_Sale_Trait_Version_0_1_0 {
     /// # Owner
     /// The key that will own this NFT
-    #[schemars(with = "String")]
     pub sell_to: bitcoin::XOnlyPublicKey,
     /// # Price
     /// The price in Sats
@@ -113,7 +111,6 @@ pub trait SellableNFT: Contract {
 pub struct NFT_Sale_Trait_Version_0_1_0_Partial {
     /// # Owner
     /// The key that will own this NFT
-    #[schemars(with = "String")]
     pub sell_to: bitcoin::XOnlyPublicKey,
     /// # Price
     /// The price in Sats

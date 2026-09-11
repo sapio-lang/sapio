@@ -24,13 +24,13 @@ use std::convert::TryFrom;
 pub enum ExtendedAddress {
     /// A parsed address. Artifact decoding has no expected network; contract
     /// arguments must check their network before constructing a destination.
-    Address(#[schemars(with = "String")] Address<NetworkUnchecked>),
+    Address(Address<NetworkUnchecked>),
     /// When we know the descriptor
-    Descriptor(#[schemars(with = "String")] Descriptor<XOnlyPublicKey>),
+    Descriptor(Descriptor<XOnlyPublicKey>),
     /// An OP_RETURN
     OpReturn(OpReturn),
     /// Unknown
-    Unknown(#[schemars(with = "String")] bitcoin::ScriptBuf),
+    Unknown(bitcoin::ScriptBuf),
 }
 impl ExtendedAddress {
     /// create an OP_RETURN address type
@@ -54,7 +54,7 @@ impl ExtendedAddress {
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 #[serde(try_from = "ScriptBuf")]
 #[serde(into = "ScriptBuf")]
-pub struct OpReturn(#[schemars(with = "String")] ScriptBuf);
+pub struct OpReturn(ScriptBuf);
 
 impl TryFrom<ScriptBuf> for OpReturn {
     type Error = &'static str;

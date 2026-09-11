@@ -65,7 +65,7 @@ impl<const N: usize> From<[(&str, serde_json::Value); N]> for OutputMeta {
 pub struct Output {
     /// the amount of sats being sent to this contract
     #[serde(with = "bitcoin::amount::serde::as_sat")]
-    #[schemars(with = "i64")]
+    #[schemars(with = "u64")]
     #[serde(rename = "sending_amount_sats")]
     pub amount: Amount,
     /// the compiled contract this output creates

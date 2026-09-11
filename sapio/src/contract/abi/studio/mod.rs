@@ -92,7 +92,6 @@ pub struct SapioStudioObject {
     /// The object's metadata
     pub metadata: ObjectMetadata,
     /// The main covenant OutPoint
-    #[schemars(with = "String")]
     pub out: OutPoint,
     /// List of SapioStudioFormat PSBTs
     pub txs: Vec<SapioStudioFormat>,

@@ -120,7 +120,6 @@ pub struct Template {
     pub guards: Vec<ScriptPolicy>,
     /// the precomputed template hash for this Template
     #[serde(rename = "precomputed_template_hash")]
-    #[schemars(with = "String")]
     pub ctv: sha256::Hash,
     /// the index used for the template hash. (TODO: currently always 0, although
     /// future version may support other indexes)
@@ -153,7 +152,6 @@ pub struct Template {
     pub metadata_map_s2s: TemplateMetadata,
     /// The actual transaction this template will create
     #[serde(rename = "transaction_literal")]
-    #[schemars(with = "sapio_base::schema::Transaction")]
     pub tx: bitcoin::Transaction,
     /// sapio specific information about all the outputs in the `tx`.
     #[serde(rename = "outputs_info")]

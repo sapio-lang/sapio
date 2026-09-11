@@ -51,11 +51,11 @@ pub enum PathFragment {
 
 // Fragment variants are encoded as path strings, not tagged enum objects.
 impl JsonSchema for PathFragment {
-    fn is_referenceable() -> bool {
-        String::is_referenceable()
+    fn inline_schema() -> bool {
+        String::inline_schema()
     }
 
-    fn schema_name() -> String {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
         String::schema_name()
     }
 
@@ -63,7 +63,7 @@ impl JsonSchema for PathFragment {
         String::schema_id()
     }
 
-    fn json_schema(generator: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
         String::json_schema(generator)
     }
 }

@@ -10,7 +10,7 @@ description = "Starter Pack of Sapio Interactive Metadata Protocols; currently n
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-schemars = "0.8.0"
+schemars = { version = "=1.2.2", features = ["bitcoin032", "miniscript13"] }
 serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"

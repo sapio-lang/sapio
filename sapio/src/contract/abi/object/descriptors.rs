@@ -20,9 +20,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 pub enum SupportedDescriptors {
     /// # ECDSA Descriptors
-    Pk(#[schemars(with = "String")] Descriptor<PublicKey>),
+    Pk(Descriptor<PublicKey>),
     /// # Taproot Descriptors
-    XOnly(#[schemars(with = "String")] Descriptor<XOnlyPublicKey>),
+    XOnly(Descriptor<XOnlyPublicKey>),
     /// # Checked raw Taproot scripts
     /// Spending data for scripts whose witness requirements are not described
     /// by Miniscript. This representation carries no satisfaction-weight bound.

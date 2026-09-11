@@ -18,13 +18,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt;
 
-/// A clause returned across a plugin's JSON interface.
-///
-/// Schema ownership stays at Sapio's boundary while Miniscript owns parsing.
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(transparent)]
-pub struct CompiledClause(#[schemars(with = "String")] pub Clause);
-
 /// Immutable policy source accepted by Sapio's script lowering stage.
 ///
 /// Miniscript clauses remain source policies until their enclosing branch is
@@ -39,7 +32,7 @@ pub struct CompiledClause(#[schemars(with = "String")] pub Clause);
 )]
 pub enum ScriptPolicy {
     /// The existing native Miniscript policy language.
-    Miniscript(#[schemars(with = "String")] Clause),
+    Miniscript(Clause),
     /// A CTV predicate explicitly resolved with public lowering inputs.
     Emulatable(Emulatable<Ctv>),
     /// A checked raw fragment with backend-defined witness requirements.
@@ -127,7 +120,7 @@ impl<P: PolicyCompiler, E: fmt::Display> PolicyCompiler for Result<P, E> {
 /// implied. Deserialization performs the same validation as construction.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, JsonSchema)]
 #[serde(transparent)]
-pub struct ScriptFragment(#[schemars(with = "String")] ScriptBuf);
+pub struct ScriptFragment(ScriptBuf);
 
 impl ScriptFragment {
     /// Check the fragment's instruction and composition boundaries.
@@ -338,7 +331,6 @@ pub fn validate_tapscript(script: &bitcoin::Script) -> Result<(), PolicyError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use schemars::schema::{InstanceType, SingleOrVec};
 
     fn script(bytes: &[u8]) -> ScriptBuf {
         ScriptBuf::from(bytes.to_vec())
@@ -452,10 +444,7 @@ mod tests {
             assert!(serde_json::from_str::<ScriptFragment>(invalid).is_err());
         }
         let schema = schemars::schema_for!(ScriptFragment);
-        assert_eq!(
-            schema.schema.instance_type,
-            Some(SingleOrVec::Single(Box::new(InstanceType::String)))
-        );
+        assert_eq!(schema.as_value()["type"], "string");
     }
 
     #[test]

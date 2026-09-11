@@ -18,7 +18,7 @@ fn api_error(message: impl Into<String>) -> CompilationError {
 }
 
 fn compile(schema: &Value, side: &str) -> Result<Validator, CompilationError> {
-    // Schemars 0.8 emits Draft 7. The preflight checks declarations before
+    // Plugin APIs explicitly emit Draft 7. The preflight checks declarations before
     // reference resolution; neither pass may retrieve files or network data.
     complexity::check(schema)
         .map_err(|error| api_error(format!("Invalid {side} schema: {error}")))?;
@@ -32,8 +32,8 @@ fn compile(schema: &Value, side: &str) -> Result<Validator, CompilationError> {
 
 impl CallSchema {
     pub(super) fn from_json(bytes: &[u8]) -> Result<Self, CompilationError> {
-        // Preserve the advertised JSON. Round-tripping through Schemars'
-        // RootSchema would normalize integer limits into f64 and lose precision.
+        // Validate the exact advertised JSON, including integer bounds that
+        // cannot be represented without loss as floating point numbers.
         #[derive(Deserialize)]
         struct AdvertisedSchemas {
             arguments: Value,

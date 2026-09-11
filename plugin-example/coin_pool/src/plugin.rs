@@ -39,7 +39,6 @@ enum PoolTypes {
 pub struct SimplePayment {
     /// # The Key that Votes & Redeems Funds
     // TODO: Taproot Fix Encoding
-    #[schemars(with = "String")]
     key: bitcoin::XOnlyPublicKey,
     /// # Amount to Pay in BTC
     amount: AmountF64,

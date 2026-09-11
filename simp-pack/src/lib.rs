@@ -28,11 +28,9 @@ pub struct IpfsNFT {
     pub of_edition_count: u64,
     /// The Artist's Public Key
     // TODO: fixup representation with patches to add more Schemars to bitcoin
-    #[schemars(with = "Option::<String>")]
     pub artist: Option<bitcoin::secp256k1::XOnlyPublicKey>,
     /// The signature of artist
     // TODO: fixup representation with patches to add more Schemars to bitcoin
-    #[schemars(with = "Option::<String>")]
     pub blessing: Option<bitcoin::secp256k1::schnorr::Signature>,
     /// If the NFT has a webpage (legacy web)
     pub softlink: Option<URL>,

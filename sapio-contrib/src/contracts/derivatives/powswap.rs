@@ -83,7 +83,6 @@ pub struct Pays {
     /// Payment in satoshis.
     pub sats: AmountU64,
     /// Recipient public key, paid through its x-only Taproot output.
-    #[schemars(with = "String")]
     pub to: PublicKey,
 }
 /// One timelocked settlement of a PowSwap.
@@ -100,7 +99,6 @@ pub struct PowSwap {
     /// Both outcomes must distribute the same collateral.
     pub outcomes: [Outcome; 2],
     /// Distinct cooperating signers; at least two are required.
-    #[schemars(with = "Vec<String>")]
     pub coop: Vec<PublicKey>,
 }
 

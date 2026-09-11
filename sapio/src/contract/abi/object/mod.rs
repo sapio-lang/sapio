@@ -143,7 +143,6 @@ pub struct Object {
         skip_serializing_if = "BTreeMap::is_empty",
         default
     )]
-    #[schemars(with = "BTreeMap<String, Template>")]
     pub ctv_to_tx: BTreeMap<sha256::Hash, Template>,
     /// a map of template hashes to the corresponding template, that in the
     /// policy are not necessarily CTV protected but we might want to know about
@@ -153,7 +152,6 @@ pub struct Object {
         skip_serializing_if = "BTreeMap::is_empty",
         default
     )]
-    #[schemars(with = "BTreeMap<String, Template>")]
     pub suggested_txs: BTreeMap<sha256::Hash, Template>,
     /// A Map of arguments to continue execution and generate an update at this
     /// point via a passed message
