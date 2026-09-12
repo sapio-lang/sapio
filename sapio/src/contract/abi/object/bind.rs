@@ -5,18 +5,14 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 //!  binding Object to a specific UTXO
-use super::descriptors::*;
 pub use crate::contract::abi::studio::*;
 use crate::contract::object::Object;
 use crate::contract::object::ObjectError;
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::psbt::Psbt;
-use bitcoin::taproot::ControlBlock;
 use bitcoin::{OutPoint, Transaction};
-use miniscript::*;
 use sapio_base::covenant::{Ctv, LoweringPlan};
 use sapio_base::effects::{EffectPath, PathFragment};
-use sapio_base::miniscript;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::txindex::{TxIndex, TxIndexError};
 use sapio_base::Clause;
@@ -266,42 +262,8 @@ impl Object {
                     ),
                     ));
                 }
-                match &object.descriptor {
-                    Some(SupportedDescriptors::Pk(d)) => {
-                        psbt.inputs[0].witness_script = Some(d.explicit_script()?);
-                    }
-                    Some(SupportedDescriptors::XOnly(Descriptor::Tr(t))) => {
-                        let info = t.spend_info();
-                        let input = &mut psbt.inputs[0];
-                        for leaf in info.leaves() {
-                            let script = (leaf.script().to_owned(), leaf.leaf_version());
-                            input.tap_scripts.insert(leaf.into_control_block(), script);
-                        }
-                        input.tap_merkle_root = info.merkle_root();
-                        input.tap_internal_key = Some(info.internal_key());
-                    }
-                    Some(SupportedDescriptors::Taproot(tree)) => {
-                        let info = tree.spend_info();
-                        let input = &mut psbt.inputs[0];
-                        for ((script, version), branches) in info.script_map() {
-                            // Preserve every proof when the same script occurs
-                            // at different positions in the explicit tree.
-                            for branch in branches {
-                                let control = ControlBlock {
-                                    leaf_version: *version,
-                                    output_key_parity: info.output_key_parity(),
-                                    internal_key: info.internal_key(),
-                                    merkle_branch: branch.clone(),
-                                };
-                                input
-                                    .tap_scripts
-                                    .insert(control, (script.clone(), *version));
-                            }
-                        }
-                        input.tap_merkle_root = info.merkle_root();
-                        input.tap_internal_key = Some(info.internal_key());
-                    }
-                    _ => (),
+                if let Some(descriptor) = &object.descriptor {
+                    descriptor.update_psbt_input(&mut psbt.inputs[0])?;
                 }
                 let txid = tx.compute_txid();
                 let parent = Arc::new(tx);

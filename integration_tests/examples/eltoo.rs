@@ -4,9 +4,11 @@ use bitcoin::consensus::encode::serialize_hex;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::{OutPoint, Transaction};
 use emulator_connect::program::{ProgramOracle, ProgramSigningRequest};
+use sapio_contrib::contracts::eltoo::State;
+use sapio_integration_tests::eltoo_example::fixture;
 use sapio_integration_tests::eltoo_example::recovery::recover_update;
-use sapio_integration_tests::eltoo_example::{
-    authorize_update, fixture, settlement_request, sign_sponsor, update_request, Coin, Error, State,
+use sapio_integration_tests::eltoo_example::runner::{
+    authorize_update, compile, settlement_request, sign_sponsor, update_request, Coin, Error,
 };
 use serde_json::json;
 
@@ -86,9 +88,9 @@ fn main() -> Result<(), Error> {
             "joint_signing": "one disposable key simulates joint authorization; not MuSig2",
             "settlement_delay_blocks": terms.delay(),
             "artifacts": {
-                "funding": funding.compile()?,
-                "state_1": first_channel.compile()?,
-                "state_3": latest_channel.compile()?,
+                "funding": compile(&funding)?,
+                "state_1": compile(&first_channel)?,
+                "state_3": compile(&latest_channel)?,
             },
             "authorizations": {
                 "state_1": first_authorization.to_string(),

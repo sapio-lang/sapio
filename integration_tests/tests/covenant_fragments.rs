@@ -1,7 +1,71 @@
 use bitcoin::secp256k1::Secp256k1;
+use bitcoin::{Amount, Network, TxOut};
 use emulator_connect::program::{ProgramError, ProgramOracle, ProgramSpendPath};
-use sapio_integration_tests::fragment_example::{participant_key, Authorization, FragmentContract};
-use sapio_integration_tests::program_example::{bind_candidates, example_root};
+use sapio::contract::{Compilable, CompilationError, Context};
+use sapio_base::effects::EffectPath;
+use sapio_contrib::contracts::template_authorization::{Authorization, FragmentContract};
+use sapio_integration_tests::fragment_example::{
+    compile_candidates, example_contract, participant_key, signing_request,
+};
+use sapio_integration_tests::program_example::{bind_candidates, example_root, recipient};
+use std::sync::Arc;
+
+#[test]
+fn contract_uses_public_terms_and_supplied_funds_without_default_proposals() {
+    let oracle = ProgramOracle::new(example_root(), vec![]).unwrap();
+    let destination = recipient(97);
+    let change = recipient(98);
+    let source = FragmentContract::new(
+        Authorization::KnownTweak,
+        oracle.public_root(),
+        destination.clone(),
+        change.clone(),
+        Amount::from_sat(1_000),
+    )
+    .unwrap();
+    let context = |amount: Option<u64>| {
+        let candidates: std::collections::BTreeMap<_, _> = amount
+            .map(|amount| ("payment", amount))
+            .into_iter()
+            .collect();
+        let effects = serde_json::from_value(serde_json::json!({
+            "effects": {"fragments/@action/pay/@suggested": candidates}
+        }))
+        .unwrap();
+        Context::new(
+            Network::Regtest,
+            Amount::from_sat(50_000),
+            sapio_base::LoweringPlan::Native,
+            EffectPath::try_from("fragments").unwrap(),
+            Arc::new(effects),
+            None,
+        )
+    };
+    let baseline = source.compile(context(None)).unwrap();
+    assert!(baseline.suggested_txs.is_empty());
+    let compiled = source.compile(context(Some(45_000))).unwrap();
+    assert_eq!(baseline.address, compiled.address);
+    assert_eq!(compiled.suggested_txs.len(), 1);
+    let template = compiled.suggested_txs.values().next().unwrap();
+    assert_eq!(
+        template.tx.output,
+        [
+            TxOut {
+                value: Amount::from_sat(45_000),
+                script_pubkey: destination.script_pubkey(),
+            },
+            TxOut {
+                value: Amount::from_sat(4_000),
+                script_pubkey: change.script_pubkey(),
+            },
+        ]
+    );
+    assert_eq!(template.required_input_amount, Amount::from_sat(50_000));
+    assert!(matches!(
+        source.compile(context(Some(49_001))),
+        Err(CompilationError::OutOfFunds)
+    ));
+}
 
 #[test]
 fn compiled_fragment_contracts_authorize_both_paths_and_preserve_annexes() {
@@ -17,9 +81,9 @@ fn compiled_fragment_contracts_authorize_both_paths_and_preserve_annexes() {
         ),
         (Authorization::KnownTweak, root.to_keypair(&secp), false),
     ] {
-        let source = FragmentContract::new(mode, oracle.public_root());
-        let baseline = source.compile_candidates(&[]).unwrap();
-        let compiled = source.compile_candidates(&[7_000]).unwrap();
+        let source = example_contract(mode, oracle.public_root());
+        let baseline = compile_candidates(&source, &[]).unwrap();
+        let compiled = compile_candidates(&source, &[7_000]).unwrap();
         assert_eq!(baseline.address, compiled.address);
         assert_eq!(baseline.descriptor, compiled.descriptor);
         let candidates = bind_candidates(&compiled).unwrap();
@@ -31,9 +95,13 @@ fn compiled_fragment_contracts_authorize_both_paths_and_preserve_annexes() {
                     Some(participant.x_only_public_key().0)
                 );
             }
-            let request = source
-                .signing_request(candidate, &signer, Some(b"\x50fragments-test".to_vec()))
-                .unwrap();
+            let request = signing_request(
+                &source,
+                candidate,
+                &signer,
+                Some(b"\x50fragments-test".to_vec()),
+            )
+            .unwrap();
             assert_eq!(
                 matches!(request.path, ProgramSpendPath::ScriptPath(_)),
                 script_path

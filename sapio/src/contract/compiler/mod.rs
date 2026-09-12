@@ -23,7 +23,7 @@ use sapio_base::effects::EffectDB;
 use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
 use sapio_base::miniscript;
-use sapio_base::policy::ScriptPolicy;
+use sapio_base::policy::{PolicyCompiler, ScriptPolicy};
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::Clause;
 use std::collections::{BTreeMap, BTreeSet};
@@ -55,6 +55,25 @@ mod private {
 pub trait Compilable: private::ImplSeal {
     /// Compile a compilable object returning errors, if any.
     fn compile(&self, ctx: Context) -> Result<Compiled, CompilationError>;
+}
+
+/// Compile a policy that describes exactly one Taproot script leaf.
+///
+/// This uses the contract compiler's checked policy lowering without building
+/// a contract or choosing an internal key. Empty or alternative policies are
+/// rejected. Emulatable predicates must already be resolved using explicit
+/// public lowering inputs; this helper does not choose an emulation mode.
+pub fn compile_policy_leaf(
+    policy: &(impl PolicyCompiler + ?Sized),
+) -> Result<bitcoin::ScriptBuf, CompilationError> {
+    let mut leaves = script::lower_script_policy(&policy.compile_policy()?)?;
+    match leaves.len() {
+        0 => Err(CompilationError::EmptyPolicy),
+        1 => Ok(leaves.remove(0)),
+        count => Err(CompilationError::Custom(
+            format!("expected one policy leaf, found {count}").into(),
+        )),
+    }
 }
 
 /// Implements a basic identity
@@ -677,5 +696,91 @@ fn optimizer_flatten_policy(p: Clause) -> Vec<Clause> {
             .flat_map(|child| optimizer_flatten_policy(Arc::unwrap_or_clone(child)))
             .collect(),
         p => vec![p],
+    }
+}
+
+#[cfg(test)]
+mod policy_leaf_tests {
+    use super::*;
+    use crate::contract::actions::Guard;
+    use crate::contract::Contract;
+    use bitcoin::blockdata::script::Builder;
+    use bitcoin::hashes::{sha256, Hash};
+    use bitcoin::secp256k1::{Keypair, Secp256k1, SecretKey};
+    use bitcoin::{Amount, Network};
+    use sapio_base::policy::ScriptFragment;
+    use sapio_base::timelocks::RelHeight;
+    use sapio_base::LoweringPlan;
+
+    struct PolicyContract(ScriptPolicy);
+
+    impl PolicyContract {
+        fn policy() -> Option<Guard<Self>> {
+            Some(Guard::CachedPolicy(|contract| Ok(contract.0.clone()), None))
+        }
+    }
+
+    impl Contract for PolicyContract {
+        crate::declare! {non updatable}
+        crate::declare! {finish, Self::policy}
+    }
+
+    fn key() -> Clause {
+        Clause::Key(
+            Keypair::from_secret_key(&Secp256k1::new(), &SecretKey::from_slice(&[1; 32]).unwrap())
+                .x_only_public_key()
+                .0,
+        )
+    }
+
+    #[test]
+    fn standalone_policy_leaf_matches_the_compiled_contract_script() {
+        let raw = ScriptFragment::new(Builder::new().push_int(1).into_script()).unwrap();
+        for policy in [
+            ScriptPolicy::from(key()),
+            ScriptPolicy::And(vec![
+                Clause::try_from(RelHeight::from(6)).unwrap().into(),
+                key().into(),
+            ]),
+            ScriptPolicy::And(vec![raw.into(), key().into()]),
+        ] {
+            let expected = compile_policy_leaf(&policy).unwrap();
+            let object = PolicyContract(policy)
+                .compile(Context::new(
+                    Network::Regtest,
+                    Amount::from_sat(1_000),
+                    LoweringPlan::Native,
+                    "policy_leaf".try_into().unwrap(),
+                    Arc::new(Default::default()),
+                    None,
+                ))
+                .unwrap();
+            let mut input = bitcoin::psbt::Input::default();
+            object
+                .descriptor
+                .unwrap()
+                .update_psbt_input(&mut input)
+                .unwrap();
+            assert_eq!(input.tap_scripts.len(), 1);
+            assert_eq!(input.tap_scripts.values().next().unwrap().0, expected);
+        }
+    }
+
+    #[test]
+    fn a_leaf_cannot_silently_discard_missing_or_alternative_branches() {
+        assert!(matches!(
+            compile_policy_leaf(&ScriptPolicy::Or(vec![])),
+            Err(CompilationError::EmptyPolicy)
+        ));
+        assert!(compile_policy_leaf(&ScriptPolicy::Or(vec![key().into(), key().into()])).is_err());
+    }
+
+    #[test]
+    fn a_leaf_does_not_choose_emulation_inputs() {
+        let policy = Emulatable(Ctv(sha256::Hash::from_byte_array([1; 32])));
+        assert!(matches!(
+            compile_policy_leaf(&policy),
+            Err(CompilationError::UnresolvedEmulation)
+        ));
     }
 }

@@ -3,7 +3,10 @@
 use bitcoin::consensus::encode::serialize_hex;
 use bitcoin::secp256k1::Secp256k1;
 use emulator_connect::program::ProgramOracle;
-use sapio_integration_tests::fragment_example::{participant_key, Authorization, FragmentContract};
+use sapio_contrib::contracts::template_authorization::Authorization;
+use sapio_integration_tests::fragment_example::{
+    compile_candidates, example_contract, participant_key, signing_request,
+};
 use sapio_integration_tests::program_example::{bind_candidates, example_root};
 use std::error::Error;
 
@@ -25,14 +28,15 @@ fn main() -> Result<(), Box<dyn Error>> {
             root.to_keypair(&secp),
         ),
     ] {
-        let source = FragmentContract::new(mode, oracle.public_root());
-        let baseline = source.compile_candidates(&[])?;
-        let compiled = source.compile_candidates(&[7_000])?;
+        let source = example_contract(mode, oracle.public_root());
+        let baseline = compile_candidates(&source, &[])?;
+        let compiled = compile_candidates(&source, &[7_000])?;
         assert_eq!(baseline.address, compiled.address);
         assert_eq!(baseline.descriptor, compiled.descriptor);
         let mut spends = vec![];
         for candidate in bind_candidates(&compiled)? {
-            let request = source.signing_request(
+            let request = signing_request(
+                &source,
                 candidate,
                 &authorizer,
                 Some(b"\x50sapio-fragments".to_vec()),
