@@ -20,6 +20,7 @@ rand = "0.8.1"
 wasmer = "=6.1.0"
 wasmer-middlewares = "=6.1.0"
 sapio-wasm = { path = "../wasm", features = ["host"] }
+sapio = { path = "../sapio" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }

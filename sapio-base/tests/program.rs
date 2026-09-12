@@ -8,7 +8,7 @@ use sapio_base::program::{
     program_derivation_path, ProgramError, WasmVersion, MAX_PARAMETER_BYTES, MAX_PROGRAM_BYTES,
     MAX_PROGRAM_ROOT_DEPTH,
 };
-use sapio_base::{Clause, EmulatedProgram, EvaluatorId, ProgramId, ProgramInstance};
+use sapio_base::{EmulatedProgram, EvaluatorId, ProgramId, ProgramInstance};
 use serde_json::json;
 use std::collections::BTreeSet;
 use std::str::FromStr;
@@ -252,7 +252,7 @@ fn root_depth_is_checked_in_public_derivation_and_policy_deserialization() {
 }
 
 #[test]
-fn serialized_public_policy_retains_its_complete_instance_and_lowers_to_a_key() {
+fn serialized_public_policy_retains_its_complete_typed_program() {
     let instance = instance();
     let policy = EmulatedProgram::new(instance.clone(), public_root(7)).unwrap();
     let json = serde_json::to_value(&policy).unwrap();
@@ -273,7 +273,7 @@ fn serialized_public_policy_retains_its_complete_instance_and_lowers_to_a_key() 
     assert_eq!(restored.root(), &public_root(7));
     assert_eq!(
         restored.compile_policy().unwrap(),
-        ScriptPolicy::Miniscript(Clause::Key(policy.derive_public_key().unwrap()))
+        ScriptPolicy::Program(policy.clone())
     );
     let mut extra_field = json.clone();
     extra_field["endpoint"] = json!("ambient runtime");

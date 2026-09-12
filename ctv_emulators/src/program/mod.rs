@@ -36,7 +36,8 @@ use std::fmt;
 
 pub use crate::msgs::PSBT;
 
-mod paths;
+mod artifacts;
+pub use artifacts::{prepare_program_request, ArtifactProgramError};
 mod transport;
 pub use transport::{ProgramClient, ProgramClientError};
 mod wasm;
@@ -45,14 +46,7 @@ pub use wasm::{WasmEvaluator, MAX_FUNCTION_SLOTS, MAX_SIGNED_VIEW_BYTES};
 /// Maximum auxiliary evidence accepted by the program protocol.
 pub const MAX_WITNESS_BYTES: usize = 65_536;
 
-/// The single Taproot signature location requested by the caller.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ProgramSpendPath {
-    /// Sign the output key after its BIP341 tweak.
-    KeyPath,
-    /// Sign this known, authenticated tapscript leaf with no code separator.
-    ScriptPath(TapLeafHash),
-}
+pub use sapio_base::program::ProgramSpendPath;
 
 /// All data needed to evaluate a predicate and authorize one signature.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -243,10 +237,6 @@ pub enum ProgramError {
     KeyPathMismatch,
     /// No supplied tapscript and control block authenticate the selected leaf.
     MissingScriptPath,
-    /// No supplied Miniscript leaf contains the requested program key.
-    MissingProgramLeaf,
-    /// Multiple distinct leaves contain the requested program key.
-    AmbiguousProgramLeaf,
     /// Optional internal-key or Merkle-root metadata contradicts the proof.
     ConflictingTaprootMetadata,
     /// A selected leaf uses unsupported semantics or OP_CODESEPARATOR.
@@ -309,11 +299,6 @@ impl fmt::Display for ProgramError {
             }
             Self::MissingScriptPath => formatter
                 .write_str("selected tapscript has no valid commitment to the spent output"),
-            Self::MissingProgramLeaf => {
-                formatter.write_str("no Miniscript leaf contains the program key")
-            }
-            Self::AmbiguousProgramLeaf => formatter
-                .write_str("multiple leaves contain the program key; select one explicitly"),
             Self::ConflictingTaprootMetadata => formatter
                 .write_str("Taproot metadata conflicts with the authenticated spending context"),
             Self::UnsupportedScriptPath => {

@@ -96,7 +96,8 @@ fn compiled_fragment_contracts_authorize_both_paths_and_preserve_annexes() {
                 );
             }
             let request = signing_request(
-                &source,
+                &compiled,
+                mode,
                 candidate,
                 &signer,
                 Some(b"\x50fragments-test".to_vec()),

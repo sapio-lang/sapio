@@ -621,6 +621,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sapio-wasm-program-policy"
+version = "0.1.0"
+dependencies = [
+ "sapio",
+ "sapio-base",
+ "sapio-wasm-plugin",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "sapio-wasm-staker"
 version = "0.1.0"
 dependencies = [

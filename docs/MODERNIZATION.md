@@ -50,6 +50,7 @@ with upstream crates would remove semantics, not complete a migration.
 | Funding representation | Replace ambiguous BTC ranges with an explicit integer-satoshi minimum; retain `ensure_amount` without templates, validate fresh/reused graphs, reject underfunded children and enforce known input floors before signing |
 | Template accounting | Make builder debits private, preserve outputs-before-fees ordering, and count exact unsigned bytes and prospective outputs; regressions cover CompactSize boundaries, ordinal prefixes and the affected fee-paying examples |
 | Covenant assumptions | [Explicit CTV wrappers and public lowering plans](ENFORCEMENT.md), recorded predicate requirements including finish guards, pure compiled-object reuse checks and runtime signer compatibility; explicit CLI native assumptions before wallet funding |
+| Program artifacts | Typed program branches survive lowering, serialization and key selection; explicit preparation validates source/descriptor correspondence and funded PSBT data; fresh-process fragment and eltoo spends work without optional SIMP metadata or contract objects |
 | Program emulation | [Exact program instances and public oracle keys](PROGRAM_EMULATION.md), versioned evaluated requests, a signature-bound transaction view and verified responses limited to one input/path; a fixed payment predicate admits multiple continuation candidates through local and TCP signing |
 | Funding integrity | Authenticate previous transactions and index acknowledgements; check contract scripts, distinct inputs, checked funding totals and reserved fees before signing; preserve operational lookup errors and authenticated PSBT prevouts |
 | Bound graph identity | Derive child keys from parent bindings and transition/output identities; preserve reused leaves and contracts, original source paths and continuation paths; keep synthetic funding in its own path |
@@ -73,7 +74,7 @@ with upstream crates would remove semantics, not complete a migration.
 | Emulator responses | Accept complete PSBT responses containing only signature additions; preserve existing signatures and every other field in raw HD responses and each federation participant; signer callbacks are absent from the compilation host |
 | Emulator lifecycle | Bound each peer exchange and the async wait for CLI peer resolution; cap admitted server connections; discard incomplete exchanges, isolate peer errors and cancel owned connection tasks on shutdown |
 | Integration | Restore the suite to the workspace; compile, sign and finalize two contract steps and reject a modified output |
-| Contract examples | [Complete inventory](EXAMPLES.md): repaired and tested library families, restored PowSwap/TapBet, 19 real WASM fixtures, both native examples and explicit research assumptions |
+| Contract examples | [Complete inventory](EXAMPLES.md): repaired and tested library families, restored PowSwap/TapBet, 20 real WASM fixtures, both native examples and explicit research assumptions |
 | Developer checks | Formatting, feature checks, native tests, complete WASM catalog with artifact/schema/repeatability checks, CLI smoke checks, and API documentation |
 
 The [development guide](DEVELOPMENT.md) gives reproducible commands. This list is

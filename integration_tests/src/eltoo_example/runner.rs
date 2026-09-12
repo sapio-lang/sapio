@@ -12,10 +12,13 @@ use bitcoin::{
     taproot, Address, Amount, Network, OutPoint, ScriptBuf, TapSighashType, Transaction, TxOut,
     XOnlyPublicKey,
 };
-use emulator_connect::program::{ProgramSigningRequest, ProgramSpendPath, PSBT};
+use emulator_connect::program::{prepare_program_request, ProgramSigningRequest, ProgramSpendPath};
+use sapio::contract::abi::object::ProgramRequirement;
 use sapio::contract::{Compilable, Compiled, Context};
-use sapio_base::fragments::template_hash;
-use sapio_base::program::EmulatedProgram;
+use sapio_base::fragments::{
+    template_authorization_wasm_instance, template_hash, templatehash_wasm_instance, TemplateKey,
+};
+use sapio_base::program::{EmulatedProgram, ProgramInstance};
 use sapio_contrib::contracts::eltoo::{Candidate, Channel, State, Terms};
 use std::sync::Arc;
 
@@ -85,9 +88,47 @@ pub fn settlement_transaction(terms: &Terms, state: State) -> Result<Transaction
     Ok(terms.settlement_template(state, context(terms)?)?.tx)
 }
 
-/// Reconstruct a state's public settlement predicate; funding cannot settle.
+fn requirement_for(
+    compiled: &Compiled,
+    instance: ProgramInstance,
+) -> Result<ProgramRequirement, Error> {
+    let requirements = compiled.program_requirements()?;
+    let mut matching = requirements.into_iter().filter(|requirement| {
+        requirement.program.instance() == &instance
+            && matches!(requirement.path, ProgramSpendPath::ScriptPath(_))
+    });
+    let requirement = matching
+        .next()
+        .ok_or("artifact has no matching eltoo program path")?;
+    if matching.next().is_some() {
+        return Err("artifact has ambiguous eltoo program paths".into());
+    }
+    Ok(requirement)
+}
+
+/// Select the artifact's exact internal-key template authorization program.
+pub fn update_requirement(compiled: &Compiled) -> Result<ProgramRequirement, Error> {
+    requirement_for(
+        compiled,
+        template_authorization_wasm_instance(TemplateKey::InternalKey),
+    )
+}
+
+/// Select the artifact's exact predicate for this settlement transaction.
+pub fn settlement_requirement(
+    compiled: &Compiled,
+    transaction: &Transaction,
+) -> Result<ProgramRequirement, Error> {
+    requirement_for(
+        compiled,
+        templatehash_wasm_instance(template_hash(transaction, 0, None)?),
+    )
+}
+
+/// Read a state's settlement program from its compiled artifact.
 pub fn settlement_program(source: &Channel) -> Result<EmulatedProgram, Error> {
-    Ok(source.settlement_program(context(source.terms())?)?)
+    let compiled = compile_settlement(source)?;
+    Ok(settlement_requirement(&compiled, &only_candidate(&compiled)?)?.program)
 }
 
 fn spending_input(compiled: &Compiled) -> Result<Input, Error> {
@@ -101,9 +142,9 @@ fn spending_input(compiled: &Compiled) -> Result<Input, Error> {
     Ok(input)
 }
 
-fn leaf_for(source: &Channel, program: &EmulatedProgram) -> Result<ScriptBuf, Error> {
-    let input = spending_input(&compile(source)?)?;
-    let ProgramSpendPath::ScriptPath(hash) = ProgramSpendPath::script_for(program, &input)? else {
+fn leaf_for(compiled: &Compiled, requirement: &ProgramRequirement) -> Result<ScriptBuf, Error> {
+    let input = spending_input(compiled)?;
+    let ProgramSpendPath::ScriptPath(hash) = requirement.path else {
         return Err("expected a program script path".into());
     };
     input
@@ -114,25 +155,32 @@ fn leaf_for(source: &Channel, program: &EmulatedProgram) -> Result<ScriptBuf, Er
         .ok_or_else(|| "program leaf absent from this channel output".into())
 }
 
-/// Find the update program's actual compiled script leaf.
+/// Find the update program's exact leaf in the compiled artifact.
 pub fn update_leaf(source: &Channel) -> Result<ScriptBuf, Error> {
-    leaf_for(source, source.terms().update_program())
+    let compiled = compile(source)?;
+    leaf_for(&compiled, &update_requirement(&compiled)?)
 }
 
-/// Find the settlement program's actual compiled script leaf.
+/// Find the settlement program's exact leaf in the compiled artifact.
 pub fn settlement_leaf(source: &Channel) -> Result<ScriptBuf, Error> {
-    leaf_for(source, &settlement_program(source)?)
+    let compiled = compile_settlement(source)?;
+    let requirement = settlement_requirement(&compiled, &only_candidate(&compiled)?)?;
+    leaf_for(&compiled, &requirement)
 }
 
 /// Attach a verified channel coin to the compiler's spending proof.
 pub fn input(source: &Channel, coin: &Coin) -> Result<Input, Error> {
-    let compiled = compile(source)?;
-    if coin.txout.value.to_sat() != source.terms().capacity()
+    input_from_artifact(&compile(source)?, coin)
+}
+
+/// Attach a channel coin using only its compiled artifact.
+pub fn input_from_artifact(compiled: &Compiled, coin: &Coin) -> Result<Input, Error> {
+    if coin.txout.value != compiled.required_input_amount
         || coin.txout.script_pubkey != ScriptBuf::from(&compiled.address)
     {
         return Err("channel funding does not match the compiled output".into());
     }
-    let mut input = spending_input(&compiled)?;
+    let mut input = spending_input(compiled)?;
     input.witness_utxo = Some(coin.txout.clone());
     Ok(input)
 }
@@ -214,6 +262,7 @@ pub fn authorize_update(terms: &Terms, target: State, joint: &Keypair) -> Result
         .sign_schnorr_no_aux_rand(&Message::from_digest_slice(hash.as_ref())?, joint))
 }
 
+/// Compile a newer candidate and prepare its artifact-declared authorization.
 pub fn update_request(
     source: &Channel,
     target: State,
@@ -221,38 +270,59 @@ pub fn update_request(
     sponsor: Sponsor,
     authorization: &Signature,
 ) -> Result<ProgramSigningRequest, Error> {
-    let transaction = only_candidate(&compile_update(source, target)?)?;
-    let input = input(source, &channel)?;
-    let path = ProgramSpendPath::script_for(source.terms().update_program(), &input)?;
-    Ok(ProgramSigningRequest {
-        instance: source.terms().update_program().instance().clone(),
-        input_index: 0,
-        witness: authorization.as_ref().to_vec(),
-        path,
-        psbt: PSBT(attach_inputs(transaction, channel, input, sponsor)?),
-    })
+    update_request_from_artifact(
+        &compile_update(source, target)?,
+        channel,
+        sponsor,
+        authorization,
+    )
 }
 
+/// Bind and authorize an exported update candidate without its Rust contract.
+pub fn update_request_from_artifact(
+    compiled: &Compiled,
+    channel: Coin,
+    sponsor: Sponsor,
+    authorization: &Signature,
+) -> Result<ProgramSigningRequest, Error> {
+    let requirement = update_requirement(compiled)?;
+    let input = input_from_artifact(compiled, &channel)?;
+    let psbt = attach_inputs(only_candidate(compiled)?, channel, input, sponsor)?;
+    Ok(prepare_program_request(
+        compiled,
+        &requirement,
+        psbt,
+        0,
+        authorization.as_ref().to_vec(),
+    )?)
+}
+
+/// Compile the delayed exit and prepare its artifact-declared predicate.
 pub fn settlement_request(
     source: &Channel,
     channel: Coin,
     sponsor: Sponsor,
 ) -> Result<ProgramSigningRequest, Error> {
-    let transaction = only_candidate(&compile_settlement(source)?)?;
-    let state = source.current_state().ok_or("funding cannot settle")?;
-    if transaction != settlement_transaction(source.terms(), state)? {
-        return Err("compiled settlement differs from the committed template".into());
-    }
-    let input = input(source, &channel)?;
-    let program = settlement_program(source)?;
-    let path = ProgramSpendPath::script_for(&program, &input)?;
-    Ok(ProgramSigningRequest {
-        instance: program.instance().clone(),
-        input_index: 0,
-        witness: vec![],
-        path,
-        psbt: PSBT(attach_inputs(transaction, channel, input, sponsor)?),
-    })
+    settlement_request_from_artifact(&compile_settlement(source)?, channel, sponsor)
+}
+
+/// Bind an exported settlement candidate without reconstructing its contract.
+pub fn settlement_request_from_artifact(
+    compiled: &Compiled,
+    channel: Coin,
+    sponsor: Sponsor,
+) -> Result<ProgramSigningRequest, Error> {
+    let transaction = only_candidate(compiled)?;
+    let requirement = settlement_requirement(compiled, &transaction)?;
+    let input = input_from_artifact(compiled, &channel)?;
+    let psbt = attach_inputs(transaction, channel, input, sponsor)?;
+    Ok(prepare_program_request(
+        compiled,
+        &requirement,
+        psbt,
+        0,
+        vec![],
+    )?)
 }
 
 /// Add the sponsor's real SIGHASH_ALL signature after the oracle accepts input zero.

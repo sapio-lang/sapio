@@ -4,15 +4,15 @@ use bitcoin::secp256k1::{schnorr::Signature, Secp256k1};
 use bitcoin::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::{taproot, ScriptBuf, Transaction};
 use emulator_connect::program::{
-    validate_program_response, ProgramError, ProgramOracle, ProgramSigningRequest,
-    ProgramSpendPath, PSBT,
+    prepare_program_request, validate_program_response, ProgramError, ProgramOracle,
+    ProgramSigningRequest, ProgramSpendPath,
 };
 use sapio_base::fragments::template_hash;
 use sapio_contrib::contracts::eltoo::{Channel, State, Terms};
 use sapio_integration_tests::eltoo_example::runner::{
     attach_inputs, authorize_update, compile, compile_settlement, compile_update, input,
     settlement_leaf, settlement_program, settlement_request, settlement_transaction, sign_sponsor,
-    update_leaf, update_request, update_transaction,
+    update_leaf, update_request, update_requirement, update_transaction,
 };
 use sapio_integration_tests::eltoo_example::{fixture, recovery::recover_update};
 
@@ -51,14 +51,16 @@ fn raw_update_request(
 ) -> ProgramSigningRequest {
     let coin = fixture::coin(source, 80);
     let input = input(source, &coin).unwrap();
-    let leaf = update_leaf(source).unwrap();
-    ProgramSigningRequest {
-        instance: source.terms().update_program().instance().clone(),
-        input_index: 0,
-        witness: authorization.as_ref().to_vec(),
-        path: ProgramSpendPath::ScriptPath(TapLeafHash::from_script(&leaf, LeafVersion::TapScript)),
-        psbt: PSBT(attach_inputs(transaction, coin, input, fixture::sponsor(2_000, 81)).unwrap()),
-    }
+    let compiled = compile(source).unwrap();
+    let requirement = update_requirement(&compiled).unwrap();
+    prepare_program_request(
+        &compiled,
+        &requirement,
+        attach_inputs(transaction, coin, input, fixture::sponsor(2_000, 81)).unwrap(),
+        0,
+        authorization.as_ref().to_vec(),
+    )
+    .unwrap()
 }
 
 #[test]

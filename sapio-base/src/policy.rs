@@ -10,7 +10,7 @@
 //! conditions with action guards and transaction commitments. Raw fragments
 //! retain their instruction order and multiplicity when combined.
 
-use crate::{Clause, Ctv, Emulatable};
+use crate::{Clause, Ctv, Emulatable, EmulatedProgram};
 use bitcoin::blockdata::opcodes::{all, Class, ClassifyContext};
 use bitcoin::blockdata::script::{Error as ScriptError, Instruction};
 use bitcoin::ScriptBuf;
@@ -35,6 +35,9 @@ pub enum ScriptPolicy {
     Miniscript(Clause),
     /// A CTV predicate explicitly resolved with public lowering inputs.
     Emulatable(Emulatable<Ctv>),
+    /// A complete evaluated predicate whose derived key authorizes a signature.
+    /// Compilation preserves this source and its exact spending locations.
+    Program(EmulatedProgram),
     /// A checked raw fragment with backend-defined witness requirements.
     Script(ScriptFragment),
     /// Require every child, in encounter order. An empty conjunction is true.
@@ -58,6 +61,12 @@ impl From<ScriptFragment> for ScriptPolicy {
 impl From<Emulatable<Ctv>> for ScriptPolicy {
     fn from(predicate: Emulatable<Ctv>) -> Self {
         Self::Emulatable(predicate)
+    }
+}
+
+impl From<EmulatedProgram> for ScriptPolicy {
+    fn from(program: EmulatedProgram) -> Self {
+        Self::Program(program)
     }
 }
 

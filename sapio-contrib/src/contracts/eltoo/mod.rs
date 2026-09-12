@@ -165,17 +165,20 @@ impl Contract for Channel {
         Ok(Some(self.terms.joint_key()))
     }
 
-    fn metadata(&self, ctx: Context) -> Result<ObjectMetadata, CompilationError> {
-        let settlement_program = self
-            .state
-            .map(|_| self.settlement_program(ctx))
-            .transpose()?;
+    fn metadata(&self, _ctx: Context) -> Result<ObjectMetadata, CompilationError> {
         let mut metadata = ObjectMetadata::default();
         metadata.extra.insert(
             "eltoo".into(),
             serde_json::json!({
-                "terms": self.terms, "state": self.state,
-                "settlement_program": settlement_program,
+                "terms": {
+                    "joint_key": self.terms.joint_key(),
+                    "capacity": self.terms.capacity(),
+                    "delay": self.terms.delay(),
+                    "max_state": self.terms.max_state(),
+                    "alice": self.terms.alice(),
+                    "bob": self.terms.bob(),
+                },
+                "state": self.state,
             }),
         );
         Ok(metadata)

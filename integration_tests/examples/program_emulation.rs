@@ -31,11 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             .iter()
             .position(|output| output.script_pubkey == recipient.script_pubkey())
             .expect("candidate pays the fixed recipient") as u32;
-        let mut signed = oracle.sign(signing_request(
-            contract.emulation(),
-            candidate,
-            output_index,
-        ))?;
+        let mut signed = oracle.sign(signing_request(&compiled, candidate, output_index)?)?;
         signed
             .finalize_mut(&Secp256k1::new())
             .map_err(|errors| format!("sample spend failed finalization: {errors:?}"))?;

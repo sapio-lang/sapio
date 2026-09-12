@@ -1,4 +1,9 @@
 //! Recover an update proof without retaining an old state's payout allocation.
+//!
+//! This recovery path has chain data and public channel terms, but no compiled
+//! artifact for the old state. It reconstructs and authenticates the published
+//! spending proof before making a low-level request. Ordinary exported-contract
+//! requests use the artifact's recorded program requirements instead.
 
 use super::runner::{attach_inputs, update_transaction, Coin, Error, Sponsor};
 use bitcoin::psbt::Input;

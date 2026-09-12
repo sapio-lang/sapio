@@ -1,6 +1,6 @@
 # Contract examples
 
-This inventory covers every contract family in `sapio-contrib`, all 19 WASM
+This inventory covers every contract family in `sapio-contrib`, all 20 WASM
 modules and both shared interfaces in `plugin-example`, and the two native
 executables. The examples demonstrate contract construction and have behavioral
 regressions for their supported paths. They remain research examples: compiling
@@ -115,6 +115,7 @@ native mocks.
 | [ordinal-example](../plugin-example/ordinal-example) | Owner-authorized ordinal sales with direct and planner-based construction. Native regressions check actual ordinal positions, payout destinations, fees, malformed ranges and auxiliary funding; the catalog checks both exposed continuations. |
 | [ordinal-inscription](../plugin-example/ordinal-inscription) | Constructs and carries an inscription through a signed continuation. Native regressions check envelope/payload preservation, ownership and funding; the catalog compiles the artifact and checks its fee-adjusted output. |
 | [custom-policy](../plugin-example/custom-policy) | Implements `PolicyCompiler` with an arithmetic signature predicate outside Miniscript. The catalog validates the raw Taproot artifact and its committed payout; native tests check the payment and reject underfunding. |
+| [program-policy](../plugin-example/program-policy) | Composes a supplied `EmulatedProgram` with a native CSV delay. The catalog checks exact program identity, oracle root and script-path requirements after guest compilation, schema validation and host deserialization. Evaluator registration and signing are separate. |
 
 The two remaining workspace members are interfaces, not WASM entry points:
 

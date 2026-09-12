@@ -8,9 +8,10 @@ use bitcoin::bip32::{Xpriv, Xpub};
 use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{Secp256k1, SecretKey};
 use bitcoin::{Address, Amount, Network, OutPoint, Transaction, TxIn, TxOut};
-use emulator_connect::program::{ProgramSigningRequest, ProgramSpendPath, WasmEvaluator, PSBT};
+use emulator_connect::program::{
+    prepare_program_request, ProgramSigningRequest, ProgramSpendPath, WasmEvaluator,
+};
 use emulator_connect::CTVAvailable;
-use sapio::contract::abi::object::ObjectMetadata;
 use sapio::contract::abi::studio::SapioStudioFormat;
 use sapio::contract::*;
 use sapio::*;
@@ -25,8 +26,6 @@ use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
 
-/// Public source metadata retained even though the guard lowers to a key.
-pub const PROGRAM_METADATA: &str = "emulated_program";
 /// Fixed semantics selector interpreted by the registered example evaluator.
 pub const PAY_AT_LEAST: &[u8] = b"pay-at-least/v1";
 /// Sample funding amount, in satoshis.
@@ -64,19 +63,29 @@ pub fn instance(minimum: u64, recipient: &bitcoin::Script) -> ProgramInstance {
     .expect("bounded example program")
 }
 
-/// Create an explicit program request for one candidate's key-path signature.
+/// Prepare the compiled payment's key-path signature with an output-index witness.
 pub fn signing_request(
-    program: &EmulatedProgram,
+    compiled: &Compiled,
     psbt: Psbt,
     output_index: u32,
-) -> ProgramSigningRequest {
-    ProgramSigningRequest {
-        instance: program.instance().clone(),
-        input_index: 0,
-        witness: output_index.to_le_bytes().to_vec(),
-        path: ProgramSpendPath::KeyPath,
-        psbt: PSBT(psbt),
+) -> Result<ProgramSigningRequest, Box<dyn Error>> {
+    let mut requirements = compiled
+        .program_requirements()?
+        .into_iter()
+        .filter(|requirement| requirement.path == ProgramSpendPath::KeyPath);
+    let requirement = requirements
+        .next()
+        .ok_or("payment has no program key path")?;
+    if requirements.next().is_some() {
+        return Err("payment has more than one program for its key path".into());
     }
+    Ok(prepare_program_request(
+        compiled,
+        &requirement,
+        psbt,
+        0,
+        output_index.to_le_bytes().to_vec(),
+    )?)
 }
 
 /// Deterministic, disposable keys for this research example only.
@@ -120,11 +129,6 @@ impl PaymentContract {
             minimum,
             recipient,
         }
-    }
-
-    /// Full public source for an explicit signing request.
-    pub fn emulation(&self) -> &EmulatedProgram {
-        &self.emulation
     }
 
     #[guard(policy, cached)]
@@ -183,17 +187,6 @@ impl PaymentContract {
 
 impl Contract for PaymentContract {
     declare! {updatable<Option<PaymentCandidate>>, Self::pay}
-
-    fn metadata(&self, _ctx: Context) -> Result<ObjectMetadata, CompilationError> {
-        let mut metadata = ObjectMetadata::default();
-        // PolicyCompiler emits an ordinary key, so generic program source is
-        // deliberately retained here rather than implied by CTV requirements.
-        metadata.extra.insert(
-            PROGRAM_METADATA.into(),
-            serde_json::to_value(&self.emulation).map_err(CompilationError::SerializationError)?,
-        );
-        Ok(metadata)
-    }
 }
 
 /// Attach candidates to a known synthetic funding transaction, without signing.

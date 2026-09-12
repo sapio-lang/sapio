@@ -1,0 +1,18 @@
+{
+  "arguments": {
+    "program": {
+      "instance": {
+        "evaluator": "0707070707070707070707070707070707070707070707070707070707070707",
+        "program": [1, 2, 3],
+        "parameters": [4, 5, 6]
+      },
+      "root": "tpubD6NzVbkrYhZ4Wf398td3H8YhWBsXx9Sxa4W3cQWkNW3N3DHSNB2qtPoUMXrA6JNaPxodQfRpoZNE5tGM9iZ4xfUEFRJEJvfs8W5paUagYCE"
+    },
+    "delay": 6
+  },
+  "context": {
+    "amount": 10000,
+    "network": "Regtest",
+    "lowering": "Native"
+  }
+}

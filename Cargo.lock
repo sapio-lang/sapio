@@ -616,6 +616,7 @@ version = "0.2.4"
 dependencies = [
  "bitcoin",
  "rand",
+ "sapio",
  "sapio-base",
  "sapio-ctv-emulator-trait",
  "sapio-psbt",
