@@ -1,6 +1,8 @@
 use bitcoin::bip32::Xpub;
 use bitcoin::secp256k1::Secp256k1;
-use emulator_connect::program::{ProgramClient, ProgramClientError, ProgramError, ProgramOracle};
+use emulator_connect::program::{
+    ProgramClient, ProgramClientError, ProgramError, ProgramOracle, ProgramSpendPath,
+};
 use miniscript::psbt::PsbtExt;
 use sapio_base::program::EmulatedProgram;
 use sapio_integration_tests::program_example::*;
@@ -31,6 +33,7 @@ fn continuation_candidates_preserve_the_complete_fixed_program_policy() {
         .unwrap();
     assert_eq!(original.address, with_effects.address);
     assert_eq!(original.descriptor, with_effects.descriptor);
+    assert_eq!(original.program_policies, with_effects.program_policies);
     assert_eq!(original.metadata, with_effects.metadata);
     assert_eq!(original.suggested_txs.len(), 1);
     assert_eq!(with_effects.suggested_txs.len(), 3);
@@ -40,10 +43,21 @@ fn continuation_candidates_preserve_the_complete_fixed_program_policy() {
 
     let restored: sapio::contract::Compiled =
         serde_json::from_value(serde_json::to_value(&with_effects).unwrap()).unwrap();
+    drop(source);
     restored.validate().unwrap();
-    let program: EmulatedProgram =
-        serde_json::from_value(restored.metadata.extra[PROGRAM_METADATA].clone()).unwrap();
-    assert_eq!(&program, source.emulation());
+    assert!(restored.metadata.is_empty());
+    let program = EmulatedProgram::new(
+        instance(5_000, &recipient(92).script_pubkey()),
+        Xpub::from_priv(&Secp256k1::new(), &example_root()),
+    )
+    .unwrap();
+    let requirements = restored.program_requirements().unwrap();
+    assert!(requirements
+        .iter()
+        .all(|requirement| requirement.program == program));
+    assert!(requirements
+        .iter()
+        .any(|requirement| requirement.path == ProgramSpendPath::KeyPath));
     let candidates = bind_candidates(&restored).unwrap();
     assert_eq!(candidates.len(), 3);
     for candidate in candidates {
@@ -60,7 +74,7 @@ fn continuation_candidates_preserve_the_complete_fixed_program_policy() {
 fn recipient_minimum_and_oracle_root_are_fixed_before_funding() {
     let source = contract();
     let original = source.compile_candidates(&[]).unwrap();
-    let root = *source.emulation().root();
+    let root = Xpub::from_priv(&Secp256k1::new(), &example_root());
     for replacement in [
         PaymentContract::new(5_001, recipient(92), root),
         PaymentContract::new(5_000, recipient(93), root),
@@ -75,7 +89,7 @@ fn recipient_minimum_and_oracle_root_are_fixed_before_funding() {
     ] {
         let changed = replacement.compile_candidates(&[]).unwrap();
         assert_ne!(changed.address, original.address);
-        assert_ne!(changed.metadata, original.metadata);
+        assert_ne!(changed.program_policies, original.program_policies);
     }
 }
 
@@ -96,12 +110,12 @@ fn the_oracle_enforces_the_program_and_rejects_altered_authorization() {
         .unwrap();
     let underpaid = candidates.remove(underpaid);
     assert!(matches!(
-        oracle.sign(signing_request(source.emulation(), underpaid, 0)),
+        oracle.sign(signing_request(&compiled, underpaid, 0).unwrap()),
         Err(ProgramError::Rejected)
     ));
 
     let candidate = candidates.pop().unwrap();
-    let request = signing_request(source.emulation(), candidate.clone(), 0);
+    let request = signing_request(&compiled, candidate.clone(), 0).unwrap();
     let signed = oracle.sign(request.clone()).unwrap();
     let mut finalized = signed.clone();
     finalized.finalize_mut(&Secp256k1::new()).unwrap();
@@ -115,11 +129,7 @@ fn the_oracle_enforces_the_program_and_rejects_altered_authorization() {
     ));
     for index in [1, 2, u32::MAX] {
         assert!(matches!(
-            oracle.sign(signing_request(
-                source.emulation(),
-                candidate.clone(),
-                index
-            )),
+            oracle.sign(signing_request(&compiled, candidate.clone(), index).unwrap()),
             Err(ProgramError::Rejected)
         ));
     }
@@ -177,6 +187,7 @@ async fn one_fixed_continuation_accepts_larger_and_reordered_payments_over_tcp()
         ])
         .unwrap();
     let candidates = bind_candidates(&compiled).unwrap();
+    drop(source);
     let oracle = ProgramOracle::new(example_root(), vec![pay_at_least_evaluator()]).unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
@@ -184,11 +195,7 @@ async fn one_fixed_continuation_accepts_larger_and_reordered_payments_over_tcp()
     let server = tokio::spawn(oracle.serve(listener));
     assert!(matches!(
         client
-            .sign(signing_request(
-                source.emulation(),
-                candidates[0].clone(),
-                u32::MAX,
-            ))
+            .sign(signing_request(&compiled, candidates[0].clone(), u32::MAX).unwrap())
             .await,
         Err(ProgramClientError::Rejected(_))
     ));
@@ -203,7 +210,7 @@ async fn one_fixed_continuation_accepts_larger_and_reordered_payments_over_tcp()
         let value = candidate.unsigned_tx.output[index].value.to_sat();
         let original_txid = candidate.unsigned_tx.compute_txid();
         let mut signed = client
-            .sign(signing_request(source.emulation(), candidate, index as u32))
+            .sign(signing_request(&compiled, candidate, index as u32).unwrap())
             .await
             .unwrap();
         signed.finalize_mut(&Secp256k1::new()).unwrap();

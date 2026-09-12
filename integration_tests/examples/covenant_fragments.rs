@@ -36,7 +36,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         let mut spends = vec![];
         for candidate in bind_candidates(&compiled)? {
             let request = signing_request(
-                &source,
+                &compiled,
+                mode,
                 candidate,
                 &authorizer,
                 Some(b"\x50sapio-fragments".to_vec()),

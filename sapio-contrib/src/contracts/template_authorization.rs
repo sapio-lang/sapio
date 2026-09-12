@@ -5,7 +5,6 @@
 
 use bitcoin::bip32::Xpub;
 use bitcoin::{Address, Amount, XOnlyPublicKey};
-use sapio::contract::abi::object::ObjectMetadata;
 use sapio::contract::*;
 use sapio::*;
 use sapio_base::fragments::{template_signed_by, TemplateKey};
@@ -50,16 +49,6 @@ impl FragmentContract {
             change,
             fee,
         })
-    }
-
-    /// Public key selection needed to construct the authorization evidence.
-    pub fn authorization(&self) -> Authorization {
-        self.authorization
-    }
-
-    /// Complete program source and public derivation root.
-    pub fn program(&self) -> &EmulatedProgram {
-        &self.program
     }
 
     #[guard(policy, cached)]
@@ -110,14 +99,5 @@ impl Contract for FragmentContract {
         _ctx: &Context,
     ) -> Result<Option<XOnlyPublicKey>, CompilationError> {
         Ok(Some(self.internal_key()))
-    }
-
-    fn metadata(&self, _ctx: Context) -> Result<ObjectMetadata, CompilationError> {
-        let mut metadata = ObjectMetadata::default();
-        metadata.extra.insert(
-            "emulated_program".into(),
-            serde_json::to_value(&self.program).map_err(CompilationError::SerializationError)?,
-        );
-        Ok(metadata)
     }
 }

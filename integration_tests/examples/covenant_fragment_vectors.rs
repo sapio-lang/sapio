@@ -48,7 +48,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             funding.get(name).copied().unwrap_or_default();
         candidate.inputs[0].non_witness_utxo = None;
         let request = signing_request(
-            &source,
+            &compiled,
+            mode,
             candidate,
             &authorizer,
             Some(b"\x50sapio-fragments".to_vec()),

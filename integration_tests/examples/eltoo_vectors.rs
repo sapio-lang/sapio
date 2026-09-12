@@ -4,13 +4,15 @@ use bitcoin::consensus::encode::serialize_hex;
 use bitcoin::secp256k1::{schnorr::Signature, Secp256k1};
 use bitcoin::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::{Address, Network, OutPoint, Transaction, Witness};
-use emulator_connect::program::{ProgramOracle, ProgramSigningRequest, ProgramSpendPath, PSBT};
+use emulator_connect::program::{
+    prepare_program_request, ProgramOracle, ProgramSigningRequest, ProgramSpendPath,
+};
 use sapio_contrib::contracts::eltoo::{Channel, State};
 use sapio_integration_tests::eltoo_example::fixture;
 use sapio_integration_tests::eltoo_example::recovery::recover_update;
 use sapio_integration_tests::eltoo_example::runner::{
-    attach_inputs, authorize_update, input, settlement_request, sign_sponsor, update_leaf,
-    update_request, update_transaction, Coin, Error, Sponsor,
+    attach_inputs, authorize_update, compile, input, settlement_request, sign_sponsor, update_leaf,
+    update_request, update_requirement, update_transaction, Coin, Error, Sponsor,
 };
 
 const SPONSOR_FEE: u64 = 2_000;
@@ -51,22 +53,25 @@ fn non_advancing_update(
     let script = update_leaf(source)?;
     let leaf = TapLeafHash::from_script(&script, LeafVersion::TapScript);
     let input = input(source, &coin)?;
-    let request = ProgramSigningRequest {
-        instance: source.terms().update_program().instance().clone(),
-        input_index: 0,
-        witness: authorization.as_ref().to_vec(),
-        path: ProgramSpendPath::ScriptPath(leaf),
-        psbt: PSBT(attach_inputs(
+    let compiled = compile(source)?;
+    let requirement = update_requirement(&compiled)?;
+    assert_eq!(requirement.path, ProgramSpendPath::ScriptPath(leaf));
+    let request = prepare_program_request(
+        &compiled,
+        &requirement,
+        attach_inputs(
             update_transaction(source.terms(), target)?,
             coin,
             input,
             sponsor,
-        )?),
-    };
+        )?,
+        0,
+        authorization.as_ref().to_vec(),
+    )?;
     let mut signed = oracle.sign(request)?;
     sign_sponsor(&mut signed, &fixture::sponsor_key())?;
     assert!(sapio_psbt::finalize::finalize(signed.clone(), &Secp256k1::new()).is_err());
-    let key = source.terms().update_program().derive_public_key()?;
+    let key = requirement.program.derive_public_key()?;
     let signature = signed.inputs[0]
         .tap_script_sigs
         .get(&(key, leaf))
