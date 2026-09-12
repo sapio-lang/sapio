@@ -13,8 +13,9 @@ use bitcoin::{Script, ScriptBuf};
 use sapio_base::covenant::LoweringPlan;
 use sapio_base::miniscript::ord::Inscription;
 use sapio_base::miniscript::Tap;
-use sapio_base::policy::ScriptPolicy;
-use sapio_base::Clause;
+use sapio_base::policy::{ScriptFragment, ScriptPolicy};
+use sapio_base::{Clause, EmulatedProgram};
+use std::borrow::Cow;
 
 const MAX_DEPTH: usize = 128;
 const MAX_NODES: usize = 65_536;
@@ -140,6 +141,17 @@ impl Preflight<'_> {
     ) -> Result<Expansion, CompilationError> {
         self.visit(depth)?;
         match policy {
+            ScriptPolicy::Program(program) => {
+                // Account for the complete instance before expansion clones it
+                // into the provenance of each spending alternative.
+                let payload_bytes =
+                    program.instance().program().len() + program.instance().parameters().len();
+                self.payload(payload_bytes)?;
+                Ok(Expansion {
+                    payload_bytes,
+                    ..Expansion::ONE
+                })
+            }
             ScriptPolicy::Emulatable(_) => {
                 self.visit(depth + 1)?;
                 match self.lowering {
@@ -295,7 +307,47 @@ fn inscription_payload_bytes(inscription: &Inscription) -> Result<usize, Compila
 #[derive(Clone, Copy)]
 enum Operand<'a> {
     Miniscript(&'a Clause),
-    Script(&'a Script),
+    Program(&'a EmulatedProgram),
+    Script(&'a ScriptFragment),
+}
+
+/// Cumulative provenance allocation across all actions in one contract.
+#[derive(Default)]
+pub(super) struct RecordedPolicyBudget(Preflight<'static>);
+
+impl RecordedPolicyBudget {
+    fn admit(&mut self, alternatives: &[Vec<Operand<'_>>]) -> Result<(), CompilationError> {
+        for operands in alternatives {
+            if !operands
+                .iter()
+                .any(|operand| matches!(operand, Operand::Program(_)))
+            {
+                continue;
+            }
+            let depth = usize::from(operands.len() > 1);
+            if depth != 0 {
+                self.0.visit(0)?;
+            }
+            for operand in operands {
+                self.0.visit(depth)?;
+                match operand {
+                    Operand::Miniscript(clause) => {
+                        // This complete native subtree is cloned into the
+                        // record, even when its choices remain inside a leaf.
+                        self.0.clause(clause, depth + 1, false)?;
+                    }
+                    Operand::Program(program) => {
+                        self.0.payload(
+                            program.instance().program().len()
+                                + program.instance().parameters().len(),
+                        )?;
+                    }
+                    Operand::Script(fragment) => self.0.payload(fragment.as_script().len())?,
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 fn expand_clause(clause: &Clause) -> Vec<Vec<Operand<'_>>> {
@@ -313,11 +365,26 @@ fn expand_clause(clause: &Clause) -> Vec<Vec<Operand<'_>>> {
 }
 
 fn expand(policy: &ScriptPolicy) -> Vec<Vec<Operand<'_>>> {
+    expand_inner(policy, false, false)
+}
+
+fn expand_inner(
+    policy: &ScriptPolicy,
+    retain_native_choices: bool,
+    conjoined: bool,
+) -> Vec<Vec<Operand<'_>>> {
     match policy {
+        ScriptPolicy::Miniscript(clause) if retain_native_choices && conjoined => {
+            vec![vec![Operand::Miniscript(clause)]]
+        }
         ScriptPolicy::Miniscript(clause) => expand_clause(clause),
+        ScriptPolicy::Program(program) => vec![vec![Operand::Program(program)]],
         ScriptPolicy::Emulatable(_) => unreachable!("resolved before expansion"),
-        ScriptPolicy::Script(fragment) => vec![vec![Operand::Script(fragment.as_script())]],
-        ScriptPolicy::Or(children) => children.iter().flat_map(expand).collect(),
+        ScriptPolicy::Script(fragment) => vec![vec![Operand::Script(fragment)]],
+        ScriptPolicy::Or(children) => children
+            .iter()
+            .flat_map(|child| expand_inner(child, retain_native_choices, conjoined))
+            .collect(),
         ScriptPolicy::And(children) => {
             let mut alternatives = vec![vec![]];
             for child in children {
@@ -325,7 +392,7 @@ fn expand(policy: &ScriptPolicy) -> Vec<Vec<Operand<'_>>> {
                     // Preflight already validated every unreachable child.
                     break;
                 }
-                let next = expand(child);
+                let next = expand_inner(child, retain_native_choices, true);
                 if let [right] = next.as_slice() {
                     // A long conjunction of single predicates must append in
                     // place, not repeatedly copy its growing prefix.
@@ -364,7 +431,7 @@ fn encoded_size(
 }
 
 fn compile_run(
-    clauses: &[&Clause],
+    clauses: &[Cow<'_, Clause>],
     encoded_bytes: usize,
     separator: bool,
 ) -> Result<ScriptBuf, CompilationError> {
@@ -373,7 +440,7 @@ fn compile_run(
     // The current public Miniscript compiler requires a safe run; an opaque
     // neighbor cannot establish that proof. A custom backend can instead emit
     // the complete predicate, including its timelock or hashlock, as raw script.
-    let clause = super::conjoin_guards(clauses.iter().copied());
+    let clause = super::conjoin_guards(clauses.iter().map(|clause| clause.as_ref()));
     let compiled = clause.compile::<Tap>()?;
     // Check the encoded size before materializing the native script as well.
     encoded_size(encoded_bytes, compiled.script_size(), separator)?;
@@ -411,7 +478,8 @@ fn compile_alternative(
     let mut clauses = vec![];
     for operand in operands {
         match operand {
-            Operand::Miniscript(clause) => clauses.push(*clause),
+            Operand::Miniscript(clause) => clauses.push(Cow::Borrowed(*clause)),
+            Operand::Program(program) => clauses.push(Cow::Owned(program_clause(program)?)),
             Operand::Script(script) => {
                 if !clauses.is_empty() {
                     let script = compile_run(&clauses, *encoded_bytes, has_predicate)?;
@@ -420,7 +488,12 @@ fn compile_alternative(
                 }
                 // Borrow the source fragment directly. A raw script shared by
                 // many alternatives must not first be cloned into temporary runs.
-                append_script(&mut bytes, script, &mut has_predicate, encoded_bytes)?;
+                append_script(
+                    &mut bytes,
+                    script.as_script(),
+                    &mut has_predicate,
+                    encoded_bytes,
+                )?;
             }
         }
     }
@@ -429,6 +502,118 @@ fn compile_alternative(
         append_script(&mut bytes, &script, &mut has_predicate, encoded_bytes)?;
     }
     Ok(ScriptBuf::from(bytes))
+}
+
+fn program_clause(program: &EmulatedProgram) -> Result<Clause, CompilationError> {
+    program
+        .derive_public_key()
+        .map(Clause::Key)
+        .map_err(|error| CompilationError::Custom(error.to_string().into()))
+}
+
+pub(super) fn contains_program(policy: &ScriptPolicy) -> bool {
+    match policy {
+        ScriptPolicy::Program(_) => true,
+        ScriptPolicy::And(children) | ScriptPolicy::Or(children) => {
+            children.iter().any(contains_program)
+        }
+        _ => false,
+    }
+}
+
+fn contains_raw(policy: &ScriptPolicy) -> bool {
+    match policy {
+        ScriptPolicy::Script(_) => true,
+        ScriptPolicy::And(children) | ScriptPolicy::Or(children) => {
+            children.iter().any(contains_raw)
+        }
+        _ => false,
+    }
+}
+
+/// Keep the exact source of each expanded program-bearing alternative. The
+/// payload budget is shared by every action contributing to this contract.
+pub(super) fn lower_program_branches(
+    policy: &ScriptPolicy,
+    budget: &mut RecordedPolicyBudget,
+) -> Result<Vec<super::CompiledBranch>, CompilationError> {
+    Preflight::default().policy(policy, 0)?;
+    reject_unresolved(policy)?;
+    let alternatives = expand_inner(policy, !contains_raw(policy), false);
+    budget.admit(&alternatives)?;
+    let mut encoded_bytes = 0;
+    alternatives
+        .iter()
+        .map(|operands| {
+            let has_program = operands
+                .iter()
+                .any(|operand| matches!(operand, Operand::Program(_)));
+            let native = !operands.is_empty()
+                && operands
+                    .iter()
+                    .all(|operand| !matches!(operand, Operand::Script(_)));
+            let (script, retained_program) = if native {
+                let clauses = operands
+                    .iter()
+                    .map(|operand| match operand {
+                        Operand::Miniscript(clause) => Ok(Cow::Borrowed(*clause)),
+                        Operand::Program(program) => program_clause(program).map(Cow::Owned),
+                        Operand::Script(_) => unreachable!("native operands only"),
+                    })
+                    .collect::<Result<Vec<_>, CompilationError>>()?;
+                let clause = super::conjoin_guards(clauses.iter().map(|clause| clause.as_ref()));
+                let compiled = clause.compile::<Tap>()?;
+                encoded_bytes = encoded_size(encoded_bytes, compiled.script_size(), false)?;
+                // A false conjunction may have erased its signature operands.
+                // Reuse the derived clauses rather than deriving keys again.
+                let retained = operands.iter().zip(&clauses).any(|(operand, clause)| {
+                    matches!(operand, Operand::Program(_))
+                        && matches!(clause.as_ref(),
+                        Clause::Key(key) if compiled.iter_pk().any(|candidate| candidate == *key))
+                });
+                (super::CompiledScript::Miniscript(compiled), retained)
+            } else {
+                (
+                    super::CompiledScript::Script(compile_alternative(
+                        operands,
+                        &mut encoded_bytes,
+                    )?),
+                    has_program,
+                )
+            };
+            let program_policy = retained_program.then(|| {
+                let mut source: Vec<_> = operands
+                    .iter()
+                    .map(|operand| match operand {
+                        Operand::Miniscript(clause) => ScriptPolicy::Miniscript((*clause).clone()),
+                        Operand::Program(program) => ScriptPolicy::Program((*program).clone()),
+                        Operand::Script(fragment) => ScriptPolicy::Script((*fragment).clone()),
+                    })
+                    .collect();
+                if source.len() == 1 {
+                    source.pop().unwrap()
+                } else {
+                    ScriptPolicy::And(source)
+                }
+            });
+            Ok(super::CompiledBranch {
+                script,
+                program_policy,
+            })
+        })
+        .collect()
+}
+
+fn reject_unresolved(policy: &ScriptPolicy) -> Result<(), CompilationError> {
+    let mut pending = vec![policy];
+    while let Some(policy) = pending.pop() {
+        match policy {
+            ScriptPolicy::Emulatable(_) => return Err(CompilationError::UnresolvedEmulation),
+            ScriptPolicy::And(children) | ScriptPolicy::Or(children) => pending.extend(children),
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 /// Compile disjunctive alternatives after validating the complete source and
@@ -442,14 +627,17 @@ pub(crate) fn lower_script_policy(
     policy: &ScriptPolicy,
 ) -> Result<Vec<ScriptBuf>, CompilationError> {
     validate_source(policy)?;
-    let mut pending = vec![policy];
-    while let Some(policy) = pending.pop() {
-        match policy {
-            ScriptPolicy::Emulatable(_) => return Err(CompilationError::UnresolvedEmulation),
-            ScriptPolicy::And(children) | ScriptPolicy::Or(children) => pending.extend(children),
-            _ => {}
-        }
+    if contains_program(policy) {
+        return lower_program_branches(policy, &mut RecordedPolicyBudget::default()).map(
+            |branches| {
+                branches
+                    .into_iter()
+                    .map(|branch| branch.script.into_script())
+                    .collect()
+            },
+        );
     }
+    reject_unresolved(policy)?;
     let mut encoded_bytes = 0;
     expand(policy)
         .iter()
@@ -513,6 +701,17 @@ pub(super) fn resolve_emulation(
 /// enumeration can erase malformed declarations or expand untrusted input.
 pub(crate) fn validate_source(policy: &ScriptPolicy) -> Result<(), CompilationError> {
     Preflight::default().policy(policy, 0).map(|_| ())
+}
+
+pub(super) fn validate_sources<'a>(
+    policies: impl IntoIterator<Item = &'a ScriptPolicy>,
+) -> Result<(), CompilationError> {
+    let mut preflight = Preflight::default();
+    let mut expansion = Expansion::EMPTY;
+    for policy in policies {
+        expansion = expansion.or(preflight.policy(policy, 0)?)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -960,6 +1159,97 @@ mod tests {
                 resource: "policy nodes",
                 limit: 65_536
             })
+        ));
+    }
+
+    fn program(payload: usize) -> ScriptPolicy {
+        let root = Xpub::from_priv(
+            &Secp256k1::new(),
+            &Xpriv::new_master(Network::Regtest, &[53; 32]).unwrap(),
+        );
+        EmulatedProgram::new(
+            sapio_base::program::ProgramInstance::wasm_v2(vec![0; payload], vec![]).unwrap(),
+            root,
+        )
+        .unwrap()
+        .into()
+    }
+
+    #[test]
+    fn program_payload_expansion_is_bounded_before_source_is_copied() {
+        let source = ScriptPolicy::And(vec![
+            program(sapio_base::program::MAX_PROGRAM_BYTES),
+            ScriptPolicy::Or(vec![ScriptPolicy::And(vec![]); 257]),
+        ]);
+        assert!(matches!(
+            lower_script_policy(&source),
+            Err(CompilationError::PolicyLimit {
+                resource: "expanded script bytes",
+                limit: MAX_SCRIPT_BYTES
+            })
+        ));
+    }
+
+    #[test]
+    fn every_actions_program_records_share_one_payload_budget() {
+        let source = ScriptPolicy::And(vec![
+            program(sapio_base::program::MAX_PROGRAM_BYTES),
+            ScriptPolicy::Or(vec![ScriptPolicy::And(vec![]); 128]),
+        ]);
+        let mut budget = RecordedPolicyBudget::default();
+        assert_eq!(
+            lower_program_branches(&source, &mut budget).unwrap().len(),
+            128
+        );
+        assert_eq!(
+            lower_program_branches(&source, &mut budget).unwrap().len(),
+            128
+        );
+        assert!(matches!(
+            lower_program_branches(&source, &mut budget),
+            Err(CompilationError::PolicyLimit {
+                resource: "source script bytes",
+                limit: MAX_SCRIPT_BYTES
+            })
+        ));
+    }
+
+    #[test]
+    fn expanded_native_subtrees_are_bounded_before_record_cloning() {
+        let key =
+            Keypair::from_secret_key(&Secp256k1::new(), &SecretKey::from_slice(&[1; 32]).unwrap())
+                .x_only_public_key()
+                .0;
+        let native = Clause::Thresh(sapio_base::miniscript::Threshold::and_n(
+            vec![std::sync::Arc::new(Clause::Key(key)); 1_024],
+        ));
+        let source = ScriptPolicy::And(vec![
+            program(0),
+            native.into(),
+            ScriptPolicy::Or(vec![ScriptPolicy::And(vec![]); 64]),
+        ]);
+        // The original source and reference expansion fit; copied native
+        // subtrees would exceed the aggregate policy-node budget.
+        validate_source(&source).unwrap();
+        assert!(matches!(
+            lower_script_policy(&source),
+            Err(CompilationError::PolicyLimit {
+                resource: "policy nodes",
+                limit: MAX_NODES
+            })
+        ));
+    }
+
+    #[test]
+    fn unreachable_program_branches_do_not_hide_invalid_native_source() {
+        let source = ScriptPolicy::And(vec![
+            ScriptPolicy::Or(vec![]),
+            program(0),
+            Clause::And(vec![]).into(),
+        ]);
+        assert!(matches!(
+            lower_script_policy(&source),
+            Err(CompilationError::Miniscript(CompilerError::NonBinaryArgAnd))
         ));
     }
 }

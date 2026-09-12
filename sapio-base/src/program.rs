@@ -13,14 +13,27 @@
 
 use crate::covenant::{hash_to_child_vec, Ctv};
 use crate::policy::{PolicyCompiler, PolicyError, ScriptPolicy};
-use crate::Clause;
 use bitcoin::bip32::{self, ChildNumber, Xpub};
 use bitcoin::hashes::{sha256, Hash, HashEngine};
+use bitcoin::taproot::TapLeafHash;
 use bitcoin::XOnlyPublicKey;
 use schemars::JsonSchema;
 use serde::de::{Error as _, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt;
+
+mod paths;
+
+/// A single Taproot signature location, selected explicitly by the spender.
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema,
+)]
+pub enum ProgramSpendPath {
+    /// Sign the output key after its BIP341 tweak.
+    KeyPath,
+    /// Sign this exact tapscript leaf with no code separator.
+    ScriptPath(TapLeafHash),
+}
 
 /// Maximum exact program length, in bytes.
 pub const MAX_PROGRAM_BYTES: usize = 65_536;
@@ -328,11 +341,10 @@ pub fn program_derivation_path(id: ProgramId) -> Vec<ChildNumber> {
 
 /// A complete program instance and the public root authorized to evaluate it.
 ///
-/// This custom [`PolicyCompiler`] produces an ordinary signature-key clause.
-/// It does not register an evaluator, contact a signer, or add its assumptions
-/// to the compiled object's CTV-specific covenant requirements. Applications
-/// must retain this complete value for their evaluated signing requests.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, JsonSchema)]
+/// This custom [`PolicyCompiler`] preserves a typed program predicate until
+/// compilation records its spending locations and lowers it to a signature
+/// key. It does not register an evaluator or contact a signer.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, JsonSchema)]
 pub struct EmulatedProgram {
     instance: ProgramInstance,
     root: Xpub,
@@ -376,15 +388,17 @@ impl<'de> Deserialize<'de> for EmulatedProgram {
 
 impl PolicyCompiler for EmulatedProgram {
     fn compile_policy(&self) -> Result<ScriptPolicy, PolicyError> {
-        self.derive_public_key()
-            .map(|key| ScriptPolicy::Miniscript(Clause::Key(key)))
-            .map_err(|error| PolicyError::Backend(error.to_string()))
+        Ok(ScriptPolicy::Program(self.clone()))
     }
 }
 
 /// An exact program instance or its public derivation is invalid.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ProgramError {
+    /// No supported Miniscript leaf contains this program's signing key.
+    MissingProgramLeaf,
+    /// Distinct leaves contain the key and need explicit caller selection.
+    AmbiguousProgramLeaf,
     /// The exact program exceeds the public size limit.
     ProgramTooLarge {
         /// Actual program length.
@@ -407,6 +421,11 @@ pub enum ProgramError {
 impl fmt::Display for ProgramError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::MissingProgramLeaf => {
+                formatter.write_str("no Miniscript leaf contains the program key")
+            }
+            Self::AmbiguousProgramLeaf => formatter
+                .write_str("multiple leaves contain the program key; select one explicitly"),
             Self::ProgramTooLarge { size } => write!(
                 formatter,
                 "program has {size} bytes; maximum is {MAX_PROGRAM_BYTES}"
