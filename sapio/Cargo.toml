@@ -17,7 +17,7 @@ description = "A programming framework for bitcoin smart contracts."
 serde_json = "1.0"
 serde_derive = "1.0"
 paste = "1.0"
-base64 = "0.13.0"
+base64 = "0.21.7"
 lazy_static = "1.4.0"
 
 

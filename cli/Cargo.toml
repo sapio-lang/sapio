@@ -17,7 +17,7 @@ serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
 clap = "=3.0.0-beta.2"
-base64 = "0.13.0"
+base64 = "0.21.7"
 lazy_static = "1.4.0"
 bitcoincore-rpc = "0.19.0"
 tokio = { version = "1", features = ["full"] }
