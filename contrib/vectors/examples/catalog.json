@@ -206,6 +206,32 @@
       "raw_taproot": true
     }
   },
+  "program-policy": {
+    "wasm": "sapio_wasm_program_policy.wasm",
+    "input": "program-policy.json",
+    "dependencies": [],
+    "expect": {
+      "ctv_count": 0,
+      "suggested_count": 0,
+      "continuation_count": 0,
+      "raw_taproot": false,
+      "program_requirements": [
+        {
+          "program": {
+            "instance": {
+              "evaluator": "0707070707070707070707070707070707070707070707070707070707070707",
+              "program": [1, 2, 3],
+              "parameters": [4, 5, 6]
+            },
+            "root": "tpubD6NzVbkrYhZ4Wf398td3H8YhWBsXx9Sxa4W3cQWkNW3N3DHSNB2qtPoUMXrA6JNaPxodQfRpoZNE5tGM9iZ4xfUEFRJEJvfs8W5paUagYCE"
+          },
+          "path": {
+            "ScriptPath": "578b4ae92d33278edb0715f480e14a0d8dc2ef326153417fe181ada0fa914d5c"
+          }
+        }
+      ]
+    }
+  },
   "ordinal-inscription": {
     "wasm": "sapio_wasm_ordinal_inscription.wasm",
     "input": "ordinal-inscription.json",

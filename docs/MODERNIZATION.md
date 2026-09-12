@@ -74,7 +74,7 @@ with upstream crates would remove semantics, not complete a migration.
 | Emulator responses | Accept complete PSBT responses containing only signature additions; preserve existing signatures and every other field in raw HD responses and each federation participant; signer callbacks are absent from the compilation host |
 | Emulator lifecycle | Bound each peer exchange and the async wait for CLI peer resolution; cap admitted server connections; discard incomplete exchanges, isolate peer errors and cancel owned connection tasks on shutdown |
 | Integration | Restore the suite to the workspace; compile, sign and finalize two contract steps and reject a modified output |
-| Contract examples | [Complete inventory](EXAMPLES.md): repaired and tested library families, restored PowSwap/TapBet, 19 real WASM fixtures, both native examples and explicit research assumptions |
+| Contract examples | [Complete inventory](EXAMPLES.md): repaired and tested library families, restored PowSwap/TapBet, 20 real WASM fixtures, both native examples and explicit research assumptions |
 | Developer checks | Formatting, feature checks, native tests, complete WASM catalog with artifact/schema/repeatability checks, CLI smoke checks, and API documentation |
 
 The [development guide](DEVELOPMENT.md) gives reproducible commands. This list is

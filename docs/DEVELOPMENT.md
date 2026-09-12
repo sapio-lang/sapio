@@ -56,9 +56,9 @@ bash contrib/sapio_wasm.sh
 ```
 
 This requires Python 3. The catalog checks that every workspace guest has a
-fixture, compiles all 19 modules with their actual schemas, validates complete
-artifacts, checks payment/timing expectations, compares fresh-instance results,
-and rejects malformed arguments. The two shared interface crates are inventoried
+fixture, compiles all 20 modules with their actual schemas, validates complete
+artifacts, checks payment/timing and program requirements, compares fresh-instance
+results, and rejects malformed arguments. The two shared interface crates are inventoried
 separately. A CLI smoke test additionally covers cross-module calls, a 521-byte
 inscription, and mock binding. Each catalog process has a 360-second wall-clock allowance for its two create
 requests; each individual CLI request has 180 seconds. Both allowances include

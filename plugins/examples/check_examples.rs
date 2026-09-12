@@ -1,17 +1,23 @@
 //! Run one real WASM catalog fixture. The Python driver bounds each process.
 use bitcoin::Network;
-use sapio::contract::Compiled;
+use sapio::contract::abi::object::ProgramRequirement;
+use sapio::contract::{Compilable, Compiled, Context};
 use sapio_base::covenant::LoweringPlan;
-use sapio_base::effects::EffectPath;
+use sapio_base::effects::{EffectPath, PathFragment};
+use sapio_base::serialization_helpers::SArc;
 use sapio_wasm_plugin::host::plugin_handle::{SyncModuleLocator, WasmPluginHandle};
 use sapio_wasm_plugin::plugin_handle::PluginHandle;
 use sapio_wasm_plugin::CreateArgs;
 use serde::Deserialize;
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
+
+#[path = "../../plugin-example/program-policy/src/plugin.rs"]
+mod program_policy;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -25,6 +31,7 @@ struct Case {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Expected {
+    program_requirements: Option<BTreeSet<ProgramRequirement>>,
     raw_taproot: Option<bool>,
     clause: Option<String>,
     ctv_count: Option<usize>,
@@ -76,6 +83,13 @@ fn check(
     }
     let compiled: Compiled = serde_json::from_value(value)?;
     compiled.validate_for_lowering(lowering)?;
+    if let Some(expected) = &expected.program_requirements {
+        assert!(
+            !expected.is_empty(),
+            "program fixture must exercise a signature slot"
+        );
+        assert_eq!(&compiled.program_requirements()?, expected);
+    }
     if let Some(case) = signer_case {
         let mut committed = 0;
         let mut pending = vec![&compiled];
@@ -241,6 +255,32 @@ fn main() -> Result<(), Box<dyn Error>> {
         plugin.fresh_clone()?.call(&path, &input)?,
         "nondeterministic artifact"
     );
+    if args[3] == "program-policy" {
+        let contract: program_policy::DelayedProgram =
+            serde_json::from_value(input.arguments.clone())?;
+        let context = &input.context;
+        // The guest scopes compilation to its authenticated module identity.
+        let native_path = EffectPath::push_owned(
+            Some(EffectPath::push(
+                Some(Arc::new(path.clone())),
+                PathFragment::Root,
+            )),
+            PathFragment::Named(SArc(Arc::new(plugin.id().to_string()))),
+        );
+        let native = contract.compile(Context::new(
+            context.network,
+            context.amount,
+            context.lowering.clone(),
+            native_path,
+            Arc::new(context.effects.clone()),
+            context.ordinals_info.clone(),
+        ))?;
+        assert_eq!(
+            first,
+            serde_json::to_value(native)?,
+            "WASM differs from native compilation"
+        );
+    }
     check(
         first,
         &case.expect,

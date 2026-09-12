@@ -20,7 +20,8 @@ members = ["treepay"
           , "clause-module-trampoline"
           , "ordinal-example"
           , "ordinal-inscription"
-          , "custom-policy"]
+          , "custom-policy"
+          , "program-policy"]
 
 [patch.crates-io]
 # Upstream Bitcoin 0.32.102 with strict Taproot signature and PSBT decoding.

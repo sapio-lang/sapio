@@ -248,6 +248,10 @@ optional metadata and descriptor proofs, then prepares, signs and finalizes
 both template-authorization modes and eltoo update/settlement spends without
 reconstructing the original Rust contract objects.
 
+The `program-policy` WASM catalog fixture also compiles a typed program guard
+inside a real guest. Host checks compare the exact program, public root and
+script-path requirement after output schema validation and deserialization.
+
 The CLI's covenant modes and `emulator_server` executable still configure the
 CTV service. Generic program preparation/signing is exposed through the public
 Rust API; `bind_psbt` supplies candidates without automatically dispatching
