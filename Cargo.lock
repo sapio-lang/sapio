@@ -1979,7 +1979,7 @@ dependencies = [
 name = "sapio"
 version = "0.2.4"
 dependencies = [
- "base64 0.13.1",
+ "base64 0.21.7",
  "bitcoin",
  "lazy_static",
  "paste",
@@ -2009,7 +2009,7 @@ dependencies = [
 name = "sapio-cli"
 version = "0.2.4"
 dependencies = [
- "base64 0.13.1",
+ "base64 0.21.7",
  "bitcoin",
  "bitcoincore-rpc",
  "clap",
@@ -2061,7 +2061,7 @@ dependencies = [
 name = "sapio-psbt"
 version = "0.2.4"
 dependencies = [
- "base64 0.13.1",
+ "base64 0.21.7",
  "bitcoin",
  "miniscript",
  "sapio-base",
@@ -2097,7 +2097,7 @@ dependencies = [
 name = "sapio-wasm-plugin"
 version = "0.2.4"
 dependencies = [
- "base64 0.13.1",
+ "base64 0.21.7",
  "bitcoin",
  "hex",
  "jsonschema",
@@ -2120,7 +2120,7 @@ dependencies = [
 name = "sapio_integration_tests"
 version = "0.2.0"
 dependencies = [
- "base64 0.13.1",
+ "base64 0.21.7",
  "bitcoin",
  "ctv_emulators",
  "miniscript",
