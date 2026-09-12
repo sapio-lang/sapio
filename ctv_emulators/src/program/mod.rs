@@ -36,6 +36,8 @@ use std::fmt;
 
 pub use crate::msgs::PSBT;
 
+mod artifacts;
+pub use artifacts::{prepare_program_request, ArtifactProgramError};
 mod transport;
 pub use transport::{ProgramClient, ProgramClientError};
 mod wasm;
