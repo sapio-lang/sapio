@@ -133,3 +133,14 @@ enforcement on a particular chain. The supported signing/finalization domain
 and remaining release boundaries are recorded in [the fork audit](CTV_FORK_AUDIT.md)
 and [the modernization plan](MODERNIZATION.md). Backend equality and the CLI's
 explicit native assumption are described in [enforcement assumptions](ENFORCEMENT.md).
+
+## Generic program requests
+
+Compiled objects retain program-bearing source branches and exact signing
+locations in `program_policies`, independently of optional SIMP metadata.
+After binding supplies a funded PSBT, select a requirement from
+`Object::program_requirements()` and call
+`emulator_connect::program::prepare_program_request` with the input index and
+explicit evidence. Preparation validates artifact correspondence and spending
+proofs without contacting a signer. Ordinary binding does not automatically
+sign every alternative. See [artifact-driven program preparation](PROGRAM_EMULATION.md#artifact-driven-preparation).

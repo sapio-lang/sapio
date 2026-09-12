@@ -18,7 +18,9 @@ keys, network selection, PSBT assembly or signing code.
 
 The separate [runner](../integration_tests/src/eltoo_example/runner.rs) chooses
 a compilation context, proposes transitions, binds coins and collects
-signatures. [Fixtures](../integration_tests/src/eltoo_example/fixture.rs) and
+signatures. Artifact-only update and settlement helpers use recorded program
+requirements and the shared request preparation API; they do not reconstruct
+contract objects or read programs out of optional metadata. [Fixtures](../integration_tests/src/eltoo_example/fixture.rs) and
 [chain recovery](../integration_tests/src/eltoo_example/recovery.rs) are separate
 modules. A caller constructs source with `terms.funding()` or
 `terms.state(state)?`, then uses Sapio's ordinary `compile(context)` API.

@@ -28,9 +28,11 @@ the all-zero identity and its existing ABI. Applications can instead register
 the module with `WasmEvaluator::with_version(WasmVersion::V2, module)` and use
 the resulting versioned module hash as the evaluator ID.
 
-Compiler output should retain the complete `EmulatedProgram`, including its
-public root, for constructing signing requests. See
-[program emulation](PROGRAM_EMULATION.md) for the request/response protocol.
+Compiler output automatically retains the complete `EmulatedProgram`, its
+public root and guarded spending locations in `program_policies`. Use
+`artifact.program_requirements()` and `prepare_program_request` to construct
+an explicit signing request. See [program emulation](PROGRAM_EMULATION.md#artifact-driven-preparation)
+for artifact validation and the request/response protocol.
 
 ## TemplateHash and CSFS
 
@@ -167,13 +169,16 @@ funding amount in the caller's `Context`. With no payment proposal it compiles
 only the spending policy. Proposed amounts never change that policy.
 
 The [example runner](../integration_tests/src/fragment_example.rs) supplies
-fixtures, compilation effects and signatures. The binder uses
-`SupportedDescriptors::update_psbt_input` to copy compiler spending data into
-the PSBT; the runner uses `ProgramSpendPath::script_for` to select a program's unique
-Miniscript leaf even when it shares native guards. Multiple control blocks
-for the same leaf are accepted. Multiple matching leaves require explicit
-selection. The oracle still verifies the selected proof against the prevout.
-Key-path selection is explicit.
+fixtures, compilation effects and signatures. It selects an explicit recorded
+requirement from the compiled artifact and passes it to
+`prepare_program_request`. The shared API checks funding and supplies the
+compiler's descriptor proofs, rejecting conflicting PSBT data. No ad hoc
+program metadata or original contract object is needed to prepare a spend.
+
+`ProgramSpendPath::script_for` remains a lower-level selector for callers with
+an explicit public program and Miniscript PSBT leaves. Artifact-based callers
+use the compiler's recorded locations, including policies containing raw
+fragments. Key-path selection remains explicit.
 
 ## Execution and verification
 
