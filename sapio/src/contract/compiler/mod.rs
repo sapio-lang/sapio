@@ -670,25 +670,11 @@ fn insert_template(
             // A CTV hash commits to transaction fields, not funding budgets,
             // metadata or child continuation paths. None may be chosen by
             // whichever action happens to be visited first.
-            macro_rules! same {
-                ($($field:ident),+ $(,)?) => { $(
-                    if existing.$field != template.$field {
-                        return Err(CompilationError::ConflictingTemplate {
-                            hash, at: path.clone(), field: stringify!($field),
-                        });
-                    }
-                )+ };
+            if let Some(field) = existing.binding_difference(&template) {
+                return Err(CompilationError::ConflictingTemplate {
+                    hash, at: path.clone(), field,
+                });
             }
-            same!(
-                ctv_index,
-                tx,
-                max,
-                required_input_amount,
-                min_feerate_sats_vbyte,
-                metadata_map_s2s,
-                inputs,
-                outputs
-            );
             let alternatives = source_alternatives(conjoin_source(existing.guards.iter()))
                 .into_iter()
                 .chain(source_alternatives(conjoin_source(template.guards.iter())))

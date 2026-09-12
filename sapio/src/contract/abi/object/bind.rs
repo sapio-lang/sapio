@@ -230,19 +230,13 @@ impl Object {
                     prev_txs.push(previous);
                 }
                 let mut psbt = Psbt::from_unsigned_tx(tx.clone())?;
-                let mut amount = 0u64;
-                let mut complete = true;
+                let mut amounts = Vec::with_capacity(psbt.inputs.len());
                 for ((input, tx_in), previous) in
                     psbt.inputs.iter_mut().zip(&tx.input).zip(prev_txs)
                 {
                     if let Some(previous) = previous {
                         let output = &previous.output[tx_in.previous_output.vout as usize];
-                        amount = amount.checked_add(output.value.to_sat()).ok_or_else(|| {
-                            invalid_funding(
-                                tx_in.previous_output,
-                                "input amount sum overflows".into(),
-                            )
-                        })?;
+                        amounts.push(Some(output.value));
                         if output.script_pubkey.is_witness_program() {
                             input.witness_utxo = Some(output.clone());
                         }
@@ -250,18 +244,11 @@ impl Object {
                         // amounts and scripts against the committed outpoint.
                         input.non_witness_utxo = Some((*previous).clone());
                     } else {
-                        complete = false;
+                        amounts.push(None);
                     }
                 }
-                if complete && amount < template.max.to_sat() {
-                    return Err(invalid_funding(
-                        out,
-                        format!(
-                        "inputs provide {amount} sat but outputs and reserved fees require {} sat",
-                        template.max.to_sat()
-                    ),
-                    ));
-                }
+                template.check_funding_amounts(&amounts)
+                    .map_err(|failure| invalid_funding(out, failure.to_string()))?;
                 if let Some(descriptor) = &object.descriptor {
                     descriptor.update_psbt_input(&mut psbt.inputs[0])?;
                 }

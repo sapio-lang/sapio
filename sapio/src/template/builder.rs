@@ -419,6 +419,7 @@ impl<T> From<BuilderState<T>> for Template {
         let max = tx.total_amount() + t.fees;
         let required_input_amount = max.checked_sub(t.external_funding).unwrap_or(Amount::ZERO);
         Template {
+            funding_constraints: None,
             guards: t.guards,
             outputs: t.outputs,
             inputs: t.inputs,
