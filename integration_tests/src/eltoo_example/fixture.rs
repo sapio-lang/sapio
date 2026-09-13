@@ -29,6 +29,7 @@ pub fn terms() -> Terms {
         100_000,
         6,
         MAX_STATE,
+        Amount::from_sat(10_000),
         crate::program_example::recipient(104),
         crate::program_example::recipient(105),
     )

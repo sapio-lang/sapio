@@ -12,22 +12,11 @@ use sapio::contract::abi::object::ObjectMetadata;
 use sapio::contract::actions::ConditionalCompileType;
 use sapio::contract::compiler::compile_policy_leaf;
 use sapio::contract::*;
-use sapio::*;
+use sapio::template::{OutputAmount, Surplus, Template};
 use sapio_base::policy::{PolicyCompiler, ScriptPolicy};
 use sapio_base::program::EmulatedProgram;
 use sapio_base::timelocks::{AbsTime, RelHeight};
 use sapio_base::Clause;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
-/// A proposed transaction, independent of the output's fixed spending policy.
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
-pub enum Candidate {
-    /// Advance the state and publish its settlement commitment.
-    Update(State),
-    /// Pay the current allocation after the contest period.
-    Settle,
-}
 
 /// Funding or an agreed state under one immutable set of channel terms.
 #[derive(Clone, Debug)]
@@ -36,6 +25,7 @@ pub struct Channel {
     state: Option<State>,
 }
 
+#[sapio::contract]
 impl Channel {
     /// Borrow the fixed channel terms.
     pub fn terms(&self) -> &Terms {
@@ -46,27 +36,27 @@ impl Channel {
         self.state
     }
 
-    #[guard(cached)]
-    fn cooperative(self) {
+    #[spend]
+    fn cooperative(&self) -> Clause {
         Clause::Key(self.terms.joint_key())
     }
 
-    #[guard(policy, cached)]
-    fn update_policy(self) -> Result<ScriptPolicy, CompilationError> {
+    #[policy]
+    fn update_policy(&self) -> Result<ScriptPolicy, CompilationError> {
         self.terms
             .update_policy(self.state.map(|state| state.number))
     }
 
-    #[guard(policy)]
-    fn settlement_policy(self, ctx: Context) -> Result<ScriptPolicy, CompilationError> {
+    #[policy]
+    fn settlement_policy(&self, ctx: Context) -> Result<ScriptPolicy, CompilationError> {
         Ok(ScriptPolicy::And(vec![
             Clause::try_from(RelHeight::from(self.terms.delay()))?.into(),
             self.settlement_program(ctx)?.compile_policy()?,
         ]))
     }
 
-    #[compile_if]
-    fn can_update(self, _ctx: Context) {
+    #[condition]
+    fn can_update(&self, _ctx: Context) -> ConditionalCompileType {
         if self
             .state
             .is_some_and(|state| state.number == self.terms.max_state())
@@ -77,8 +67,8 @@ impl Channel {
         }
     }
 
-    #[compile_if]
-    fn can_settle(self, _ctx: Context) {
+    #[condition]
+    fn can_settle(&self, _ctx: Context) -> ConditionalCompileType {
         if self.state.is_some() {
             ConditionalCompileType::NoConstraint
         } else {
@@ -86,15 +76,13 @@ impl Channel {
         }
     }
 
-    #[continuation(
-        guarded_by = "[Self::update_policy]",
-        compile_if = "[Self::can_update]",
-        web_api
+    /// Propose a newer state and publish its settlement recovery commitment.
+    #[action(
+        suggested,
+        guarded_by(Self::update_policy),
+        compile_if(Self::can_update)
     )]
-    fn update(self, mut ctx: Context, candidate: Option<Candidate>) {
-        let Some(Candidate::Update(state)) = candidate else {
-            return empty();
-        };
+    pub fn update(&self, mut ctx: Context, state: State) -> Result<Template, CompilationError> {
         if self.state.is_some_and(|old| state.number <= old.number) {
             return Err(terms::invalid("updates must advance the state number"));
         }
@@ -107,31 +95,34 @@ impl Channel {
         let mut payload = RECOVERY_TAG.to_vec();
         payload.extend_from_slice(TapLeafHash::from_script(&leaf, LeafVersion::TapScript).as_ref());
         let recovery = Compiled::from_op_return(&payload)?;
-        ctx.template()
-            .add_sequence()
-            .set_sequence(0, RelHeight::from(0).into())?
-            .set_sequence(1, RelHeight::from(0).into())?
-            .set_lock_time(AbsTime::try_from(self.terms.lock_time(state.number)?)?.into())?
-            .add_output(Amount::from_sat(self.terms.capacity()), &successor, None)?
-            .add_output(Amount::ZERO, &recovery, None)?
-            .into()
+        let mut plan = ctx.template_plan();
+        let sponsor = plan.input("fee_sponsor", Amount::ZERO)?;
+        plan.require_older(&plan.contract_input(), RelHeight::from(0).into())?;
+        plan.require_older(&sponsor, RelHeight::from(0).into())?;
+        plan.require_after(AbsTime::try_from(self.terms.lock_time(state.number)?)?.into())?;
+        plan.output(
+            "successor",
+            OutputAmount::Exact(Amount::from_sat(self.terms.capacity())),
+            &successor,
+        )?;
+        plan.output("recovery", OutputAmount::Exact(Amount::ZERO), &recovery)?;
+        plan.surplus(Surplus::Fees {
+            maximum: self.terms.maximum_sponsor_fee(),
+        });
+        Ok(plan.finish()?)
     }
 
-    #[continuation(
-        guarded_by = "[Self::settlement_policy]",
-        compile_if = "[Self::can_settle]",
-        web_api
+    /// Propose the current allocation after its contest period.
+    #[action(
+        suggested,
+        guarded_by(Self::settlement_policy),
+        compile_if(Self::can_settle)
     )]
-    fn settle(self, ctx: Context, candidate: Option<Candidate>) {
-        let Some(Candidate::Settle) = candidate else {
-            return empty();
-        };
+    pub fn settle(&self, ctx: Context) -> Result<Template, CompilationError> {
         let state = self
             .state
             .ok_or_else(|| terms::invalid("funding cannot settle"))?;
-        Ok(Box::new(std::iter::once(
-            self.terms.settlement_template(state, ctx),
-        )))
+        self.terms.settlement_template(state, ctx)
     }
 
     /// The exact settlement predicate, built using the caller's compilation context.
@@ -144,18 +135,14 @@ impl Channel {
 
     /// Canonical settlement leaf used by the update's recovery publication.
     pub fn settlement_script(&self, ctx: Context) -> Result<ScriptBuf, CompilationError> {
-        compile_policy_leaf(&self.guard_settlement_policy(ctx))
+        compile_policy_leaf(&self.settlement_policy(ctx)?)
     }
-}
-
-impl Contract for Channel {
-    declare! {finish, Self::cooperative}
-    declare! {actions, Self::update, Self::settle}
-
+    #[amount]
     fn ensure_amount(&self, _ctx: Context) -> Result<Amount, CompilationError> {
         Ok(Amount::from_sat(self.terms.capacity()))
     }
 
+    #[internal_key]
     fn pinned_internal_key(
         &self,
         _ctx: &Context,
@@ -163,6 +150,7 @@ impl Contract for Channel {
         Ok(Some(self.terms.joint_key()))
     }
 
+    #[metadata]
     fn metadata(&self, _ctx: Context) -> Result<ObjectMetadata, CompilationError> {
         let mut metadata = ObjectMetadata::default();
         metadata.extra.insert(
@@ -173,6 +161,7 @@ impl Contract for Channel {
                     "capacity": self.terms.capacity(),
                     "delay": self.terms.delay(),
                     "max_state": self.terms.max_state(),
+                    "maximum_sponsor_fee_sats": self.terms.maximum_sponsor_fee().to_sat(),
                     "alice": self.terms.alice(),
                     "bob": self.terms.bob(),
                 },

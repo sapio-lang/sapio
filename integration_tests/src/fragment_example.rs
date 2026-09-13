@@ -1,20 +1,18 @@
 //! Disposable fixtures and signing for the public template authorization contract.
 
-use crate::program_example::{recipient, FUNDING_SATS};
+use crate::program_example::{prepare_example_request, recipient, FUNDING_SATS};
 use bitcoin::bip32::Xpub;
 use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{Keypair, Message, Secp256k1, SecretKey};
 use bitcoin::{Amount, Network, XOnlyPublicKey};
-use emulator_connect::program::{prepare_program_request, ProgramSigningRequest, ProgramSpendPath};
+use emulator_connect::program::{ProgramSigningRequest, ProgramSpendPath};
 use sapio::contract::abi::object::ProgramRequirement;
 use sapio::contract::*;
-use sapio::*;
 use sapio_base::effects::EffectPath;
 use sapio_base::fragments::{
     template_authorization_wasm_instance, template_hash, KnownTweakProof, TemplateKey,
 };
 use sapio_contrib::contracts::template_authorization::{Authorization, FragmentContract};
-use std::collections::BTreeMap;
 use std::error::Error;
 use std::sync::Arc;
 
@@ -43,20 +41,16 @@ pub fn compile_candidates(
     contract: &FragmentContract,
     amounts: &[u64],
 ) -> Result<Compiled, CompilationError> {
-    let effects: BTreeMap<_, _> = std::iter::once(6_000)
+    let candidates: Vec<_> = std::iter::once(6_000)
         .chain(amounts.iter().copied())
-        .enumerate()
-        .map(|(index, amount)| (format!("candidate_{index}"), amount))
         .collect();
-    let effects = serde_json::from_value(serde_json::json!({
-        "effects": {"fragments/@action/pay/@suggested": effects}
-    }))
-    .expect("well-formed example effects");
+    let root = EffectPath::try_from("fragments").unwrap();
+    let effects = FragmentContract::pay_action().requests(&root, &candidates)?;
     contract.compile(Context::new(
         Network::Regtest,
         Amount::from_sat(FUNDING_SATS),
         sapio_base::LoweringPlan::Native,
-        EffectPath::try_from("fragments").unwrap(),
+        root,
         Arc::new(effects),
         None,
     ))
@@ -134,7 +128,13 @@ pub fn signing_request(
             proof.witness(&signature)
         }
     };
-    let mut request = prepare_program_request(compiled, &requirement, psbt, 0, witness)?;
+    let mut request = prepare_example_request(
+        compiled,
+        requirement,
+        psbt,
+        "template-authorization/v1",
+        witness,
+    )?;
     if matches!(authorization, Authorization::KnownTweak) {
         // The opening authenticates the output key without revealing an
         // internal key or a control block from a different spending path.

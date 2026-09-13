@@ -12,14 +12,19 @@ use bitcoin::{
     taproot, Address, Amount, Network, OutPoint, ScriptBuf, TapSighashType, Transaction, TxOut,
     XOnlyPublicKey,
 };
-use emulator_connect::program::{prepare_program_request, ProgramSigningRequest, ProgramSpendPath};
+use emulator_connect::program::spend_plan::{ProgramCapability, ProgramEvidence, SpendPath};
+use emulator_connect::program::{
+    prepare_spend, ProgramSigningRequest, ProgramSpendPath, SpendAssets,
+};
 use sapio::contract::abi::object::ProgramRequirement;
 use sapio::contract::{Compilable, Compiled, Context};
+use sapio::template::Template;
+use sapio_base::effects::MapEffectDB;
 use sapio_base::fragments::{
     template_authorization_wasm_instance, template_hash, templatehash_wasm_instance, TemplateKey,
 };
 use sapio_base::program::{EmulatedProgram, ProgramInstance};
-use sapio_contrib::contracts::eltoo::{Candidate, Channel, State, Terms};
+use sapio_contrib::contracts::eltoo::{Channel, State, Terms};
 use std::sync::Arc;
 
 /// Errors in the example's compilation, binding and signing helpers.
@@ -36,13 +41,7 @@ fn context(terms: &Terms) -> Result<Context, Error> {
     ))
 }
 
-fn compile_with(source: &Channel, action: Option<(&str, Candidate)>) -> Result<Compiled, Error> {
-    let effects = match action {
-        None => Default::default(),
-        Some((name, candidate)) => serde_json::from_value(serde_json::json!({
-            "effects": {format!("eltoo/@action/{name}/@suggested"): {"candidate": candidate}}
-        }))?,
-    };
+fn compile_with(source: &Channel, effects: MapEffectDB) -> Result<Compiled, Error> {
     Ok(source.compile(Context::new(
         Network::Regtest,
         Amount::from_sat(source.terms().capacity()),
@@ -55,7 +54,7 @@ fn compile_with(source: &Channel, action: Option<(&str, Candidate)>) -> Result<C
 
 /// Compile the output's fixed policy without adding transition candidates.
 pub fn compile(source: &Channel) -> Result<Compiled, Error> {
-    compile_with(source, None)
+    compile_with(source, MapEffectDB::default())
 }
 
 /// Compile a newer state as a candidate under the source's unchanged policy.
@@ -67,7 +66,10 @@ pub fn compile_update(source: &Channel, target: State) -> Result<Compiled, Error
     {
         return Err("updates must advance the state number".into());
     }
-    compile_with(source, Some(("update", Candidate::Update(target))))
+    compile_with(
+        source,
+        Channel::update_action().request(&"eltoo".try_into()?, &target)?,
+    )
 }
 
 /// Compile a state's delayed settlement candidate.
@@ -75,17 +77,38 @@ pub fn compile_settlement(source: &Channel) -> Result<Compiled, Error> {
     if source.current_state().is_none() {
         return Err("funding has no settlement path".into());
     }
-    compile_with(source, Some(("settle", Candidate::Settle)))
+    compile_with(
+        source,
+        Channel::settle_action().request(&"eltoo".try_into()?, &())?,
+    )
 }
 
 /// Canonical update transaction, before attaching channel and sponsor outpoints.
 pub fn update_transaction(terms: &Terms, target: State) -> Result<Transaction, Error> {
-    only_candidate(&compile_update(&terms.funding(), target)?)
+    Ok(update_template(terms, target)?.tx)
+}
+
+/// Canonical update and its named funding requirements, retained through signing.
+pub fn update_template(terms: &Terms, target: State) -> Result<Template, Error> {
+    Ok(only_candidate(&compile_update(&terms.funding(), target)?)?.clone())
 }
 
 /// Canonical settlement transaction, independent of its funding outpoints.
 pub fn settlement_transaction(terms: &Terms, state: State) -> Result<Transaction, Error> {
-    Ok(terms.settlement_template(state, context(terms)?)?.tx)
+    Ok(settlement_template(terms, state)?.tx)
+}
+
+/// Canonical settlement and its explicit local sponsor-fee ceiling.
+pub fn settlement_template(terms: &Terms, state: State) -> Result<Template, Error> {
+    Ok(terms.settlement_template(state, context(terms)?)?)
+}
+
+/// Verify witnesses, check the retained funding rules, and then extract a transaction.
+pub fn finalize_candidate(template: &Template, psbt: Psbt) -> Result<Transaction, Error> {
+    let finalized = sapio_psbt::finalize::finalize(psbt, &Secp256k1::new())
+        .map_err(|(_, errors)| format!("eltoo finalization failed: {errors:?}"))?;
+    template.check_funded_psbt(&finalized)?;
+    Ok(finalized.extract_tx()?)
 }
 
 fn requirement_for(
@@ -128,7 +151,7 @@ pub fn settlement_requirement(
 /// Read a state's settlement program from its compiled artifact.
 pub fn settlement_program(source: &Channel) -> Result<EmulatedProgram, Error> {
     let compiled = compile_settlement(source)?;
-    Ok(settlement_requirement(&compiled, &only_candidate(&compiled)?)?.program)
+    Ok(settlement_requirement(&compiled, &only_candidate(&compiled)?.tx)?.program)
 }
 
 fn spending_input(compiled: &Compiled) -> Result<Input, Error> {
@@ -164,7 +187,7 @@ pub fn update_leaf(source: &Channel) -> Result<ScriptBuf, Error> {
 /// Find the settlement program's exact leaf in the compiled artifact.
 pub fn settlement_leaf(source: &Channel) -> Result<ScriptBuf, Error> {
     let compiled = compile_settlement(source)?;
-    let requirement = settlement_requirement(&compiled, &only_candidate(&compiled)?)?;
+    let requirement = settlement_requirement(&compiled, &only_candidate(&compiled)?.tx)?;
     leaf_for(&compiled, &requirement)
 }
 
@@ -185,11 +208,11 @@ pub fn input_from_artifact(compiled: &Compiled, coin: &Coin) -> Result<Input, Er
     Ok(input)
 }
 
-fn only_candidate(compiled: &Compiled) -> Result<Transaction, Error> {
+fn only_candidate(compiled: &Compiled) -> Result<&Template, Error> {
     if compiled.suggested_txs.len() != 1 || !compiled.ctv_to_tx.is_empty() {
         return Err("expected exactly one continuation candidate and no CTV branches".into());
     }
-    Ok(compiled.suggested_txs.values().next().unwrap().tx.clone())
+    Ok(compiled.suggested_txs.values().next().unwrap())
 }
 
 /// A funding assertion; the caller must obtain actual prevouts from its node.
@@ -287,14 +310,16 @@ pub fn update_request_from_artifact(
 ) -> Result<ProgramSigningRequest, Error> {
     let requirement = update_requirement(compiled)?;
     let input = input_from_artifact(compiled, &channel)?;
-    let psbt = attach_inputs(only_candidate(compiled)?, channel, input, sponsor)?;
-    Ok(prepare_program_request(
+    let template = only_candidate(compiled)?;
+    let psbt = attach_inputs(template.tx.clone(), channel, input, sponsor)?;
+    template.check_funded_psbt(&psbt)?;
+    prepare_authorization(
         compiled,
-        &requirement,
+        requirement,
         psbt,
-        0,
+        "eltoo/update-signature/v2",
         authorization.as_ref().to_vec(),
-    )?)
+    )
 }
 
 /// Compile the delayed exit and prepare its artifact-declared predicate.
@@ -312,17 +337,56 @@ pub fn settlement_request_from_artifact(
     channel: Coin,
     sponsor: Sponsor,
 ) -> Result<ProgramSigningRequest, Error> {
-    let transaction = only_candidate(compiled)?;
-    let requirement = settlement_requirement(compiled, &transaction)?;
+    let template = only_candidate(compiled)?;
+    let requirement = settlement_requirement(compiled, &template.tx)?;
     let input = input_from_artifact(compiled, &channel)?;
-    let psbt = attach_inputs(transaction, channel, input, sponsor)?;
-    Ok(prepare_program_request(
+    let psbt = attach_inputs(template.tx.clone(), channel, input, sponsor)?;
+    template.check_funded_psbt(&psbt)?;
+    prepare_authorization(
         compiled,
-        &requirement,
+        requirement,
+        psbt,
+        "eltoo/settlement-empty/v2",
+        vec![],
+    )
+}
+
+fn prepare_authorization(
+    compiled: &Compiled,
+    requirement: ProgramRequirement,
+    psbt: Psbt,
+    codec: &str,
+    witness: Vec<u8>,
+) -> Result<ProgramSigningRequest, Error> {
+    let ProgramSpendPath::ScriptPath(leaf) = requirement.path else {
+        return Err("eltoo authorization must use a script path".into());
+    };
+    let assets = SpendAssets {
+        programs: vec![ProgramCapability {
+            requirement: requirement.clone(),
+            codec: codec.into(),
+            evidence_available: true,
+            signer_available: false,
+        }],
+        ..Default::default()
+    };
+    let evidence = [ProgramEvidence {
+        requirement,
+        codec: codec.into(),
+        witness,
+    }];
+    let mut prepared = prepare_spend(
+        compiled,
+        SpendPath::ScriptPath(leaf),
         psbt,
         0,
-        vec![],
-    )?)
+        &assets,
+        &evidence,
+    )?;
+    if prepared.program_requests.len() != 1 {
+        return Err("eltoo branch needs exactly one unsigned program".into());
+    }
+    Ok(prepared.program_requests.pop().unwrap())
 }
 
 /// Add the sponsor's real SIGHASH_ALL signature after the oracle accepts input zero.
