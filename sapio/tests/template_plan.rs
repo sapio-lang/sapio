@@ -245,9 +245,38 @@ fn surplus_fees_require_an_explicit_sufficient_ceiling() {
 }
 
 #[test]
+fn all_fee_plans_still_require_an_output_and_allow_zero_value_op_return() {
+    for budget in [0, 1_000] {
+        let amount = Amount::from_sat(budget);
+        for surplus in [Surplus::Reject, Surplus::Fees { maximum: amount }] {
+            let mut plan = context(budget, None).template_plan();
+            plan.surplus(surplus);
+            if surplus == Surplus::Reject {
+                plan.reserve_fees(amount);
+            }
+            assert!(matches!(plan.finish(), Err(PlanError::NoOutputs)));
+        }
+
+        let data = Compiled::from_op_return(&b"receipt"[..]).unwrap();
+        let mut plan = context(budget, None).template_plan();
+        plan.output("receipt", OutputAmount::Exact(Amount::ZERO), &data)
+            .unwrap();
+        plan.surplus(Surplus::Fees { maximum: amount });
+        let template = plan.finish().unwrap();
+        assert_eq!(template.tx.output.len(), 1);
+        assert_eq!(template.tx.output[0].value, Amount::ZERO);
+        assert!(template.tx.output[0].script_pubkey.is_op_return());
+    }
+}
+
+#[test]
 fn overflow_and_child_funding_errors_identify_the_declaration() {
+    let recipient = destination(0);
     let mut overflow = context(u64::MAX, None).template_plan();
     overflow.input("sponsor", Amount::ONE_SAT).unwrap();
+    overflow
+        .output("recipient", OutputAmount::Remainder, &recipient)
+        .unwrap();
     assert!(
         matches!(overflow.finish(), Err(PlanError::AmountOverflow { at }) if at.contains("sponsor"))
     );

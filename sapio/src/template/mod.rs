@@ -122,6 +122,11 @@ pub struct Template {
     /// Explicit local funding and fee constraints retained by a transaction plan.
     /// These are checked during binding; they are not additional Script predicates.
     #[serde(deserialize_with = "Option::deserialize")]
+    // `required` alone strips null from an Option schema; explicit null is valid.
+    #[schemars(
+        required,
+        schema_with = "Option::<plan::FundingConstraints>::json_schema"
+    )]
     pub funding_constraints: Option<plan::FundingConstraints>,
     /// Additional restrictions on a builder's template. After contract
     /// compilation, these include the action guards; duplicate transactions

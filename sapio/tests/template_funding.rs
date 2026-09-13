@@ -153,7 +153,31 @@ fn changed_commitments_and_invalid_constraint_declarations_are_rejected() {
         tampered.validate_funding_constraints(),
         Err(FundingError::InvalidConstraints(_))
     ));
-    let mut serialized = serde_json::to_value(template).unwrap();
+}
+
+#[test]
+fn funding_schema_requires_the_field_while_preserving_explicit_null() {
+    let schema = serde_json::to_value(schemars::schema_for!(Template)).unwrap();
+    assert!(schema["required"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("funding_constraints")));
+    assert!(schema["properties"]["funding_constraints"]["anyOf"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|alternative| alternative["type"] == "null"));
+
+    let mut serialized = serde_json::to_value(template(None)).unwrap();
+    assert!(serde_json::from_value::<Template>(serialized.clone())
+        .unwrap()
+        .funding_constraints
+        .is_some());
+    serialized["funding_constraints"] = serde_json::Value::Null;
+    assert!(serde_json::from_value::<Template>(serialized.clone())
+        .unwrap()
+        .funding_constraints
+        .is_none());
     serialized
         .as_object_mut()
         .unwrap()

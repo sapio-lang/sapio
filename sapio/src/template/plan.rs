@@ -96,6 +96,8 @@ pub enum Surplus {
 /// A declaration that cannot be resolved into a checked transaction template.
 #[derive(Debug)]
 pub enum PlanError {
+    /// A Bitcoin transaction must declare at least one output.
+    NoOutputs,
     /// Resolved funding rules are already inconsistent with the transaction.
     Funding(super::funding::FundingError),
     /// Input and output names must be nonempty.
@@ -213,6 +215,7 @@ pub enum PlanError {
 impl fmt::Display for PlanError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::NoOutputs => f.write_str("transaction plan must declare at least one output"),
             Self::Funding(error) => error.fmt(f),
             Self::EmptyName => f.write_str("transaction input and output names must be nonempty"),
             Self::DuplicateName { kind, name } => write!(f, "duplicate {kind} name {name:?}"),
@@ -552,6 +555,9 @@ impl<'a> TemplatePlan<'a> {
     /// Resolve the finite budget and locks, compile each child once, and freeze
     /// the exact ordered transaction and its local spending requirements.
     pub fn finish(self) -> Result<Template, PlanError> {
+        if self.outputs.is_empty() {
+            return Err(PlanError::NoOutputs);
+        }
         if let Some(ordinals) = self.ctx.get_ordinals() {
             let tracked = ordinals
                 .total()
