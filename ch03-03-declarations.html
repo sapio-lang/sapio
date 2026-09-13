@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7ebe54e0.js";
+            window.path_to_searchindex_js = "searchindex-fbfad89f.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-efed9c80.js"></script>
+        <script src="toc-6630874e.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -179,33 +179,34 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="contract-declarations"><a class="header" href="#contract-declarations">Contract Declarations</a></h1>
-<h2 id="static-contracts"><a class="header" href="#static-contracts">Static Contracts</a></h2>
-<p>This is the usual way to declare a contract for Sapio.</p>
-<p>Once a contract and all relevant logic has been defined, a <code>impl Contract</code>
-should be written. This binds the functionality to the compiler interface.</p>
+                        <h1 id="contract-declarations"><a class="header" href="#contract-declarations">Contract declarations</a></h1>
+<p><code>#[sapio::contract]</code> registers explicitly marked actions and spending policies.
+Ordinary helper methods remain ordinary helpers. <code>#[policy]</code> declares a policy
+that can guard actions; <code>#[spend]</code> also exports it as independently sufficient to
+spend the output.</p>
+<p>Contract hooks are ordinary methods marked <code>#[amount]</code> for minimum funding,
+<code>#[internal_key]</code> for an already authorized Taproot internal key, and <code>#[metadata]</code>
+for descriptive object metadata. Selecting an internal key never grants new
+spending authority.</p>
+<p>An explicit <code>Contract</code> implementation can register factories directly:</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>impl Contract for T {
-    declare!{then, Self::a, Self::b}
-    declare!{finish, Self::guard_1, Self::guard_2}
-    /// if there are finish! functions
-    declare!{updatable&lt;Z&gt;, Self::updatable_1}
-    /// if there are no updatable functions
-    declare!{non updatable}
+</span>impl Contract for Escrow {
+    declare! {actions, Self::refund, Self::propose_payment}
+    declare! {finish, Self::cooperative}
 }
 <span class="boring">}</span></code></pre>
-<p>The type <code>Z</code> above becomes bound for the updatable functions.</p>
-<h2 id="dynamic-contracts"><a class="header" href="#dynamic-contracts">Dynamic Contracts</a></h2>
-<p>Sapio also supports several “Dynamic Contract” paradigms which allows a user
-to assemble contracts at run-time. The two main paradigms are accomplished by
-either directly <code>impl AnyContract</code> or by using the <code>DynamicContract</code> struct
-which holds all functions in vecs.</p>
-<p>These are useful in rare circumstances.</p>
-<h2 id="external-addresses"><a class="header" href="#external-addresses">External Addresses?</a></h2>
-<p>The compiler is able to “lift” an address or a script into a contract via
-<code>Object::from_address</code> and <code>Object::from_script</code>. Care should be taken when
-doing so as Sapio will not be able to provide any further API data beyond such a bound.</p>
+<p>Each action has its own request type before registration. A factory returns
+<code>Option&lt;Box&lt;dyn ErasedAction&lt;Self&gt;&gt;&gt;</code>; returning <code>None</code> explicitly omits an
+optional interface member. Action names must be unique within a contract so typed
+request paths cannot be silently redirected.</p>
+<p><code>DynamicContract&lt;S&gt;</code> assembles <code>actions</code> and independent <code>finish</code> factories in
+vectors alongside the contract data, metadata callback and minimum-funding
+callback. A custom <code>AnyContract</code> implementation can provide the same compiler
+interface without choosing a specific storage layout.</p>
+<p>Existing addresses can be used through <code>Compiled::from_address</code>. They provide an
+output destination and minimum-funding information, but no action API or source
+policy beyond the supplied artifact.</p>
 
                     </main>
 

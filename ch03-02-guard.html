@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7ebe54e0.js";
+            window.path_to_searchindex_js = "searchindex-fbfad89f.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-efed9c80.js"></script>
+        <script src="toc-6630874e.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -180,10 +180,24 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="guard"><a class="header" href="#guard">Guard</a></h1>
-<p>Guards are central to any Sapio contract. They allow declaring a piece of
-miniscript logic.</p>
-<p>These guards can either be used standalone as unlocking conditions or as a
-requirement on a <code>continuation</code> or <code>then</code> function.</p>
+<p>A guard is a fixed spending predicate. It can use native Miniscript, a typed
+program evaluator, or another supported policy compiler.</p>
+<p>Inside <code>#[sapio::contract]</code>, a <code>#[policy]</code> method declares a reusable predicate.
+A <code>#[spend]</code> method additionally exports its predicate as independently sufficient
+to spend the output. An action attaches policies with
+<code>guarded_by(Self::signed, Self::timeout)</code>; these predicates are conjoined.</p>
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[policy]
+fn signed(&amp;self) -&gt; Clause {
+    Clause::Key(self.owner)
+}
+<span class="boring">}</span></code></pre>
+<p>The ordinary method’s signature expresses its context dependency. With only
+<code>&amp;self</code>, it is cached within the compilation. Adding <code>Context</code> evaluates it at
+each attachment. The method remains directly callable as Rust.</p>
+<p>The standalone <code>#[guard]</code> frontend is useful for trait interfaces and optional
+metadata callbacks:</p>
 <p>An ordinary guard receives the context of each attachment. Use it when the
 policy depends on the current path or other compilation context.</p>
 <p>A cached guard is evaluated once per guard declaration during a contract’s

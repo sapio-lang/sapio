@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7ebe54e0.js";
+            window.path_to_searchindex_js = "searchindex-fbfad89f.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-efed9c80.js"></script>
+        <script src="toc-6630874e.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -179,36 +179,39 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="thenfunc"><a class="header" href="#thenfunc">ThenFunc</a></h1>
-<p>A <code>ThenFunc</code> is a continuation of a contract that can proceed when all the
-guarded_by conditions on that object are met. The <code>ThenFunc</code> provides an
-iterator of possible next transactions, using CTV to ensure execution.</p>
-<h2 id="when-to-use-a-thenfunc"><a class="header" href="#when-to-use-a-thenfunc">When to use a ThenFunc</a></h2>
-<p>We’ve already seen an example of a <code>then</code> function in the wild in <a href="./ch01-03-hello-world.html">Chapter
-1</a>. In that example we are guaranteeing that after
-a timeout, a specific “return policy” is honored out of the escrow. Unless
-Alice and Bob agree to something else, the funds can only be returned via
-that transaction.</p>
-<p>In general, any time you want a state transition to be “locked in” you should use a <code>then!</code>.</p>
-<h2 id="then-macro"><a class="header" href="#then-macro">then! macro</a></h2>
-<p>The <code>then</code> macro generates a static <code>fn() -&gt; Option&lt;ThenFunc&gt;</code> method for a given impl.</p>
-<p>There are a few variants of how you can create a <code>then</code>.</p>
+                        <h1 id="committed-actions"><a class="header" href="#committed-actions">Committed actions</a></h1>
+<p>A committed action constructs the transactions permitted by a covenant. Each
+returned transaction is combined with the action’s authorization guards and the
+configured covenant lowering. This is useful for fixed payouts, timeout paths,
+and recursively constructed transaction trees.</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>/// A Conditional + Guarded CTV Function
-#[then(
-    /// optional: only compile these branches if these compile_if statements permit
-    compile_if= "[compile_if_1, ... compile_if_n]",
-    /// optional: protect these branches with the conjunction (and) of these clauses
-    guarded_by= "[guard_1, ... guard_n]"
-)]
-fn name(self, ctx) {
-    /*Result&lt;Box&lt;Iterator&lt;TransactionTemplate&gt;&gt;&gt;*/
+</span>#[sapio::contract]
+impl Escrow {
+    #[action(committed)]
+    fn refund(&amp;self, ctx: Context) -&gt; Result&lt;Template, CompilationError&gt; {
+        self.refund_template(ctx)
+    }
 }
-/// Null Implementation
-decl_then!{name}
 <span class="boring">}</span></code></pre>
-<p>The Iterator must not be empty, or it will cause an error.</p>
+<p>An argument-free committed action produces its default transaction during
+compilation. A request-taking committed action requires supplied requests or an
+explicit default-proposal callback. Its requests participate in compilation of
+the output’s fixed spending policy: changing them may change the contract’s
+address.</p>
+<p><code>guarded_by(Self::authorization)</code> attaches fixed policies.
+<code>compile_if(Self::availability)</code> applies a separately declared <code>#[condition]</code>
+method returning <code>ConditionalCompileType</code>. The normal required action must
+produce at least one template; <code>Nullable</code> permits an empty result and <code>Never</code>
+omits the action.</p>
+<p>A method can return a <code>Template</code> or <code>Result&lt;Template, CompilationError&gt;</code>. Multiple
+alternatives are explicit through <code>Vec&lt;Template&gt;</code> or
+<code>Result&lt;Vec&lt;Template&gt;, CompilationError&gt;</code>; <code>TxTmplIt</code> remains available for a
+fallible stream.</p>
+<p>The standalone <code>#[then]</code> frontend remains useful when implementing an optional
+trait action declared with <code>decl_then!</code>. It creates the same committed action
+representation, with an argument-free default callback. Export it through
+<code>declare! {actions, Self::refund}</code>.</p>
 
                     </main>
 

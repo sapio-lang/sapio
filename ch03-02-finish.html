@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7ebe54e0.js";
+            window.path_to_searchindex_js = "searchindex-fbfad89f.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-efed9c80.js"></script>
+        <script src="toc-6630874e.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -179,46 +179,43 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="finishorfunc"><a class="header" href="#finishorfunc">FinishOrFunc</a></h1>
-<p>A <code>FinishOrFunc</code> is a continuation of a contract that <em>may</em> terminate when
-all the guarded_by conditions on that object are met, but provides logic for some default continuations and logic for new continuations in light of new information.</p>
-<p><code>FinishOrFunc</code>s do not use CTV to ensure execution.</p>
-<h2 id="when-to-use-a-finishorfunc"><a class="header" href="#when-to-use-a-finishorfunc">When to use a FinishOrFunc</a></h2>
-<p>An example of where a <code>FinishOrFunc</code> could be used is a multisig escrow contract, where if n-of-n interested parties agree to move the funds, the funds can move to any transaction. However, perhaps the escrow operators typically emit a payment to a third party and carry the remaining balances to a new escrow. A <code>FinishOrFunc</code> can provide convenient logic shared by all participants for generating what that next transaction should look like.</p>
-<h2 id="finish-macro"><a class="header" href="#finish-macro">finish! macro</a></h2>
-<p>The <code>continuation</code> macro generates a static <code>fn() -&gt; Option&lt;FinishOrFunc&gt;</code> method for a given impl.</p>
-<p>There are a few variants of how you can create a <code>continuation</code>.</p>
+                        <h1 id="suggested-actions"><a class="header" href="#suggested-actions">Suggested actions</a></h1>
+<p>A suggested action constructs candidate transactions under a fixed spending
+policy. Its authorization guards determine who can spend; returning a candidate
+from Rust does not commit the output to that transaction.</p>
+<p>For example, an escrow’s participants may agree to make a payment and return the
+remainder to a new escrow. The action provides shared construction logic, while
+the participants’ signatures authorize the actual transaction.</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>struct UpdateType;
-/// Helper
-fn default_coerce(
-    k: &lt;T as Contract&gt;::StatefulArguments,
-) -&gt; Result&lt;UpdateType, CompilationError&gt; {
-    Ok(k)
+</span>#[sapio::contract]
+impl Escrow {
+    #[policy]
+    fn participants(&amp;self) -&gt; Clause {
+        Clause::And(vec![Clause::Key(self.alice).into(), Clause::Key(self.bob).into()])
+    }
+
+    #[action(suggested, guarded_by(Self::participants))]
+    fn pay(&amp;self, ctx: Context, payment: Payment) -&gt; Result&lt;Template, CompilationError&gt; {
+        self.payment_template(ctx, payment)
+    }
 }
-/// A Guarded CTV Function
-#[continuation(
-    /// required: guards for the miniscript clauses required
-    guarded_by = "[Self::guard_1,... Self::guard_n]",
-    /// optional: Conditional compilation
-    compile_if = "[Self::compile_if_1, ... Self::compile_if_n]",
-    ///  optional: Enables compiling this for a json callable continuation
-    web_api,
-    /// helper for coercing args for json api, could be arbitrary
-    coerce_args = "default_coerce"
-)]
-fn name(self, ctx:Context, o:UpdateType) {
-    /*Result&lt;Box&lt;Iterator&lt;TransactionTemplate&gt;&gt;&gt;*/
-}
-/// Null Implementation
-decl_finish!(name);
 <span class="boring">}</span></code></pre>
-<p>The parameter <code>o</code> is either called directly or attempted to be coerced from the
-higher level <code>&lt;Self as Contract&gt;::StatefulArguments</code> which mus enum wrap the
-arguments. This means that each <code>continuation</code> can have a unique parameter type,
-but also be represented as a trait object with a single type. Enums may be used
-to pass different arguments to different functions.</p>
+<p><code>Payment</code> is this action’s own request type. The generated
+<code>Escrow::pay_action()</code> handle can invoke the method with a typed request or encode
+it for compilation through JSON/WASM. There is no contract-wide argument enum.</p>
+<p>No request means no invocation. A request-taking action does not need a <code>Default</code>
+implementation or an artificial <code>Option</code> parameter. Even a unit request is an
+explicit request: JSON <code>null</code> is distinct from an absent effects entry.</p>
+<p>When useful, <code>defaults = Self::default_proposals</code> attaches a separate callback
+that constructs default candidates. It does not manufacture request arguments.
+An argument-free suggested action can use the explicit <code>default</code> flag instead.</p>
+<p>The method’s Rust checks validate the generated candidate. Spending requirements
+belong in its policy or evaluator; the compiler rejects attempts to add new
+authorization guards through a suggested template.</p>
+<p>The standalone <code>#[continuation]</code> frontend remains available for trait interfaces.
+It generates the same <code>Action&lt;Self, Request&gt;</code> representation, accepts optional
+<code>defaults = "Self::default_proposals"</code>, and exposes JSON when marked <code>web_api</code>.</p>
 
                     </main>
 

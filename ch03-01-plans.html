@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Contract Actions - Designing Bitcoin Contracts with Sapio</title>
+        <title>Transaction Plans - Designing Bitcoin Contracts with Sapio</title>
 
 
         <!-- Custom HTML head -->
@@ -179,33 +179,119 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="contract-actions"><a class="header" href="#contract-actions">Contract Actions</a></h1>
-<p>Contracts have a variety of different actions used at different times.</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>name</th><th>function</th></tr>
-</thead>
-<tbody>
-<tr><td>guard</td><td>Create a clause using miniscript with access to the contract’s values and context.</td></tr>
-<tr><td>compile_if</td><td>Determine if a <code>then</code> or <code>finish</code> should be compiled based on the contract’s values and context</td></tr>
-<tr><td>then</td><td>Create a path or paths  that are guaranteed using CTV for a contract to be spent,  with optional <code>guard</code>s and <code>compile_if</code>s.</td></tr>
-<tr><td>continuation</td><td>Create a suggested path or paths for a contract to be spent that are not guaranteed via CTV with mandatory <code>guard</code>s and <code>compile_if</code>s. Also accepts an update argument for generating transactions based on future data.</td></tr>
-<tr><td>decl_*!</td><td>For any of the above, declare the existence of a method, for e.g. a trait definition, without defining the function.</td></tr>
-</tbody>
-</table>
-</div>
-<p>This section will teach you then ins and outs of each.</p>
+                        <h1 id="transaction-plans"><a class="header" href="#transaction-plans">Transaction plans</a></h1>
+<p>Start with a plan when a contract needs exact payments, change, a fee budget or
+named sponsor inputs. The plan resolves allocations before compiling children,
+then freezes the exact ordered transaction into the compiler’s usual template.</p>
+<p>The runnable payment example uses ordinary Rust methods under <code>#[sapio::contract]</code>.
+Its committed action declares one recipient and reserves a fee. Try it from the
+repository root:</p>
+<pre><code class="language-sh">cargo run --locked -p sapio --example payment
+</code></pre>
+<p>The complete source below is included directly from the tested example:</p>
+<pre><code class="language-rust ignore">//! Compile a small payment contract without a node, signer, or WASM runtime.
+//! Native CTV is a research target; this example does not fund or broadcast it.
+use bitcoin::{Address, Amount, Network};
+use sapio::contract::{Compilable, CompilationError, Compiled, Context};
+use sapio::template::{OutputAmount, Template};
+use sapio_base::covenant::LoweringPlan;
+use sapio_base::effects::EffectPath;
+use std::sync::Arc;
+
+struct Payment {
+    destination: Compiled,
+}
+
+#[sapio::contract]
+impl Payment {
+    #[action(committed)]
+    fn pay(&amp;self, ctx: Context) -&gt; Result&lt;Template, CompilationError&gt; {
+        let mut plan = ctx.template_plan();
+        plan.output(
+            "recipient",
+            OutputAmount::Exact(Amount::from_sat(1_000)),
+            &amp;self.destination,
+        )?;
+        plan.reserve_fees(Amount::from_sat(500));
+        plan.require_feerate(bitcoin::FeeRate::from_sat_per_vb(1).unwrap());
+        Ok(plan.finish()?)
+    }
+}
+
+fn compile_payment(funding: u64) -&gt; Result&lt;Compiled, Box&lt;dyn std::error::Error&gt;&gt; {
+    let destination = "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj"
+        .parse::&lt;Address&lt;bitcoin::address::NetworkUnchecked&gt;&gt;()?
+        .require_network(Network::Regtest)?;
+    let contract = Payment {
+        destination: Compiled::from_address(destination, bitcoin::Amount::ZERO),
+    };
+    let compiled = contract.compile(Context::new(
+        Network::Regtest,
+        Amount::from_sat(funding),
+        LoweringPlan::Native,
+        EffectPath::try_from("payment")?,
+        Arc::new(Default::default()),
+        None,
+    ))?;
+    compiled.validate()?;
+    Ok(compiled)
+}
+
+fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    let compiled = compile_payment(1_500)?;
+    serde_json::to_writer_pretty(
+        std::io::stdout().lock(),
+        &amp;serde_json::json!({
+            "network": "regtest",
+            "enforcement": "native_ctv_research",
+            "funding_satoshis": 1_500,
+            "contract": compiled,
+        }),
+    )?;
+    Ok(())
+}
+
+#[test]
+fn payment_preserves_destination_value_and_fee_reserve() {
+    let compiled = compile_payment(1_500).unwrap();
+    assert_eq!(compiled.ctv_to_tx.len(), 1);
+    let template = compiled.ctv_to_tx.values().next().unwrap();
+    assert_eq!(template.tx.input.len(), 1);
+    assert_eq!(template.tx.output.len(), 1);
+    assert_eq!(template.tx.output[0].value.to_sat(), 1_000);
+    let destination = "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj"
+        .parse::&lt;Address&lt;bitcoin::address::NetworkUnchecked&gt;&gt;()
+        .unwrap()
+        .require_network(Network::Regtest)
+        .unwrap();
+    assert_eq!(
+        template.tx.output[0].script_pubkey,
+        destination.script_pubkey()
+    );
+    assert_eq!(template.required_input_amount.to_sat(), 1_500);
+    assert!(compile_payment(1_499).is_err());
+}</code></pre>
+<p><code>OutputAmount::Remainder</code> can assign change to one additional output. Output order
+is declaration order; the resolver never sorts destinations. Auxiliary inputs
+have names and declared minimum contributions, checked again when funding is
+supplied. Repeated fee reservations take their maximum, and height/time lock
+conflicts are explicit errors.</p>
+<p>A fee cap is a local preparation rule. It is not automatically enforced by
+Bitcoin Script. Final fee-rate checks also need actual previous outputs and the
+completed witness weight. Native signature finalization and chain checks remain
+separate from transaction construction.</p>
+<p>The lower-level builder described next is useful for procedural constructions.
+Both APIs produce the same <code>Template</code>.</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="ch03-01-amounts.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="ch03-01-miniscript.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="ch03-02-guard.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="ch03-01-builder.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -215,11 +301,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="ch03-01-amounts.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="ch03-01-miniscript.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="ch03-02-guard.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="ch03-01-builder.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

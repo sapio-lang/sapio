@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7ebe54e0.js";
+            window.path_to_searchindex_js = "searchindex-fbfad89f.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-efed9c80.js"></script>
+        <script src="toc-6630874e.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -179,16 +179,28 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="when-to-use-macros"><a class="header" href="#when-to-use-macros">When to use macros?</a></h1>
-<p>Generally, you want to use <code>continuation</code>, <code>then</code>, <code>guard</code>, etc to generate your
-methods.  However, if you prefer to create them manually, it’s entirely possible
-to do so without much effort. A tool like <code>cargo expand</code> may be useful as you
-can just copy the macro output and customize from there.</p>
-<p>One reason you might choose to manually define them is if you want to have
-custom static logic (that is, known just from the type and not a value-filled
-instance) to decide if a method should be <code>Some</code> or <code>None</code>. If it does not need
-to be static logic, a <code>compile_if</code> can be used, or the static logic can go
-inside a <code>compile_if</code>.</p>
+                        <h1 id="when-to-use-macros"><a class="header" href="#when-to-use-macros">When to use macros</a></h1>
+<p>Use <code>#[sapio::contract]</code> on an inherent impl for normal contract authoring. Mark
+transaction methods with <code>#[action(committed)]</code> or <code>#[action(suggested)]</code>, policies
+with <code>#[policy]</code>, and independently sufficient spending policies with <code>#[spend]</code>.
+The methods remain ordinary Rust methods. The macro generates typed action
+handles, request schemas and registration.</p>
+<p>A policy with only <code>&amp;self</code> is context-free and cached. A policy that also accepts
+<code>Context</code> is evaluated at its attachment context. The signature expresses the
+actual dependency.</p>
+<p>The explicit low-level API is <code>Action&lt;Contract, Request&gt;</code>. Its constructor takes a
+transaction-generation callback. <code>with_guards</code>, <code>with_conditions</code>, <code>with_json</code>,
+and <code>with_defaults</code> add the corresponding capabilities; <code>erase()</code> hides only the
+individual request type when registering the action. There is no global argument
+pack. This API is useful for dynamically assembled contracts.</p>
+<p>Optional interfaces can still use <code>decl_then!</code>, <code>decl_continuation!</code>, and
+<code>decl_guard!</code>, implemented by the standalone action/guard attributes. A factory
+returning <code>None</code> means that the implementation does not provide that interface
+member. Export optional factories explicitly through <code>declare! {actions, ...}</code> or
+<code>#[sapio::contract(actions(Self::optional), spends(Self::optional_guard))]</code>.</p>
+<p>Use <code>#[condition]</code> with <code>compile_if(...)</code> for availability depending on the
+contract’s value. Its condition algebra distinguishes absent, nullable and
+required branches; it does not add a spending predicate.</p>
 
                     </main>
 

@@ -38,10 +38,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7ebe54e0.js";
+            window.path_to_searchindex_js = "searchindex-fbfad89f.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-efed9c80.js"></script>
+        <script src="toc-6630874e.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -397,8 +397,7 @@ impl TrustlessEscrow {
 
 impl Contract for TrustlessEscrow {
     declare! {finish, Self::cooperate}
-    declare! {then, Self::use_escrow}
-    declare! {non updatable}
+    declare! {actions, Self::use_escrow}
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -559,6 +558,110 @@ malleability.</p>
 <p>Miniscript &amp; Policy are an ongoing research concern. As they develop, Sapio will
 benefit from this foundational work.</p>
 <div style="break-before: page; page-break-before: always;"></div>
+<h1 id="transaction-plans"><a class="header" href="#transaction-plans">Transaction plans</a></h1>
+<p>Start with a plan when a contract needs exact payments, change, a fee budget or
+named sponsor inputs. The plan resolves allocations before compiling children,
+then freezes the exact ordered transaction into the compiler’s usual template.</p>
+<p>The runnable payment example uses ordinary Rust methods under <code>#[sapio::contract]</code>.
+Its committed action declares one recipient and reserves a fee. Try it from the
+repository root:</p>
+<pre><code class="language-sh">cargo run --locked -p sapio --example payment
+</code></pre>
+<p>The complete source below is included directly from the tested example:</p>
+<pre><code class="language-rust ignore">//! Compile a small payment contract without a node, signer, or WASM runtime.
+//! Native CTV is a research target; this example does not fund or broadcast it.
+use bitcoin::{Address, Amount, Network};
+use sapio::contract::{Compilable, CompilationError, Compiled, Context};
+use sapio::template::{OutputAmount, Template};
+use sapio_base::covenant::LoweringPlan;
+use sapio_base::effects::EffectPath;
+use std::sync::Arc;
+
+struct Payment {
+    destination: Compiled,
+}
+
+#[sapio::contract]
+impl Payment {
+    #[action(committed)]
+    fn pay(&amp;self, ctx: Context) -&gt; Result&lt;Template, CompilationError&gt; {
+        let mut plan = ctx.template_plan();
+        plan.output(
+            "recipient",
+            OutputAmount::Exact(Amount::from_sat(1_000)),
+            &amp;self.destination,
+        )?;
+        plan.reserve_fees(Amount::from_sat(500));
+        plan.require_feerate(bitcoin::FeeRate::from_sat_per_vb(1).unwrap());
+        Ok(plan.finish()?)
+    }
+}
+
+fn compile_payment(funding: u64) -&gt; Result&lt;Compiled, Box&lt;dyn std::error::Error&gt;&gt; {
+    let destination = "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj"
+        .parse::&lt;Address&lt;bitcoin::address::NetworkUnchecked&gt;&gt;()?
+        .require_network(Network::Regtest)?;
+    let contract = Payment {
+        destination: Compiled::from_address(destination, bitcoin::Amount::ZERO),
+    };
+    let compiled = contract.compile(Context::new(
+        Network::Regtest,
+        Amount::from_sat(funding),
+        LoweringPlan::Native,
+        EffectPath::try_from("payment")?,
+        Arc::new(Default::default()),
+        None,
+    ))?;
+    compiled.validate()?;
+    Ok(compiled)
+}
+
+fn main() -&gt; Result&lt;(), Box&lt;dyn std::error::Error&gt;&gt; {
+    let compiled = compile_payment(1_500)?;
+    serde_json::to_writer_pretty(
+        std::io::stdout().lock(),
+        &amp;serde_json::json!({
+            "network": "regtest",
+            "enforcement": "native_ctv_research",
+            "funding_satoshis": 1_500,
+            "contract": compiled,
+        }),
+    )?;
+    Ok(())
+}
+
+#[test]
+fn payment_preserves_destination_value_and_fee_reserve() {
+    let compiled = compile_payment(1_500).unwrap();
+    assert_eq!(compiled.ctv_to_tx.len(), 1);
+    let template = compiled.ctv_to_tx.values().next().unwrap();
+    assert_eq!(template.tx.input.len(), 1);
+    assert_eq!(template.tx.output.len(), 1);
+    assert_eq!(template.tx.output[0].value.to_sat(), 1_000);
+    let destination = "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj"
+        .parse::&lt;Address&lt;bitcoin::address::NetworkUnchecked&gt;&gt;()
+        .unwrap()
+        .require_network(Network::Regtest)
+        .unwrap();
+    assert_eq!(
+        template.tx.output[0].script_pubkey,
+        destination.script_pubkey()
+    );
+    assert_eq!(template.required_input_amount.to_sat(), 1_500);
+    assert!(compile_payment(1_499).is_err());
+}</code></pre>
+<p><code>OutputAmount::Remainder</code> can assign change to one additional output. Output order
+is declaration order; the resolver never sorts destinations. Auxiliary inputs
+have names and declared minimum contributions, checked again when funding is
+supplied. Repeated fee reservations take their maximum, and height/time lock
+conflicts are explicit errors.</p>
+<p>A fee cap is a local preparation rule. It is not automatically enforced by
+Bitcoin Script. Final fee-rate checks also need actual previous outputs and the
+completed witness weight. Native signature finalization and chain checks remain
+separate from transaction construction.</p>
+<p>The lower-level builder described next is useful for procedural constructions.
+Both APIs produce the same <code>Template</code>.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="template-builder"><a class="header" href="#template-builder">Template Builder</a></h1>
 <p>The template builder defines a transaction step. Each output receives part of
 the available funding and its own compilation context. Reserve fees explicitly
@@ -599,8 +702,7 @@ impl Payment {
 }
 
 impl Contract for Payment {
-    declare! {then, Self::pay}
-    declare! {non updatable}
+    declare! {actions, Self::pay}
 }
 <span class="boring">}</span></code></pre>
 <p>Builder methods consume the previous builder and return the updated one.
@@ -786,10 +888,24 @@ Keep calculations in integer satoshis even when the wire format uses bitcoin.</p
 <p>This section will teach you then ins and outs of each.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="guard"><a class="header" href="#guard">Guard</a></h1>
-<p>Guards are central to any Sapio contract. They allow declaring a piece of
-miniscript logic.</p>
-<p>These guards can either be used standalone as unlocking conditions or as a
-requirement on a <code>continuation</code> or <code>then</code> function.</p>
+<p>A guard is a fixed spending predicate. It can use native Miniscript, a typed
+program evaluator, or another supported policy compiler.</p>
+<p>Inside <code>#[sapio::contract]</code>, a <code>#[policy]</code> method declares a reusable predicate.
+A <code>#[spend]</code> method additionally exports its predicate as independently sufficient
+to spend the output. An action attaches policies with
+<code>guarded_by(Self::signed, Self::timeout)</code>; these predicates are conjoined.</p>
+<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[policy]
+fn signed(&amp;self) -&gt; Clause {
+    Clause::Key(self.owner)
+}
+<span class="boring">}</span></code></pre>
+<p>The ordinary method’s signature expresses its context dependency. With only
+<code>&amp;self</code>, it is cached within the compilation. Adding <code>Context</code> evaluates it at
+each attachment. The method remains directly callable as Rust.</p>
+<p>The standalone <code>#[guard]</code> frontend is useful for trait interfaces and optional
+metadata callbacks:</p>
 <p>An ordinary guard receives the context of each attachment. Use it when the
 policy depends on the current path or other compilation context.</p>
 <p>A cached guard is evaluated once per guard declaration during a contract’s
@@ -820,7 +936,7 @@ preserving distinct JSON values in attachment order and removing equal values.
 Metadata from different attachment paths therefore remains visible without
 duplicating identical annotations.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="conditionallycompileif"><a class="header" href="#conditionallycompileif">ConditionallyCompileIf</a></h1>
+<h1 id="compile-time-action-conditions"><a class="header" href="#compile-time-action-conditions">Compile-time action conditions</a></h1>
 <p><code>ConditionallyCompileIf</code> enables a contract writer to evaluate certain
 value-based logic before evaluating a path function.</p>
 <p>If the return value(s) indicate that a branch should not be evaluated, it is
@@ -831,16 +947,19 @@ path that’s only accessible if the amount of funds being sent to the contract 
 <p>We could write:</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>#[compile_if]
-fn not_too_much(self, ctx: Context) {
+</span>#[condition]
+fn not_too_much(&amp;self, ctx: Context) -&gt; ConditionalCompileType {
     if ctx.funds() &gt; Self::MAX_FUNDS {
-        ConditionallyCompileType::Never
+        ConditionalCompileType::Never
     } else {
         ConditionalCompileType::NoConstraint
     }
 }
 <span class="boring">}</span></code></pre>
-<p>and apply it to the relevant paths.</p>
+<p>Inside <code>#[sapio::contract]</code>, apply it with
+<code>#[action(committed, compile_if(Self::not_too_much))]</code>. This controls whether the
+compiler includes the action. It does not introduce a predicate checked while
+spending; spending rules belong in policies.</p>
 <h2 id="conditionalcompiletype-variants"><a class="header" href="#conditionalcompiletype-variants">ConditionalCompileType Variants</a></h2>
 <p>There are many different ConditionalCompileType return values:</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
@@ -874,128 +993,146 @@ see <code>ConditionalCompileType::merge</code> for details.</p>
     ///     Never &gt;&lt; Required ==&gt; Fail
     ///     Never &gt; {Skippable, Nullable}  ==&gt; Never
 <span class="boring">}</span></code></pre>
-<h1 id="compile_if-macro"><a class="header" href="#compile_if-macro">compile_if! macro</a></h1>
-<p>The <code>compile_if</code> macro can be called two ways:</p>
+<h2 id="optional-interface-conditions"><a class="header" href="#optional-interface-conditions">Optional interface conditions</a></h2>
+<p>The standalone attribute and declaration macro support optional trait methods:</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>#[compile_if]
-fn name(self, ctx) {
-    /*ConditionalCompileType*/
+fn available(self, ctx: Context) -&gt; ConditionalCompileType {
+    ConditionalCompileType::NoConstraint
 }
-/// null implementation
-decl_compile_if!{name}
+
+// In a trait interface, its factory is absent unless implemented:
+decl_compile_if! { available }
 <span class="boring">}</span></code></pre>
+<p>Both frontends preserve the same condition algebra. <code>Never</code> and <code>Required</code>
+contradict one another; an explicit failure does not hide this contradiction.
+An absent condition factory keeps the declared slots of the remaining
+conditions, preserving their context paths.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="thenfunc"><a class="header" href="#thenfunc">ThenFunc</a></h1>
-<p>A <code>ThenFunc</code> is a continuation of a contract that can proceed when all the
-guarded_by conditions on that object are met. The <code>ThenFunc</code> provides an
-iterator of possible next transactions, using CTV to ensure execution.</p>
-<h2 id="when-to-use-a-thenfunc"><a class="header" href="#when-to-use-a-thenfunc">When to use a ThenFunc</a></h2>
-<p>We’ve already seen an example of a <code>then</code> function in the wild in <a href="#hello-world">Chapter
-1</a>. In that example we are guaranteeing that after
-a timeout, a specific “return policy” is honored out of the escrow. Unless
-Alice and Bob agree to something else, the funds can only be returned via
-that transaction.</p>
-<p>In general, any time you want a state transition to be “locked in” you should use a <code>then!</code>.</p>
-<h2 id="then-macro"><a class="header" href="#then-macro">then! macro</a></h2>
-<p>The <code>then</code> macro generates a static <code>fn() -&gt; Option&lt;ThenFunc&gt;</code> method for a given impl.</p>
-<p>There are a few variants of how you can create a <code>then</code>.</p>
+<h1 id="committed-actions"><a class="header" href="#committed-actions">Committed actions</a></h1>
+<p>A committed action constructs the transactions permitted by a covenant. Each
+returned transaction is combined with the action’s authorization guards and the
+configured covenant lowering. This is useful for fixed payouts, timeout paths,
+and recursively constructed transaction trees.</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>/// A Conditional + Guarded CTV Function
-#[then(
-    /// optional: only compile these branches if these compile_if statements permit
-    compile_if= "[compile_if_1, ... compile_if_n]",
-    /// optional: protect these branches with the conjunction (and) of these clauses
-    guarded_by= "[guard_1, ... guard_n]"
-)]
-fn name(self, ctx) {
-    /*Result&lt;Box&lt;Iterator&lt;TransactionTemplate&gt;&gt;&gt;*/
+</span>#[sapio::contract]
+impl Escrow {
+    #[action(committed)]
+    fn refund(&amp;self, ctx: Context) -&gt; Result&lt;Template, CompilationError&gt; {
+        self.refund_template(ctx)
+    }
 }
-/// Null Implementation
-decl_then!{name}
 <span class="boring">}</span></code></pre>
-<p>The Iterator must not be empty, or it will cause an error.</p>
+<p>An argument-free committed action produces its default transaction during
+compilation. A request-taking committed action requires supplied requests or an
+explicit default-proposal callback. Its requests participate in compilation of
+the output’s fixed spending policy: changing them may change the contract’s
+address.</p>
+<p><code>guarded_by(Self::authorization)</code> attaches fixed policies.
+<code>compile_if(Self::availability)</code> applies a separately declared <code>#[condition]</code>
+method returning <code>ConditionalCompileType</code>. The normal required action must
+produce at least one template; <code>Nullable</code> permits an empty result and <code>Never</code>
+omits the action.</p>
+<p>A method can return a <code>Template</code> or <code>Result&lt;Template, CompilationError&gt;</code>. Multiple
+alternatives are explicit through <code>Vec&lt;Template&gt;</code> or
+<code>Result&lt;Vec&lt;Template&gt;, CompilationError&gt;</code>; <code>TxTmplIt</code> remains available for a
+fallible stream.</p>
+<p>The standalone <code>#[then]</code> frontend remains useful when implementing an optional
+trait action declared with <code>decl_then!</code>. It creates the same committed action
+representation, with an argument-free default callback. Export it through
+<code>declare! {actions, Self::refund}</code>.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="finishorfunc"><a class="header" href="#finishorfunc">FinishOrFunc</a></h1>
-<p>A <code>FinishOrFunc</code> is a continuation of a contract that <em>may</em> terminate when
-all the guarded_by conditions on that object are met, but provides logic for some default continuations and logic for new continuations in light of new information.</p>
-<p><code>FinishOrFunc</code>s do not use CTV to ensure execution.</p>
-<h2 id="when-to-use-a-finishorfunc"><a class="header" href="#when-to-use-a-finishorfunc">When to use a FinishOrFunc</a></h2>
-<p>An example of where a <code>FinishOrFunc</code> could be used is a multisig escrow contract, where if n-of-n interested parties agree to move the funds, the funds can move to any transaction. However, perhaps the escrow operators typically emit a payment to a third party and carry the remaining balances to a new escrow. A <code>FinishOrFunc</code> can provide convenient logic shared by all participants for generating what that next transaction should look like.</p>
-<h2 id="finish-macro"><a class="header" href="#finish-macro">finish! macro</a></h2>
-<p>The <code>continuation</code> macro generates a static <code>fn() -&gt; Option&lt;FinishOrFunc&gt;</code> method for a given impl.</p>
-<p>There are a few variants of how you can create a <code>continuation</code>.</p>
+<h1 id="suggested-actions"><a class="header" href="#suggested-actions">Suggested actions</a></h1>
+<p>A suggested action constructs candidate transactions under a fixed spending
+policy. Its authorization guards determine who can spend; returning a candidate
+from Rust does not commit the output to that transaction.</p>
+<p>For example, an escrow’s participants may agree to make a payment and return the
+remainder to a new escrow. The action provides shared construction logic, while
+the participants’ signatures authorize the actual transaction.</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>struct UpdateType;
-/// Helper
-fn default_coerce(
-    k: &lt;T as Contract&gt;::StatefulArguments,
-) -&gt; Result&lt;UpdateType, CompilationError&gt; {
-    Ok(k)
+</span>#[sapio::contract]
+impl Escrow {
+    #[policy]
+    fn participants(&amp;self) -&gt; Clause {
+        Clause::And(vec![Clause::Key(self.alice).into(), Clause::Key(self.bob).into()])
+    }
+
+    #[action(suggested, guarded_by(Self::participants))]
+    fn pay(&amp;self, ctx: Context, payment: Payment) -&gt; Result&lt;Template, CompilationError&gt; {
+        self.payment_template(ctx, payment)
+    }
 }
-/// A Guarded CTV Function
-#[continuation(
-    /// required: guards for the miniscript clauses required
-    guarded_by = "[Self::guard_1,... Self::guard_n]",
-    /// optional: Conditional compilation
-    compile_if = "[Self::compile_if_1, ... Self::compile_if_n]",
-    ///  optional: Enables compiling this for a json callable continuation
-    web_api,
-    /// helper for coercing args for json api, could be arbitrary
-    coerce_args = "default_coerce"
-)]
-fn name(self, ctx:Context, o:UpdateType) {
-    /*Result&lt;Box&lt;Iterator&lt;TransactionTemplate&gt;&gt;&gt;*/
-}
-/// Null Implementation
-decl_finish!(name);
 <span class="boring">}</span></code></pre>
-<p>The parameter <code>o</code> is either called directly or attempted to be coerced from the
-higher level <code>&lt;Self as Contract&gt;::StatefulArguments</code> which mus enum wrap the
-arguments. This means that each <code>continuation</code> can have a unique parameter type,
-but also be represented as a trait object with a single type. Enums may be used
-to pass different arguments to different functions.</p>
+<p><code>Payment</code> is this action’s own request type. The generated
+<code>Escrow::pay_action()</code> handle can invoke the method with a typed request or encode
+it for compilation through JSON/WASM. There is no contract-wide argument enum.</p>
+<p>No request means no invocation. A request-taking action does not need a <code>Default</code>
+implementation or an artificial <code>Option</code> parameter. Even a unit request is an
+explicit request: JSON <code>null</code> is distinct from an absent effects entry.</p>
+<p>When useful, <code>defaults = Self::default_proposals</code> attaches a separate callback
+that constructs default candidates. It does not manufacture request arguments.
+An argument-free suggested action can use the explicit <code>default</code> flag instead.</p>
+<p>The method’s Rust checks validate the generated candidate. Spending requirements
+belong in its policy or evaluator; the compiler rejects attempts to add new
+authorization guards through a suggested template.</p>
+<p>The standalone <code>#[continuation]</code> frontend remains available for trait interfaces.
+It generates the same <code>Action&lt;Self, Request&gt;</code> representation, accepts optional
+<code>defaults = "Self::default_proposals"</code>, and exposes JSON when marked <code>web_api</code>.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="when-to-use-macros"><a class="header" href="#when-to-use-macros">When to use macros?</a></h1>
-<p>Generally, you want to use <code>continuation</code>, <code>then</code>, <code>guard</code>, etc to generate your
-methods.  However, if you prefer to create them manually, it’s entirely possible
-to do so without much effort. A tool like <code>cargo expand</code> may be useful as you
-can just copy the macro output and customize from there.</p>
-<p>One reason you might choose to manually define them is if you want to have
-custom static logic (that is, known just from the type and not a value-filled
-instance) to decide if a method should be <code>Some</code> or <code>None</code>. If it does not need
-to be static logic, a <code>compile_if</code> can be used, or the static logic can go
-inside a <code>compile_if</code>.</p>
+<h1 id="when-to-use-macros"><a class="header" href="#when-to-use-macros">When to use macros</a></h1>
+<p>Use <code>#[sapio::contract]</code> on an inherent impl for normal contract authoring. Mark
+transaction methods with <code>#[action(committed)]</code> or <code>#[action(suggested)]</code>, policies
+with <code>#[policy]</code>, and independently sufficient spending policies with <code>#[spend]</code>.
+The methods remain ordinary Rust methods. The macro generates typed action
+handles, request schemas and registration.</p>
+<p>A policy with only <code>&amp;self</code> is context-free and cached. A policy that also accepts
+<code>Context</code> is evaluated at its attachment context. The signature expresses the
+actual dependency.</p>
+<p>The explicit low-level API is <code>Action&lt;Contract, Request&gt;</code>. Its constructor takes a
+transaction-generation callback. <code>with_guards</code>, <code>with_conditions</code>, <code>with_json</code>,
+and <code>with_defaults</code> add the corresponding capabilities; <code>erase()</code> hides only the
+individual request type when registering the action. There is no global argument
+pack. This API is useful for dynamically assembled contracts.</p>
+<p>Optional interfaces can still use <code>decl_then!</code>, <code>decl_continuation!</code>, and
+<code>decl_guard!</code>, implemented by the standalone action/guard attributes. A factory
+returning <code>None</code> means that the implementation does not provide that interface
+member. Export optional factories explicitly through <code>declare! {actions, ...}</code> or
+<code>#[sapio::contract(actions(Self::optional), spends(Self::optional_guard))]</code>.</p>
+<p>Use <code>#[condition]</code> with <code>compile_if(...)</code> for availability depending on the
+contract’s value. Its condition algebra distinguishes absent, nullable and
+required branches; it does not add a spending predicate.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="contract-declarations"><a class="header" href="#contract-declarations">Contract Declarations</a></h1>
-<h2 id="static-contracts"><a class="header" href="#static-contracts">Static Contracts</a></h2>
-<p>This is the usual way to declare a contract for Sapio.</p>
-<p>Once a contract and all relevant logic has been defined, a <code>impl Contract</code>
-should be written. This binds the functionality to the compiler interface.</p>
+<h1 id="contract-declarations"><a class="header" href="#contract-declarations">Contract declarations</a></h1>
+<p><code>#[sapio::contract]</code> registers explicitly marked actions and spending policies.
+Ordinary helper methods remain ordinary helpers. <code>#[policy]</code> declares a policy
+that can guard actions; <code>#[spend]</code> also exports it as independently sufficient to
+spend the output.</p>
+<p>Contract hooks are ordinary methods marked <code>#[amount]</code> for minimum funding,
+<code>#[internal_key]</code> for an already authorized Taproot internal key, and <code>#[metadata]</code>
+for descriptive object metadata. Selecting an internal key never grants new
+spending authority.</p>
+<p>An explicit <code>Contract</code> implementation can register factories directly:</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>impl Contract for T {
-    declare!{then, Self::a, Self::b}
-    declare!{finish, Self::guard_1, Self::guard_2}
-    /// if there are finish! functions
-    declare!{updatable&lt;Z&gt;, Self::updatable_1}
-    /// if there are no updatable functions
-    declare!{non updatable}
+</span>impl Contract for Escrow {
+    declare! {actions, Self::refund, Self::propose_payment}
+    declare! {finish, Self::cooperative}
 }
 <span class="boring">}</span></code></pre>
-<p>The type <code>Z</code> above becomes bound for the updatable functions.</p>
-<h2 id="dynamic-contracts"><a class="header" href="#dynamic-contracts">Dynamic Contracts</a></h2>
-<p>Sapio also supports several “Dynamic Contract” paradigms which allows a user
-to assemble contracts at run-time. The two main paradigms are accomplished by
-either directly <code>impl AnyContract</code> or by using the <code>DynamicContract</code> struct
-which holds all functions in vecs.</p>
-<p>These are useful in rare circumstances.</p>
-<h2 id="external-addresses"><a class="header" href="#external-addresses">External Addresses?</a></h2>
-<p>The compiler is able to “lift” an address or a script into a contract via
-<code>Object::from_address</code> and <code>Object::from_script</code>. Care should be taken when
-doing so as Sapio will not be able to provide any further API data beyond such a bound.</p>
+<p>Each action has its own request type before registration. A factory returns
+<code>Option&lt;Box&lt;dyn ErasedAction&lt;Self&gt;&gt;&gt;</code>; returning <code>None</code> explicitly omits an
+optional interface member. Action names must be unique within a contract so typed
+request paths cannot be silently redirected.</p>
+<p><code>DynamicContract&lt;S&gt;</code> assembles <code>actions</code> and independent <code>finish</code> factories in
+vectors alongside the contract data, metadata callback and minimum-funding
+callback. A custom <code>AnyContract</code> implementation can provide the same compiler
+interface without choosing a specific storage layout.</p>
+<p>Existing addresses can be used through <code>Compiled::from_address</code>. They provide an
+output destination and minimum-funding information, but no action API or source
+policy beyond the supplied artifact.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="contract-compilation-overview"><a class="header" href="#contract-compilation-overview">Contract Compilation Overview</a></h1>
 <p>When the compiler sees a new contract, it proceeds by processing each path
@@ -1022,101 +1159,46 @@ merkle root (in this case, a bitcoin address) is the same. If it differs,
 either the arguments differed, someone cheated, or there was unexpected
 non-determinism.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="continuation-effects"><a class="header" href="#continuation-effects">Continuation Effects</a></h1>
-<p>Suppose we had the following bit of code in a contract’s implementation:</p>
+<h1 id="typed-action-requests-and-effects"><a class="header" href="#typed-action-requests-and-effects">Typed action requests and effects</a></h1>
+<p>A contract’s spending policy can be compiled without making a request to every
+action. Each suggested action publishes its own argument schema and effects path.
+The generated typed handle encodes a request at that exact path:</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>#[derive(Serialize, Deserialize)]
-struct PayToKey(bitcoin::PublicKey);
-/// Helper
-fn default_coerce(
-    k: &lt;T as Contract&gt;::StatefulArguments,
-) -&gt; Result&lt;PayToKey, CompilationError&gt; {
-    Ok(k)
-}
-/// A Guarded CTV Function
-#[continuation(
-    /// required: guards for the miniscript clauses required
-    guarded_by = "[Self::guard_1,... Self::guard_n]",
-    web_api,
-    /// helper for coercing args for json api, could be arbitrary
-    coerce_args = "default_coerce"
-)]
-fn to_address(self, ctx:Context, o:PayToKey) {
-    let amt = ctx.funds();
-    ctx.template().add_output(amt, &amp;o.0, None)?.into()
-}
+</span>let effects = Escrow::pay_action().request(&amp;root_path, &amp;payment)?;
+let context = Context::new(
+    network,
+    amount,
+    lowering,
+    root_path,
+    Arc::new(effects),
+    None,
+);
+let artifact = escrow.compile(context)?;
 <span class="boring">}</span></code></pre>
-<p>When the <code>to_address</code> function gets passed by the compiler, a unique pointer (an effect path) is
-generated for it from the context object. This enabled sending it parameters
-later in the future.</p>
-<p>On creation of the context object a <code>effects: Arc&lt;MapEffectDB&gt;</code> parameter  is
-available.  This <code>MapEffectDB</code> links the effect paths to a list of arguments
-intended to be passed to this branch which can generate new contract transitions
-intended to be signed off on by the guards to that path.</p>
-<p>For example, consider a contract for a NFT (a provenance checkable certificate
-of ownership).</p>
-<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>#[derive(Serialize, Deserialize)]
-struct NFT(bitcoin::PublicKey);
-
-#[derive(Serialize, Deserialize)]
-struct Sale(bitcoin::PublicKey, AmountF64);
-/// Helper
-fn default_coerce(
-    k: &lt;T as Contract&gt;::StatefulArguments,
-) -&gt; Result&lt;Sale, CompilationError&gt; {
-    Ok(k)
-}
-impl NFT {
-    #[guard]
-    fn signed(self, ctx:Context) {
-        Clause::Key(self.0)
-    }
-    #[continuation(
-        guarded_by = "[Self::signed]",
-        web_api,
-        /// helper for coercing args for json api, could be arbitrary
-        coerce_args = "default_coerce"
-    )]
-    fn make_sale(self, ctx:Context, o:Sale) {
-        let amt = ctx.funds();
-        ctx.template()
-           .add_amount(o.1)
-           // Carry whatever funds in the UTXO to the buyer in
-           // a new NFT
-           .add_output(amt, &amp;NFT(o.0), None)?
-           // Pay the sale amount to the previous owner
-           .add_output(amt, &amp;self.0, None)?
-           .into()
-    }
-}
-impl Contract for NFT {
-    declare!{updatable&lt;Sale&gt;, Self::make_sale}
-}
-<span class="boring">}</span></code></pre>
-<p>The updates generated through <code>make_sale</code> generate the transactions for a series
-of sales. For example, imagine I start with a <code>NFT(Bob)</code>.</p>
-<p>I can recompile <code>NFT(Bob)</code> with the context (not exactly the pointer, but just for example)
-<code>NFT(Bob)</code> with effects</p>
-<pre><code class="language-json">{"0": {"make_sale": [["Alice", 10]]}}
-</code></pre>
-<p>Supposing Alice pays into the transaction, a future transaction could be:</p>
-<pre><code class="language-json">{"0": {"make_sale": [["Alice", 10]]}, "1": {"make_sale": [["Carol", 11]]}}
-</code></pre>
-<p>Thus by starting with a known valid NFT (e.g., Bob being the original artist),
-the effects can regenerate a series of state transitions for verification of
-provenance.</p>
-<p>Further, as effects at a given point are a set, there could be multiple in flight transitions. E.g.,</p>
-<pre><code class="language-json">{"0": {"make_sale": [["Alice", 10], ["Eve", 10]]}}
-</code></pre>
-<p>represents Alice and Bob both having the ability to purchase the NFT for 10 BTC.</p>
-<h1 id="challenges-1"><a class="header" href="#challenges-1">Challenges</a></h1>
-<ol>
-<li>By using decreasing time locks, implement a dutch auction pitting two
-participants against each other.</li>
-</ol>
+<p>The request invokes only <code>pay</code>; it is not passed through unrelated actions or a
+shared contract-wide enum. JSON deserialization occurs at the request boundary.
+<code>Escrow::pay_action().invoke(&amp;escrow, context, payment)</code> is the equivalent typed
+Rust construction entry point. Directly calling <code>escrow.pay(context, payment)</code>
+also works because the contract macro preserves ordinary methods.</p>
+<p>For several candidates at the same action, use
+<code>Escrow::pay_action().requests(&amp;root_path, &amp;payments)</code>. Entries receive distinct,
+deterministic labels that preserve their input order. An empty collection adds no
+requests. The lower-level <code>MapEffectDB</code> remains available when requests must be
+attached at multiple contract paths.</p>
+<p>An argument-free suggested action still needs an explicit unit request, encoded
+as JSON <code>null</code>. An absent entry never means “call this action with a default
+value.” Explicit default-proposal callbacks are evaluated separately.</p>
+<p>Suggested transactions remain subject to their fixed authorization policy. A
+candidate does not acquire authority because its generator accepted it. For
+example, an NFT sale generator may construct the transfer and seller payment;
+the owner must still authorize the resulting transaction through the spending
+policy. A committed action additionally fixes its candidate transactions in the
+compiled covenant, so changing committed candidates may change the address.</p>
+<p>Raw effects paths that are not visited by compilation are not automatically
+reported as unused. Typed handles avoid hand-written action paths; callers that
+assemble raw effects maps remain responsible for targeting the intended contract
+instance.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="sapio-for-fun-and-profit"><a class="header" href="#sapio-for-fun-and-profit">Sapio for Fun (and Profit)</a></h1>
 <p>In this section, we’re going to build a simple option contract. This sort of
@@ -1157,7 +1239,7 @@ impl UnderFundedExpiringOption {
     fn expires(self, ctx: Context) {
         ctx.template()
             // set the timeout for this path -- because it is using
-            // then! we do not require a guard.
+            // a committed action needs no separate timelock guard.
             .set_lock_time(self.timeout)?
             .add_output(
                 // ctx.funds() knows how much money has been sent to this contract
@@ -1185,11 +1267,10 @@ impl UnderFundedExpiringOption {
 }
 
 impl Contract for UnderFundedExpiringOption {
-    declare!(then, Self::expires, Self::strikes);
-    declare!(non updatable);
+    declare!(actions, Self::expires, Self::strikes);
 }
 <span class="boring">}</span></code></pre>
-<h1 id="challenges-2"><a class="header" href="#challenges-2">Challenges</a></h1>
+<h1 id="challenges-1"><a class="header" href="#challenges-1">Challenges</a></h1>
 <p>There’s no right answer to the following challenges, and the resulting
 contract may not be too useful, but it should be a good exercise to learn
 more about writing Sapio contracts.</p>
@@ -1585,159 +1666,67 @@ paradigm you like.</p>
 <p>That said, this section has a few useful patterns that merit specific mention
 as you may find yourself reaching for them again and again.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="type-level-state-machines"><a class="header" href="#type-level-state-machines">Type Level State Machines</a></h1>
-<p>In this example we use type level state machines to encode functionality that
-is potentially available. See the example below for a sketch of how this can work.</p>
+<h1 id="type-level-state-machines"><a class="header" href="#type-level-state-machines">Type-level state machines</a></h1>
+<p>Rust types can express which actions a contract implementation provides. An
+optional action factory returns <code>None</code> when a transition is unavailable; this is
+separate from an action returning an empty set of transactions.</p>
+<p>The following sketch uses <code>Opened</code> and <code>Closed</code> as state tags. Both states retain
+the owner’s independent spending policy, while only the open state exports the
+committed <code>close</code> transition.</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>/// The contract we're building, that can be in any type-state T.
-struct StatefulContract&lt;T&gt;(PhantomData&lt;T&gt;);
+</span>use std::marker::PhantomData;
 
-/// We use empty structs as type tags.
-/// Note: we could add a `trait State`, but it is not required
-/// 
-/// A contract can be in the open state or the closed state.
 struct Opened;
 struct Closed;
-
-/// The "state machine" defines functionality that may be available
-trait FunctionalityAtState 
-where Self : Sized + Contract
-{
-    /// empty declaration *could* be a default implementation, but we leave it empty
-    /// so that other states may override it.
-    decl_then!{do_something}
+struct StatefulContract&lt;State&gt; {
+    owner: bitcoin::XOnlyPublicKey,
+    state: PhantomData&lt;State&gt;,
 }
 
+trait Moves: Sized + 'static {
+    sapio::decl_then! { close }
+}
 
-/// Override the impl when state is Opened
-impl FunctionalityAtState for StatefulContract&lt;Opened&gt; {
-  /// Transition from Opened =&gt; Closed state
-    #[then]
-    fn do_something(self, ctx: Context) {
+impl Moves for StatefulContract&lt;Opened&gt; {
+    #[sapio::then]
+    fn close(self, ctx: Context) {
+        let amount = ctx.funds();
         ctx.template()
-            .add_output(
-                ctx.funds(),
-                &amp;StatefulContract::&lt;Closed&gt;(Default::default()),
-                None,
-            )?
+            .add_output(amount, &amp;StatefulContract::&lt;Closed&gt; {
+                owner: self.owner,
+                state: PhantomData,
+            }, None)?
             .into()
     }
 }
 
-/// do not override `do_something`, no branch will be generated
-impl FunctionalityAtState for StatefulContract&lt;Closed&gt; {}
+impl Moves for StatefulContract&lt;Closed&gt; {}
 
-/// Register that all StatefulContract&lt;T&gt;'s that implement FunctionalityAtState
-/// are Contracts
-impl Contract for StatefulContract&lt;T&gt;
-where Self : FunctionalityAtState {
-    declare!{then, Self::do_something}
+#[sapio::contract(actions(Self::close))]
+impl&lt;State: 'static&gt; StatefulContract&lt;State&gt;
+where
+    Self: Moves,
+{
+    #[spend]
+    fn owner(&amp;self) -&gt; Clause {
+        Clause::Key(self.owner)
+    }
 }
 <span class="boring">}</span></code></pre>
-<p>This technique is <em>ridiculously</em> powerful. Imagine, for instance, that we
-wanted to have different sorts of state other than Open and Closed. E.g., Red
-and Green. We could then define Transition Rules that encode a graph like:</p>
-<pre><code>(Open, Green) ==&gt; do_something ==&gt; (Closed, Green)
-(Open, Red) ==&gt; do_something ==&gt; (Closed, Red)
-(Open, Green) ==&gt; do_something_else ==&gt;  (Open, Red)
-(Open, Red) ==&gt; do_something_else ==&gt; (Closed, Red)
-</code></pre>
-<p>using two separate <code>FunctionalityAtState</code> like traits:</p>
-<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>/// The contract we're building, that can be in any type-state T.
-struct StatefulContract&lt;T1, T2&gt;(PhantomData&lt;(T1, T2)&gt;);
-
-/// We use empty structs as type tags.
-/// Note: we could add a `trait State`, but it is not required
-/// 
-/// A contract can be in the open state or the closed state.
-struct Opened;
-struct Closed;
-// And Red or Green
-struct Red;
-struct Green;
-
-/// The "state machine" defines functionality that may be available
-trait OpenAtState 
-where Self : Sized + Contract
-{
-    /// empty declaration *could* be a default implementation, but we leave it empty
-    /// so that other states may override it.
-    delc_then!{do_something}
-}
-
-trait ColorAtState 
-where Self : Sized + Contract
-{
-    /// empty declaration *could* be a default implementation, but we leave it empty
-    /// so that other states may override it.
-    decl_then!{do_something}
-}
-
-
-/// Override the impl when state is Opened
-impl OpenAtState&lt;DontCare&gt; for StatefulContract&lt;Opened, DontCare&gt; {
-    /// Transition from Opened =&gt; Closed state
-    #[then]
-    fn do_something(self, ctx: Context) {
-        ctx.template()
-            .add_output(
-                ctx.funds(),
-                &amp;StatefulContract::&lt;Closed, DontCare&gt;(Default::default()),
-                None,
-            )?
-            .into()
-    }
-}
-
-/// do not override `do_something`, no branch will be generated
-impl OpenAtState&lt;DontCare&gt; for StatefulContract&lt;Closed, DontCare&gt; {}
-
-/// Override the impl when state is Opened
-impl ColorAtState for StatefulContract&lt;Open, Green&gt; {
-    /// Transition from Green =&gt; Red state
-    #[then]
-    fn do_something_else(self, ctx: Context) {
-        ctx.template()
-            .add_output(
-                ctx.funds(),
-                &amp;StatefulContract::&lt;Open, Red&gt;(Default::default()),
-                None,
-            )?
-            .into()
-    }
-}
-
-impl ColorAtState for StatefulContract&lt;Open, Red&gt; {
-    /// Transition from Open =&gt; Closed state
-    #[then]
-    fn do_something_else(self, ctx: Context) {
-        ctx.template()
-            .add_output(
-                ctx.funds(),
-                &amp;StatefulContract::&lt;Closed, Red&gt;(Default::default()),
-                None,
-            )?
-            .into()
-    }
-}
-
-/// do not override `do_something_else`, no branch will be generated
-impl ColorAtState&lt;DontCare&gt; for StatefulContract&lt;DontCare, Red&gt; {}
-
-/// Register that all StatefulContract&lt;T&gt;'s that implement OpenAtState
-/// are Contracts
-impl Contract for StatefulContract&lt;T&gt;
-where Self : OpenAtState + ColorAtState {
-    declare!{then, Self::do_something, Self::do_something_else}
-}
-<span class="boring">}</span></code></pre>
-<p>This technique showcases how Sapio could encode very sophisticated logic in
-program generation.</p>
-<p>It’s also notable that following rustc v1.51, it is possible to use <code>const</code>’s
-as generic type parameters which enables even more computation at the type level.</p>
+<p><code>decl_then!</code> supplies an absent default factory. The open implementation replaces
+it; the closed implementation keeps it absent. The contract macro explicitly
+exports that optional interface and the independent owner policy.</p>
+<p>For availability that depends on a value rather than a Rust type, use a
+<code>#[condition]</code> method with <code>compile_if(...)</code>. For example, an eltoo state can omit
+its update action after reaching the maximum state number. <code>Required</code> and
+<code>Nullable</code> still distinguish an action that must generate a transaction from one
+that may legitimately return none.</p>
+<p>Rust enums, traits, generics and const generics can organize more elaborate state
+machines. They execute while constructing and compiling contracts. An ordinary
+Rust state check is not automatically enforced by a spending script: the
+committed transition or fixed policy/evaluator must enforce the corresponding
+on-chain rule.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="tryfrom-constructors"><a class="header" href="#tryfrom-constructors">TryFrom Constructors</a></h1>
 <p>Often times we want to assure that various properties must be true about the

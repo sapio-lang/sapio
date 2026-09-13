@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7ebe54e0.js";
+            window.path_to_searchindex_js = "searchindex-fbfad89f.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-efed9c80.js"></script>
+        <script src="toc-6630874e.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -179,7 +179,7 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="conditionallycompileif"><a class="header" href="#conditionallycompileif">ConditionallyCompileIf</a></h1>
+                        <h1 id="compile-time-action-conditions"><a class="header" href="#compile-time-action-conditions">Compile-time action conditions</a></h1>
 <p><code>ConditionallyCompileIf</code> enables a contract writer to evaluate certain
 value-based logic before evaluating a path function.</p>
 <p>If the return value(s) indicate that a branch should not be evaluated, it is
@@ -190,16 +190,19 @@ path that’s only accessible if the amount of funds being sent to the contract 
 <p>We could write:</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
-</span>#[compile_if]
-fn not_too_much(self, ctx: Context) {
+</span>#[condition]
+fn not_too_much(&amp;self, ctx: Context) -&gt; ConditionalCompileType {
     if ctx.funds() &gt; Self::MAX_FUNDS {
-        ConditionallyCompileType::Never
+        ConditionalCompileType::Never
     } else {
         ConditionalCompileType::NoConstraint
     }
 }
 <span class="boring">}</span></code></pre>
-<p>and apply it to the relevant paths.</p>
+<p>Inside <code>#[sapio::contract]</code>, apply it with
+<code>#[action(committed, compile_if(Self::not_too_much))]</code>. This controls whether the
+compiler includes the action. It does not introduce a predicate checked while
+spending; spending rules belong in policies.</p>
 <h2 id="conditionalcompiletype-variants"><a class="header" href="#conditionalcompiletype-variants">ConditionalCompileType Variants</a></h2>
 <p>There are many different ConditionalCompileType return values:</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
@@ -233,17 +236,22 @@ see <code>ConditionalCompileType::merge</code> for details.</p>
     ///     Never &gt;&lt; Required ==&gt; Fail
     ///     Never &gt; {Skippable, Nullable}  ==&gt; Never
 <span class="boring">}</span></code></pre>
-<h1 id="compile_if-macro"><a class="header" href="#compile_if-macro">compile_if! macro</a></h1>
-<p>The <code>compile_if</code> macro can be called two ways:</p>
+<h2 id="optional-interface-conditions"><a class="header" href="#optional-interface-conditions">Optional interface conditions</a></h2>
+<p>The standalone attribute and declaration macro support optional trait methods:</p>
 <pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>#[compile_if]
-fn name(self, ctx) {
-    /*ConditionalCompileType*/
+fn available(self, ctx: Context) -&gt; ConditionalCompileType {
+    ConditionalCompileType::NoConstraint
 }
-/// null implementation
-decl_compile_if!{name}
+
+// In a trait interface, its factory is absent unless implemented:
+decl_compile_if! { available }
 <span class="boring">}</span></code></pre>
+<p>Both frontends preserve the same condition algebra. <code>Never</code> and <code>Required</code>
+contradict one another; an explicit failure does not hide this contradiction.
+An absent condition factory keeps the declared slots of the remaining
+conditions, preserving their context paths.</p>
 
                     </main>
 

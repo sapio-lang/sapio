@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7ebe54e0.js";
+            window.path_to_searchindex_js = "searchindex-fbfad89f.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-efed9c80.js"></script>
+        <script src="toc-6630874e.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -252,8 +252,7 @@ impl TrustlessEscrow {
 
 impl Contract for TrustlessEscrow {
     declare! {finish, Self::cooperate}
-    declare! {then, Self::use_escrow}
-    declare! {non updatable}
+    declare! {actions, Self::use_escrow}
 }
 
 #[cfg(target_arch = "wasm32")]
