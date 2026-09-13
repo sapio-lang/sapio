@@ -25,6 +25,19 @@ contract objects or read programs out of optional metadata. [Fixtures](../integr
 modules. A caller constructs source with `terms.funding()` or
 `terms.state(state)?`, then uses Sapio's ordinary `compile(context)` API.
 
+The contract uses `#[sapio::contract]` around ordinary Rust methods.
+`update` takes a `State`; `settle` takes no request argument. Their generated
+handles have distinct request types and JSON schemas. Discovering a contract's
+policy does not call either method with an invented default candidate. The
+runner creates requests with `Channel::update_action().request(&path, &state)`
+or `Channel::settle_action().request(&path, &())`, without constructing effect
+paths or wrapping both calls in a common request enum.
+
+Artifact requests use [whole-branch spend planning](SPEND_PLANNING.md).
+`prepare_spend` checks the selected native timelock as well as its program
+slot before preparing auxiliary evidence. It does not run the evaluator;
+evidence codec names describe the runner's explicitly chosen byte encoding.
+
 ## Three spending paths
 
 Let `K` be a fresh joint channel key, `n` a state number, and `D` the contest
@@ -141,8 +154,20 @@ Updates preserve channel capacity. Both update and settlement templates reserve
 two inputs before authorization: channel input 0 and a sponsor input 1. The
 sponsor contributes all of its input value as fees; there is no fee-change
 output. The contract reserves the input without inventing a sponsor amount;
-the runner's chosen coin determines the fee. An alternative sponsor outpoint or amount can be substituted before
-the ordinary transaction signatures are collected.
+the runner's chosen coin determines the fee. Both methods use a transaction
+plan with a named `fee_sponsor` input whose minimum is zero. `Terms::new`
+requires an explicit `maximum_sponsor_fee`; the disposable fixture chooses
+10,000 satoshis. This is a retained local spending constraint, not a new
+Script predicate or an emulator-enforced rule. An alternative sponsor outpoint
+or amount can be substituted within that ceiling before the ordinary
+transaction signatures are collected.
+
+The runner checks the selected template's funding requirements after attaching
+actual inputs. The normal executable paths retain the template through signing,
+then use `finalize_candidate`: verify witnesses, check the finalized PSBT's
+funding and fee requirements, and extract the transaction. Chain recovery
+checks the new target template's funding while authenticating the old state's
+spending proof independently.
 
 TemplateHash commits the complete sequence vector. Adding an input after
 authorization changes the template and is not supported. The example uses

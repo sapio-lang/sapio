@@ -82,8 +82,8 @@ fn duplicate_options_are_always_errors() {
         (Action::Continuation, quote!(web_api, web_api), "web_api"),
         (
             Action::Continuation,
-            quote!(coerce_args = "one", coerce_args = "two"),
-            "coerce_args",
+            quote!(defaults = "one", defaults = "two"),
+            "defaults",
         ),
     ] {
         assert_eq!(
@@ -123,15 +123,15 @@ fn options_require_their_documented_syntax() {
     ] {
         assert!(option_error(Action::Then, tokens).contains("array expression"));
     }
-    assert!(option_error(Action::Continuation, quote!()).contains("requires `coerce_args"));
-    assert!(options(Action::Continuation, quote!(coerce_args = "{")).is_err());
+    assert!(options(Action::Continuation, quote!()).is_ok());
+    assert!(options(Action::Continuation, quote!(defaults = "{")).is_err());
     assert!(options(Action::Guard, quote!(simps = "Some(")).is_err());
     let valid = options(
         Action::Continuation,
         quote!(
             guarded_by = "[Self::signed, Self::timeout]",
             compile_if = "[Self::enabled]",
-            coerce_args = "default_coerce::<Self>",
+            defaults = "default_coerce::<Self>",
             simps = "Some(Self::metadata)",
             web_api,
         ),
@@ -234,7 +234,7 @@ fn continuation_helpers_preserve_case_and_raw_identifiers() {
     for ident in [quote!(pay), quote!(PAY), quote!(r#type)] {
         let expansion = expand(
             Action::Continuation,
-            arguments(quote!(coerce_args = "Ok", web_api)),
+            arguments(quote!(defaults = "Ok", web_api)),
             syn::parse2(quote! {
                 #[allow(non_snake_case)]
                 fn #ident(self, ctx: Context, args: ()) {}

@@ -35,6 +35,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         signed
             .finalize_mut(&Secp256k1::new())
             .map_err(|errors| format!("sample spend failed finalization: {errors:?}"))?;
+        sapio_integration_tests::program_example::check_finalized_candidate(&compiled, &signed)?;
         let transaction = signed.extract_tx()?;
         transactions.push(serde_json::json!({
             "output_witness": output_index,

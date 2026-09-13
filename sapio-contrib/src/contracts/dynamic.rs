@@ -15,26 +15,15 @@ use serde::*;
 
 /// Demonstrates how to make a contract object without known functionality at
 /// (rust) compile time. `D` Binds statically to the AnyContract interface though!
-struct D<'a> {
-    v: Vec<fn() -> Option<actions::ThenFuncAsFinishOrFunc<'a, D<'a>, ()>>>,
+struct D {
+    v: Vec<actions::ActionFactory<D>>,
     key: bitcoin::XOnlyPublicKey,
 }
 
-impl AnyContract for D<'static> {
-    type StatefulArguments = ();
+impl AnyContract for D {
     type Ref = Self;
-    fn then_fns<'a>(
-        &'a self,
-    ) -> &'a [fn() -> Option<actions::ThenFuncAsFinishOrFunc<'a, Self, Self::StatefulArguments>>]
-    where
-        Self::Ref: 'a,
-    {
+    fn actions(&self) -> &[actions::ActionFactory<Self>] {
         &self.v
-    }
-    fn finish_or_fns<'a>(
-        &'a self,
-    ) -> &'a [fn() -> Option<Box<dyn actions::CallableAsFoF<Self, Self::StatefulArguments>>>] {
-        &[]
     }
     fn finish_fns<'a>(&'a self) -> &'a [fn() -> Option<actions::Guard<Self>>] {
         &[|| {
@@ -64,19 +53,19 @@ pub struct DynamicExample {
 impl DynamicExample {
     #[then]
     fn next(self, ctx: sapio::Context) {
-        let v: Vec<fn() -> Option<actions::ThenFuncAsFinishOrFunc<'static, D<'static>, ()>>> =
-            vec![];
-        let d: D<'_> = D { v, key: self.key };
+        let d = D {
+            v: vec![],
+            key: self.key,
+        };
 
-        let d2 = DynamicContract::<(), bitcoin::XOnlyPublicKey> {
-            then: vec![|| None],
+        let d2 = DynamicContract::<bitcoin::XOnlyPublicKey> {
+            actions: vec![|| None],
             finish: vec![|| {
                 Some(actions::Guard::Fresh(
                     |key, _| sapio_base::Clause::Key(*key),
                     None,
                 ))
             }],
-            finish_or: vec![],
             data: self.key,
             metadata_f: Box::new(|_s, _c| Ok(Default::default())),
             ensure_amount_f: Box::new(|_s, _c| Ok(Default::default())),
@@ -90,8 +79,7 @@ impl DynamicExample {
 }
 
 impl Contract for DynamicExample {
-    declare! {then, Self::next}
-    declare! {non updatable}
+    declare! {actions, Self::next}
 
     fn ensure_amount(&self, ctx: Context) -> Result<Amount, CompilationError> {
         if ctx.funds().to_sat() < 2 {

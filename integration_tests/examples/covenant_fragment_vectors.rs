@@ -57,6 +57,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let signed = oracle.sign(request)?;
         let finalized = sapio_psbt::finalize::finalize(signed, &secp)
             .map_err(|(_, errors)| format!("fragment vector finalization failed: {errors:?}"))?;
+        sapio_integration_tests::program_example::check_finalized_candidate(&compiled, &finalized)?;
         let transaction = finalized.extract_tx()?;
         let mut amount_changed = transaction.clone();
         amount_changed.output[0].value -= bitcoin::Amount::ONE_SAT;

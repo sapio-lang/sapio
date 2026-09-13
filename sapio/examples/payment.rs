@@ -1,8 +1,8 @@
 //! Compile a small payment contract without a node, signer, or WASM runtime.
 //! Native CTV is a research target; this example does not fund or broadcast it.
 use bitcoin::{Address, Amount, Network};
-use sapio::contract::{Compilable, Compiled, Context, Contract};
-use sapio::{declare, then};
+use sapio::contract::{Compilable, CompilationError, Compiled, Context};
+use sapio::template::{OutputAmount, Template};
 use sapio_base::covenant::LoweringPlan;
 use sapio_base::effects::EffectPath;
 use std::sync::Arc;
@@ -11,20 +11,20 @@ struct Payment {
     destination: Compiled,
 }
 
+#[sapio::contract]
 impl Payment {
-    #[then]
-    fn pay(self, ctx: Context) {
-        ctx.template()
-            .add_output(Amount::from_sat(1_000), &self.destination, None)?
-            .set_min_feerate(Amount::from_sat(1))
-            .add_fees(Amount::from_sat(500))?
-            .into()
+    #[action(committed)]
+    fn pay(&self, ctx: Context) -> Result<Template, CompilationError> {
+        let mut plan = ctx.template_plan();
+        plan.output(
+            "recipient",
+            OutputAmount::Exact(Amount::from_sat(1_000)),
+            &self.destination,
+        )?;
+        plan.reserve_fees(Amount::from_sat(500));
+        plan.require_feerate(bitcoin::FeeRate::from_sat_per_vb(1).unwrap());
+        Ok(plan.finish()?)
     }
-}
-
-impl Contract for Payment {
-    declare! {then, Self::pay}
-    declare! {non updatable}
 }
 
 fn compile_payment(funding: u64) -> Result<Compiled, Box<dyn std::error::Error>> {

@@ -11,6 +11,11 @@ pub use error::*;
 pub mod bind;
 pub mod descriptors;
 mod enforcement;
+mod explain;
+pub use explain::{
+    ActionExplanation, ArtifactExplanation, InputExplanation, ObjectExplanation, OutputExplanation,
+    TemplateExplanation,
+};
 mod programs;
 pub use programs::{ProgramPolicy, ProgramRequirement};
 pub mod taproot;

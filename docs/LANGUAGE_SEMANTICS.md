@@ -11,6 +11,13 @@ predicates, public lowering inputs, signer compatibility and CLI deployment mode
 
 ## Declarations
 
+The preferred frontend is `#[sapio::contract]` with ordinary `&self` methods
+marked `#[action]`, `#[policy]`, `#[spend]` and `#[condition]`. Each action has its
+own request type and an explicit committed/suggested mode. Generated typed
+handles encode requests without a contract-wide argument pack. See
+[transaction plans and spend preparation](TRANSACTION_PLANS.md).
+
+
 `#[then]`, `#[continuation]`, `#[guard]` and `#[compile_if]` accept only their
 documented options. Unknown names, duplicates, malformed expressions and
 unsupported method signatures are compile errors at the declaration. In
@@ -66,7 +73,7 @@ For a shared transaction it records their complete alternative conditions in
 canonical policy order. The committed descriptor or raw Taproot tree remains the
 authority for spending.
 
-The action API uses `TemplateKind::Covenant` or `TemplateKind::Suggested`.
+The action API uses `TemplateKind::Committed` or `TemplateKind::Suggested`.
 Committed templates contribute an explicit CTV wrapper; suggestions do not
 create an automatic covenant. This shared action representation replaces the
 old Boolean and clause-extraction callback without compatibility aliases.
@@ -77,8 +84,9 @@ the wrapper as `ScriptPolicy::Emulatable`. The compiler then resolves it from
 `Context`'s serialized `LoweringPlan` and collects its predicate in
 `Object.covenant_requirements` alongside that plan. Native
 `Clause::TxTemplate` and raw scripts are never automatically rewritten.
-The wrapper currently supports CTV only; arbitrary program evaluators remain
-future work. See [the enforcement boundary](ENFORCEMENT.md).
+Arbitrary emulated programs retain their complete evaluator/program/parameters
+and public root in typed policy records. Their WASM evaluation and signing are
+separate from contract compilation. See [the enforcement boundary](ENFORCEMENT.md).
 
 ## Source validity and possible transitions
 
@@ -106,7 +114,8 @@ binding payloads agree: transaction, commitment index, funding/fee requirements,
 input metadata, template metadata and output contract graphs, including the
 children's recorded lowering requirements. A disagreement
 returns `ConflictingTemplate` with the hash, action/effect path and differing
-field. Authorizations may differ and are combined as alternatives.
+field. This consistency requirement also applies across the committed and
+suggested catalogs. Authorizations may differ and are combined as alternatives.
 
 Authors intentionally sharing a transaction should reuse a common compiled
 destination and metadata. Equal child addresses alone are insufficient: their
@@ -159,9 +168,12 @@ Named action/effect fragments use ASCII letters, digits and underscores.
 Reserved fragments and separators cannot be passed as user names. All effect
 names for a continuation are checked before its default or JSON callback runs,
 so the callback cannot observe a path that changes meaning after serialization.
-Repeated action names receive deterministic suffixes in the current declaration
-order; changing the set or order of action factories can change those paths.
+Repeated action names are rejected. The compiler never renames an action to
+resolve a collision, so a typed request has one unambiguous destination.
 
-Effects augment the default continuation invocation. They do not replace it.
+Requests augment an explicitly declared default-proposal callback. No callback
+is inferred from a request type implementing `Default`; absent requests and an
+explicit unit request are distinct. JSON schemas are retained for exported
+committed and suggested actions.
 These rules describe compiler behavior; use artifact validation and binding
 checks before consuming publicly constructed or deserialized compiled objects.

@@ -77,8 +77,7 @@ impl Hanukkiah {
     }
 }
 impl Contract for Hanukkiah {
-    declare! {then, Self::light_candles}
-    declare! {non updatable}
+    declare! {actions, Self::light_candles}
 }
 
 /// Implements a Hanukkiah for @TheBitcoinRabbi
@@ -205,12 +204,10 @@ impl Hanukkiah2 {
     }
 }
 impl Contract for Hanukkiah2 {
-    declare! {then, Self::create}
-    declare! {non updatable}
+    declare! {actions, Self::create}
 }
 impl Contract for Hanukkiah2Night {
-    declare! {then, Self::light_candles}
-    declare! {non updatable}
+    declare! {actions, Self::light_candles}
 }
 
 #[cfg(test)]

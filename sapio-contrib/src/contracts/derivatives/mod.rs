@@ -161,9 +161,9 @@ impl Contract for GenericBet {
         }
         Ok(self.amount)
     }
-    declare!(non updatable);
-    declare!(finish, Self::cooperate);
-    declare!(then, Self::pay_gte, Self::pay_lt);
+
+    declare! {finish, Self::cooperate}
+    declare! {actions, Self::pay_gte, Self::pay_lt}
 }
 
 fn invalid(message: &str) -> CompilationError {

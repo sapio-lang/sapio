@@ -2,14 +2,13 @@ use std::collections::BTreeMap;
 
 use bitcoin::Amount;
 use bitcoin::XOnlyPublicKey;
-use sapio::contract::empty;
 use sapio::contract::Compilable;
 use sapio::contract::CompilationError;
 use sapio::contract::Compiled;
 use sapio::contract::Contract;
-use sapio::contract::StatefulArgumentsTrait;
 use sapio::ordinals::OrdinalPlanner;
 use sapio::ordinals::OrdinalSpec;
+use sapio::template::{OutputAmount, Template};
 use sapio::util::amountrange::AmountF64;
 use sapio::*;
 use sapio_base::Clause;
@@ -40,8 +39,6 @@ impl Sell {
     }
 }
 
-#[derive(JsonSchema, Serialize, Deserialize, Default)]
-pub struct Sale(Option<Sell>);
 fn multimap<T: Ord + PartialOrd + Eq + Clone, U: Clone, const N: usize>(
     v: [(T, U); N],
 ) -> BTreeMap<T, Vec<U>> {
@@ -101,88 +98,107 @@ impl SimpleOrdinal {
         Ok(offset)
     }
 
-    #[continuation(guarded_by = "[Self::signed]", web_api, coerce_args = "default_coerce")]
-    fn sell_with_planner(self, ctx: Context, opt_sale: Sale) {
+    #[continuation(guarded_by = "[Self::signed]", web_api)]
+    fn sell_with_planner(self, ctx: Context, sale: Sell) {
         let network = ctx.network;
-        if let Sale(Some(sale)) = opt_sale {
-            self.ordinal_offset(&ctx)?;
-            if let Some(ords) = ctx.get_ordinals().clone() {
-                let plan = ords.output_plan(&OrdinalSpec {
-                    payouts: [Amount::from(sale.amount), sale.change.into()]
-                        .into_iter()
-                        .filter(|amount| *amount != Amount::ZERO)
-                        .collect(),
-                    payins: [sale.payin()?]
-                        .into_iter()
-                        .filter(|amount| *amount != Amount::ZERO)
-                        .collect(),
-                    fees: sale.fee.into(),
-                    ordinals: [Ordinal(self.ordinal)].into(),
-                })?;
-                let buyer: &dyn Compilable = &Compiled::from_address(
-                    sale.purchaser.require_network(network)?,
-                    bitcoin::Amount::ZERO,
-                );
-                return plan
-                    .build_plan(
-                        ctx,
-                        multimap([
-                            (sale.amount.into(), (&self.owner as &dyn Compilable, None)),
-                            (sale.change.into(), (buyer, None)),
-                        ])
-                        .into_iter()
-                        .filter(|(amount, _)| *amount != Amount::ZERO)
-                        .collect(),
-                        [(Ordinal(self.ordinal), (buyer, None))].into(),
-                        (&self.owner, None),
-                    )?
-                    .into();
-            }
-        }
-        empty()
+        self.ordinal_offset(&ctx)?;
+        let ords = ctx
+            .get_ordinals()
+            .clone()
+            .ok_or_else(|| CompilationError::OrdinalsError("Missing Ordinals Info".into()))?;
+        let plan = ords.output_plan(&OrdinalSpec {
+            payouts: [Amount::from(sale.amount), sale.change.into()]
+                .into_iter()
+                .filter(|amount| *amount != Amount::ZERO)
+                .collect(),
+            payins: [sale.payin()?]
+                .into_iter()
+                .filter(|amount| *amount != Amount::ZERO)
+                .collect(),
+            fees: sale.fee.into(),
+            ordinals: [Ordinal(self.ordinal)].into(),
+        })?;
+        let buyer: &dyn Compilable = &Compiled::from_address(
+            sale.purchaser.require_network(network)?,
+            bitcoin::Amount::ZERO,
+        );
+        plan.build_plan(
+            ctx,
+            multimap([
+                (sale.amount.into(), (&self.owner as &dyn Compilable, None)),
+                (sale.change.into(), (buyer, None)),
+            ])
+            .into_iter()
+            .filter(|(amount, _)| *amount != Amount::ZERO)
+            .collect(),
+            [(Ordinal(self.ordinal), (buyer, None))].into(),
+            (&self.owner, None),
+        )?
+        .into()
     }
-    #[continuation(guarded_by = "[Self::signed]", web_api, coerce_args = "default_coerce")]
-    fn sell(self, ctx: Context, opt_sale: Sale) {
+    #[continuation(guarded_by = "[Self::signed]", web_api)]
+    fn sell(self, ctx: Context, sale: Sell) -> Result<Template, CompilationError> {
         let network = ctx.network;
-        if let Sale(Some(sale)) = opt_sale {
-            let index = self.ordinal_offset(&ctx)?;
-            let payin = sale.payin()?;
-            let mut t = ctx.template();
-            if index != 0 {
-                t = t.add_output(Amount::from_sat(index), &self.owner, None)?;
-            }
-            let buyer = Compiled::from_address(
-                sale.purchaser.require_network(network)?,
-                bitcoin::Amount::ZERO,
-            );
-            t = t.add_output(Amount::from_sat(501), &buyer, None)?;
-            let remaining = t.ctx().funds();
-            if remaining != Amount::ZERO {
-                t = t.add_output(remaining, &self.owner, None)?;
-            }
-            // Allocate the complete known ordinal input before introducing an
-            // external buyer input whose ordinal ranges are not available.
-            if payin != Amount::ZERO {
-                t = t.add_sequence().add_amount(payin)?;
-            }
-            if Amount::from(sale.amount) != Amount::ZERO {
-                t = t.add_output(sale.amount.into(), &self.owner, None)?;
-            }
-            if Amount::from(sale.change) != Amount::ZERO {
-                t = t.add_output(sale.change.into(), &buyer, None)?;
-            }
-            t.add_fees(sale.fee.into())?.into()
-        } else {
-            empty()
+        let index = self.ordinal_offset(&ctx)?;
+        let payin = sale.payin()?;
+        let remaining = ctx
+            .funds()
+            .checked_sub(Amount::from_sat(index))
+            .and_then(|amount| amount.checked_sub(Amount::from_sat(501)))
+            .ok_or(CompilationError::OutOfFunds)?;
+        let buyer = Compiled::from_address(
+            sale.purchaser.require_network(network)?,
+            bitcoin::Amount::ZERO,
+        );
+        let mut plan = ctx.template_plan();
+        if payin != Amount::ZERO {
+            plan.input("buyer_funding", payin)?;
         }
+        if index != 0 {
+            plan.output(
+                "owner_prefix",
+                OutputAmount::Exact(Amount::from_sat(index)),
+                &self.owner,
+            )?;
+        }
+        let ordinal = plan.output(
+            "ordinal",
+            OutputAmount::Exact(Amount::from_sat(501)),
+            &buyer,
+        )?;
+        plan.require_ordinal(&ordinal, Ordinal(self.ordinal), 0)?;
+        // Allocate the complete known ordinal input before the buyer-funded
+        // price and change; those external sats have no tracked ordinal ranges.
+        if remaining != Amount::ZERO {
+            plan.output(
+                "owner_remainder",
+                OutputAmount::Exact(remaining),
+                &self.owner,
+            )?;
+        }
+        if Amount::from(sale.amount) != Amount::ZERO {
+            plan.output(
+                "price",
+                OutputAmount::Exact(sale.amount.into()),
+                &self.owner,
+            )?;
+        }
+        if Amount::from(sale.change) != Amount::ZERO {
+            plan.output(
+                "buyer_change",
+                OutputAmount::Exact(sale.change.into()),
+                &buyer,
+            )?;
+        }
+        plan.reserve_fees(sale.fee.into());
+        Ok(plan.finish()?)
     }
 }
-impl StatefulArgumentsTrait for Sale {}
 
 /// # The SimpleNFT Contract
 impl Contract for SimpleOrdinal {
     // Ordinals... only good for selling?
-    declare! {updatable<Sale>, Self::sell, Self::sell_with_planner}
+    declare! {actions, Self::sell, Self::sell_with_planner}
 
     fn ensure_amount(&self, ctx: Context) -> Result<Amount, CompilationError> {
         self.ordinal_offset(&ctx)?;
@@ -197,11 +213,6 @@ impl SimpleOrdinal {
     fn signed(self, _ctx: Context) {
         Clause::Key(self.owner.clone())
     }
-}
-fn default_coerce(
-    k: <SimpleOrdinal as sapio::contract::Contract>::StatefulArguments,
-) -> Result<Sale, CompilationError> {
-    Ok(k)
 }
 
 #[cfg(target_arch = "wasm32")]

@@ -1,23 +1,26 @@
 //! Compile and finalize a disposable eltoo graph without broadcasting.
 
 use bitcoin::consensus::encode::serialize_hex;
-use bitcoin::secp256k1::Secp256k1;
 use bitcoin::{OutPoint, Transaction};
 use emulator_connect::program::{ProgramOracle, ProgramSigningRequest};
+use sapio::template::Template;
 use sapio_contrib::contracts::eltoo::State;
 use sapio_integration_tests::eltoo_example::fixture;
 use sapio_integration_tests::eltoo_example::recovery::recover_update;
 use sapio_integration_tests::eltoo_example::runner::{
-    authorize_update, compile, settlement_request, sign_sponsor, update_request, Coin, Error,
+    authorize_update, compile, finalize_candidate, settlement_request, settlement_template,
+    sign_sponsor, update_request, update_template, Coin, Error,
 };
 use serde_json::json;
 
-fn finish(oracle: &ProgramOracle, request: ProgramSigningRequest) -> Result<Transaction, Error> {
+fn finish(
+    oracle: &ProgramOracle,
+    request: ProgramSigningRequest,
+    template: &Template,
+) -> Result<Transaction, Error> {
     let mut psbt = oracle.sign(request)?;
     sign_sponsor(&mut psbt, &fixture::sponsor_key())?;
-    let psbt = sapio_psbt::finalize::finalize(psbt, &Secp256k1::new())
-        .map_err(|(_, errors)| format!("eltoo finalization failed: {errors:?}"))?;
-    Ok(psbt.extract_tx()?)
+    finalize_candidate(template, psbt)
 }
 
 fn output_zero(transaction: &Transaction) -> Coin {
@@ -54,6 +57,7 @@ fn main() -> Result<(), Error> {
             fixture::sponsor(2_000, 2),
             &first_authorization,
         )?,
+        &update_template(&terms, first)?,
     )?;
     let direct = update_request(
         &funding,
@@ -70,8 +74,8 @@ fn main() -> Result<(), Error> {
         &latest_authorization,
     )?;
     assert_eq!(direct.witness, rebound.witness);
-    let update_3_direct = finish(&oracle, direct)?;
-    let update_3_rebound = finish(&oracle, rebound)?;
+    let update_3_direct = finish(&oracle, direct, &update_template(&terms, latest)?)?;
+    let update_3_rebound = finish(&oracle, rebound, &update_template(&terms, latest)?)?;
     let settlement = finish(
         &oracle,
         settlement_request(
@@ -79,6 +83,7 @@ fn main() -> Result<(), Error> {
             output_zero(&update_3_rebound),
             fixture::sponsor(2_000, 5),
         )?,
+        &settlement_template(&terms, latest)?,
     )?;
     println!(
         "{}",

@@ -5,7 +5,7 @@
 //! spending proof before making a low-level request. Ordinary exported-contract
 //! requests use the artifact's recorded program requirements instead.
 
-use super::runner::{attach_inputs, update_transaction, Coin, Error, Sponsor};
+use super::runner::{attach_inputs, update_template, Coin, Error, Sponsor};
 use bitcoin::psbt::Input;
 use bitcoin::secp256k1::{schnorr::Signature, Secp256k1};
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash};
@@ -33,17 +33,20 @@ impl RecoveredUpdate {
         if target.number <= self.state_number {
             return Err("a recovered update must advance the state number".into());
         }
+        let template = update_template(terms, target)?;
+        let psbt = attach_inputs(
+            template.tx.clone(),
+            self.coin.clone(),
+            self.input.clone(),
+            sponsor,
+        )?;
+        template.check_funded_psbt(&psbt)?;
         Ok(ProgramSigningRequest {
             instance: terms.update_program().instance().clone(),
             input_index: 0,
             witness: authorization.as_ref().to_vec(),
             path: ProgramSpendPath::ScriptPath(self.leaf_hash),
-            psbt: PSBT(attach_inputs(
-                update_transaction(terms, target)?,
-                self.coin.clone(),
-                self.input.clone(),
-                sponsor,
-            )?),
+            psbt: PSBT(psbt),
         })
     }
 }
@@ -120,7 +123,7 @@ pub fn recover_update(terms: &Terms, observed: &Transaction) -> Result<Recovered
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::eltoo_example::fixture;
+    use crate::eltoo_example::{fixture, runner::update_transaction};
     use bitcoin::ScriptBuf;
 
     #[test]

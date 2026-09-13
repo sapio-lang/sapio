@@ -7,11 +7,14 @@ use bitcoin::psbt::{Input, Psbt};
 use bitcoin::{Amount, ScriptBuf};
 use sapio::contract::abi::object::{ArtifactError, Object, ProgramRequirement};
 use sapio_base::miniscript;
+use sapio_base::CTVHash;
 use std::fmt;
 
 /// A compiled artifact and funded PSBT cannot prepare the selected program spend.
 #[derive(Debug)]
 pub enum ArtifactProgramError {
+    /// A matching candidate's explicit local funding constraints are not met.
+    Funding(sapio::template::funding::FundingError),
     /// The compiled artifact contains inconsistent spending data.
     Artifact(ArtifactError),
     /// The selected program and path are not a requirement of this artifact.
@@ -36,6 +39,7 @@ pub enum ArtifactProgramError {
 impl fmt::Display for ArtifactProgramError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Funding(error) => error.fmt(formatter),
             Self::Artifact(error) => error.fmt(formatter),
             Self::UnknownRequirement => {
                 formatter.write_str("selected program and path are absent from the artifact")
@@ -62,6 +66,7 @@ impl fmt::Display for ArtifactProgramError {
 impl std::error::Error for ArtifactProgramError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
+            Self::Funding(error) => Some(error),
             Self::Artifact(error) => Some(error),
             Self::Descriptor(error) => Some(error),
             Self::Program(error) => Some(error),
@@ -113,6 +118,17 @@ pub fn prepare_program_request(
             available: prevout.value,
             required: object.required_input_amount,
         });
+    }
+
+    let commitment = psbt.unsigned_tx.get_ctv_hash(input_index);
+    if let Some(template) = object
+        .ctv_to_tx
+        .get(&commitment)
+        .or_else(|| object.suggested_txs.get(&commitment))
+    {
+        template
+            .check_funded_psbt(&psbt)
+            .map_err(ArtifactProgramError::Funding)?;
     }
 
     let mut expected = Input::default();
@@ -220,7 +236,6 @@ mod tests {
 
     impl Contract for Predicate {
         declare! {finish, Self::authorized}
-        declare! {non updatable}
 
         fn ensure_amount(&self, _ctx: Context) -> Result<Amount, CompilationError> {
             Ok(Amount::from_sat(10_000))

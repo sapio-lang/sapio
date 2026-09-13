@@ -90,8 +90,7 @@ impl Vault {
 }
 
 impl Contract for Vault {
-    declare! {then, Self::step, Self::to_cold}
-    declare! {non updatable}
+    declare! {actions, Self::step, Self::to_cold}
 
     fn ensure_amount(&self, _ctx: Context) -> Result<bitcoin::Amount, CompilationError> {
         let step: bitcoin::Amount = self.amount_step.try_into()?;

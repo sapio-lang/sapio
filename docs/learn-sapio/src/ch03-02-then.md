@@ -1,39 +1,38 @@
-# ThenFunc
-A `ThenFunc` is a continuation of a contract that can proceed when all the
-guarded_by conditions on that object are met. The `ThenFunc` provides an
-iterator of possible next transactions, using CTV to ensure execution.
+# Committed actions
 
-## When to use a ThenFunc
-
-We've already seen an example of a `then` function in the wild in [Chapter
-1](./ch01-03-hello-world.md). In that example we are guaranteeing that after
-a timeout, a specific "return policy" is honored out of the escrow. Unless
-Alice and Bob agree to something else, the funds can only be returned via
-that transaction.
-
-In general, any time you want a state transition to be "locked in" you should use a `then!`.
-
-
-## then! macro
-
-
-The `then` macro generates a static `fn() -> Option<ThenFunc>` method for a given impl.
-
-There are a few variants of how you can create a `then`.
+A committed action constructs the transactions permitted by a covenant. Each
+returned transaction is combined with the action's authorization guards and the
+configured covenant lowering. This is useful for fixed payouts, timeout paths,
+and recursively constructed transaction trees.
 
 ```rust
-/// A Conditional + Guarded CTV Function
-#[then(
-    /// optional: only compile these branches if these compile_if statements permit
-    compile_if= "[compile_if_1, ... compile_if_n]",
-    /// optional: protect these branches with the conjunction (and) of these clauses
-    guarded_by= "[guard_1, ... guard_n]"
-)]
-fn name(self, ctx) {
-    /*Result<Box<Iterator<TransactionTemplate>>>*/
+#[sapio::contract]
+impl Escrow {
+    #[action(committed)]
+    fn refund(&self, ctx: Context) -> Result<Template, CompilationError> {
+        self.refund_template(ctx)
+    }
 }
-/// Null Implementation
-decl_then!{name}
 ```
 
-The Iterator must not be empty, or it will cause an error.
+An argument-free committed action produces its default transaction during
+compilation. A request-taking committed action requires supplied requests or an
+explicit default-proposal callback. Its requests participate in compilation of
+the output's fixed spending policy: changing them may change the contract's
+address.
+
+`guarded_by(Self::authorization)` attaches fixed policies.
+`compile_if(Self::availability)` applies a separately declared `#[condition]`
+method returning `ConditionalCompileType`. The normal required action must
+produce at least one template; `Nullable` permits an empty result and `Never`
+omits the action.
+
+A method can return a `Template` or `Result<Template, CompilationError>`. Multiple
+alternatives are explicit through `Vec<Template>` or
+`Result<Vec<Template>, CompilationError>`; `TxTmplIt` remains available for a
+fallible stream.
+
+The standalone `#[then]` frontend remains useful when implementing an optional
+trait action declared with `decl_then!`. It creates the same committed action
+representation, with an argument-free default callback. Export it through
+`declare! {actions, Self::refund}`.

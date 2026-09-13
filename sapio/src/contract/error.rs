@@ -22,6 +22,8 @@ type ErrT = Box<dyn std::error::Error>;
 /// Sapio's core error type.
 #[derive(Debug)]
 pub enum CompilationError {
+    /// An ordered transaction plan has incompatible or incomplete requirements.
+    TemplatePlan(Box<crate::template::PlanError>),
     /// An emulatable source reached script encoding before explicit lowering.
     UnresolvedEmulation,
     /// Public covenant lowering inputs are invalid or derivation failed.
@@ -44,7 +46,7 @@ pub enum CompilationError {
     InvalidPathName,
     /// Other Error for Fragment Format
     PathFragmentError(ValidFragmentError),
-    /// Error when a `ThenFunc` returns no Templates.
+    /// A required committed action returned no templates.
     MissingTemplates,
     /// The same commitment was returned with incompatible binding data.
     ConflictingTemplate {
@@ -172,6 +174,12 @@ impl From<sapio_base::covenant::CovenantError> for CompilationError {
     }
 }
 
+impl From<crate::template::PlanError> for CompilationError {
+    fn from(error: crate::template::PlanError) -> Self {
+        Self::TemplatePlan(Box::new(error))
+    }
+}
+
 impl From<crate::contract::object::ArtifactError> for CompilationError {
     fn from(error: crate::contract::object::ArtifactError) -> Self {
         Self::InvalidArtifact(error)
@@ -257,11 +265,21 @@ impl From<ObjectError> for CompilationError {
 
 impl fmt::Display for CompilationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        match self {
+            Self::TemplatePlan(error) => error.fmt(f),
+            _ => write!(f, "{:?}", self),
+        }
     }
 }
 
-impl Error for CompilationError {}
+impl Error for CompilationError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::TemplatePlan(error) => Some(error.as_ref()),
+            _ => None,
+        }
+    }
+}
 
 impl From<EmulatorError> for CompilationError {
     fn from(e: EmulatorError) -> Self {

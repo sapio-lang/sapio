@@ -24,19 +24,15 @@ fn contract_uses_public_terms_and_supplied_funds_without_default_proposals() {
     )
     .unwrap();
     let context = |amount: Option<u64>| {
-        let candidates: std::collections::BTreeMap<_, _> = amount
-            .map(|amount| ("payment", amount))
-            .into_iter()
-            .collect();
-        let effects = serde_json::from_value(serde_json::json!({
-            "effects": {"fragments/@action/pay/@suggested": candidates}
-        }))
-        .unwrap();
+        let root = EffectPath::try_from("fragments").unwrap();
+        let effects = FragmentContract::pay_action()
+            .requests(&root, &amount)
+            .unwrap();
         Context::new(
             Network::Regtest,
             Amount::from_sat(50_000),
             sapio_base::LoweringPlan::Native,
-            EffectPath::try_from("fragments").unwrap(),
+            root,
             Arc::new(effects),
             None,
         )
@@ -63,7 +59,7 @@ fn contract_uses_public_terms_and_supplied_funds_without_default_proposals() {
     assert_eq!(template.required_input_amount, Amount::from_sat(50_000));
     assert!(matches!(
         source.compile(context(Some(49_001))),
-        Err(CompilationError::OutOfFunds)
+        Err(CompilationError::TemplatePlan(_))
     ));
 }
 
@@ -129,6 +125,10 @@ fn compiled_fragment_contracts_authorize_both_paths_and_preserve_annexes() {
             ));
             let signed = oracle.sign(request).unwrap();
             let finalized = sapio_psbt::finalize::finalize(signed, &secp).unwrap();
+            sapio_integration_tests::program_example::check_finalized_candidate(
+                &compiled, &finalized,
+            )
+            .unwrap();
             let tx = finalized.extract_tx().unwrap();
             assert_eq!(tx.input[0].witness.last(), Some(&b"\x50fragments-test"[..]));
             assert_eq!(tx.input[0].witness.len(), if script_path { 4 } else { 2 });

@@ -146,7 +146,6 @@ impl Nested {
 
 impl Contract for Nested {
     declare! {finish, Self::alternatives}
-    declare! {non updatable}
 }
 
 #[test]
@@ -213,7 +212,6 @@ impl Cached {
 
 impl Contract for Cached {
     declare! {finish, Self::owner, Self::owner}
-    declare! {non updatable}
 }
 
 #[test]

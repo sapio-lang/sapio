@@ -29,8 +29,8 @@ enum Versions {
     NFT_Sale_Trait_Version_0_1_0(NFT_Sale_Trait_Version_0_1_0),
 }
 impl Contract for SimpleNFTSale {
-    declare! {then, Self::transfer}
-    declare! {non updatable}
+    declare! {actions, Self::transfer}
+
     fn ensure_amount(&self, ctx: Context) -> Result<Amount, CompilationError> {
         self.0.data.validate()?;
         ctx.funds()

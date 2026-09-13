@@ -204,7 +204,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 [[package]]
 name = "miniscript"
 version = "13.1.0"
-source = "git+https://github.com/sapio-lang/rust-miniscript?rev=d9f9176a68a93efbfb303f24da154f9c72829892#d9f9176a68a93efbfb303f24da154f9c72829892"
+source = "git+https://github.com/sapio-lang/rust-miniscript?rev=8d2aa4a60979a55f6ecd6222d48f94a482f4a2f6#8d2aa4a60979a55f6ecd6222d48f94a482f4a2f6"
 dependencies = [
  "bech32",
  "bitcoin",

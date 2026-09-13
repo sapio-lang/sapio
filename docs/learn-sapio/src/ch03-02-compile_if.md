@@ -1,4 +1,4 @@
-# ConditionallyCompileIf
+# Compile-time action conditions
 
 `ConditionallyCompileIf` enables a contract writer to evaluate certain
 value-based logic before evaluating a path function.
@@ -14,17 +14,20 @@ path that's only accessible if the amount of funds being sent to the contract is
 We could write:
 
 ```rust
-#[compile_if]
-fn not_too_much(self, ctx: Context) {
+#[condition]
+fn not_too_much(&self, ctx: Context) -> ConditionalCompileType {
     if ctx.funds() > Self::MAX_FUNDS {
-        ConditionallyCompileType::Never
+        ConditionalCompileType::Never
     } else {
         ConditionalCompileType::NoConstraint
     }
 }
 ```
 
-and apply it to the relevant paths.
+Inside `#[sapio::contract]`, apply it with
+`#[action(committed, compile_if(Self::not_too_much))]`. This controls whether the
+compiler includes the action. It does not introduce a predicate checked while
+spending; spending rules belong in policies.
 
 ## ConditionalCompileType Variants
 
@@ -62,13 +65,21 @@ see `ConditionalCompileType::merge` for details.
     ///     Never > {Skippable, Nullable}  ==> Never
 ```
 
-# compile_if! macro
-The `compile_if` macro can be called two ways:
+## Optional interface conditions
+
+The standalone attribute and declaration macro support optional trait methods:
+
 ```rust
 #[compile_if]
-fn name(self, ctx) {
-    /*ConditionalCompileType*/
+fn available(self, ctx: Context) -> ConditionalCompileType {
+    ConditionalCompileType::NoConstraint
 }
-/// null implementation
-decl_compile_if!{name}
+
+// In a trait interface, its factory is absent unless implemented:
+decl_compile_if! { available }
 ```
+
+Both frontends preserve the same condition algebra. `Never` and `Required`
+contradict one another; an explicit failure does not hide this contradiction.
+An absent condition factory keeps the declared slots of the remaining
+conditions, preserving their context paths.

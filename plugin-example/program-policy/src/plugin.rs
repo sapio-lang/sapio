@@ -1,7 +1,6 @@
 //! Preserve a complete emulated program behind a native relative timelock.
 
-use sapio::contract::{CompilationError, Contract};
-use sapio::{declare, guard};
+use sapio::contract::CompilationError;
 use sapio_base::policy::ScriptPolicy;
 use sapio_base::program::EmulatedProgram;
 use sapio_base::timelocks::RelHeight;
@@ -23,19 +22,15 @@ pub struct DelayedProgram {
     delay: u16,
 }
 
+#[sapio::contract]
 impl DelayedProgram {
-    #[guard(policy, cached)]
-    fn authorized(self) -> Result<ScriptPolicy, CompilationError> {
+    #[spend]
+    fn authorized(&self) -> Result<ScriptPolicy, CompilationError> {
         Ok(ScriptPolicy::And(vec![
             Clause::try_from(RelHeight::from(self.delay))?.into(),
             self.program.clone().into(),
         ]))
     }
-}
-
-impl Contract for DelayedProgram {
-    declare! {non updatable}
-    declare! {finish, Self::authorized}
 }
 
 #[cfg(target_arch = "wasm32")]

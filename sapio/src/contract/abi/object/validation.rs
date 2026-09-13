@@ -26,6 +26,10 @@ pub struct ArtifactError {
 /// Invariants required to bind a compiled artifact to transaction inputs.
 #[derive(Debug, PartialEq, Eq)]
 pub enum ArtifactErrorKind {
+    /// The same transaction has incompatible binding rules across catalogs.
+    ConflictingTemplateCatalogs(&'static str),
+    /// Named funding requirements or fee limits contradict the transaction.
+    InvalidFundingConstraints(String),
     /// A retained program policy does not match its descriptor or resource limits.
     InvalidProgramPolicy(String),
     /// Every committed template must record the injected covenant policy.
@@ -71,6 +75,13 @@ pub enum ArtifactErrorKind {
 impl fmt::Display for ArtifactErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::ConflictingTemplateCatalogs(field) => write!(
+                f,
+                "committed and suggested catalogs disagree on {field} for the same transaction"
+            ),
+            Self::InvalidFundingConstraints(reason) => {
+                write!(f, "invalid funding constraints: {reason}")
+            }
             Self::InvalidProgramPolicy(reason) => write!(f, "invalid program policy: {reason}"),
             Self::MissingCovenant => write!(f, "committed template has no covenant policy"),
             Self::InvalidCovenantLowering(reason) => {
@@ -174,6 +185,16 @@ impl Object {
             object
                 .validate_program_policies()
                 .map_err(|kind| error(None, kind))?;
+            for (hash, committed) in &object.ctv_to_tx {
+                if let Some(suggested) = object.suggested_txs.get(hash) {
+                    if let Some(field) = committed.binding_difference(suggested) {
+                        return Err(error(
+                            Some(*hash),
+                            ArtifactErrorKind::ConflictingTemplateCatalogs(field),
+                        ));
+                    }
+                }
+            }
             for (committed, key, template) in object
                 .ctv_to_tx
                 .iter()
@@ -240,6 +261,11 @@ impl Object {
                 if object.required_input_amount < template.required_input_amount {
                     return Err(error(ArtifactErrorKind::InvalidInputRequirement));
                 }
+                template.validate_funding_constraints().map_err(|failure| {
+                    error(ArtifactErrorKind::InvalidFundingConstraints(
+                        failure.to_string(),
+                    ))
+                })?;
                 if committed
                     && !object
                         .covenant_requirements

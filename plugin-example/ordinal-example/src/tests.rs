@@ -39,22 +39,17 @@ fn ordinal(n: u64) -> SimpleOrdinal {
         owner: key(1),
     }
 }
-fn sale() -> Sale {
-    Sale(Some(Sell {
+fn sale() -> Sell {
+    Sell {
         purchaser: address().into_unchecked(),
         amount: Amount::from_sat(1000).into(),
         change: Amount::from_sat(200).into(),
         fee: Amount::from_sat(100).into(),
-    }))
+    }
 }
 #[test]
 fn sale_places_exact_target_sat_at_start_of_buyer_output() {
-    let template = ordinal(110)
-        .continue_sell(context(1000), sale())
-        .unwrap()
-        .next()
-        .unwrap()
-        .unwrap();
+    let template = ordinal(110).continue_sell(context(1000), sale()).unwrap();
     assert_eq!(template.tx.input.len(), 2);
     assert_eq!(
         template
@@ -74,12 +69,23 @@ fn sale_places_exact_target_sat_at_start_of_buyer_output() {
         address().script_pubkey()
     );
     assert_eq!(template.max, Amount::from_sat(2300));
+    let funding = template.funding_constraints.as_ref().unwrap();
+    assert_eq!(funding.maximum_fee, Amount::from_sat(100));
+    assert_eq!(funding.inputs[1].name, "buyer_funding");
+    assert_eq!(funding.inputs[1].minimum, Amount::from_sat(1300));
+    assert_eq!(
+        funding.outputs,
+        [
+            "owner_prefix",
+            "ordinal",
+            "owner_remainder",
+            "price",
+            "buyer_change"
+        ]
+    );
     assert_eq!(
         ordinal(100)
             .continue_sell(context(1000), sale())
-            .unwrap()
-            .next()
-            .unwrap()
             .unwrap()
             .tx
             .output[0]
@@ -96,7 +102,7 @@ fn missing_ordinal_and_insufficient_padding_are_rejected() {
     }
     assert!(ordinal(100).compile(context(500)).is_err());
     let mut overflow = sale();
-    overflow.0.as_mut().unwrap().amount = Amount::from_sat(u64::MAX).into();
+    overflow.amount = Amount::from_sat(u64::MAX).into();
     assert!(ordinal(100).continue_sell(context(1000), overflow).is_err());
 }
 
@@ -136,7 +142,7 @@ fn planner_sale_preserves_target_owner_balance_buyer_change_and_fees() {
     assert_eq!(template.max, Amount::from_sat(2300));
     assert_eq!(template.required_input_amount, Amount::from_sat(1000));
     let mut no_change = sale();
-    no_change.0.as_mut().unwrap().change = Amount::ZERO.into();
+    no_change.change = Amount::ZERO.into();
     assert!(ordinal(110)
         .continue_sell_with_planner(context(1000), no_change)
         .is_ok());

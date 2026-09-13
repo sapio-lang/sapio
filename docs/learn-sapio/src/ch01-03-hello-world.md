@@ -74,8 +74,7 @@ impl TrustlessEscrow {
 
 impl Contract for TrustlessEscrow {
     declare! {finish, Self::cooperate}
-    declare! {then, Self::use_escrow}
-    declare! {non updatable}
+    declare! {actions, Self::use_escrow}
 }
 
 #[cfg(target_arch = "wasm32")]

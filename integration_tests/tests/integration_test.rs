@@ -43,8 +43,7 @@ where
 }
 
 impl<T: Compilable + 'static> Contract for TestEmulation<T> {
-    declare! {then, Self::complete}
-    declare! {non updatable}
+    declare! {actions, Self::complete}
 }
 
 #[tokio::test(flavor = "multi_thread")]

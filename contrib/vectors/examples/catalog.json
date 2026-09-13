@@ -189,10 +189,30 @@
     "wasm": "sapio_wasm_ordinal_example.wasm",
     "input": "ordinal-example.json",
     "dependencies": [],
+    "request": {
+      "action": "sell",
+      "arguments": {
+        "purchaser": "bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj",
+        "amount": 0.00001,
+        "change": 0.000002,
+        "fee": 0.000001
+      }
+    },
     "expect": {
       "ctv_count": 0,
-      "suggested_count": 0,
-      "continuation_count": 2
+      "suggested_count": 1,
+      "continuation_count": 2,
+      "root_output_values": [10, 501, 489, 1000, 200],
+      "root_required_input_amount": 1000,
+      "root_funding_constraints": {
+        "inputs": [
+          {"name": "contract", "minimum": 1000},
+          {"name": "buyer_funding", "minimum": 1300}
+        ],
+        "outputs": ["owner_prefix", "ordinal", "owner_remainder", "price", "buyer_change"],
+        "maximum_fee": 100,
+        "minimum_feerate_sat_kwu": null
+      }
     }
   },
   "custom-policy": {
@@ -203,6 +223,12 @@
       "ctv_count": 1,
       "root_output_values": [9000],
       "root_required_input_amount": 10000,
+      "root_funding_constraints": {
+        "inputs": [{"name": "contract", "minimum": 10000}],
+        "outputs": ["payment"],
+        "maximum_fee": 1000,
+        "minimum_feerate_sat_kwu": null
+      },
       "raw_taproot": true
     }
   },

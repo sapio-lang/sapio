@@ -166,9 +166,8 @@ impl MiningPayout {
 }
 
 impl Contract for MiningPayout {
-    declare! {then, Self::expand}
+    declare! {actions, Self::expand}
     declare! {finish, Self::cooperate}
-    declare! {non updatable}
 }
 
 trait PayThisThing {
@@ -240,9 +239,8 @@ impl PayoutBundle {
     }
 }
 impl Contract for PayoutBundle {
-    declare! {then, Self::expand}
+    declare! {actions, Self::expand}
     declare! {finish, Self::cooperate}
-    declare! {non updatable}
 }
 
 #[cfg(test)]

@@ -46,6 +46,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             let signed = oracle.sign(request)?;
             let finalized = sapio_psbt::finalize::finalize(signed, &secp)
                 .map_err(|(_, errors)| format!("fragment finalization failed: {errors:?}"))?;
+            sapio_integration_tests::program_example::check_finalized_candidate(
+                &compiled, &finalized,
+            )?;
             let tx = finalized.extract_tx()?;
             assert_eq!(
                 tx.input[0].witness.last(),

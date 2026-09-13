@@ -4,7 +4,6 @@ use bitcoin::XOnlyPublicKey;
 use sapio::contract::CompilationError;
 use sapio::contract::Compiled;
 use sapio::contract::Contract;
-use sapio::contract::StatefulArgumentsTrait;
 use sapio::ordinals::Ordinal;
 use sapio::util::amountrange::AmountU64;
 use sapio::*;
@@ -81,13 +80,6 @@ pub struct Reveal {
     fee: AmountU64,
     alternative: Option<Address<bitcoin::address::NetworkUnchecked>>,
 }
-impl Reveal {
-    fn parse(
-        k: <InscribingStep as sapio::contract::Contract>::StatefulArguments,
-    ) -> Result<Self, CompilationError> {
-        Ok(k)
-    }
-}
 impl Default for Reveal {
     fn default() -> Self {
         Self {
@@ -98,10 +90,14 @@ impl Default for Reveal {
 }
 // ASSUMES 500 sats after Ord are "dust"
 impl InscribingStep {
+    fn default_reveal(&self, ctx: Context) -> sapio::contract::TxTmplIt {
+        self.continue_reveal(ctx, Reveal::default())
+    }
+
     #[continuation(
         guarded_by = "[Self::signed, Self::inscription]",
         web_api,
-        coerce_args = "Reveal::parse"
+        defaults = "Self::default_reveal"
     )]
     fn reveal(self, ctx: Context, reveal: Reveal) {
         let network = ctx.network;
@@ -127,11 +123,10 @@ impl InscribingStep {
         .into()
     }
 }
-impl StatefulArgumentsTrait for Reveal {}
 
 /// # The SimpleInscription Contract
 impl Contract for InscribingStep {
-    declare! {updatable<Reveal>, Self::reveal}
+    declare! {actions, Self::reveal}
 
     fn ensure_amount(&self, ctx: Context) -> Result<Amount, CompilationError> {
         Self::ordinal_info(&ctx).map(|(_, amount)| amount)

@@ -15,7 +15,7 @@
 //!     #[sapio::then(guarded_byy = "[Self::signed]")]
 //!     fn pay(self, _ctx: Context) { sapio::contract::empty() }
 //! }
-//! impl Contract for Payment { sapio::declare! {non updatable} }
+//! impl Contract for Payment {}
 //! ```
 //! Cached clauses have no invocation context:
 //! ```compile_fail
@@ -42,69 +42,28 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-/// The declare macro is used to declare the list of pathways in a Contract trait impl.
-/// formats for calling are:
-/// ```ignore
-/// declare!{then, a,...}
-/// declare!{finish, a,...}
-/// declare!{updatable<X>, a,...}
-/// /// Required when no updatable<X> declaration is made.
-/// declare!{non updatable}
-/// ```
+/// Explicitly export action or independent spending-policy factories.
 #[macro_export]
 macro_rules! declare {
-    {then $(,$a:expr)*} => {
-        /// binds the list of `ThenFunc`'s to this impl.
-        /// Any fn() which returns None is ignored (useful for type-level state machines)
-        const THEN_FNS: &'static [fn() -> ::std::option::Option<$crate::contract::actions::ThenFuncAsFinishOrFunc<'static, Self, Self::StatefulArguments>>] = &[$($a,)*];
+    {actions $(,$action:expr)* $(,)?} => {
+        const ACTIONS: &'static [$crate::contract::actions::ActionFactory<Self>] = &[$($action,)*];
     };
-    [state $i:ty]  => {
-        type StatefulArguments = $i;
+    {finish $(,$guard:expr)* $(,)?} => {
+        const FINISH_FNS: &'static [fn() -> ::std::option::Option<$crate::contract::actions::Guard<Self>>] = &[$($guard,)*];
     };
-
-    [state]  => {
-        /// All continuations for a contract share this argument type.
-        type StatefulArguments;
-    };
-    {updatable<$($i:ty)?> $(,$a:expr)*} => {
-        /// binds the list of `FinishOrFunc`'s to this impl.
-        /// Any fn() which returns None is ignored (useful for type-level state machines)
-        const FINISH_OR_FUNCS: &'static [fn() -> ::std::option::Option<::std::boxed::Box<dyn $crate::contract::actions::CallableAsFoF<Self, Self::StatefulArguments>>>] = &[$($a,)*];
-        $crate::declare![state $($i)?];
-    };
-    {non updatable} => {
-        $crate::declare![state ()];
-    };
-    {finish $(,$a:expr)*} => {
-        /// binds the list of `Gurard`'s to this impl as unlocking conditions.
-        /// `Guard`s only need to be bound if it is desired that they are
-        /// sufficient to unlock funds, a `Guard` should not be bound if it is
-        /// intended to be used with a `ThenFunc`.
-        /// Any fn() which returns None is ignored (useful for type-level state machines)
-        const FINISH_FNS: &'static [fn() -> ::std::option::Option<$crate::contract::actions::Guard<Self>>] = &[$($a,)*];
-    };
-
-
 }
 
-/// Declare an optional CTV action in a contract interface: `decl_then! { name }`.
-/// Its default factory returns `None`; implement it with `#[then]` to enable it.
+/// Declare an optional committed action in a contract interface.
 #[macro_export]
 macro_rules! decl_then {
-    {
-        $(#[$meta:meta])*
-        $name:ident
-    } => {
-
-        $crate::contract::macros::paste!{
-
+    {$(#[$meta:meta])* $name:ident} => {
+        $crate::contract::macros::paste! {
             $(#[$meta])*
-            fn [<then_ $name>](&self, _ctx:$crate::contract::Context, _:$crate::contract::actions::ThenFuncTypeTag)-> $crate::contract::TxTmplIt
-            {
-                unimplemented!();
+            fn [<then_ $name>](&self, _ctx: $crate::contract::Context) -> $crate::contract::TxTmplIt {
+                unimplemented!()
             }
             $(#[$meta])*
-            fn $name<'a>() -> ::std::option::Option<$crate::contract::actions::ThenFuncAsFinishOrFunc<'a, Self, <Self as $crate::contract::Contract>::StatefulArguments>> {::std::option::Option::None}
+            fn $name() -> ::std::option::Option<::std::boxed::Box<dyn $crate::contract::actions::ErasedAction<Self>>> { ::std::option::Option::None }
         }
     };
 }
@@ -160,43 +119,18 @@ macro_rules! web_api {
 }
 pub use web_api;
 
-/// Generates a type tag for WebAPI Enabled/Disabled
-#[macro_export]
-macro_rules! is_web_api_type {
-    (
-        $b:block
-    ) => {
-        $crate::contract::actions::WebAPIEnabled
-    };
-    () => {
-        $crate::contract::actions::WebAPIDisabled
-    };
-}
-/// Declare an optional continuation in a contract interface:
-/// `decl_continuation! { name<SpecificArgs> }`.
-/// Add `<web={}>` before the name to declare its JSON schema as well.
-/// Its default factory returns `None`; implement it with `#[continuation]`.
+/// Declare an optional request action with its own argument type.
 #[macro_export]
 macro_rules! decl_continuation {
-    {
-        $(#[$meta:meta])*
-        $(<web=$web_enable:block>)?
-        $name:ident<$arg_type:ty>
-    } => {
-        $crate::contract::macros::paste!{
+    {$(#[$meta:meta])* $(<web=$web_enable:block>)? $name:ident<$arg_type:ty>} => {
+        $crate::contract::macros::paste! {
             $crate::contract::macros::web_api!($(#[$meta])* $name,$arg_type$(,$web_enable)*);
             $(#[$meta])*
-            fn [<continue_ $name>](&self, _ctx:$crate::contract::Context, _o: $arg_type)-> $crate::contract::TxTmplIt
-            {
-                unimplemented!();
+            fn [<continue_ $name>](&self, _ctx: $crate::contract::Context, _args: $arg_type) -> $crate::contract::TxTmplIt {
+                unimplemented!()
             }
             $(#[$meta])*
-            fn $name<'a>() ->
-            ::std::option::Option<::std::boxed::Box<dyn
-            $crate::contract::actions::CallableAsFoF<Self, <Self as $crate::contract::Contract>::StatefulArguments>>>
-            {
-                ::std::option::Option::None
-            }
+            fn $name() -> ::std::option::Option<::std::boxed::Box<dyn $crate::contract::actions::ErasedAction<Self>>> { ::std::option::Option::None }
         }
     };
 }

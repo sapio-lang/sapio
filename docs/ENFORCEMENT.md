@@ -71,12 +71,12 @@ authors remain responsible for avoiding other ambient state in their code.
 ## Actions and artifact requirements
 
 Both transaction actions and continuations use the shared action representation
-with `TemplateKind::Covenant` or `TemplateKind::Suggested`:
+with `TemplateKind::Committed` or `TemplateKind::Suggested`:
 
 | Action kind | Returned templates | Policy behavior |
 | --- | --- | --- |
-| `Covenant` (`#[then]`) | Committed transitions | Add an explicit `Emulatable(Ctv(template_hash))` predicate alongside action and template guards |
-| `Suggested` (`#[continuation]`) | Transaction suggestions | Retain the continuation's declared guards; reject additional guards on returned templates |
+| `Committed` (`#[action(committed)]` or `#[then]`) | Committed transitions | Add an explicit `Emulatable(Ctv(template_hash))` predicate alongside action and template guards |
+| `Suggested` (`#[action(suggested)]` or `#[continuation]`) | Transaction suggestions | Retain the continuation's declared guards; reject additional guards on returned templates |
 
 The compiler resolves wrappers wherever they occur, including finish guards,
 continuation guards and custom policy sources. Custom raw predicates retain

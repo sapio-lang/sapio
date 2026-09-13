@@ -75,7 +75,6 @@ impl Owned {
 
 impl sapio::contract::Contract for Owned {
     sapio::declare! {finish, Self::signed}
-    sapio::declare! {non updatable}
 }
 ```
 

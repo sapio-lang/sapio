@@ -15,6 +15,7 @@
 - [Sapio Basics](./ch03-00-basics.md)
     - [Contract Guts](./ch03-01-guts.md)
         - [Miniscript/Policy](./ch03-01-miniscript.md)
+        - [Transaction Plans](./ch03-01-plans.md)
         - [Template Builder](./ch03-01-builder.md)
         - [Time Locks](./ch03-01-timelocks.md)
         - [Sats and Coins](./ch03-01-amounts.md)

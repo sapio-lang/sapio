@@ -78,6 +78,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         signed
             .finalize_mut(&Secp256k1::new())
             .map_err(|errors| format!("program spend failed finalization: {errors:?}"))?;
+        sapio_integration_tests::program_example::check_finalized_candidate(&compiled, &signed)?;
         let transaction = signed.extract_tx()?;
         let label = format!("pay_{amount}_at_{index}");
         cases.push(case(label.clone(), true, transaction.clone()));
