@@ -1,7 +1,6 @@
 use bitcoin::Amount;
 use sapio::contract::CompilationError;
 use sapio::contract::Contract;
-use sapio::contract::StatefulArgumentsTrait;
 use sapio::decl_continuation;
 use sapio::util::amountrange::AmountU64;
 use sapio_base::timelocks::AbsHeight;
@@ -137,26 +136,13 @@ impl NFT_Sale_Trait_Version_0_1_0_Partial {
 
 /// # Sell Instructions
 #[derive(Serialize, Deserialize, JsonSchema)]
-pub enum Sell {
-    /// # Hold
-    /// Don't transfer this NFT
-    Hold,
-    /// # MakeSale
-    /// Transfer this NFT
-    MakeSale {
-        /// # Which Sale Contract to use?
-        /// Specify a hash/name for a contract to generate the sale with.
-        which_sale: NFTSaleModule,
-        /// # The information needed to create the sale
-        sale_info_partial: NFT_Sale_Trait_Version_0_1_0_Partial,
-    },
+pub struct Sell {
+    /// # Which Sale Contract to use?
+    /// Specify a hash/name for a contract to generate the sale with.
+    pub which_sale: NFTSaleModule,
+    /// # The information needed to create the sale
+    pub sale_info_partial: NFT_Sale_Trait_Version_0_1_0_Partial,
 }
-impl Default for Sell {
-    fn default() -> Sell {
-        Sell::Hold
-    }
-}
-impl StatefulArgumentsTrait for Sell {}
 
 #[cfg(test)]
 mod tests;

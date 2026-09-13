@@ -4,7 +4,7 @@ use bitcoin::{Amount, Network};
 use sapio::contract::actions::Guard;
 use sapio::contract::object::SupportedDescriptors;
 use sapio::contract::{Compilable, CompilationError, Context, Contract};
-use sapio::{declare, guard};
+use sapio::guard;
 use sapio_base::covenant::LoweringPlan;
 use sapio_base::policy::{PolicyError, ScriptFragment};
 use std::cell::Cell;
@@ -40,7 +40,6 @@ impl<const COUNT: usize> Alternatives<COUNT> {
 impl<const COUNT: usize> Contract for Alternatives<COUNT> {
     const FINISH_FNS: &'static [fn() -> Option<Guard<Self>>] =
         &[Self::alternative as fn() -> Option<Guard<Self>>; COUNT];
-    declare! {non updatable}
 }
 
 fn context() -> Context {

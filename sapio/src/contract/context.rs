@@ -210,4 +210,9 @@ impl Context {
     pub fn template(self) -> crate::template::Builder {
         crate::template::Builder::new(self)
     }
+
+    /// Declare an ordered transaction with explicit funding and fee requirements.
+    pub fn template_plan<'a>(self) -> crate::template::TemplatePlan<'a> {
+        crate::template::TemplatePlan::new(self)
+    }
 }

@@ -113,7 +113,7 @@ enum Versions {
     Exact(DutchAuctionData, NFT_Sale_Trait_Version_0_1_0),
 }
 impl Contract for NFTDutchAuction {
-    declare! {updatable<()>, Self::transfer}
+    declare! {actions, Self::transfer}
     fn ensure_amount(&self, ctx: Context) -> Result<Amount, CompilationError> {
         self.main.data.validate()?;
         self.extra.validate(self.main.sale_time)?;
@@ -122,9 +122,6 @@ impl Contract for NFTDutchAuction {
             .ok_or(CompilationError::OutOfFunds)?;
         Ok(ctx.funds())
     }
-}
-fn default_coerce<T>(_: T) -> Result<(), CompilationError> {
-    Ok(())
 }
 impl TryFrom<Versions> for NFTDutchAuction {
     type Error = CompilationError;
@@ -162,7 +159,7 @@ impl NFTDutchAuction {
     }
     /// # transfer
     /// transfer exchanges the NFT for cold hard Bitcoinz
-    #[continuation(guarded_by = "[Self::signed]", web_api, coerce_args = "default_coerce")]
+    #[continuation(guarded_by = "[Self::signed]", web_api, default)]
     fn transfer(self, base_ctx: Context, _u: ()) {
         let mut ret = vec![];
         let schedule = self.extra.create_schedule(self.main.sale_time)?;

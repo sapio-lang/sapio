@@ -1,9 +1,9 @@
+use super::EmulatedProgram;
 use super::{ProgramError, ProgramSpendPath};
+use crate::miniscript::{Miniscript, Tap};
 use bitcoin::psbt::Input;
 use bitcoin::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::XOnlyPublicKey;
-use sapio_base::miniscript::{Miniscript, Tap};
-use sapio_base::program::EmulatedProgram;
 
 impl ProgramSpendPath {
     /// Select the unique Miniscript leaf containing this program's signing key.
@@ -14,9 +14,7 @@ impl ProgramSpendPath {
     /// locates a signature slot: the oracle still authenticates the supplied
     /// control block and previous output before evaluating or signing.
     pub fn script_for(program: &EmulatedProgram, input: &Input) -> Result<Self, ProgramError> {
-        let key = program
-            .derive_public_key()
-            .map_err(ProgramError::Instance)?;
+        let key = program.derive_public_key()?;
         let mut selected = None;
         for (script, version) in input.tap_scripts.values() {
             if *version != LeafVersion::TapScript {
@@ -43,13 +41,13 @@ impl ProgramSpendPath {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fragments::{template_signed_by, TemplateKey};
     use bitcoin::bip32::{Xpriv, Xpub};
     use bitcoin::blockdata::opcodes::all::OP_DROP;
     use bitcoin::blockdata::script::Builder;
     use bitcoin::secp256k1::Secp256k1;
     use bitcoin::taproot::{ControlBlock, TaprootBuilder};
     use bitcoin::{Amount, Network, ScriptBuf, TxOut};
-    use sapio_base::fragments::{template_signed_by, TemplateKey};
 
     fn root(seed: u8) -> Xpub {
         Xpub::from_priv(

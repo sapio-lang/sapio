@@ -22,7 +22,7 @@ impl Updates {
             .unwrap(),
         )
     }
-    #[continuation(guarded_by = "[Self::signed]", coerce_args = "Ok", web_api)]
+    #[continuation(guarded_by = "[Self::signed]", web_api)]
     fn update(self, ctx: Context, _args: Option<u64>) {
         self.calls
             .borrow_mut()
@@ -31,7 +31,7 @@ impl Updates {
     }
 }
 impl Contract for Updates {
-    declare! {updatable<Option<u64>>, Self::update}
+    declare! {actions, Self::update}
 }
 
 fn context(name: &str) -> Context {
@@ -64,10 +64,7 @@ fn valid_effect_and_continuation_paths_survive_artifact_round_trips() {
     let compiled = contract.compile(context("request_1")).unwrap();
     assert_eq!(
         *contract.calls.borrow(),
-        [
-            "updates/@action/update/@suggested/@default_effect",
-            "updates/@action/update/@suggested/@effects/request_1",
-        ]
+        ["updates/@action/update/@suggested/@effects/request_1",]
     );
     let restored: Compiled =
         serde_json::from_str(&serde_json::to_string(&compiled).unwrap()).unwrap();
@@ -88,18 +85,25 @@ fn valid_effect_and_continuation_paths_survive_artifact_round_trips() {
     );
 }
 
-fn bad_name() -> Option<Box<dyn sapio::contract::actions::CallableAsFoF<Updates, Option<u64>>>> {
-    let mut action = Updates::update()?;
-    action.rename(Arc::new("bad/name".into()));
-    Some(action)
+fn bad_name() -> Option<Box<dyn sapio::contract::actions::ErasedAction<Updates>>> {
+    use sapio::contract::actions::{Action, TemplateKind};
+    Some(
+        Action::new(
+            "bad/name",
+            TemplateKind::Suggested,
+            Updates::continue_update,
+        )
+        .with_guards(&[Updates::signed])
+        .with_json()
+        .erase(),
+    )
 }
 
 #[test]
 fn invalid_dynamic_action_names_are_rejected_before_execution() {
     let contract = DynamicContract {
-        then: vec![],
         finish: vec![],
-        finish_or: vec![bad_name],
+        actions: vec![bad_name],
         data: Updates::default(),
         metadata_f: Box::new(|_, _| Ok(Default::default())),
         ensure_amount_f: Box::new(|_, _| Ok(Amount::ZERO)),

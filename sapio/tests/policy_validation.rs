@@ -1,6 +1,6 @@
 use bitcoin::secp256k1::{Secp256k1, SecretKey};
 use bitcoin::{Amount, Network, XOnlyPublicKey};
-use sapio::contract::actions::{CallableAsFoF, Guard};
+use sapio::contract::actions::{ActionFactory, Guard};
 use sapio::contract::object::SupportedDescriptors;
 use sapio::contract::{Compilable, CompilationError, Compiled, Contract};
 use sapio::miniscript::ord::Inscription;
@@ -40,7 +40,7 @@ impl<const CONTINUATION: bool> SinglePolicy<CONTINUATION> {
         self.0.clone()
     }
 
-    #[continuation(guarded_by = "[Self::policy]", coerce_args = "Ok")]
+    #[continuation(guarded_by = "[Self::policy]", default)]
     fn update(self, _ctx: Context, _args: ()) {
         sapio::contract::empty()
     }
@@ -49,9 +49,8 @@ impl<const CONTINUATION: bool> SinglePolicy<CONTINUATION> {
 impl<const CONTINUATION: bool> Contract for SinglePolicy<CONTINUATION> {
     const FINISH_FNS: &'static [fn() -> Option<Guard<Self>>] =
         if CONTINUATION { &[] } else { &[Self::policy] };
-    const FINISH_OR_FUNCS: &'static [fn() -> Option<Box<dyn CallableAsFoF<Self, ()>>>] =
+    const ACTIONS: &'static [ActionFactory<Self>] =
         if CONTINUATION { &[Self::update] } else { &[] };
-    declare! {non updatable}
 }
 
 fn assert_policy_error(result: Result<Compiled, CompilationError>, expected: CompilerError) {
@@ -160,14 +159,14 @@ impl ConjoinedPolicies {
         self.second.clone()
     }
 
-    #[continuation(guarded_by = "[Self::first, Self::second]", coerce_args = "Ok")]
+    #[continuation(guarded_by = "[Self::first, Self::second]", default)]
     fn update(self, _ctx: Context, _args: ()) {
         sapio::contract::empty()
     }
 }
 
 impl Contract for ConjoinedPolicies {
-    declare! {updatable<()>, Self::update}
+    declare! {actions, Self::update}
 }
 
 #[test]
@@ -261,8 +260,7 @@ impl TemplatePolicies {
 }
 
 impl Contract for TemplatePolicies {
-    declare! {then, Self::pay}
-    declare! {non updatable}
+    declare! {actions, Self::pay}
 }
 
 #[test]

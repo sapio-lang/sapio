@@ -32,12 +32,14 @@ outputs. Those effects generate candidate transactions without changing the
 guard or funded address. Changing the minimum, recipient, evaluator semantics,
 program bytes, or oracle root produces different authorization.
 
-The resulting script contains an ordinary signature key. `PaymentContract`
-therefore explicitly retains the complete `EmulatedProgram` in its
-`emulated_program` object metadata. It is not recorded in the CTV-specific
-`covenant_requirements`, and `bind_psbt` does not infer or dispatch a generic
-program request from a key. An application must preserve this source and make
-its intended request explicitly.
+`EmulatedProgram` remains a typed `ScriptPolicy::Program` until script lowering.
+The resulting script contains its ordinary signature key, while the compiled
+object retains the complete program-bearing branch in `program_policies`.
+Each record includes its native guards and exact key-path or TapLeafHash
+locations. The compiler records these automatically, including finish guards
+and branches without suggested transactions. Optional metadata is not needed
+to recover a program request.
+
 For a nonzero evaluator ID, also preserve the matching interpreter module;
 the ID authenticates those bytes but cannot reconstruct them. The example's
 interpreter is distributed in `evaluators/artifacts/pay_at_least.wasm`.
@@ -122,8 +124,9 @@ are distinct under the same configured root. Arbitrary ancestor-related roots
 do not establish independent namespaces or independent oracle custody.
 
 `EmulatedProgram::new(instance, root)` checks public derivation and retains both
-inputs. Its `compile_policy()` returns the resulting ordinary key clause.
-Compilation does not register an evaluator or contact an endpoint.
+inputs. Its `compile_policy()` returns the typed program source. Lowering derives
+the ordinary signing key and retains the source/location records. Compilation
+does not register an evaluator or contact an endpoint.
 
 ## Protocol and resource limits
 
@@ -192,19 +195,86 @@ client independently derives the key, verifies the signature and checks every
 other PSBT field for exact preservation. This verifies the requested signature,
 not full transaction validity or satisfaction of other spending conditions.
 
-## Artifact and CLI boundary
+## Artifact-driven preparation
 
-The complete program source must survive lowering, as it does in this example's
-metadata. A key alone cannot recover its evaluator or parameters. Ordinary
-`Object::validate`, CTV `covenant_requirements`, `validate_for_emulator` and
-`bind_psbt` do not infer a generic signing request or verify arbitrary program
-metadata against the spending script. Artifact provenance remains required.
+`Object::program_requirements()` validates the complete object graph and returns
+this output's available program signature slots. Every slot contains its exact
+`EmulatedProgram` and a `ProgramSpendPath`. Select a slot explicitly; multiple
+programs can share a leaf and different leaves can represent alternatives.
+A requirement is an available signature slot, not an instruction to sign every
+program or proof that one signature satisfies the whole branch.
 
-The CLI's covenant modes and `emulator_server` executable configure the CTV
-service. They do not register program evaluators or dispatch generic requests.
-Applications currently use the public Rust API and preserve their intended
-`EmulatedProgram` explicitly, as the executable example does. There is no
-new signer import in the WASM ABI or ambient compiler callback.
+```rust,ignore
+use emulator_connect::program::prepare_program_request;
+
+let available = artifact.program_requirements()?;
+// Select the intended program and path from `available`.
+let request = prepare_program_request(
+    &artifact, &selected, funded_psbt, input_index, evidence,
+)?;
+let signed_psbt = oracle.sign(request)?;
+```
+
+Preparation checks that the selected requirement belongs to the artifact,
+authenticates available previous transactions, matches the selected input's
+script and funding floor, and supplies descriptor proofs. Existing conflicting
+Taproot metadata or signatures fail. Unrelated PSBT data is preserved. The
+existing signing protocol then evaluates the supplied evidence and verifies
+responses; finalization still checks native guards and transaction signatures.
+Preparation does not choose an oracle, connect to an endpoint or evaluate WASM.
+
+Artifact validation re-lowers each complete recorded branch, requires the
+canonical live source, and checks exact leaf bytes. Unreachable alternatives
+cannot advertise additional programs. A key-path record additionally needs an independently sufficient
+bare program key matching the descriptor's internal key. Automatic key
+selection can leave that program available through both key and script paths;
+explicit key pinning removes the matching bare-key leaf. Repeated leaves and
+source alternatives retain their records without mixing unrelated programs.
+Source/expanded payload and node budgets bound validation and retained source.
+
+These checks establish internal consistency, not artifact origin or an
+oracle's honesty. An ordinary key cannot reveal whether someone originally
+intended it to represent a program. Replacing or removing all provenance cannot
+be detected cryptographically from the output script alone. Applications still
+need the intended artifact from their trusted contract-building process.
+
+The serialized `program_policies` field is required, including an empty list on
+objects without programs. Recompile older artifacts. The WASM ABI and program
+identity encoding are unchanged.
+
+The integration test `program_artifacts` sends only serialized artifacts,
+funded PSBTs, explicit requirements and evidence to a fresh process. It removes
+optional metadata and descriptor proofs, then prepares, signs and finalizes
+both template-authorization modes and eltoo update/settlement spends without
+reconstructing the original Rust contract objects.
+
+The `program-policy` WASM catalog fixture also compiles a typed program guard
+inside a real guest. Host checks compare the exact program, public root and
+script-path requirement after output schema validation and deserialization.
+
+The CLI's covenant modes and `emulator_server` executable still configure the
+CTV service. Generic program preparation/signing is exposed through the public
+Rust API; `bind_psbt` supplies candidates without automatically dispatching
+program requests. The caller chooses its evaluator registry and signer runtime.
+
+## Relationship to SIMP
+
+SIMP attaches optional interactive protocol data to objects, guards,
+continuations and template inputs/outputs. It can describe coordination,
+witness collection or presentation. Guard SIMPs retain their typed source
+policy, including programs, and contextual metadata still runs at each guard
+attachment independently of cached policy evaluation.
+
+Required program source lives in `program_policies`, separately from SIMP and
+`metadata.extra`. Neither the artifact validator nor program preparation treats
+protocol numbers, endpoint hints or program-looking JSON as signing authority.
+Removing optional metadata leaves program requirements and requests unchanged.
+A contract may explicitly commit a metadata value in its spending rules; that
+commitment comes from the contract, not from installing a SIMP handler.
+
+Input SIMP insertion also preserves existing metadata on duplicate or
+serialization failure. The new workflow uses explicit fallible APIs, without
+a handler registry or automatic protocol dispatch.
 
 ## What the oracle guarantees
 

@@ -1,0 +1,20 @@
+[package]
+name = "sapio-wasm-program-policy"
+version = "0.1.0"
+edition = "2021"
+license = "MPL-2.0"
+description = "An evaluated program guarded by a native relative timelock"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/plugin.rs"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+schemars = { version = "=1.2.2", features = ["bitcoin032", "miniscript13"] }
+sapio = { path = "../../sapio" }
+sapio-base = { path = "../../sapio-base" }
+sapio-wasm-plugin = { path = "../../plugins", features = ["client"] }
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

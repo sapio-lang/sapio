@@ -48,7 +48,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             funding.get(name).copied().unwrap_or_default();
         candidate.inputs[0].non_witness_utxo = None;
         let request = signing_request(
-            &source,
+            &compiled,
+            mode,
             candidate,
             &authorizer,
             Some(b"\x50sapio-fragments".to_vec()),
@@ -56,6 +57,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         let signed = oracle.sign(request)?;
         let finalized = sapio_psbt::finalize::finalize(signed, &secp)
             .map_err(|(_, errors)| format!("fragment vector finalization failed: {errors:?}"))?;
+        sapio_integration_tests::program_example::check_finalized_candidate(&compiled, &finalized)?;
         let transaction = finalized.extract_tx()?;
         let mut amount_changed = transaction.clone();
         amount_changed.output[0].value -= bitcoin::Amount::ONE_SAT;

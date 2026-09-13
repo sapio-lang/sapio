@@ -52,8 +52,7 @@ impl TrampolinePay {
     }
 }
 impl Contract for TrampolinePay {
-    declare! {then, Self::expand}
-    declare! {non updatable}
+    declare! {actions, Self::expand}
 }
 
 #[cfg(target_arch = "wasm32")]

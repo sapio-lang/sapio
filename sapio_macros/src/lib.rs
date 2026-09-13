@@ -13,6 +13,7 @@ use syn::{
     ext::IdentExt, parse_macro_input, parse_quote, AttributeArgs, FnArg, ItemFn, ReturnType,
 };
 
+mod contract;
 mod parse;
 use parse::{Action, Options};
 
@@ -51,7 +52,7 @@ pub fn then(args: TokenStream, input: TokenStream) -> TokenStream {
 
 /// Declare a continuation with `(self, ctx: Context, args: SpecificArgs)`.
 ///
-/// `coerce_args = "Self::coerce"` is required. Optional `guarded_by` and
+/// No request is fabricated during compilation. Optional `guarded_by` and
 /// `compile_if` arrays work as on `then`; `web_api` enables JSON calls and
 /// `simps = "Some(Self::metadata)"` supplies continuation metadata.
 #[proc_macro_attribute]
@@ -99,7 +100,8 @@ fn expand(action: Action, args: AttributeArgs, mut input: ItemFn) -> syn::Result
         policy,
         guarded_by,
         compile_if,
-        coerce_args,
+        defaults,
+        default,
         simps,
         web_api,
     } = options;
@@ -148,65 +150,62 @@ fn expand(action: Action, args: AttributeArgs, mut input: ItemFn) -> syn::Result
                 }
             }
         }
-        Action::Then => {
-            input
-                .sig
-                .inputs
-                .push(parse_quote!(_: ::sapio::contract::actions::ThenFuncTypeTag));
-            quote! {
-                #(#attrs)*
-                #[doc = "CTV action declaration."]
-                #vis fn #name<'a>() -> ::std::option::Option<::sapio::contract::actions::ThenFuncAsFinishOrFunc<'a, Self, <Self as ::sapio::contract::Contract>::StatefulArguments>> {
-                    ::std::option::Option::Some(::sapio::contract::actions::ThenFunc {
-                        guard: &#guarded_by,
-                        conditional_compile_if: &#compile_if,
-                        func: Self::#helper,
-                        name: ::std::sync::Arc::new(#action_name.into()),
-                    }.into())
-                }
+        Action::Then => quote! {
+            #(#attrs)*
+            #[doc = "Committed transaction action declaration."]
+            #vis fn #name() -> ::std::option::Option<::std::boxed::Box<dyn ::sapio::contract::actions::ErasedAction<Self>>> {
+                ::std::option::Option::Some(
+                    ::sapio::contract::actions::Action::new(
+                        #action_name,
+                        ::sapio::contract::actions::TemplateKind::Committed,
+                        |this, ctx, ()| ::sapio::contract::actions::IntoTemplates::into_templates(Self::#helper(this, ctx)),
+                    )
+                    .with_guards(&#guarded_by)
+                    .with_conditions(&#compile_if)
+                    .with_defaults(|this, ctx| ::sapio::contract::actions::IntoTemplates::into_templates(Self::#helper(this, ctx)))
+                    .erase()
+                )
             }
-        }
+        },
         Action::Continuation => {
             let schema_helper = format_ident!("__sapio_schema_for_{}", name);
             let FnArg::Typed(argument) = &input.sig.inputs[2] else {
                 unreachable!("validated continuation argument")
             };
             let ty = &argument.ty;
-            let (web_api_type, schema) = if web_api {
-                (
-                    quote!(::sapio::contract::actions::WebAPIEnabled),
-                    quote!(::std::option::Option::Some(::sapio::contract::macros::get_schema_for::<#ty>())),
-                )
+            let schema = if web_api {
+                quote!(::std::option::Option::Some(::sapio::contract::macros::get_schema_for::<#ty>()))
             } else {
-                (
-                    quote!(::sapio::contract::actions::WebAPIDisabled),
-                    quote!(::std::option::Option::None),
-                )
+                quote!(::std::option::Option::None)
+            };
+            let json = web_api.then(|| quote!(.with_json()));
+            let default_proposals = if let Some(callback) = defaults {
+                quote!(.with_defaults(|this, ctx| ::sapio::contract::actions::IntoTemplates::into_templates((#callback)(this, ctx))))
+            } else if default {
+                quote!(.with_defaults(|this, ctx| ::sapio::contract::actions::IntoTemplates::into_templates(Self::#helper(this, ctx, ()))))
+            } else {
+                quote!()
             };
             quote! {
                 #(#attrs)*
-                #[doc = "JSON schema for the continuation's specific arguments."]
-                #vis fn #schema_helper() -> ::sapio::contract::macros::ContinuationSchema {
-                    #schema
-                }
+                #[doc = "JSON schema for this action's request type."]
+                #vis fn #schema_helper() -> ::sapio::contract::macros::ContinuationSchema { #schema }
                 #(#attrs)*
-                #[doc = "Continuation action declaration."]
-                #vis fn #name<'a>() -> ::std::option::Option<::std::boxed::Box<dyn
-                    ::sapio::contract::actions::CallableAsFoF<Self, <Self as ::sapio::contract::Contract>::StatefulArguments>>>
-                {
-                    let action: ::sapio::contract::actions::FinishOrFunc<_, _, _, #web_api_type> =
-                        ::sapio::contract::actions::FinishOrFunc {
-                            simp_gen: #simps,
-                            coerce_args: #coerce_args,
-                            guard: &#guarded_by,
-                            conditional_compile_if: &#compile_if,
-                            func: Self::#helper,
-                            schema: Self::#schema_helper(),
-                            name: ::std::sync::Arc::new(#action_name.into()),
-                            f: ::std::default::Default::default(),
-                            template_kind: ::sapio::contract::actions::TemplateKind::Suggested,
-                        };
-                    ::std::option::Option::Some(::std::boxed::Box::new(action))
+                #[doc = "Suggested transaction action declaration."]
+                #vis fn #name() -> ::std::option::Option<::std::boxed::Box<dyn ::sapio::contract::actions::ErasedAction<Self>>> {
+                    ::std::option::Option::Some(
+                        ::sapio::contract::actions::Action::new(
+                            #action_name,
+                            ::sapio::contract::actions::TemplateKind::Suggested,
+                            |this, ctx, args: #ty| ::sapio::contract::actions::IntoTemplates::into_templates(Self::#helper(this, ctx, args)),
+                        )
+                        .with_guards(&#guarded_by)
+                        .with_conditions(&#compile_if)
+                        .with_metadata(#simps)
+                        #default_proposals
+                        #json
+                        .erase()
+                    )
                 }
             }
         }
@@ -216,3 +215,12 @@ fn expand(action: Action, args: AttributeArgs, mut input: ItemFn) -> syn::Result
 
 #[cfg(test)]
 mod tests;
+
+/// Define a contract through ordinary Rust methods and explicitly marked actions.
+/// See `sapio::contract::actions::Action` for request and default semantics.
+#[proc_macro_attribute]
+pub fn contract(args: TokenStream, input: TokenStream) -> TokenStream {
+    contract::expand(args.into(), input.into())
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
+}

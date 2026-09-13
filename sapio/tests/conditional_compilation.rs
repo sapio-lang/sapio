@@ -1,8 +1,8 @@
 use bitcoin::secp256k1::{Keypair, Secp256k1, SecretKey};
 use bitcoin::{Amount, Network, XOnlyPublicKey};
 use sapio::contract::actions::{
-    ConditionalCompileType as Condition, ConditionallyCompileIf, Guard, ThenFunc,
-    ThenFuncAsFinishOrFunc, ThenFuncTypeTag,
+    Action, ConditionalCompileType as Condition, ConditionallyCompileIf, ErasedAction, Guard,
+    TemplateKind,
 };
 use sapio::contract::{empty, Compilable, CompilationError, Context, DynamicContract, TxTmplIt};
 use sapio_base::covenant::LoweringPlan;
@@ -162,7 +162,7 @@ fn finish_guard() -> Option<Guard<State>> {
     Some(Guard::Fresh(|_, _| Clause::Key(key(1)), None))
 }
 
-fn body(state: &State, context: Context, _: ThenFuncTypeTag) -> TxTmplIt {
+fn body(state: &State, context: Context) -> TxTmplIt {
     state.body_calls.set(state.body_calls.get() + 1);
     if state.body_error {
         return Err(CompilationError::TerminateWith("body error".into()));
@@ -177,39 +177,37 @@ fn body(state: &State, context: Context, _: ThenFuncTypeTag) -> TxTmplIt {
     }
 }
 
-fn action() -> Option<ThenFuncAsFinishOrFunc<'static, State, ()>> {
+fn action() -> Option<Box<dyn ErasedAction<State>>> {
     Some(
-        ThenFunc {
-            guard: &[branch_guard],
-            conditional_compile_if: &[
-                condition::<0>,
-                condition::<1>,
-                condition::<2>,
-                condition::<3>,
-            ],
-            func: body,
-            name: Arc::new("candidate".into()),
-        }
-        .into(),
+        Action::new("candidate", TemplateKind::Committed, |state, ctx, ()| {
+            body(state, ctx)
+        })
+        .with_guards(&[branch_guard])
+        .with_conditions(&[
+            condition::<0>,
+            condition::<1>,
+            condition::<2>,
+            condition::<3>,
+        ])
+        .with_defaults(body)
+        .erase(),
+    )
+}
+fn sparse_action() -> Option<Box<dyn ErasedAction<State>>> {
+    Some(
+        Action::new("candidate", TemplateKind::Committed, |state, ctx, ()| {
+            body(state, ctx)
+        })
+        .with_guards(&[branch_guard])
+        .with_conditions(&[absent, condition::<0>, absent, condition::<1>])
+        .with_defaults(body)
+        .erase(),
     )
 }
 
-fn sparse_action() -> Option<ThenFuncAsFinishOrFunc<'static, State, ()>> {
-    Some(
-        ThenFunc {
-            guard: &[branch_guard],
-            conditional_compile_if: &[absent, condition::<0>, absent, condition::<1>],
-            func: body,
-            name: Arc::new("candidate".into()),
-        }
-        .into(),
-    )
-}
-
-fn contract(conditions: [Condition; 4]) -> DynamicContract<'static, (), State> {
+fn contract(conditions: [Condition; 4]) -> DynamicContract<State> {
     DynamicContract {
-        then: vec![action],
-        finish_or: vec![],
+        actions: vec![action],
         finish: vec![finish_guard],
         metadata_f: Box::new(|_, _| Ok(Default::default())),
         ensure_amount_f: Box::new(|_, context| Ok(context.funds())),
@@ -224,7 +222,7 @@ fn contract(conditions: [Condition; 4]) -> DynamicContract<'static, (), State> {
     }
 }
 
-fn single_condition(condition: Condition) -> DynamicContract<'static, (), State> {
+fn single_condition(condition: Condition) -> DynamicContract<State> {
     contract([
         condition,
         Condition::NoConstraint,
@@ -236,7 +234,7 @@ fn single_condition(condition: Condition) -> DynamicContract<'static, (), State>
 #[test]
 fn absent_factories_preserve_declared_condition_context_slots() {
     let mut contract = single_condition(Condition::NoConstraint);
-    contract.then = vec![sparse_action];
+    contract.actions = vec![sparse_action];
     let compiled = contract.compile(context()).unwrap();
     assert_eq!(
         *contract.data.paths.borrow(),

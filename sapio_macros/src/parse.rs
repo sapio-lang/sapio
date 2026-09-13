@@ -27,7 +27,7 @@ impl Action {
         match name {
             "cached" | "policy" => self == Self::Guard,
             "guarded_by" | "compile_if" => matches!(self, Self::Then | Self::Continuation),
-            "coerce_args" | "web_api" => self == Self::Continuation,
+            "defaults" | "default" | "web_api" => self == Self::Continuation,
             "simps" => matches!(self, Self::Guard | Self::Continuation),
             _ => false,
         }
@@ -39,7 +39,8 @@ pub(crate) struct Options {
     pub policy: bool,
     pub guarded_by: ExprArray,
     pub compile_if: ExprArray,
-    pub coerce_args: Option<Expr>,
+    pub defaults: Option<Expr>,
+    pub default: bool,
     pub simps: Expr,
     pub web_api: bool,
 }
@@ -51,7 +52,8 @@ impl Options {
             policy: false,
             guarded_by: parse_quote!([]),
             compile_if: parse_quote!([]),
-            coerce_args: None,
+            defaults: None,
+            default: false,
             simps: parse_quote!(::std::option::Option::None),
             web_api: false,
         };
@@ -77,7 +79,7 @@ impl Options {
                 ));
             }
             match name.as_str() {
-                "cached" | "policy" | "web_api" => {
+                "cached" | "policy" | "web_api" | "default" => {
                     if !matches!(meta, Meta::Path(_)) {
                         return Err(syn::Error::new_spanned(
                             meta,
@@ -88,6 +90,8 @@ impl Options {
                         options.cached = true;
                     } else if name == "policy" {
                         options.policy = true;
+                    } else if name == "default" {
+                        options.default = true;
                     } else {
                         options.web_api = true;
                     }
@@ -103,15 +107,15 @@ impl Options {
                         options.compile_if = array;
                     }
                 }
-                "coerce_args" => options.coerce_args = Some(string_value(&meta)?.parse()?),
+                "defaults" => options.defaults = Some(string_value(&meta)?.parse()?),
                 "simps" => options.simps = string_value(&meta)?.parse()?,
                 _ => unreachable!("validated action option"),
             }
         }
-        if action == Action::Continuation && options.coerce_args.is_none() {
+        if options.default && options.defaults.is_some() {
             return Err(syn::Error::new(
                 span,
-                "continuation requires `coerce_args = \"Self::coerce\"`",
+                "choose `default` or `defaults`, not both",
             ));
         }
         Ok(options)

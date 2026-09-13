@@ -59,8 +59,7 @@ impl Payment {
 }
 
 impl Contract for Payment {
-    declare! {then, Self::pay}
-    declare! {non updatable}
+    declare! {actions, Self::pay}
 }
 
 fn payment(destination: Compiled, amount: u64, external: u64, fees: u64, path: &str) -> Compiled {
@@ -98,7 +97,7 @@ impl Alternatives {
             .into()
     }
 
-    #[continuation(guarded_by = "[Self::signed]", coerce_args = "Ok")]
+    #[continuation(guarded_by = "[Self::signed]", default)]
     fn suggest(self, ctx: Context, _args: ()) {
         ctx.template()
             .add_sequence()
@@ -110,8 +109,7 @@ impl Alternatives {
 }
 
 impl Contract for Alternatives {
-    declare! {then, Self::pay}
-    declare! {updatable<()>, Self::suggest}
+    declare! {actions, Self::pay, Self::suggest}
 }
 
 #[test]
@@ -192,7 +190,6 @@ impl MinimumBalance {
 
 impl Contract for MinimumBalance {
     declare! {finish, Self::signed}
-    declare! {non updatable}
 
     fn ensure_amount(&self, _ctx: Context) -> Result<Amount, CompilationError> {
         Ok(Amount::from_sat(1_000))
@@ -238,8 +235,7 @@ impl MutatedChild {
 }
 
 impl Contract for MutatedChild {
-    declare! {then, Self::pay}
-    declare! {non updatable}
+    declare! {actions, Self::pay}
 }
 
 #[test]

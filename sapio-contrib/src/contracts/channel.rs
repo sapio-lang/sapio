@@ -59,10 +59,8 @@ mod tests {
             contract.guard_signed(),
             Clause::And(vec![Clause::Key(key(1)).into(), Clause::Key(key(2)).into()])
         );
-        let update = |a, b| {
-            Some(Update {
-                split: (Amount::from_sat(a).into(), Amount::from_sat(b).into()),
-            })
+        let update = |a, b| Update {
+            split: (Amount::from_sat(a).into(), Amount::from_sat(b).into()),
         };
         let template = contract
             .continue_cooperate(context(1000), update(400, 600))
@@ -82,11 +80,6 @@ mod tests {
         assert!(contract
             .continue_cooperate(context(1000), update(400, 601))
             .is_err());
-        assert!(contract
-            .continue_cooperate(context(1000), None)
-            .unwrap()
-            .next()
-            .is_none());
         assert!(contract.compile(context(999)).is_err());
     }
 
@@ -130,7 +123,6 @@ impl Default for Args {
         Args::None
     }
 }
-impl StatefulArgumentsTrait for Args {}
 
 /// Handle for DB Types
 #[derive(JsonSchema, Serialize, Deserialize)]
@@ -229,17 +221,10 @@ struct Channel<T: State, ArgsT: TryInto<Update>> {
     db: Arc<Mutex<dyn DB>>,
 }
 
-fn coerce_args(t: Args) -> Result<Option<Update>, CompilationError> {
-    Ok(match t {
-        Args::Update(update) => Some(update),
-        Args::None => None,
-    })
-}
-
 /// Functionality Available for a channel regardless of state
 impl<T: State> Channel<T, Args>
 where
-    Self: Contract<StatefulArguments = Args>,
+    Self: Contract,
 {
     #[guard]
     fn timeout(self, _ctx: Context) {
@@ -254,9 +239,8 @@ where
         ])
     }
 
-    #[continuation(guarded_by = "[Self::signed]", coerce_args = "coerce_args", web_api)]
-    fn cooperate(self, ctx: sapio::Context, update: Option<Update>) {
-        let Some(update) = update else { return empty() };
+    #[continuation(guarded_by = "[Self::signed]", web_api)]
+    fn cooperate(self, ctx: sapio::Context, update: Update) {
         let alice: bitcoin::Amount = update.split.0.try_into()?;
         let bob: bitcoin::Amount = update.split.1.try_into()?;
         if alice.checked_add(bob) != Some(self.amount.try_into()?) {
@@ -279,7 +263,6 @@ where
 trait FunctionalityAtState
 where
     Self: Sized + Contract,
-    <Self as Contract>::StatefulArguments: TryInto<Update>,
 {
     decl_then! {begin_contest}
     decl_then! {finish_contest}
@@ -320,13 +303,11 @@ impl FunctionalityAtState for Channel<Stop, Args> {
 /// Implement Contract for Channel<T> and functionality will be correctly assembled for different
 /// States.
 impl Contract for Channel<Start, Args> {
-    declare! {then, Self::begin_contest, Self::finish_contest}
-    declare! {updatable<Args>, Self::cooperate }
+    declare! {actions,Self::begin_contest, Self::finish_contest, Self::cooperate}
     declare! {finish, Self::signed}
 }
 
 impl Contract for Channel<Stop, Args> {
-    declare! {then, Self::begin_contest, Self::finish_contest}
-    declare! {updatable<Args>, Self::cooperate }
+    declare! {actions,Self::begin_contest, Self::finish_contest, Self::cooperate}
     declare! {finish, Self::signed}
 }

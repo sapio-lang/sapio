@@ -102,13 +102,6 @@ struct Vault<S: State> {
     pd: PhantomData<S>,
 }
 
-/// Helper to coerce a Contract's stateful arguments into itself.
-fn default_coerce<T: Contract>(
-    k: <T as Contract>::StatefulArguments,
-) -> Result<<T as Contract>::StatefulArguments, CompilationError> {
-    Ok(k)
-}
-
 impl<S: State> Vault<S> {
     /// don't compile spend_hot unless we're in redeeming mode
     #[compile_if]
@@ -128,31 +121,27 @@ impl<S: State> Vault<S> {
     #[continuation(
         guarded_by = "[Self::hot_key_cl]",
         compile_if = "[Self::compile_spend_hot]",
-        coerce_args = "default_coerce::<Self>",
         web_api
     )]
-    fn spend_hot(self, ctx: Context, u: Option<Output>) {
+    fn spend_hot(self, ctx: Context, output: Output) {
         let network = ctx.network;
-        if let Some(Output { address, amount }) = u {
-            ctx.template()
-                .set_label("spend via hot".into())
-                .set_color("red".into())
-                .set_sequence(-1, self.timeout.into())?
-                .add_output(
-                    amount.into(),
-                    &Compiled::from_address(address.require_network(network)?, Amount::ZERO),
-                    Some(
-                        [(
-                            "purpose",
-                            "Funds transfered out of vault to this address.".into(),
-                        )]
-                        .into(),
-                    ),
-                )?
-                .into()
-        } else {
-            empty()
-        }
+        let Output { address, amount } = output;
+        ctx.template()
+            .set_label("spend via hot".into())
+            .set_color("red".into())
+            .set_sequence(-1, self.timeout.into())?
+            .add_output(
+                amount.into(),
+                &Compiled::from_address(address.require_network(network)?, Amount::ZERO),
+                Some(
+                    [(
+                        "purpose",
+                        "Funds transfered out of vault to this address.".into(),
+                    )]
+                    .into(),
+                ),
+            )?
+            .into()
     }
     /// a contract has_cold if a plain backup key has been provided. some cold
     /// storages won't have a plain key path
@@ -177,30 +166,26 @@ impl<S: State> Vault<S> {
     #[continuation(
         guarded_by = "[Self::cold_key]",
         compile_if = "[Self::has_cold]",
-        coerce_args = "default_coerce::<Self>",
         web_api
     )]
-    fn spend_cold(self, ctx: Context, u: Option<Output>) {
+    fn spend_cold(self, ctx: Context, output: Output) {
         let network = ctx.network;
-        if let Some(Output { amount, address }) = u {
-            ctx.template()
-                .set_label("spend via cold direct".into())
-                .set_color("cyan".into())
-                .add_output(
-                    amount.into(),
-                    &Compiled::from_address(address.require_network(network)?, Amount::ZERO),
-                    Some(
-                        [(
-                            "purpose",
-                            "Funds transfered out of vault to this address.".into(),
-                        )]
-                        .into(),
-                    ),
-                )?
-                .into()
-        } else {
-            empty()
-        }
+        let Output { amount, address } = output;
+        ctx.template()
+            .set_label("spend via cold direct".into())
+            .set_color("cyan".into())
+            .add_output(
+                amount.into(),
+                &Compiled::from_address(address.require_network(network)?, Amount::ZERO),
+                Some(
+                    [(
+                        "purpose",
+                        "Funds transfered out of vault to this address.".into(),
+                    )]
+                    .into(),
+                ),
+            )?
+            .into()
     }
     /// send the funds to the backup address without delay.
     #[then]
@@ -303,8 +288,7 @@ impl<S: State> Vault<S> {
     }
 }
 impl<S: State + 'static> Contract for Vault<S> {
-    declare! {updatable<Option<Output>>, Self::spend_cold, Self::spend_hot}
-    declare! {then, Self::backup, Self::begin_redeem}
+    declare! {actions, Self::backup, Self::begin_redeem, Self::spend_cold, Self::spend_hot}
 }
 #[cfg(target_arch = "wasm32")]
 type JamesVault = Vault<Secure>;

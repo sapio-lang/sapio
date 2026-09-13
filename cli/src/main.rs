@@ -41,6 +41,7 @@ use tokio::sync::oneshot;
 use util::*;
 pub mod config;
 mod contracts;
+mod explain;
 mod util;
 
 async fn config(custom_config: Option<&str>) -> Result<Config, Box<dyn Error>> {
@@ -139,6 +140,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
      (@subcommand contract =>
       (@setting SubcommandRequiredElseHelp)
       (about: "Create or Manage a Contract")
+      (@subcommand explain =>
+       (about: "Validate and explain a compiled artifact without wallet or network configuration")
+       (@arg file: -f --file +takes_value "Compiled artifact JSON file; omit or use - for stdin")
+       (@arg psbt: --psbt +takes_value "Optional file containing a base64 PSBT")
+       (@arg assets: --assets +takes_value "Optional JSON capability inventory; no private keys or evidence bytes")
+       (@arg input: --input +takes_value "PSBT input index to inspect; defaults to zero")
+       (@arg json: -j --json "Print the complete portable explanation as JSON")
+      )
       (@subcommand bind =>
        (about: "Bind Contract to a specific UTXO")
        (@arg base64_psbt: --base64_psbt "Output as a base64 PSBT")
@@ -372,6 +381,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => unreachable!(),
         },
         Some(("contract", matches)) => {
+            if let Some(("explain", args)) = matches.subcommand() {
+                return explain::run(args);
+            }
             let config = config(custom_config).await?;
             let module_path = |args: &clap::ArgMatches| {
                 let mut p = args

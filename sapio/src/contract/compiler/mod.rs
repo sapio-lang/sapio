@@ -12,10 +12,11 @@ use super::Compiled;
 use super::Context;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::contract::actions::conditional_compile::CCILWrapper;
-use crate::contract::actions::CallableAsFoF;
-use crate::contract::object::CovenantRequirements;
+use crate::contract::actions::ErasedAction;
+use crate::contract::object::{CovenantRequirements, ProgramPolicy, SupportedDescriptors};
 use crate::contract::TxTmplIt;
 use bitcoin::key::TweakedPublicKey;
+use bitcoin::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::XOnlyPublicKey;
 use miniscript::*;
 use sapio_base::covenant::{Ctv, Emulatable};
@@ -24,6 +25,7 @@ use sapio_base::effects::EffectPath;
 use sapio_base::effects::PathFragment;
 use sapio_base::miniscript;
 use sapio_base::policy::{PolicyCompiler, ScriptPolicy};
+use sapio_base::program::ProgramSpendPath;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::Clause;
 use std::collections::{BTreeMap, BTreeSet};
@@ -32,6 +34,8 @@ mod cache;
 mod feasibility;
 #[cfg(test)]
 mod internal_key_tests;
+#[cfg(test)]
+mod program_tests;
 mod script;
 mod util;
 mod validation;
@@ -63,6 +67,7 @@ pub trait Compilable: private::ImplSeal {
 /// a contract or choosing an internal key. Empty or alternative policies are
 /// rejected. Emulatable predicates must already be resolved using explicit
 /// public lowering inputs; this helper does not choose an emulation mode.
+/// Program predicates carry their own public roots and lower directly to keys.
 pub fn compile_policy_leaf(
     policy: &(impl PolicyCompiler + ?Sized),
 ) -> Result<bitcoin::ScriptBuf, CompilationError> {
@@ -74,6 +79,28 @@ pub fn compile_policy_leaf(
             format!("expected one policy leaf, found {count}").into(),
         )),
     }
+}
+
+/// Bound an artifact's complete policy provenance before replay or cloning.
+pub(crate) fn validate_policy_sources<'a>(
+    policies: impl IntoIterator<Item = &'a ScriptPolicy>,
+) -> Result<(), CompilationError> {
+    script::validate_sources(policies)
+}
+
+/// Replay one compiler-retained program branch without admitting source from
+/// discarded alternatives. Program extraction is safe only after this check.
+pub(crate) fn validate_program_policy(
+    policy: &ScriptPolicy,
+) -> Result<bitcoin::ScriptBuf, CompilationError> {
+    let mut branches =
+        script::lower_program_branches(policy, &mut script::RecordedPolicyBudget::default())?;
+    if branches.len() != 1 || branches[0].program_policy.as_ref() != Some(policy) {
+        return Err(CompilationError::Custom(
+            "program policy is not one canonical compiled branch".into(),
+        ));
+    }
+    Ok(branches.pop().unwrap().script.into_script())
 }
 
 /// Implements a basic identity
@@ -102,10 +129,10 @@ enum Nullable {
     No,
 }
 
-fn compute_all_effects<C, A: Default>(
+fn compute_all_effects<C>(
     mut top_effect_ctx: Context,
     self_ref: &C,
-    func: &dyn CallableAsFoF<C, A>,
+    func: &dyn ErasedAction<C>,
 ) -> TxTmplIt {
     // Reject malformed names before any continuation callback can observe an
     // effect path that would change meaning when serialized.
@@ -123,7 +150,7 @@ fn compute_all_effects<C, A: Default>(
         }
     }
     let default_applied_effect_ctx = top_effect_ctx.derive(PathFragment::DefaultEffect)?;
-    let def = func.call(self_ref, default_applied_effect_ctx, Default::default())?;
+    let def = func.default_templates(self_ref, default_applied_effect_ctx)?;
     if !func.web_api() {
         return Ok(def);
     }
@@ -140,30 +167,6 @@ fn compute_all_effects<C, A: Default>(
             Ok(Box::new(v.chain(w)))
         });
     r
-}
-
-struct Renamer {
-    used_names: BTreeSet<String>,
-}
-
-impl Renamer {
-    fn new() -> Self {
-        Renamer {
-            used_names: Default::default(),
-        }
-    }
-    fn get_name(&mut self, a: &String) -> String {
-        let mut count = 0u64;
-        let mut name: String = a.clone();
-        loop {
-            if self.used_names.insert(name.clone()) {
-                return name;
-            } else {
-                name = format!("{}_renamed_{}", a, count);
-                count += 1;
-            }
-        }
-    }
 }
 
 impl<'a, T> Compilable for T
@@ -197,27 +200,26 @@ where
         // Extract each declared action's policy before deduplicating its
         // transaction payload. Equal CTV hashes do not imply equal guards.
         let mut action_ctx = ctx.derive(PathFragment::Action)?;
-        let mut renamer = Renamer::new();
+        let mut action_names = BTreeSet::new();
         let mut continue_apis = BTreeMap::new();
         let mut branches = vec![];
         let mut branch_bytes = 0usize;
+        let mut recorded_policy_budget = script::RecordedPolicyBudget::default();
         let mut all_guard_simps: BTreeMap<ScriptPolicy, GuardSimps> = BTreeMap::new();
-        let then_fns = self.then_fns();
-        let finish_or_fns = self.finish_or_fns();
-        let actions = then_fns
-            .iter()
-            .filter_map(|factory| factory())
-            .map(|action| -> Box<dyn CallableAsFoF<_, _>> { Box::new(action) })
-            .chain(finish_or_fns.iter().filter_map(|factory| factory()));
-        for mut action in actions {
-            // Validate the source name before renaming: reserved fragments must
-            // never acquire a different meaning after a JSON round trip.
+        for action in self.actions().iter().filter_map(|factory| factory()) {
+            // An action handle's request path must remain stable. Duplicate
+            // names are rejected rather than silently rerouting a request.
             let original_name: PathFragment = action.get_name().clone().try_into()?;
             if !matches!(original_name, PathFragment::Named(_)) {
                 return Err(CompilationError::InvalidPathName);
             }
-            let name = Arc::new(renamer.get_name(action.get_name()));
-            action.rename(name.clone());
+            let name = action.get_name().clone();
+            if !action_names.insert(name.clone()) {
+                return Err(CompilationError::TerminateWith(format!(
+                    "duplicate action name: {}",
+                    action.get_name()
+                )));
+            }
             let mut action_context = action_ctx.derive_str(name)?;
             let mut condition_context = action_context.derive(PathFragment::CondCompIf)?;
             let nullability = match CCILWrapper(action.get_conditional_compile_if())
@@ -241,7 +243,7 @@ where
                 &mut guard_clauses,
             )?;
             let resolved_guards = script::resolve_emulation(&guards, &mut covenant_requirements)?;
-            let committed = action.template_kind() == super::actions::TemplateKind::Covenant;
+            let committed = action.template_kind() == super::actions::TemplateKind::Committed;
             let effect_context = action_context.derive(if committed {
                 PathFragment::Next
             } else {
@@ -304,28 +306,30 @@ where
                         append_branches(
                             &mut branches,
                             &mut branch_bytes,
-                            compile_branches(conjoin_source(
-                                [&resolved_guards, &clause].into_iter(),
-                            ))?,
+                            compile_branches(
+                                conjoin_source([&resolved_guards, &clause].into_iter()),
+                                &mut recorded_policy_budget,
+                            )?,
                         )?;
                     }
                 }
             }
-            if committed {
-                if !produced_clause && nullability == Nullable::No {
-                    return Err(CompilationError::MissingTemplates);
-                }
-            } else {
+            if committed && !produced_clause && nullability == Nullable::No {
+                return Err(CompilationError::MissingTemplates);
+            }
+            if !committed || action.web_api() {
                 let mut continuation =
                     ContinuationPoint::at(action.get_schema().clone(), effect_path.clone());
                 for simp in action.gen_simps(self_ref, metadata_context)? {
                     continuation = continuation.add_simp(simp.as_ref())?;
                 }
                 continue_apis.insert(SArc(effect_path), continuation);
+            }
+            if !committed {
                 append_branches(
                     &mut branches,
                     &mut branch_bytes,
-                    compile_branches(resolved_guards)?,
+                    compile_branches(resolved_guards, &mut recorded_policy_budget)?,
                 )?;
             }
             for (policy, mut simps) in guard_metadata {
@@ -348,12 +352,29 @@ where
                     .or_default()
                     .append(&mut simps);
                 let policy = script::resolve_emulation(&policy, &mut covenant_requirements)?;
-                append_branches(&mut branches, &mut branch_bytes, compile_branches(policy)?)?;
+                append_branches(
+                    &mut branches,
+                    &mut branch_bytes,
+                    compile_branches(policy, &mut recorded_policy_budget)?,
+                )?;
             }
         }
+        // Retain provenance before key-path promotion removes eligible leaves.
+        let program_sources: Vec<_> = branches
+            .iter_mut()
+            .filter_map(|branch| {
+                branch.program_policy.take().map(|policy| {
+                    let key = match &branch.script {
+                        CompiledScript::Miniscript(script) => bare_key(script),
+                        CompiledScript::Script(_) => None,
+                    };
+                    (policy, branch.script.as_script_buf(), key)
+                })
+            })
+            .collect();
         // Only a proven standalone Miniscript key may become a key-path spend.
         let some_key = if let Some(key) = pinned_internal_key {
-            let matches = |branch: &CompiledBranch| matches!(branch, CompiledBranch::Miniscript(script) if bare_key(script) == Some(key));
+            let matches = |branch: &CompiledBranch| matches!(&branch.script, CompiledScript::Miniscript(script) if bare_key(script) == Some(key));
             if !branches.iter().any(matches) {
                 return Err(CompilationError::UnauthorizedInternalKey { key });
             }
@@ -365,21 +386,18 @@ where
             if branches.is_empty() {
                 return Err(CompilationError::EmptyPolicy);
             }
-            pick_key_from_miniscripts(branches.iter().filter_map(|branch| match branch {
-                CompiledBranch::Miniscript(script) => Some(script),
-                CompiledBranch::Script(_) => None,
+            pick_key_from_miniscripts(branches.iter().filter_map(|branch| match &branch.script {
+                CompiledScript::Miniscript(script) => Some(script),
+                CompiledScript::Script(_) => None,
             }))
         };
         let opaque = branches
             .iter()
-            .any(|branch| matches!(branch, CompiledBranch::Script(_)));
+            .any(|branch| matches!(&branch.script, CompiledScript::Script(_)));
         let (address, descriptor, estimated_max_size) = if opaque {
             let scripts = branches
                 .into_iter()
-                .map(|branch| match branch {
-                    CompiledBranch::Miniscript(script) => script.encode(),
-                    CompiledBranch::Script(script) => script,
-                })
+                .map(|branch| branch.script.into_script())
                 .collect();
             let raw = crate::contract::object::RawTaproot::from_scripts(some_key, scripts)?;
             let address =
@@ -392,9 +410,9 @@ where
         } else {
             let native = branches
                 .into_iter()
-                .filter_map(|branch| match branch {
-                    CompiledBranch::Miniscript(script) => Some(script),
-                    CompiledBranch::Script(_) => None,
+                .filter_map(|branch| match branch.script {
+                    CompiledScript::Miniscript(script) => Some(script),
+                    CompiledScript::Script(_) => None,
                 })
                 .collect();
             let tree = branches_to_tree(native);
@@ -402,6 +420,35 @@ where
             let weight = descriptor.max_weight_to_satisfy()?;
             (descriptor.clone().into(), descriptor.into(), Some(weight))
         };
+        let leaves: BTreeSet<_> = match &descriptor {
+            SupportedDescriptors::XOnly(Descriptor::Tr(tree)) => {
+                tree.leaves().map(|leaf| leaf.compute_script()).collect()
+            }
+            SupportedDescriptors::Taproot(tree) => tree
+                .leaves()
+                .iter()
+                .map(|(_, script)| script.clone())
+                .collect(),
+            _ => unreachable!("contract compilation produces Taproot"),
+        };
+        let mut program_policies = BTreeMap::<ScriptPolicy, BTreeSet<ProgramSpendPath>>::new();
+        for (policy, script, bare) in program_sources {
+            let paths = program_policies.entry(policy).or_default();
+            if leaves.contains(&script) {
+                paths.insert(ProgramSpendPath::ScriptPath(TapLeafHash::from_script(
+                    &script,
+                    LeafVersion::TapScript,
+                )));
+            }
+            if bare == Some(some_key) {
+                paths.insert(ProgramSpendPath::KeyPath);
+            }
+        }
+        let program_policies = program_policies
+            .into_iter()
+            .filter(|(_, paths)| !paths.is_empty())
+            .map(|(policy, paths)| ProgramPolicy { policy, paths })
+            .collect();
         let descriptor = Some(descriptor);
         let root_path = SArc(ctx.path().clone());
 
@@ -447,6 +494,7 @@ where
                 .add_guard_simps(all_guard_simps)?;
             let compiled = Compiled {
                 covenant_requirements,
+                program_policies,
                 ctv_to_tx: comitted_txns,
                 suggested_txs: other_txns,
                 continue_apis,
@@ -536,7 +584,7 @@ fn policy_as_guards(policy: ScriptPolicy) -> Vec<ScriptPolicy> {
 fn source_policy_possible(policy: &ScriptPolicy, tx: &bitcoin::Transaction) -> bool {
     match policy {
         ScriptPolicy::Miniscript(clause) => feasibility::miniscript_policy_possible(clause, tx, 0),
-        ScriptPolicy::Script(_) => true,
+        ScriptPolicy::Script(_) | ScriptPolicy::Program(_) => true,
         // Signer lowering does not make a false covenant predicate possible.
         ScriptPolicy::Emulatable(predicate) => {
             feasibility::miniscript_policy_possible(&Clause::TxTemplate(predicate.0 .0), tx, 0)
@@ -597,25 +645,13 @@ fn insert_template(
             // A CTV hash commits to transaction fields, not funding budgets,
             // metadata or child continuation paths. None may be chosen by
             // whichever action happens to be visited first.
-            macro_rules! same {
-                ($($field:ident),+ $(,)?) => { $(
-                    if existing.$field != template.$field {
-                        return Err(CompilationError::ConflictingTemplate {
-                            hash, at: path.clone(), field: stringify!($field),
-                        });
-                    }
-                )+ };
+            if let Some(field) = existing.binding_difference(&template) {
+                return Err(CompilationError::ConflictingTemplate {
+                    hash,
+                    at: path.clone(),
+                    field,
+                });
             }
-            same!(
-                ctv_index,
-                tx,
-                max,
-                required_input_amount,
-                min_feerate_sats_vbyte,
-                metadata_map_s2s,
-                inputs,
-                outputs
-            );
             let alternatives = source_alternatives(conjoin_source(existing.guards.iter()))
                 .into_iter()
                 .chain(source_alternatives(conjoin_source(template.guards.iter())))
@@ -636,23 +672,57 @@ fn optimizer_flatten_and_compile(
     Ok(v)
 }
 
-enum CompiledBranch {
+struct CompiledBranch {
+    script: CompiledScript,
+    program_policy: Option<ScriptPolicy>,
+}
+
+enum CompiledScript {
     Miniscript(Miniscript<XOnlyPublicKey, Tap>),
     Script(bitcoin::ScriptBuf),
 }
 
-fn compile_branches(policy: ScriptPolicy) -> Result<Vec<CompiledBranch>, CompilationError> {
-    script::validate_source(&policy)?;
-    match policy {
-        ScriptPolicy::Miniscript(clause) => Ok(optimizer_flatten_and_compile(clause)?
-            .into_iter()
-            .map(CompiledBranch::Miniscript)
-            .collect()),
-        policy => Ok(script::lower_script_policy(&policy)?
-            .into_iter()
-            .map(CompiledBranch::Script)
-            .collect()),
+impl CompiledScript {
+    fn into_script(self) -> bitcoin::ScriptBuf {
+        match self {
+            Self::Miniscript(script) => script.encode(),
+            Self::Script(script) => script,
+        }
     }
+
+    fn as_script_buf(&self) -> bitcoin::ScriptBuf {
+        match self {
+            Self::Miniscript(script) => script.encode(),
+            Self::Script(script) => script.clone(),
+        }
+    }
+}
+
+fn compile_branches(
+    policy: ScriptPolicy,
+    budget: &mut script::RecordedPolicyBudget,
+) -> Result<Vec<CompiledBranch>, CompilationError> {
+    script::validate_source(&policy)?;
+    if script::contains_program(&policy) {
+        return script::lower_program_branches(&policy, budget);
+    }
+    let scripts = match policy {
+        ScriptPolicy::Miniscript(clause) => optimizer_flatten_and_compile(clause)?
+            .into_iter()
+            .map(CompiledScript::Miniscript)
+            .collect::<Vec<_>>(),
+        policy => script::lower_script_policy(&policy)?
+            .into_iter()
+            .map(CompiledScript::Script)
+            .collect::<Vec<_>>(),
+    };
+    Ok(scripts
+        .into_iter()
+        .map(|script| CompiledBranch {
+            script,
+            program_policy: None,
+        })
+        .collect())
 }
 
 /// Admit branches incrementally so separate actions share one output budget.
@@ -668,9 +738,9 @@ fn append_branches(
                 limit: 1_024,
             });
         }
-        let size = match &branch {
-            CompiledBranch::Miniscript(script) => script.script_size(),
-            CompiledBranch::Script(script) => script.len(),
+        let size = match &branch.script {
+            CompiledScript::Miniscript(script) => script.script_size(),
+            CompiledScript::Script(script) => script.len(),
         };
         *bytes = bytes
             .checked_add(size)
@@ -721,7 +791,6 @@ mod policy_leaf_tests {
     }
 
     impl Contract for PolicyContract {
-        crate::declare! {non updatable}
         crate::declare! {finish, Self::policy}
     }
 

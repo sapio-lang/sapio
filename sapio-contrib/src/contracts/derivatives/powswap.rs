@@ -184,9 +184,8 @@ impl Contract for PowSwap {
     fn ensure_amount(&self, _ctx: Context) -> Result<Amount, CompilationError> {
         self.collateral()
     }
-    declare! {then, Self::payoff}
+    declare! {actions, Self::payoff}
     declare! {finish, Self::cooperate}
-    declare! {non updatable}
 }
 
 #[cfg(test)]

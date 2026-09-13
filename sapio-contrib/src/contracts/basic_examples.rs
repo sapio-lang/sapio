@@ -42,7 +42,6 @@ impl ExampleA {
 
 impl Contract for ExampleA {
     declare! {finish, Self::signed, Self::timeout}
-    declare! {non updatable}
 }
 
 trait BState: JsonSchema {
@@ -114,9 +113,8 @@ impl<T: BState> Contract for ExampleB<T>
 where
     ExampleB<T>: ExampleBThen + 'static,
 {
-    declare! {then, Self::begin_contest}
+    declare! {actions, Self::begin_contest}
     declare! {finish, Self::all_signed}
-    declare! {non updatable }
 
     fn ensure_amount(&self, _ctx: Context) -> Result<bitcoin::Amount, CompilationError> {
         if self.threshold == 0 || self.threshold as usize > self.participants.len() {
@@ -235,8 +233,7 @@ impl ExampleCompileIf {
 
 impl Contract for ExampleCompileIf {
     declare! {finish, Self::cooperate}
-    declare! {then, Self::use_escrow}
-    declare! {non updatable}
+    declare! {actions, Self::use_escrow}
 }
 
 #[cfg(test)]

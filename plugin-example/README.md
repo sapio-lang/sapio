@@ -64,6 +64,7 @@ network policy acceptability.
 | [ordinal-example](ordinal-example/) | **Ordinal sale.** Preserves the requested sat at the start of a 501-sat buyer output, with direct and planned sale continuations. Ordered input ranges must be complete, non-overlapping and include the target plus padding. | Native target-position, payment, fee, missing-target and planner tests. |
 | [ordinal-inscription](ordinal-inscription/) | **Inscription reveal.** Commits an Ord envelope under the owner signature and reveals to the owner or a selected address. Complete non-overlapping ranges and enough funds for the inscribed sat, padding and fee are required. | Native signed PSBT/artifact round trip, body chunking and invalid-input tests; CLI smoke. |
 | [custom-policy](custom-policy/) | **Custom policy backend.** Implements a checked arithmetic signature predicate composed with a template covenant through `PolicyCompiler`. Witness construction remains the backend's responsibility. | Native checked payment and underfunding rejection; real WASM catalog checks the raw Taproot artifact and payout. |
+| [program-policy](program-policy/) | **Program guard.** Composes a supplied emulated program with a native CSV delay. Evaluator registration and signing remain explicit runtime operations. | Native compilation and real WASM catalog checks preserve exact program identity, oracle root and script-path requirements. |
 
 ## Interface libraries
 

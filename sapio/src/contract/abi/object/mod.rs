@@ -11,6 +11,13 @@ pub use error::*;
 pub mod bind;
 pub mod descriptors;
 mod enforcement;
+mod explain;
+pub use explain::{
+    ActionExplanation, ArtifactExplanation, InputExplanation, ObjectExplanation, OutputExplanation,
+    TemplateExplanation,
+};
+mod programs;
+pub use programs::{ProgramPolicy, ProgramRequirement};
 pub mod taproot;
 mod validation;
 use crate::contract::abi::continuation::ContinuationPoint;
@@ -134,6 +141,8 @@ impl Default for CovenantRequirements {
 /// [`Object::validate`] before using an artifact; binding performs this check.
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 pub struct Object {
+    /// Complete program-bearing source branches and their validated signing locations.
+    pub program_policies: Vec<ProgramPolicy>,
     /// Reproducible covenant lowering and the predicates it resolved.
     pub covenant_requirements: CovenantRequirements,
     /// CTV-protected templates, deduplicated only when their binding payloads
@@ -193,6 +202,7 @@ impl Object {
         required_input_amount: bitcoin::Amount,
     ) -> Object {
         Object {
+            program_policies: Vec::new(),
             covenant_requirements: CovenantRequirements::default(),
             ctv_to_tx: BTreeMap::new(),
             suggested_txs: BTreeMap::new(),
@@ -224,6 +234,7 @@ impl Object {
         &'a [u8]: From<&'a I>,
     {
         Ok(Object {
+            program_policies: Vec::new(),
             covenant_requirements: CovenantRequirements::default(),
             ctv_to_tx: BTreeMap::new(),
             suggested_txs: BTreeMap::new(),
@@ -246,6 +257,7 @@ impl Object {
         T: MiniscriptKey + ToPublicKey,
     {
         Object {
+            program_policies: Vec::new(),
             covenant_requirements: CovenantRequirements::default(),
             ctv_to_tx: BTreeMap::new(),
             suggested_txs: BTreeMap::new(),

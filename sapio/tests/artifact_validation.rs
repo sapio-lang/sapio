@@ -35,8 +35,7 @@ impl Payment {
 }
 
 impl Contract for Payment {
-    declare! {then, Self::pay}
-    declare! {non updatable}
+    declare! {actions, Self::pay}
 }
 
 fn payment(destination: Compiled, extra_input: bool, path: &str) -> Compiled {
@@ -281,4 +280,52 @@ fn binds_roundtripped_artifacts_with_explicit_auxiliary_inputs() {
     assert_eq!(psbt.unsigned_tx.input[1].previous_output, auxiliary_input);
     assert_eq!(psbt.unsigned_tx.get_ctv_hash(0), hash);
     assert_eq!(psbt.unsigned_tx.output[0].value.to_sat(), 1_000);
+}
+
+#[test]
+fn shared_transaction_catalogs_cannot_choose_different_local_rules() {
+    let mut object = payment(leaf(), false, "catalog");
+    let committed = object.ctv_to_tx.values().next().unwrap().clone();
+    object
+        .suggested_txs
+        .insert(committed.hash(), committed.clone());
+    object.validate().unwrap();
+    // Authorization alternatives may differ; they do not choose funding policy.
+    object.suggested_txs.values_mut().next().unwrap().guards = vec![Clause::Trivial.into()];
+    object.validate().unwrap();
+    let constraints = sapio::template::FundingConstraints {
+        inputs: vec![sapio::template::InputRequirement {
+            name: "contract".into(),
+            minimum: committed.required_input_amount,
+        }],
+        outputs: vec!["recipient".into()],
+        maximum_fee: Amount::from_sat(100),
+        minimum_feerate: None,
+    };
+    object
+        .ctv_to_tx
+        .values_mut()
+        .next()
+        .unwrap()
+        .funding_constraints = Some(constraints.clone());
+    object
+        .suggested_txs
+        .values_mut()
+        .next()
+        .unwrap()
+        .funding_constraints = Some(constraints);
+    object.validate().unwrap();
+    object
+        .suggested_txs
+        .values_mut()
+        .next()
+        .unwrap()
+        .funding_constraints
+        .as_mut()
+        .unwrap()
+        .maximum_fee = Amount::from_sat(200);
+    reject_artifact(
+        object,
+        ArtifactErrorKind::ConflictingTemplateCatalogs("funding_constraints"),
+    );
 }

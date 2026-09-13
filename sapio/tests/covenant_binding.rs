@@ -96,8 +96,7 @@ impl Payment {
 }
 
 impl Contract for Payment {
-    declare! {then, Self::pay}
-    declare! {non updatable}
+    declare! {actions, Self::pay}
 }
 
 fn payment(policy: Policy) -> Compiled {
@@ -219,7 +218,7 @@ impl SuggestChild {
         Clause::Key(owner())
     }
 
-    #[continuation(guarded_by = "[Self::signed]", coerce_args = "Ok")]
+    #[continuation(guarded_by = "[Self::signed]", default)]
     fn suggest(self, ctx: Context, _args: ()) {
         ctx.template()
             .add_output(Amount::from_sat(1_000), &self.0, None)?
@@ -228,7 +227,7 @@ impl SuggestChild {
 }
 
 impl Contract for SuggestChild {
-    declare! {updatable<()>, Self::suggest}
+    declare! {actions, Self::suggest}
 }
 
 #[test]
@@ -520,7 +519,6 @@ impl WrappedFinish {
 
 impl Contract for WrappedFinish {
     declare! {finish, Self::covenant}
-    declare! {non updatable}
 }
 
 #[test]
@@ -560,7 +558,6 @@ impl NativeFinish {
 
 impl Contract for NativeFinish {
     declare! {finish, Self::covenant}
-    declare! {non updatable}
 }
 
 #[test]
@@ -590,20 +587,30 @@ impl WrappedContinuation {
         Emulatable(self.predicate)
     }
 
-    #[continuation(guarded_by = "[Self::covenant]", coerce_args = "Ok", web_api)]
-    fn suggest(self, ctx: Context, amount: Option<u64>) {
-        let mut template =
-            ctx.template()
-                .add_output(Amount::from_sat(amount.unwrap_or(1_000)), &owner(), None)?;
-        if self.add_effect_guard && amount.is_some() {
+    #[continuation(
+        guarded_by = "[Self::covenant]",
+        defaults = "Self::default_suggestion",
+        web_api
+    )]
+    fn suggest(self, ctx: Context, amount: u64) {
+        let mut template = ctx
+            .template()
+            .add_output(Amount::from_sat(amount), &owner(), None)?;
+        if self.add_effect_guard {
             template = template.add_guard(Clause::Key(owner()));
         }
         template.into()
     }
+
+    fn default_suggestion(&self, ctx: Context) -> sapio::contract::TxTmplIt {
+        ctx.template()
+            .add_output(Amount::from_sat(1000), &owner(), None)?
+            .into()
+    }
 }
 
 impl Contract for WrappedContinuation {
-    declare! {updatable<Option<u64>>, Self::suggest}
+    declare! {actions, Self::suggest}
 }
 
 fn continuation_context(with_effect: bool) -> Context {

@@ -45,8 +45,7 @@ struct PaymentPool {
 }
 
 impl Contract for PaymentPool {
-    declare! {then, Self::ejection}
-    declare! {updatable<DoTx>, Self::do_tx}
+    declare! {actions, Self::ejection, Self::do_tx}
     declare! {finish, Self::sole_owner}
     fn ensure_amount(&self, ctx: Context) -> Result<Amount, CompilationError> {
         if self.members.is_empty()
@@ -87,22 +86,6 @@ struct DoTx {
     /// # Payments
     /// A mapping of public key in members to signed list of payouts with a fee rate.
     payments: BTreeMap<XOnlyPublicKey, PaymentRequest>,
-}
-/// required...
-impl Default for DoTx {
-    fn default() -> Self {
-        DoTx {
-            payments: BTreeMap::new(),
-        }
-    }
-}
-impl StatefulArgumentsTrait for DoTx {}
-
-/// helper for rust type system issue
-fn default_coerce(
-    k: <PaymentPool as Contract>::StatefulArguments,
-) -> Result<DoTx, CompilationError> {
-    Ok(k)
 }
 
 impl PaymentPool {
@@ -183,11 +166,7 @@ impl PaymentPool {
     }
     /// This Function will create a proposed transaction that is safe to sign
     /// given a list of data from participants.
-    #[continuation(
-        web_api,
-        guarded_by = "[Self::all_signed]",
-        coerce_args = "default_coerce"
-    )]
+    #[continuation(web_api, guarded_by = "[Self::all_signed]")]
     fn do_tx(self, mut ctx: Context, update: DoTx) {
         let network = ctx.network;
         Contract::ensure_amount(

@@ -5,9 +5,8 @@
 
 use bitcoin::bip32::Xpub;
 use bitcoin::{Address, Amount, XOnlyPublicKey};
-use sapio::contract::abi::object::ObjectMetadata;
 use sapio::contract::*;
-use sapio::*;
+use sapio::template::{OutputAmount, Template};
 use sapio_base::fragments::{template_signed_by, TemplateKey};
 use sapio_base::program::{EmulatedProgram, ProgramError};
 use sapio_base::Clause;
@@ -30,6 +29,7 @@ pub struct FragmentContract {
     fee: Amount,
 }
 
+#[sapio::contract]
 impl FragmentContract {
     /// Bind the public spending terms and the exact emulated fragment program.
     pub fn new(
@@ -52,23 +52,13 @@ impl FragmentContract {
         })
     }
 
-    /// Public key selection needed to construct the authorization evidence.
-    pub fn authorization(&self) -> Authorization {
-        self.authorization
-    }
-
-    /// Complete program source and public derivation root.
-    pub fn program(&self) -> &EmulatedProgram {
-        &self.program
-    }
-
-    #[guard(policy, cached)]
-    fn authorize(self) -> EmulatedProgram {
+    #[policy]
+    fn authorize(&self) -> EmulatedProgram {
         self.program.clone()
     }
 
-    #[guard(cached)]
-    fn key_path(self) {
+    #[spend]
+    fn key_path(&self) -> Clause {
         Clause::Key(self.internal_key())
     }
 
@@ -82,42 +72,27 @@ impl FragmentContract {
         }
     }
 
-    #[continuation(guarded_by = "[Self::authorize]", coerce_args = "Ok", web_api)]
-    fn pay(self, ctx: Context, amount: Option<u64>) {
-        let Some(amount) = amount else { return empty() };
-        let amount = Amount::from_sat(amount);
-        let change = ctx
-            .funds()
-            .checked_sub(self.fee)
-            .and_then(|available| available.checked_sub(amount))
-            .ok_or(CompilationError::OutOfFunds)?;
+    /// Construct an authorized payment candidate with explicitly allocated change.
+    #[action(suggested, guarded_by(Self::authorize))]
+    pub fn pay(&self, ctx: Context, amount: u64) -> Result<Template, CompilationError> {
         let recipient = Compiled::from_address(self.recipient.clone(), Amount::ZERO);
         let change_address = Compiled::from_address(self.change.clone(), Amount::ZERO);
-        ctx.template()
-            .add_output(amount, &recipient, None)?
-            .add_output(change, &change_address, None)?
-            .add_fees(self.fee)?
-            .into()
+        let mut plan = ctx.template_plan();
+        plan.output(
+            "recipient",
+            OutputAmount::Exact(Amount::from_sat(amount)),
+            &recipient,
+        )?;
+        plan.output("change", OutputAmount::Remainder, &change_address)?;
+        plan.reserve_fees(self.fee);
+        plan.finish().map_err(Into::into)
     }
-}
 
-impl Contract for FragmentContract {
-    declare! {finish, Self::key_path}
-    declare! {updatable<Option<u64>>, Self::pay}
-
+    #[internal_key]
     fn pinned_internal_key(
         &self,
         _ctx: &Context,
     ) -> Result<Option<XOnlyPublicKey>, CompilationError> {
         Ok(Some(self.internal_key()))
-    }
-
-    fn metadata(&self, _ctx: Context) -> Result<ObjectMetadata, CompilationError> {
-        let mut metadata = ObjectMetadata::default();
-        metadata.extra.insert(
-            "emulated_program".into(),
-            serde_json::to_value(&self.program).map_err(CompilationError::SerializationError)?,
-        );
-        Ok(metadata)
     }
 }

@@ -5,7 +5,7 @@ use bitcoin::bip32::Xpub;
 use bitcoin::{Address, Amount, ScriptBuf};
 use sapio::contract::compiler::compile_policy_leaf;
 use sapio::contract::{CompilationError, Compiled, Context};
-use sapio::template::Template;
+use sapio::template::{OutputAmount, Surplus, Template};
 use sapio_base::fragments::{template_hash, template_hash_eq, template_signed_by, TemplateKey};
 use sapio_base::policy::{PolicyCompiler, ScriptPolicy};
 use sapio_base::program::EmulatedProgram;
@@ -41,6 +41,11 @@ pub struct Terms {
     capacity: u64,
     delay: u16,
     max_state: u32,
+    #[serde(
+        rename = "maximum_sponsor_fee_sats",
+        with = "bitcoin::amount::serde::as_sat"
+    )]
+    maximum_sponsor_fee: Amount,
     alice: Address,
     bob: Address,
     update_program: EmulatedProgram,
@@ -54,6 +59,7 @@ impl Terms {
         capacity: u64,
         delay: u16,
         max_state: u32,
+        maximum_sponsor_fee: Amount,
         alice: Address,
         bob: Address,
     ) -> Result<Self, CompilationError> {
@@ -65,6 +71,9 @@ impl Terms {
         if delay == 0 {
             return Err(invalid("settlement delay must be positive"));
         }
+        if maximum_sponsor_fee == Amount::ZERO {
+            return Err(invalid("fee sponsor ceiling must be positive"));
+        }
         if !(1..=MAX_STATE).contains(&max_state) {
             return Err(invalid("state interval must end between 1 and MAX_STATE"));
         }
@@ -75,6 +84,7 @@ impl Terms {
             capacity,
             delay,
             max_state,
+            maximum_sponsor_fee,
             alice,
             bob,
             update_program,
@@ -96,6 +106,10 @@ impl Terms {
     /// Last state, with settlement as its only unilateral path.
     pub fn max_state(&self) -> u32 {
         self.max_state
+    }
+    /// Local ceiling for the sponsor value consumed as a fee; not a Script rule.
+    pub fn maximum_sponsor_fee(&self) -> Amount {
+        self.maximum_sponsor_fee
     }
     /// Alice's checked destination.
     pub fn alice(&self) -> &Address {
@@ -175,25 +189,29 @@ impl Terms {
         ctx: Context,
     ) -> Result<Template, CompilationError> {
         self.validate(state)?;
-        let mut template = ctx
-            .template()
-            .add_sequence()
-            .set_sequence(0, RelHeight::from(self.delay).into())?
-            .set_sequence(1, RelHeight::from(0).into())?
-            .set_lock_time(AbsTime::try_from(self.lock_time(state.number)?)?.into())?;
-        for (amount, address) in [
-            (state.alice_sats, &self.alice),
-            (self.capacity - state.alice_sats, &self.bob),
+        let alice = Compiled::from_address(self.alice.clone(), Amount::ZERO);
+        let bob = Compiled::from_address(self.bob.clone(), Amount::ZERO);
+        let mut plan = ctx.template_plan();
+        let sponsor = plan.input("fee_sponsor", Amount::ZERO)?;
+        plan.require_older(&plan.contract_input(), RelHeight::from(self.delay).into())?;
+        plan.require_older(&sponsor, RelHeight::from(0).into())?;
+        plan.require_after(AbsTime::try_from(self.lock_time(state.number)?)?.into())?;
+        for (name, amount, recipient) in [
+            ("alice", state.alice_sats, &alice),
+            ("bob", self.capacity - state.alice_sats, &bob),
         ] {
             if amount != 0 {
-                template = template.add_output(
-                    Amount::from_sat(amount),
-                    &Compiled::from_address(address.clone(), Amount::ZERO),
-                    None,
+                plan.output(
+                    name,
+                    OutputAmount::Exact(Amount::from_sat(amount)),
+                    recipient,
                 )?;
             }
         }
-        Ok(template.into())
+        plan.surplus(Surplus::Fees {
+            maximum: self.maximum_sponsor_fee,
+        });
+        Ok(plan.finish()?)
     }
 
     pub(super) fn settlement_program(

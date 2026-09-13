@@ -124,7 +124,6 @@ impl ObserveOrdinals {
 
 impl Contract for ObserveOrdinals {
     declare! {finish, Self::spend}
-    declare! {non updatable}
 }
 
 #[test]

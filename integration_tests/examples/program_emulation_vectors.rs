@@ -74,14 +74,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
         candidate.inputs[0].non_witness_utxo = None;
         candidate.unsigned_tx.input[0].previous_output = outpoint;
-        let mut signed = oracle.sign(signing_request(
-            contract.emulation(),
-            candidate,
-            index as u32,
-        ))?;
+        let mut signed = oracle.sign(signing_request(&compiled, candidate, index as u32)?)?;
         signed
             .finalize_mut(&Secp256k1::new())
             .map_err(|errors| format!("program spend failed finalization: {errors:?}"))?;
+        sapio_integration_tests::program_example::check_finalized_candidate(&compiled, &signed)?;
         let transaction = signed.extract_tx()?;
         let label = format!("pay_{amount}_at_{index}");
         cases.push(case(label.clone(), true, transaction.clone()));
@@ -116,7 +113,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     // signatures. The predicate key is in a real, authenticated CHECKSIG leaf.
     let name = "program_pay_at_least_scriptpath";
     let secp = Secp256k1::new();
-    let program_key = contract.emulation().derive_public_key()?;
+    let instance = instance(5_000, &destination.script_pubkey());
+    let program_key = instance.derive_public_key(&oracle.public_root())?;
     let script = Builder::new()
         .push_slice(&program_key.serialize())
         .push_opcode(OP_CHECKSIG)
@@ -159,7 +157,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .tap_scripts
         .insert(spend.control_block(&leaf).unwrap(), leaf);
     let mut signed = oracle.sign(ProgramSigningRequest {
-        instance: contract.emulation().instance().clone(),
+        instance,
         input_index: 0,
         witness: 0_u32.to_le_bytes().to_vec(),
         path: ProgramSpendPath::ScriptPath(leaf_hash),

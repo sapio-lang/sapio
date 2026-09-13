@@ -38,7 +38,6 @@ impl PinnedContract {
 }
 
 impl Contract for PinnedContract {
-    crate::declare! {non updatable}
     crate::declare! {finish, Self::first, Self::second}
 
     fn pinned_internal_key(

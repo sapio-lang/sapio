@@ -4,15 +4,15 @@ use bitcoin::secp256k1::{schnorr::Signature, Secp256k1};
 use bitcoin::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::{taproot, ScriptBuf, Transaction};
 use emulator_connect::program::{
-    validate_program_response, ProgramError, ProgramOracle, ProgramSigningRequest,
-    ProgramSpendPath, PSBT,
+    prepare_program_request, validate_program_response, ProgramError, ProgramOracle,
+    ProgramSigningRequest, ProgramSpendPath,
 };
 use sapio_base::fragments::template_hash;
 use sapio_contrib::contracts::eltoo::{Channel, State, Terms};
 use sapio_integration_tests::eltoo_example::runner::{
     attach_inputs, authorize_update, compile, compile_settlement, compile_update, input,
     settlement_leaf, settlement_program, settlement_request, settlement_transaction, sign_sponsor,
-    update_leaf, update_request, update_transaction,
+    update_leaf, update_request, update_requirement, update_transaction,
 };
 use sapio_integration_tests::eltoo_example::{fixture, recovery::recover_update};
 
@@ -51,14 +51,16 @@ fn raw_update_request(
 ) -> ProgramSigningRequest {
     let coin = fixture::coin(source, 80);
     let input = input(source, &coin).unwrap();
-    let leaf = update_leaf(source).unwrap();
-    ProgramSigningRequest {
-        instance: source.terms().update_program().instance().clone(),
-        input_index: 0,
-        witness: authorization.as_ref().to_vec(),
-        path: ProgramSpendPath::ScriptPath(TapLeafHash::from_script(&leaf, LeafVersion::TapScript)),
-        psbt: PSBT(attach_inputs(transaction, coin, input, fixture::sponsor(2_000, 81)).unwrap()),
-    }
+    let compiled = compile(source).unwrap();
+    let requirement = update_requirement(&compiled).unwrap();
+    prepare_program_request(
+        &compiled,
+        &requirement,
+        attach_inputs(transaction, coin, input, fixture::sponsor(2_000, 81)).unwrap(),
+        0,
+        authorization.as_ref().to_vec(),
+    )
+    .unwrap()
 }
 
 #[test]
@@ -327,6 +329,7 @@ fn fresh_channel_internal_key_prevents_cross_channel_certificate_replay() {
         terms.capacity(),
         terms.delay(),
         terms.max_state(),
+        terms.maximum_sponsor_fee(),
         terms.alice().clone(),
         terms.bob().clone(),
     )
@@ -345,6 +348,50 @@ fn fresh_channel_internal_key_prevents_cross_channel_certificate_replay() {
         oracle().sign(request),
         Err(ProgramError::Evaluation(_))
     ));
+}
+
+#[test]
+fn typed_actions_expose_distinct_requests_and_preserve_explicit_sponsor_limits() {
+    let terms = fixture::terms();
+    let funding = terms.funding();
+    let update_action = Channel::update_action();
+    let update_schema = update_action.schema().unwrap();
+    assert!(update_schema["properties"].get("number").is_some());
+    assert!(update_schema["properties"].get("alice_sats").is_some());
+    assert_eq!(Channel::settle_action().schema().unwrap()["type"], "null");
+    let discovered = compile(&funding).unwrap();
+    assert!(discovered.suggested_txs.is_empty());
+    let compiled = compile_update(&funding, state(1)).unwrap();
+    let template = compiled.suggested_txs.values().next().unwrap();
+    let constraints = template.funding_constraints.as_ref().unwrap();
+    assert_eq!(constraints.inputs[1].name, "fee_sponsor");
+    assert_eq!(constraints.inputs[1].minimum, bitcoin::Amount::ZERO);
+    assert_eq!(constraints.maximum_fee, terms.maximum_sponsor_fee());
+    assert_eq!(constraints.outputs, ["successor", "recovery"]);
+    assert_eq!(compiled.address, discovered.address);
+
+    let authorization = authorize_update(&terms, state(1), &fixture::joint_key()).unwrap();
+    assert!(update_request(
+        &funding,
+        state(1),
+        fixture::coin(&funding, 91),
+        fixture::sponsor(terms.maximum_sponsor_fee().to_sat() + 1, 92),
+        &authorization
+    )
+    .is_err());
+    let allowed = update_request(
+        &funding,
+        state(1),
+        fixture::coin(&funding, 93),
+        fixture::sponsor(terms.maximum_sponsor_fee().to_sat(), 94),
+        &authorization,
+    )
+    .unwrap();
+    let completed = sign(&oracle(), allowed);
+    let finalized =
+        sapio_integration_tests::eltoo_example::runner::finalize_candidate(template, completed)
+            .unwrap();
+    assert_eq!(finalized.output[0].value.to_sat(), terms.capacity());
 }
 
 #[test]

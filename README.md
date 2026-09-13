@@ -35,8 +35,13 @@ For WASM modules and development checks, follow the
 [Designing Bitcoin Contracts with Sapio](docs/learn-sapio/src/SUMMARY.md) book
 contains broader examples; its older installation instructions are being revised.
 
+Start with [transaction plans and typed actions](docs/TRANSACTION_PLANS.md),
+then [spend planning](docs/SPEND_PLANNING.md) and the
+[artifact explainer](cli/README.md#explain-a-contract). These APIs distinguish construction,
+spending predicates and the evidence required to satisfy one branch.
+
 The [contract example catalog](docs/EXAMPLES.md) inventories every library family,
-all 18 WASM modules, and both runnable native examples, with regression coverage
+all 20 WASM modules and runnable native examples, with regression coverage
 and the assumptions each construction still requires.
 
 ## Repository map

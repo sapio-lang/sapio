@@ -129,8 +129,7 @@ impl Contract for TapBet {
         self.validate(&ctx)?;
         Ok(ctx.funds())
     }
-    declare! {then, Self::stop_expansion, Self::continue_expansion}
-    declare! {non updatable}
+    declare! {actions, Self::stop_expansion, Self::continue_expansion}
 }
 
 #[cfg(test)]

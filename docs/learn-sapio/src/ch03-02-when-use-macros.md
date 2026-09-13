@@ -1,12 +1,27 @@
-# When to use macros?
+# When to use macros
 
-Generally, you want to use `continuation`, `then`, `guard`, etc to generate your
-methods.  However, if you prefer to create them manually, it's entirely possible
-to do so without much effort. A tool like `cargo expand` may be useful as you
-can just copy the macro output and customize from there.
+Use `#[sapio::contract]` on an inherent impl for normal contract authoring. Mark
+transaction methods with `#[action(committed)]` or `#[action(suggested)]`, policies
+with `#[policy]`, and independently sufficient spending policies with `#[spend]`.
+The methods remain ordinary Rust methods. The macro generates typed action
+handles, request schemas and registration.
 
-One reason you might choose to manually define them is if you want to have
-custom static logic (that is, known just from the type and not a value-filled
-instance) to decide if a method should be `Some` or `None`. If it does not need
-to be static logic, a `compile_if` can be used, or the static logic can go
-inside a `compile_if`.
+A policy with only `&self` is context-free and cached. A policy that also accepts
+`Context` is evaluated at its attachment context. The signature expresses the
+actual dependency.
+
+The explicit low-level API is `Action<Contract, Request>`. Its constructor takes a
+transaction-generation callback. `with_guards`, `with_conditions`, `with_json`,
+and `with_defaults` add the corresponding capabilities; `erase()` hides only the
+individual request type when registering the action. There is no global argument
+pack. This API is useful for dynamically assembled contracts.
+
+Optional interfaces can still use `decl_then!`, `decl_continuation!`, and
+`decl_guard!`, implemented by the standalone action/guard attributes. A factory
+returning `None` means that the implementation does not provide that interface
+member. Export optional factories explicitly through `declare! {actions, ...}` or
+`#[sapio::contract(actions(Self::optional), spends(Self::optional_guard))]`.
+
+Use `#[condition]` with `compile_if(...)` for availability depending on the
+contract's value. Its condition algebra distinguishes absent, nullable and
+required branches; it does not add a spending predicate.
