@@ -1,10 +1,26 @@
 # Guard
 
-Guards are central to any Sapio contract. They allow declaring a piece of
-miniscript logic.
+A guard is a fixed spending predicate. It can use native Miniscript, a typed
+program evaluator, or another supported policy compiler.
 
-These guards can either be used standalone as unlocking conditions or as a
-requirement on a `continuation` or `then` function.
+Inside `#[sapio::contract]`, a `#[policy]` method declares a reusable predicate.
+A `#[spend]` method additionally exports its predicate as independently sufficient
+to spend the output. An action attaches policies with
+`guarded_by(Self::signed, Self::timeout)`; these predicates are conjoined.
+
+```rust
+#[policy]
+fn signed(&self) -> Clause {
+    Clause::Key(self.owner)
+}
+```
+
+The ordinary method's signature expresses its context dependency. With only
+`&self`, it is cached within the compilation. Adding `Context` evaluates it at
+each attachment. The method remains directly callable as Rust.
+
+The standalone `#[guard]` frontend is useful for trait interfaces and optional
+metadata callbacks:
 
 An ordinary guard receives the context of each attachment. Use it when the
 policy depends on the current path or other compilation context.

@@ -32,7 +32,6 @@ impl PayToPublicKey {
 
 impl Contract for PayToPublicKey {
     declare! {finish, Self::with_key}
-    declare! {non updatable}
 }
 
 /// Basic Escrowing Contract
@@ -79,7 +78,6 @@ impl BasicEscrow {
 
 impl Contract for BasicEscrow {
     declare! {finish, Self::redeem}
-    declare! {non updatable}
 }
 
 /// Basic Escrowing Contract, written more expressively
@@ -116,7 +114,6 @@ impl BasicEscrow2 {
 
 impl Contract for BasicEscrow2 {
     declare! {finish, Self::use_escrow, Self::cooperate}
-    declare! {non updatable}
 }
 
 /// Trustless Escrowing Contract
@@ -172,8 +169,7 @@ impl TrustlessEscrow {
 
 impl Contract for TrustlessEscrow {
     declare! {finish, Self::cooperate}
-    declare! {then, Self::use_escrow}
-    declare! {non updatable}
+    declare! {actions, Self::use_escrow}
 }
 
 #[cfg(test)]

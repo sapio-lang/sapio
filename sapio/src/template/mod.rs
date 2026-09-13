@@ -20,7 +20,13 @@ pub mod input;
 pub mod output;
 pub use output::{Output, OutputMeta};
 pub mod builder;
+pub mod funding;
 pub use builder::Builder;
+pub mod plan;
+pub use plan::{
+    FundingConstraints, InputRef, InputRequirement, OutputAmount, OutputRef, PlanError, Surplus,
+    TemplatePlan,
+};
 
 use self::input::InputMetadata;
 /// Metadata Struct which has some standard defined fields
@@ -113,6 +119,15 @@ impl TemplateMetadata {
 /// metadata
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 pub struct Template {
+    /// Explicit local funding and fee constraints retained by a transaction plan.
+    /// These are checked during binding; they are not additional Script predicates.
+    #[serde(deserialize_with = "Option::deserialize")]
+    // `required` alone strips null from an Option schema; explicit null is valid.
+    #[schemars(
+        required,
+        schema_with = "Option::<plan::FundingConstraints>::json_schema"
+    )]
+    pub funding_constraints: Option<plan::FundingConstraints>,
     /// Additional restrictions on a builder's template. After contract
     /// compilation, these include the action guards; duplicate transactions
     /// retain their complete alternative authorizations here.
@@ -162,6 +177,28 @@ pub struct Template {
 }
 
 impl Template {
+    /// Compare binding data that a transaction commitment does not distinguish.
+    /// Authorization guards may differ and remain separate spending alternatives.
+    pub(crate) fn binding_difference(&self, other: &Self) -> Option<&'static str> {
+        macro_rules! compare {
+            ($($field:ident),+ $(,)?) => { $(
+                if self.$field != other.$field { return Some(stringify!($field)); }
+            )+ };
+        }
+        compare!(
+            ctv_index,
+            tx,
+            max,
+            required_input_amount,
+            min_feerate_sats_vbyte,
+            funding_constraints,
+            metadata_map_s2s,
+            inputs,
+            outputs
+        );
+        None
+    }
+
     /// Get the cached template hash of this Template
     pub fn hash(&self) -> sha256::Hash {
         self.ctv

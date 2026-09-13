@@ -101,7 +101,7 @@ impl ConditionalCompileType {
 /// condition that must be met to disable a branch.
 ///
 /// We use a separate function so that static analysis tools may operate without
-/// running the actual `ThenFunc`.
+/// running the transaction-generation callback.
 pub enum ConditionallyCompileIf<ContractSelf> {
     /// Fresh Variant may be called repeatedly
     Fresh(fn(&ContractSelf, Context) -> ConditionalCompileType),

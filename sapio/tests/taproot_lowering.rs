@@ -35,9 +35,8 @@ fn guard_at<const SLOT: usize>() -> Option<Guard<[Clause; 3]>> {
 
 fn compile(clauses: [Clause; 3], order: &[usize]) -> Object {
     let factories = [guard_at::<0>, guard_at::<1>, guard_at::<2>];
-    let contract = DynamicContract::<(), _> {
-        then: vec![],
-        finish_or: vec![],
+    let contract = DynamicContract::<_> {
+        actions: vec![],
         finish: order.iter().map(|index| factories[*index]).collect(),
         metadata_f: Box::new(|_, _| Ok(Default::default())),
         ensure_amount_f: Box::new(|_, ctx| Ok(ctx.funds())),

@@ -3,6 +3,7 @@
 use bitcoin::blockdata::{opcodes::all, script::Builder};
 use bitcoin::{Amount, XOnlyPublicKey};
 use sapio::contract::{CompilationError, Context, Contract};
+use sapio::template::{OutputAmount, Template};
 use sapio::{declare, guard, then};
 use sapio_base::policy::{PolicyCompiler, PolicyError, ScriptFragment, ScriptPolicy};
 use sapio_base::Clause;
@@ -52,7 +53,7 @@ impl CustomPolicyPayment {
     }
 
     #[then(guarded_by = "[Self::custom_owner, Self::native_co_signer]")]
-    fn pay(self, ctx: Context) {
+    fn pay(self, ctx: Context) -> Result<Template, CompilationError> {
         let fees = Amount::from_sat(1_000);
         let payment = ctx
             .funds()
@@ -61,16 +62,15 @@ impl CustomPolicyPayment {
         if payment == Amount::ZERO {
             return Err(CompilationError::OutOfFunds);
         }
-        ctx.template()
-            .add_output(payment, &self.co_signer, None)?
-            .add_fees(fees)?
-            .into()
+        let mut plan = ctx.template_plan();
+        plan.output("payment", OutputAmount::Exact(payment), &self.co_signer)?;
+        plan.reserve_fees(fees);
+        Ok(plan.finish()?)
     }
 }
 
 impl Contract for CustomPolicyPayment {
-    declare! {then, Self::pay}
-    declare! {non updatable}
+    declare! {actions, Self::pay}
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -123,6 +123,17 @@ mod tests {
                         .to_sat(),
                     9_000
                 );
+                let funding = compiled
+                    .ctv_to_tx
+                    .values()
+                    .next()
+                    .unwrap()
+                    .funding_constraints
+                    .as_ref()
+                    .unwrap();
+                assert_eq!(funding.inputs[0].minimum.to_sat(), amount);
+                assert_eq!(funding.outputs, ["payment"]);
+                assert_eq!(funding.maximum_fee.to_sat(), 1_000);
             }
         }
     }

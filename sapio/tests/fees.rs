@@ -36,8 +36,7 @@ impl Payment {
 }
 
 impl Contract for Payment {
-    declare! {then, Self::pay}
-    declare! {non updatable}
+    declare! {actions, Self::pay}
 }
 
 fn compile(fee: u64, rates: Vec<u64>, extra_input: bool) -> Result<Compiled, CompilationError> {

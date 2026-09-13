@@ -29,8 +29,7 @@ where
     fn ensure_amount(&self, _ctx: Context) -> Result<Amount, CompilationError> {
         checked_collateral(self.party_one, self.party_two)
     }
-    declare!(then, Self::explodes, Self::strikes);
-    declare!(non updatable);
+    declare! {actions, Self::explodes, Self::strikes}
 }
 
 impl<T> Contract for UnderFundedExplodingOption<T>
@@ -43,8 +42,7 @@ where
         checked_collateral(self.party_one, self.party_two)?;
         Ok(self.party_one)
     }
-    declare!(then, Self::explodes, Self::strikes);
-    declare!(non updatable);
+    declare! {actions, Self::explodes, Self::strikes}
 }
 /// Wraps an option with a refund for both parties on timeout.
 /// Convert Call/Put/RiskReversal arguments into a GenericBet first; its immutable

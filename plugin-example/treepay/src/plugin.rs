@@ -71,8 +71,7 @@ impl PayThese {
     }
 }
 impl Contract for PayThese {
-    declare! {then, Self::expand}
-    declare! {non updatable}
+    declare! {actions, Self::expand}
 }
 impl TreePay {
     #[then]
@@ -150,8 +149,8 @@ impl TreePay {
     }
 }
 impl Contract for TreePay {
-    declare! {then, Self::expand}
-    declare! {non updatable}
+    declare! {actions, Self::expand}
+
     fn ensure_amount(&self, _ctx: Context) -> Result<Amount, CompilationError> {
         self.validate()
     }

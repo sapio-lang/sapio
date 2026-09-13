@@ -92,7 +92,6 @@ impl Pure {
 
 impl Contract for Pure {
     declare! {finish, Self::owner}
-    declare! {non updatable}
 }
 
 pub struct Protected {
@@ -125,8 +124,7 @@ impl Protected {
 }
 
 impl Contract for Protected {
-    declare! {then, Self::pay}
-    declare! {non updatable}
+    declare! {actions, Self::pay}
 }
 
 pub fn compiled(protected: bool, emulated: bool) -> Compiled {

@@ -132,8 +132,7 @@ impl Payment {
 }
 
 impl sapio::contract::Contract for Payment {
-    sapio::declare! {then, Self::pay}
-    sapio::declare! {non updatable}
+    sapio::declare! {actions, Self::pay}
 }
 
 fn payment(lowering: LoweringPlan) -> Compiled {
@@ -169,8 +168,7 @@ impl MixedPayment {
 }
 
 impl sapio::contract::Contract for MixedPayment {
-    sapio::declare! {then, Self::pay}
-    sapio::declare! {non updatable}
+    sapio::declare! {actions, Self::pay}
 }
 
 #[tokio::test]

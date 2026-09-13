@@ -126,9 +126,8 @@ impl Contract for SignatureAttested {
         }
         Ok(ctx.funds())
     }
-    declare! {then, Self::payout}
+    declare! {actions, Self::payout}
     declare! {finish, Self::cooperate}
-    declare! {non updatable}
 }
 
 /// Two-party example curves, quantized to billionth-share integer weights.

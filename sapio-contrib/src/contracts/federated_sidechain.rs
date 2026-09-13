@@ -131,9 +131,8 @@ impl<T: RecoveryState> Contract for FederatedPegIn<T>
 where
     FederatedPegIn<T>: StateDependentActions + 'static,
 {
-    declare! {then, Self::begin_recovery}
+    declare! {actions, Self::begin_recovery}
     declare! {finish, Self::normal_signed, Self::finish_recovery}
-    declare! {non updatable}
 
     fn ensure_amount(&self, _ctx: Context) -> Result<bitcoin::Amount, CompilationError> {
         if self.thresh_normal == 0

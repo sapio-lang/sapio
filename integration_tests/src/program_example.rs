@@ -9,12 +9,13 @@ use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{Secp256k1, SecretKey};
 use bitcoin::{Address, Amount, Network, OutPoint, Transaction, TxIn, TxOut};
 use emulator_connect::program::{
-    prepare_program_request, ProgramSigningRequest, ProgramSpendPath, WasmEvaluator,
+    prepare_spend, ProgramCapability, ProgramEvidence, ProgramSigningRequest, ProgramSpendPath,
+    SpendAssets, SpendPath, WasmEvaluator,
 };
 use emulator_connect::CTVAvailable;
 use sapio::contract::abi::studio::SapioStudioFormat;
 use sapio::contract::*;
-use sapio::*;
+use sapio::template::{OutputAmount, Template};
 use sapio_base::effects::EffectPath;
 use sapio_base::program::{EmulatedProgram, EvaluatorId, ProgramInstance};
 use sapio_base::txindex::{TxIndex, TxIndexLogger};
@@ -79,13 +80,61 @@ pub fn signing_request(
     if requirements.next().is_some() {
         return Err("payment has more than one program for its key path".into());
     }
-    Ok(prepare_program_request(
+    prepare_example_request(
         compiled,
-        &requirement,
+        requirement,
         psbt,
-        0,
+        "pay-at-least/output-index-v1",
         output_index.to_le_bytes().to_vec(),
-    )?)
+    )
+}
+
+/// Prepare the complete branch for these single-program examples.
+/// The codec and signer are configured explicitly; preparation does not sign.
+pub fn prepare_example_request(
+    compiled: &Compiled,
+    requirement: sapio::contract::abi::object::ProgramRequirement,
+    psbt: Psbt,
+    codec: &str,
+    witness: Vec<u8>,
+) -> Result<ProgramSigningRequest, Box<dyn Error>> {
+    let path = match requirement.path {
+        ProgramSpendPath::KeyPath => SpendPath::KeyPath,
+        ProgramSpendPath::ScriptPath(leaf) => SpendPath::ScriptPath(leaf),
+    };
+    let assets = SpendAssets {
+        programs: vec![ProgramCapability {
+            requirement: requirement.clone(),
+            codec: codec.into(),
+            evidence_available: true,
+            signer_available: true,
+        }],
+        ..Default::default()
+    };
+    let evidence = ProgramEvidence {
+        requirement,
+        codec: codec.into(),
+        witness,
+    };
+    let mut prepared = prepare_spend(compiled, path, psbt, 0, &assets, &[evidence])?;
+    if prepared.program_requests.len() != 1 {
+        return Err("example branch must require exactly one program signature".into());
+    }
+    Ok(prepared.program_requests.remove(0))
+}
+
+/// Check retained local funding policy after normal signature finalization.
+/// The examples call this before extracting a transaction for display.
+pub fn check_finalized_candidate(compiled: &Compiled, psbt: &Psbt) -> Result<(), Box<dyn Error>> {
+    use sapio_base::CTVHash;
+    let hash = psbt.unsigned_tx.get_ctv_hash(0);
+    let template = compiled
+        .ctv_to_tx
+        .get(&hash)
+        .or_else(|| compiled.suggested_txs.get(&hash))
+        .ok_or("transaction is not a candidate in this artifact")?;
+    template.check_funded_psbt(psbt)?;
+    Ok(())
 }
 
 /// Deterministic, disposable keys for this research example only.
@@ -120,6 +169,7 @@ pub struct PaymentContract {
     recipient: Address,
 }
 
+#[sapio::contract]
 impl PaymentContract {
     /// Build source data and its guard together so they cannot disagree.
     pub fn new(minimum: u64, recipient: Address, root: Xpub) -> Self {
@@ -131,33 +181,50 @@ impl PaymentContract {
         }
     }
 
-    #[guard(policy, cached)]
-    fn payment_policy(self) -> EmulatedProgram {
+    #[policy]
+    fn payment_policy(&self) -> EmulatedProgram {
         self.emulation.clone()
     }
 
-    #[continuation(guarded_by = "[Self::payment_policy]", coerce_args = "Ok", web_api)]
-    fn pay(self, ctx: Context, candidate: Option<PaymentCandidate>) {
-        let candidate = candidate.unwrap_or(PaymentCandidate {
-            amount: self.minimum,
-            recipient_first: true,
-        });
-        let change = FUNDING_SATS
-            .checked_sub(FEE_SATS)
-            .and_then(|available| available.checked_sub(candidate.amount))
-            .ok_or_else(|| CompilationError::Custom("candidate exceeds example funding".into()))?;
+    fn default_payment(&self, ctx: Context) -> TxTmplIt {
+        use sapio::contract::actions::IntoTemplates;
+        self.pay(
+            ctx,
+            PaymentCandidate {
+                amount: self.minimum,
+                recipient_first: true,
+            },
+        )
+        .into_templates()
+    }
+
+    /// Construct a candidate independently of the policy that authorizes it.
+    #[action(suggested, guarded_by(Self::payment_policy), defaults = Self::default_payment)]
+    pub fn pay(
+        &self,
+        ctx: Context,
+        candidate: PaymentCandidate,
+    ) -> Result<Template, CompilationError> {
         let paid = Compiled::from_address(self.recipient.clone(), Amount::ZERO);
-        let change_address = Compiled::from_address(recipient(94), Amount::ZERO);
-        let outputs = if candidate.recipient_first {
-            [(candidate.amount, &paid), (change, &change_address)]
+        let change = Compiled::from_address(recipient(94), Amount::ZERO);
+        let mut plan = ctx.template_plan();
+        if candidate.recipient_first {
+            plan.output(
+                "recipient",
+                OutputAmount::Exact(Amount::from_sat(candidate.amount)),
+                &paid,
+            )?;
+            plan.output("change", OutputAmount::Remainder, &change)?;
         } else {
-            [(change, &change_address), (candidate.amount, &paid)]
-        };
-        let mut template = ctx.template();
-        for (amount, output) in outputs {
-            template = template.add_output(Amount::from_sat(amount), output, None)?;
+            plan.output("change", OutputAmount::Remainder, &change)?;
+            plan.output(
+                "recipient",
+                OutputAmount::Exact(Amount::from_sat(candidate.amount)),
+                &paid,
+            )?;
         }
-        template.add_fees(Amount::from_sat(FEE_SATS))?.into()
+        plan.reserve_fees(Amount::from_sat(FEE_SATS));
+        Ok(plan.finish()?)
     }
 
     /// Compile using only source, public roots, and optional candidate effects.
@@ -165,28 +232,17 @@ impl PaymentContract {
         &self,
         candidates: &[PaymentCandidate],
     ) -> Result<Compiled, CompilationError> {
-        let effects: BTreeMap<_, _> = candidates
-            .iter()
-            .enumerate()
-            .map(|(index, candidate)| (format!("candidate_{index}"), candidate))
-            .collect();
-        let effects = serde_json::from_value(serde_json::json!({
-            "effects": {"payment/@action/pay/@suggested": effects}
-        }))
-        .expect("valid candidate effects");
+        let root = EffectPath::try_from("payment").unwrap();
+        let effects = Self::pay_action().requests(&root, candidates)?;
         self.compile(Context::new(
             Network::Regtest,
             Amount::from_sat(FUNDING_SATS),
             sapio_base::LoweringPlan::Native,
-            EffectPath::try_from("payment").unwrap(),
+            root,
             Arc::new(effects),
             None,
         ))
     }
-}
-
-impl Contract for PaymentContract {
-    declare! {updatable<Option<PaymentCandidate>>, Self::pay}
 }
 
 /// Attach candidates to a known synthetic funding transaction, without signing.

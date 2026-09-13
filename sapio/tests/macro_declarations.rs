@@ -50,7 +50,6 @@ impl BackendGuards for BackendContract {
 }
 impl Contract for BackendContract {
     sapio::declare! {finish, Self::external, Self::cached_external}
-    sapio::declare! {non updatable}
 }
 
 #[test]
@@ -75,9 +74,7 @@ fn custom_backend_trait_guards_preserve_fallibility_and_optional_declarations() 
 
     struct Optional;
     impl BackendGuards for Optional {}
-    impl Contract for Optional {
-        sapio::declare! {non updatable}
-    }
+    impl Contract for Optional {}
     assert!(Optional::external().is_none());
     assert!(Optional::cached_external().is_none());
 }
@@ -124,7 +121,7 @@ impl Actions for Policy {
     #[sapio::continuation(
         guarded_by = "[Self::signed]",
         compile_if = "[Self::allowed]",
-        coerce_args = "|value: Option<u64>| Ok(value.unwrap_or(900))",
+        defaults = "|this, ctx| Self::continue_update(this, ctx, 900)",
         web_api
     )]
     fn update(self, ctx: Context, amount: u64) -> TxTmplIt {
@@ -135,7 +132,7 @@ impl Actions for Policy {
 
     #[sapio::continuation(
         guarded_by = "[Self::cached_signed]",
-        coerce_args = "|value: Option<u64>| Ok(OfflineArgs(value.unwrap_or(800)))"
+        defaults = "|this, ctx| Self::continue_offline(this, ctx, OfflineArgs(800))"
     )]
     fn offline(self, ctx: Context, OfflineArgs(amount): OfflineArgs) {
         ctx.template()
@@ -145,8 +142,7 @@ impl Actions for Policy {
 }
 
 impl Contract for Policy {
-    sapio::declare! {then, Self::pay}
-    sapio::declare! {updatable<Option<u64>>, Self::update, Self::offline}
+    sapio::declare! {actions, Self::pay, Self::update, Self::offline}
 }
 
 #[test]
@@ -182,9 +178,7 @@ fn declared_traits_and_attribute_implementations_compile_real_actions() {
 
 struct Absent;
 impl Actions for Absent {}
-impl Contract for Absent {
-    sapio::declare! {non updatable}
-}
+impl Contract for Absent {}
 
 #[test]
 fn interface_defaults_leave_actions_absent() {
@@ -206,7 +200,7 @@ trait CaseSensitive: Contract {
 
 struct Cases;
 impl Contract for Cases {
-    sapio::declare! {updatable<()>, Self::update, Self::UPDATE, Self::r#type}
+    sapio::declare! {actions, Self::update, Self::UPDATE, Self::r#type}
 }
 
 #[allow(non_snake_case)]
@@ -216,21 +210,17 @@ impl CaseSensitive for Cases {
         Clause::Key(key(3))
     }
 
-    #[sapio::continuation(guarded_by = "[Self::signed]", coerce_args = "|()| Ok(1)", web_api)]
+    #[sapio::continuation(guarded_by = "[Self::signed]", web_api)]
     fn update(self, _ctx: Context, _value: u64) {
         sapio::contract::empty()
     }
 
-    #[sapio::continuation(
-        guarded_by = "[Self::signed]",
-        coerce_args = "|()| Ok(String::new())",
-        web_api
-    )]
+    #[sapio::continuation(guarded_by = "[Self::signed]", web_api)]
     fn UPDATE(self, _ctx: Context, _value: String) {
         sapio::contract::empty()
     }
 
-    #[sapio::continuation(guarded_by = "[Self::signed]", coerce_args = "|()| Ok(true)", web_api)]
+    #[sapio::continuation(guarded_by = "[Self::signed]", web_api)]
     fn r#type(self, _ctx: Context, _value: bool) {
         sapio::contract::empty()
     }
@@ -286,7 +276,6 @@ mod hygiene {
         }
     }
     impl language::contract::Contract for Visible {
-        language::declare! {non updatable}
         language::declare! {finish, Self::signed}
     }
 }

@@ -2,8 +2,9 @@
 use bitcoin::Network;
 use sapio::contract::abi::object::ProgramRequirement;
 use sapio::contract::{Compilable, Compiled, Context};
+use sapio::template::FundingConstraints;
 use sapio_base::covenant::LoweringPlan;
-use sapio_base::effects::{EffectPath, PathFragment};
+use sapio_base::effects::{EditableMapEffectDB, EffectPath, PathFragment};
 use sapio_base::serialization_helpers::SArc;
 use sapio_wasm_plugin::host::plugin_handle::{SyncModuleLocator, WasmPluginHandle};
 use sapio_wasm_plugin::plugin_handle::PluginHandle;
@@ -16,6 +17,10 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 
+#[path = "../../plugin-example/custom-policy/src/plugin.rs"]
+mod custom_policy;
+#[path = "../../plugin-example/ordinal-example/src/plugin.rs"]
+mod ordinal_example;
 #[path = "../../plugin-example/program-policy/src/plugin.rs"]
 mod program_policy;
 
@@ -25,7 +30,15 @@ struct Case {
     wasm: String,
     input: String,
     dependencies: Vec<String>,
+    request: Option<ActionRequest>,
     expect: Expected,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ActionRequest {
+    action: String,
+    arguments: Value,
 }
 
 #[derive(Deserialize)]
@@ -42,6 +55,7 @@ struct Expected {
     root_lock_times: Option<Vec<u32>>,
     root_output_values_by_lock_time: Option<BTreeMap<u32, Vec<u64>>>,
     root_required_input_amount: Option<u64>,
+    root_funding_constraints: Option<FundingConstraints>,
 }
 
 fn substitute(value: &mut Value, modules: &BTreeMap<String, String>) -> Result<(), Box<dyn Error>> {
@@ -142,6 +156,14 @@ fn check(
         .values()
         .chain(compiled.suggested_txs.values())
         .collect();
+    if let Some(expected) = &expected.root_funding_constraints {
+        assert_eq!(
+            templates.len(),
+            1,
+            "funding fixture must identify one transition"
+        );
+        assert_eq!(templates[0].funding_constraints.as_ref(), Some(expected));
+    }
     if let Some(values) = &expected.root_output_values {
         assert_eq!(
             templates.len(),
@@ -248,16 +270,55 @@ fn main() -> Result<(), Box<dyn Error>> {
     let path = EffectPath::try_from("example")?;
     let mut plugin = load(case)?;
     assert!(!plugin.get_name()?.trim().is_empty());
-    let first = plugin.call(&path, &input)?;
+    let mut first = plugin.call(&path, &input)?;
+    if let Some(request) = &case.request {
+        let artifact: Compiled = serde_json::from_value(first)?;
+        let paths: Vec<_> = artifact
+            .continue_apis
+            .keys()
+            .filter(|path| {
+                let mut fragments = path.0.iter();
+                matches!(
+                    fragments.next(),
+                    Some(PathFragment::Next | PathFragment::Suggested)
+                ) && matches!(fragments.next(), Some(PathFragment::Named(name))
+                        if name.0.as_str() == request.action)
+                    && matches!(fragments.next(), Some(PathFragment::Action))
+            })
+            .collect();
+        assert_eq!(
+            paths.len(),
+            1,
+            "fixture action must be advertised exactly once"
+        );
+        let mut effects: EditableMapEffectDB = input.context.effects.clone().into();
+        effects
+            .effects
+            .entry(paths[0].clone())
+            .or_default()
+            .insert(SArc(Arc::new("request".into())), request.arguments.clone());
+        input.context.effects = effects.into();
+        first = plugin.fresh_clone()?.call(&path, &input)?;
+    }
     // Reuse compiled code, with independent memory, fuel and child budgets.
     assert_eq!(
         first,
         plugin.fresh_clone()?.call(&path, &input)?,
         "nondeterministic artifact"
     );
-    if args[3] == "program-policy" {
-        let contract: program_policy::DelayedProgram =
-            serde_json::from_value(input.arguments.clone())?;
+    let native_contract: Option<Box<dyn Compilable>> = match args[3].as_str() {
+        "program-policy" => Some(Box::new(serde_json::from_value::<
+            program_policy::DelayedProgram,
+        >(input.arguments.clone())?)),
+        "custom-policy" => Some(Box::new(serde_json::from_value::<
+            custom_policy::CustomPolicyPayment,
+        >(input.arguments.clone())?)),
+        "ordinal-example" => Some(Box::new(serde_json::from_value::<
+            ordinal_example::SimpleOrdinal,
+        >(input.arguments.clone())?)),
+        _ => None,
+    };
+    if let Some(contract) = native_contract {
         let context = &input.context;
         // The guest scopes compilation to its authenticated module identity.
         let native_path = EffectPath::push_owned(

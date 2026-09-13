@@ -192,8 +192,7 @@ impl TicTacToe {
 }
 
 impl Contract for TicTacToe {
-    declare! {then, Self::make_move, Self::claim_winnings, Self::timeout, Self::refund_draw}
-    declare! {non updatable}
+    declare! {actions, Self::make_move, Self::claim_winnings, Self::timeout, Self::refund_draw}
 
     fn ensure_amount(&self, ctx: Context) -> Result<bitcoin::Amount, CompilationError> {
         let x = self
@@ -322,7 +321,7 @@ mod tests {
             game.guard_current_player(context(0)),
             sapio_base::Clause::Key(key(1))
         );
-        assert_eq!(TicTacToe::make_move().unwrap().guard.len(), 1);
+        assert_eq!(TicTacToe::make_move().unwrap().get_guard().len(), 1);
         for funds in [1000, 2000] {
             let object = game.compile(context(funds)).unwrap();
             object.validate().unwrap();

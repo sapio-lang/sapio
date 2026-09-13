@@ -126,8 +126,7 @@ impl Contract for HodlChickenInner {
     fn ensure_amount(&self, _ctx: Context) -> Result<Amount, CompilationError> {
         Ok(Amount::from_sat(self.0.alice_deposit + self.0.bob_deposit))
     }
-    declare! {then, Self::alice_redeem, Self::bob_redeem}
-    declare! {non updatable}
+    declare! {actions, Self::alice_redeem, Self::bob_redeem}
 }
 
 #[cfg(test)]

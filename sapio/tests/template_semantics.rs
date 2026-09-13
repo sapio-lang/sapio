@@ -4,7 +4,7 @@ mod covenant;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::{Secp256k1, SecretKey};
 use bitcoin::{Amount, Network, XOnlyPublicKey};
-use sapio::contract::actions::ThenFuncAsFinishOrFunc;
+use sapio::contract::actions::ActionFactory;
 use sapio::contract::object::SupportedDescriptors;
 use sapio::contract::{Compilable, CompilationError, Contract};
 use sapio::miniscript::policy::{semantic::Policy, Liftable};
@@ -70,13 +70,11 @@ impl<const REVERSED: bool> Payments<REVERSED> {
     }
 }
 impl<const REVERSED: bool> Contract for Payments<REVERSED> {
-    const THEN_FNS: &'static [fn() -> Option<ThenFuncAsFinishOrFunc<'static, Self, ()>>] =
-        if REVERSED {
-            &[Self::bob_carol_payment, Self::alice_payment]
-        } else {
-            &[Self::alice_payment, Self::bob_carol_payment]
-        };
-    declare! {non updatable}
+    const ACTIONS: &'static [ActionFactory<Self>] = if REVERSED {
+        &[Self::bob_carol_payment, Self::alice_payment]
+    } else {
+        &[Self::alice_payment, Self::bob_carol_payment]
+    };
 }
 
 fn accepts(
@@ -160,8 +158,7 @@ impl RepeatedTemplates {
     }
 }
 impl Contract for RepeatedTemplates {
-    declare! {then, Self::pay}
-    declare! {non updatable}
+    declare! {actions, Self::pay}
 }
 
 #[test]
@@ -214,7 +211,7 @@ impl Suggested {
     fn signed(self, _ctx: Context) {
         Clause::Key(key(1))
     }
-    #[continuation(guarded_by = "[Self::signed]", coerce_args = "Ok")]
+    #[continuation(guarded_by = "[Self::signed]", default)]
     fn update(self, ctx: Context, _args: ()) {
         let first = payment(ctx, &[])?;
         let mut second = first.clone();
@@ -223,7 +220,7 @@ impl Suggested {
     }
 }
 impl Contract for Suggested {
-    declare! {updatable<()>, Self::update}
+    declare! {actions, Self::update}
 }
 
 #[test]
@@ -249,8 +246,7 @@ impl ManyGuards {
     }
 }
 impl Contract for ManyGuards {
-    declare! {then, Self::pay}
-    declare! {non updatable}
+    declare! {actions, Self::pay}
 }
 
 #[test]

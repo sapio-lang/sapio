@@ -35,7 +35,7 @@ impl UnderFundedExpiringOption {
     fn expires(self, ctx: Context) {
         ctx.template()
             // set the timeout for this path -- because it is using
-            // then! we do not require a guard.
+            // a committed action needs no separate timelock guard.
             .set_lock_time(self.timeout)?
             .add_output(
                 // ctx.funds() knows how much money has been sent to this contract
@@ -63,8 +63,7 @@ impl UnderFundedExpiringOption {
 }
 
 impl Contract for UnderFundedExpiringOption {
-    declare!(then, Self::expires, Self::strikes);
-    declare!(non updatable);
+    declare!(actions, Self::expires, Self::strikes);
 }
 ```
 

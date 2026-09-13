@@ -1,5 +1,13 @@
 # Contract funding requirements
 
+For new contracts, [transaction plans](TRANSACTION_PLANS.md) offer named input
+contributions, exact/remainder allocation and retained local fee rules. The
+builder and graph funding representation below remain the common lower layer.
+Templates serialize an explicit `funding_constraints` field: `null` for an
+ordinary builder template, or ordered requirements from a plan. Recompile older
+artifacts rather than dropping the field or inventing a fee policy.
+
+
 Every compiled contract has an explicit `required_input_amount: bitcoin::Amount`.
 It is the minimum amount to allocate to that contract's output and later provide
 at its input zero. The JSON field is the required integer

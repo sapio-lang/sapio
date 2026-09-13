@@ -134,9 +134,8 @@ where
     Staker<T>: StakerInterface,
     T: StakingState,
 {
-    declare! {then, Self::begin_redeem, Self::cheated}
+    declare! {actions, Self::begin_redeem, Self::cheated}
     declare! {finish, Self::finish_redeem_key}
-    declare! {non updatable}
 }
 
 #[cfg(test)]

@@ -4,10 +4,10 @@ mod fixture;
 use bitcoin::blockdata::opcodes::all::OP_VERIFY;
 use bitcoin::{Amount, ScriptBuf};
 use fixture::{context, key, ArithmeticSigner};
-use sapio::contract::actions::ThenFuncAsFinishOrFunc;
+use sapio::contract::actions::ActionFactory;
 use sapio::contract::object::SupportedDescriptors;
 use sapio::contract::{Compilable, Context, Contract, TxTmplIt};
-use sapio::{declare, guard, then};
+use sapio::{guard, then};
 use sapio_base::miniscript::Tap;
 use sapio_base::policy::{PolicyCompiler, ScriptPolicy};
 use sapio_base::Clause;
@@ -39,13 +39,11 @@ impl<const REVERSED: bool> Payments<REVERSED> {
 }
 
 impl<const REVERSED: bool> Contract for Payments<REVERSED> {
-    const THEN_FNS: &'static [fn() -> Option<ThenFuncAsFinishOrFunc<'static, Self, ()>>] =
-        if REVERSED {
-            &[Self::guarded, Self::unguarded]
-        } else {
-            &[Self::unguarded, Self::guarded]
-        };
-    declare! {non updatable}
+    const ACTIONS: &'static [ActionFactory<Self>] = if REVERSED {
+        &[Self::guarded, Self::unguarded]
+    } else {
+        &[Self::unguarded, Self::guarded]
+    };
 }
 
 #[test]

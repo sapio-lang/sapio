@@ -1,112 +1,46 @@
-# Continuation Effects
+# Typed action requests and effects
 
-Suppose we had the following bit of code in a contract's implementation:
-
-```rust
-#[derive(Serialize, Deserialize)]
-struct PayToKey(bitcoin::PublicKey);
-/// Helper
-fn default_coerce(
-    k: <T as Contract>::StatefulArguments,
-) -> Result<PayToKey, CompilationError> {
-    Ok(k)
-}
-/// A Guarded CTV Function
-#[continuation(
-    /// required: guards for the miniscript clauses required
-    guarded_by = "[Self::guard_1,... Self::guard_n]",
-    web_api,
-    /// helper for coercing args for json api, could be arbitrary
-    coerce_args = "default_coerce"
-)]
-fn to_address(self, ctx:Context, o:PayToKey) {
-    let amt = ctx.funds();
-    ctx.template().add_output(amt, &o.0, None)?.into()
-}
-```
-When the `to_address` function gets passed by the compiler, a unique pointer (an effect path) is
-generated for it from the context object. This enabled sending it parameters
-later in the future.
-
-
-On creation of the context object a `effects: Arc<MapEffectDB>` parameter  is
-available.  This `MapEffectDB` links the effect paths to a list of arguments
-intended to be passed to this branch which can generate new contract transitions
-intended to be signed off on by the guards to that path.
-
-For example, consider a contract for a NFT (a provenance checkable certificate
-of ownership).
+A contract's spending policy can be compiled without making a request to every
+action. Each suggested action publishes its own argument schema and effects path.
+The generated typed handle encodes a request at that exact path:
 
 ```rust
-#[derive(Serialize, Deserialize)]
-struct NFT(bitcoin::PublicKey);
-
-#[derive(Serialize, Deserialize)]
-struct Sale(bitcoin::PublicKey, AmountF64);
-/// Helper
-fn default_coerce(
-    k: <T as Contract>::StatefulArguments,
-) -> Result<Sale, CompilationError> {
-    Ok(k)
-}
-impl NFT {
-    #[guard]
-    fn signed(self, ctx:Context) {
-        Clause::Key(self.0)
-    }
-    #[continuation(
-        guarded_by = "[Self::signed]",
-        web_api,
-        /// helper for coercing args for json api, could be arbitrary
-        coerce_args = "default_coerce"
-    )]
-    fn make_sale(self, ctx:Context, o:Sale) {
-        let amt = ctx.funds();
-        ctx.template()
-           .add_amount(o.1)
-           // Carry whatever funds in the UTXO to the buyer in
-           // a new NFT
-           .add_output(amt, &NFT(o.0), None)?
-           // Pay the sale amount to the previous owner
-           .add_output(amt, &self.0, None)?
-           .into()
-    }
-}
-impl Contract for NFT {
-    declare!{updatable<Sale>, Self::make_sale}
-}
+let effects = Escrow::pay_action().request(&root_path, &payment)?;
+let context = Context::new(
+    network,
+    amount,
+    lowering,
+    root_path,
+    Arc::new(effects),
+    None,
+);
+let artifact = escrow.compile(context)?;
 ```
 
-The updates generated through `make_sale` generate the transactions for a series
-of sales. For example, imagine I start with a `NFT(Bob)`.
+The request invokes only `pay`; it is not passed through unrelated actions or a
+shared contract-wide enum. JSON deserialization occurs at the request boundary.
+`Escrow::pay_action().invoke(&escrow, context, payment)` is the equivalent typed
+Rust construction entry point. Directly calling `escrow.pay(context, payment)`
+also works because the contract macro preserves ordinary methods.
 
-I can recompile `NFT(Bob)` with the context (not exactly the pointer, but just for example)
-`NFT(Bob)` with effects
-```json
-{"0": {"make_sale": [["Alice", 10]]}}
-```
+For several candidates at the same action, use
+`Escrow::pay_action().requests(&root_path, &payments)`. Entries receive distinct,
+deterministic labels that preserve their input order. An empty collection adds no
+requests. The lower-level `MapEffectDB` remains available when requests must be
+attached at multiple contract paths.
 
-Supposing Alice pays into the transaction, a future transaction could be:
+An argument-free suggested action still needs an explicit unit request, encoded
+as JSON `null`. An absent entry never means “call this action with a default
+value.” Explicit default-proposal callbacks are evaluated separately.
 
-```json
-{"0": {"make_sale": [["Alice", 10]]}, "1": {"make_sale": [["Carol", 11]]}}
-```
+Suggested transactions remain subject to their fixed authorization policy. A
+candidate does not acquire authority because its generator accepted it. For
+example, an NFT sale generator may construct the transfer and seller payment;
+the owner must still authorize the resulting transaction through the spending
+policy. A committed action additionally fixes its candidate transactions in the
+compiled covenant, so changing committed candidates may change the address.
 
-Thus by starting with a known valid NFT (e.g., Bob being the original artist),
-the effects can regenerate a series of state transitions for verification of
-provenance.
-
-
-Further, as effects at a given point are a set, there could be multiple in flight transitions. E.g.,
-
-```json
-{"0": {"make_sale": [["Alice", 10], ["Eve", 10]]}}
-```
-
-represents Alice and Bob both having the ability to purchase the NFT for 10 BTC.
-
-
-# Challenges
-
-1. By using decreasing time locks, implement a dutch auction pitting two
-participants against each other.
+Raw effects paths that are not visited by compilation are not automatically
+reported as unused. Typed handles avoid hand-written action paths; callers that
+assemble raw effects maps remain responsible for targeting the intended contract
+instance.
