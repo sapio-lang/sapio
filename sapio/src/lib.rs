@@ -7,6 +7,8 @@
 //! The Sapio Compiler Core Crate. Sapio is used to create multi-transaction Bitcoin Smart Contracts.
 #![deny(missing_docs)]
 
+/// Bitcoin types used by generated contract declarations.
+pub use bitcoin;
 pub use sapio_base::miniscript;
 #[macro_use]
 pub mod contract;

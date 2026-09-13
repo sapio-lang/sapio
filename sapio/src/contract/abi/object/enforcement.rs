@@ -182,9 +182,8 @@ mod tests {
     }
 
     fn finish(clause: Clause) -> Object {
-        DynamicContract::<(), _> {
-            then: vec![],
-            finish_or: vec![],
+        DynamicContract::<_> {
+            actions: vec![],
             finish: vec![finish_guard],
             metadata_f: Box::new(|_, _| Ok(Default::default())),
             ensure_amount_f: Box::new(|_, _| Ok(Amount::ZERO)),

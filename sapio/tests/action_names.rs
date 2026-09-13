@@ -25,12 +25,11 @@ impl RepeatedPayment {
 }
 
 impl Contract for RepeatedPayment {
-    declare! {then, Self::pay, Self::pay, Self::pay}
-    declare! {non updatable}
+    declare! {actions, Self::pay, Self::pay, Self::pay}
 }
 
 #[test]
-fn compiles_three_actions_with_the_same_name() {
+fn duplicate_action_names_fail_instead_of_rerouting_requests() {
     let compiled = RepeatedPayment
         .compile(Context::new(
             Network::Regtest,
@@ -40,6 +39,8 @@ fn compiles_three_actions_with_the_same_name() {
             Arc::new(Default::default()),
             None,
         ))
-        .unwrap();
-    assert_eq!(compiled.ctv_to_tx.len(), 1);
+        .unwrap_err();
+    assert!(
+        matches!(compiled, sapio::contract::CompilationError::TerminateWith(message) if message == "duplicate action name: pay")
+    );
 }

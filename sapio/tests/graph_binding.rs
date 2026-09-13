@@ -27,8 +27,7 @@ impl Payment {
 }
 
 impl Contract for Payment {
-    declare! {then, Self::pay}
-    declare! {non updatable}
+    declare! {actions, Self::pay}
 }
 
 fn payment(destinations: Vec<Compiled>, path: &str) -> Compiled {

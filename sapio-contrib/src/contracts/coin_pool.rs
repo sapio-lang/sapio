@@ -15,7 +15,6 @@ use sapio_base::Clause;
 
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::convert::{TryFrom, TryInto};
 use std::sync::{Arc, Mutex};
 type Payouts = Vec<(Arc<Mutex<dyn Compilable>>, AmountF64)>;
 /// A CoinPool is a contract that allows a group of individuals to
@@ -25,12 +24,6 @@ pub struct CoinPool {
     pub clauses: Vec<Clause>,
     /// How to refund people if no update agreed on
     pub refunds: Payouts,
-}
-/// Helper
-fn default_coerce(
-    k: <CoinPool as Contract>::StatefulArguments,
-) -> Result<UpdateTypes, CompilationError> {
-    Ok(k)
 }
 
 impl CoinPool {
@@ -77,35 +70,27 @@ impl CoinPool {
         )?))
     }
     /// move the coins to the next state -- payouts may recursively contain pools itself
-    #[continuation(
-        web_api,
-        guarded_by = "[Self::all_approve]",
-        coerce_args = "default_coerce"
-    )]
-    fn next_pool(self, ctx: sapio::Context, o: UpdateTypes) {
-        let o2: Option<CoinPoolUpdate> = o.try_into()?;
-        if let Some(coin_pool) = o2 {
-            let external: Amount = coin_pool.external_amount.into();
-            ctx.funds()
-                .checked_add(external)
-                .ok_or(CompilationError::OutOfFunds)?;
-            if external != Amount::ZERO && coin_pool.add_inputs.is_empty() {
-                return Err(CompilationError::Custom(
-                    "External funds require an additional input".into(),
-                ));
-            }
-            let mut tmpl = ctx.template();
-            for seq in coin_pool.add_inputs.iter() {
-                tmpl = tmpl.add_sequence().set_sequence(-1, *seq)?;
-            }
-            tmpl = tmpl.add_amount(coin_pool.external_amount.into())?;
-            for (to, amt) in coin_pool.payouts.iter() {
-                tmpl = tmpl.add_output((*amt).into(), &*to.lock().unwrap(), None)?;
-            }
-            tmpl.into()
-        } else {
-            empty()
+    #[continuation(web_api, guarded_by = "[Self::all_approve]")]
+    fn next_pool(self, ctx: sapio::Context, o: PoolRequest) {
+        let coin_pool = CoinPoolUpdate::from(o);
+        let external: Amount = coin_pool.external_amount.into();
+        ctx.funds()
+            .checked_add(external)
+            .ok_or(CompilationError::OutOfFunds)?;
+        if external != Amount::ZERO && coin_pool.add_inputs.is_empty() {
+            return Err(CompilationError::Custom(
+                "External funds require an additional input".into(),
+            ));
         }
+        let mut tmpl = ctx.template();
+        for seq in coin_pool.add_inputs.iter() {
+            tmpl = tmpl.add_sequence().set_sequence(-1, *seq)?;
+        }
+        tmpl = tmpl.add_amount(coin_pool.external_amount.into())?;
+        for (to, amt) in coin_pool.payouts.iter() {
+            tmpl = tmpl.add_output((*amt).into(), &*to.lock().unwrap(), None)?;
+        }
+        tmpl.into()
     }
 }
 
@@ -122,60 +107,40 @@ pub struct CoinPoolUpdate {
     external_amount: AmountF64,
 }
 
-/// `CoinPoolUpdate` allows updating a `CoinPool` to a new state.
+/// A concrete coin-pool transition request; absence needs no placeholder value.
 #[derive(Deserialize, JsonSchema)]
-pub enum UpdateTypes {
-    /// # Normal Update
-    Basic {
-        /// the contracts to pay into
-        #[serde(skip_serializing_if = "Option::is_none", default)]
-        payouts: Option<Vec<(bitcoin::XOnlyPublicKey, AmountF64)>>,
-        /// If the external inputs are contributing funds -- this allows two
-        /// coinpools to merge.
-        /// TODO: Allow different indexes?
-        external_amount: AmountF64,
-        /// if we should add any inputs to the transaction, and if so, what the
-        /// sequences should be set to.
-        #[serde(skip_serializing_if = "Option::is_none", default)]
-        add_inputs: Option<Vec<AnyRelTimeLock>>,
-    },
-    /// # Update without Args
-    NoUpdate,
+pub struct PoolRequest {
+    /// Contracts to pay into, represented here by their public keys.
+    #[serde(default)]
+    pub payouts: Vec<(bitcoin::XOnlyPublicKey, AmountF64)>,
+    /// Contribution from additional transaction inputs.
+    pub external_amount: AmountF64,
+    /// Sequences for additional inputs.
+    #[serde(default)]
+    pub add_inputs: Vec<AnyRelTimeLock>,
 }
-impl Default for UpdateTypes {
-    fn default() -> Self {
-        UpdateTypes::NoUpdate
-    }
-}
-impl StatefulArgumentsTrait for UpdateTypes {}
-impl TryFrom<UpdateTypes> for Option<CoinPoolUpdate> {
-    type Error = CompilationError;
-    fn try_from(u: UpdateTypes) -> Result<Option<CoinPoolUpdate>, CompilationError> {
-        match u {
-            UpdateTypes::Basic {
-                add_inputs,
-                external_amount,
-                payouts,
-            } => Ok(Some(CoinPoolUpdate {
-                add_inputs: add_inputs.unwrap_or_default(),
-                external_amount,
-                payouts: payouts
-                    .unwrap_or_default()
-                    .iter()
-                    .map(|(a, b)| {
-                        let k: Arc<Mutex<dyn Compilable>> = Arc::new(Mutex::new(*a));
-                        (k, (*b))
-                    })
-                    .collect(),
-            })),
-            _ => Ok(None),
+
+impl From<PoolRequest> for CoinPoolUpdate {
+    fn from(request: PoolRequest) -> Self {
+        Self {
+            add_inputs: request.add_inputs,
+            external_amount: request.external_amount,
+            payouts: request
+                .payouts
+                .into_iter()
+                .map(|(key, amount)| {
+                    (
+                        Arc::new(Mutex::new(key)) as Arc<Mutex<dyn Compilable>>,
+                        amount,
+                    )
+                })
+                .collect(),
         }
     }
 }
 
 impl Contract for CoinPool {
-    declare! {then, Self::bisect_offline}
-    declare! {updatable<UpdateTypes>, Self::next_pool}
+    declare! {actions,Self::bisect_offline, Self::next_pool}
 
     fn ensure_amount(&self, _ctx: Context) -> Result<Amount, CompilationError> {
         if self.clauses.is_empty() || self.clauses.len() != self.refunds.len() {
@@ -248,10 +213,10 @@ mod tests {
         assert!(pool(1)
             .continue_next_pool(
                 context(1000),
-                UpdateTypes::Basic {
-                    payouts: None,
+                PoolRequest {
+                    payouts: vec![],
                     external_amount: Amount::from_sat(1).into(),
-                    add_inputs: None
+                    add_inputs: vec![]
                 }
             )
             .is_err());

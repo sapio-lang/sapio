@@ -20,12 +20,6 @@ use serde::*;
 pub struct ChainReturn {
     pk: bitcoin::XOnlyPublicKey,
 }
-/// Helper
-fn default_coerce(
-    k: <ChainReturn as Contract>::StatefulArguments,
-) -> Result<UpdateTypes, CompilationError> {
-    Ok(k)
-}
 
 impl ChainReturn {
     /// everyone has signed off on the transaction
@@ -33,10 +27,14 @@ impl ChainReturn {
     fn approved(self, _ctx: Context) {
         Clause::Key(self.pk)
     }
+    fn default_close(&self, ctx: Context) -> TxTmplIt {
+        self.continue_next_chain(ctx, UpdateTypes::Close)
+    }
+
     /// move the coins to the next state -- payouts may recursively contain pools itself
     #[continuation(
         guarded_by = "[Self::approved]",
-        coerce_args = "default_coerce",
+        defaults = "Self::default_close",
         web_api
     )]
     fn next_chain(self, ctx: sapio::Context, o: UpdateTypes) {
@@ -76,18 +74,11 @@ pub enum UpdateTypes {
         /// Fees to pay
         fees: AmountF64,
     },
-    /// # Update without Args
-    NoUpdate {},
+    /// Close the chain and return all funds to the owner.
+    Close,
 }
-impl Default for UpdateTypes {
-    fn default() -> Self {
-        UpdateTypes::NoUpdate {}
-    }
-}
-impl StatefulArgumentsTrait for UpdateTypes {}
-
 impl Contract for ChainReturn {
-    declare! {updatable<UpdateTypes>, Self::next_chain}
+    declare! {actions, Self::next_chain}
 }
 
 #[cfg(test)]

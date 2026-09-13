@@ -35,8 +35,7 @@ impl TwoGuards {
 }
 
 impl Contract for TwoGuards {
-    declare! {then, Self::pay}
-    declare! {non updatable}
+    declare! {actions, Self::pay}
 }
 
 #[test]

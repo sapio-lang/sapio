@@ -220,7 +220,6 @@ mod tests {
 
     impl Contract for Predicate {
         declare! {finish, Self::authorized}
-        declare! {non updatable}
 
         fn ensure_amount(&self, _ctx: Context) -> Result<Amount, CompilationError> {
             Ok(Amount::from_sat(10_000))

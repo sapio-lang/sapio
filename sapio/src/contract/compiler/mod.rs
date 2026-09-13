@@ -12,7 +12,7 @@ use super::Compiled;
 use super::Context;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::contract::actions::conditional_compile::CCILWrapper;
-use crate::contract::actions::CallableAsFoF;
+use crate::contract::actions::ErasedAction;
 use crate::contract::object::{CovenantRequirements, ProgramPolicy, SupportedDescriptors};
 use crate::contract::TxTmplIt;
 use bitcoin::key::TweakedPublicKey;
@@ -129,10 +129,10 @@ enum Nullable {
     No,
 }
 
-fn compute_all_effects<C, A: Default>(
+fn compute_all_effects<C>(
     mut top_effect_ctx: Context,
     self_ref: &C,
-    func: &dyn CallableAsFoF<C, A>,
+    func: &dyn ErasedAction<C>,
 ) -> TxTmplIt {
     // Reject malformed names before any continuation callback can observe an
     // effect path that would change meaning when serialized.
@@ -150,7 +150,7 @@ fn compute_all_effects<C, A: Default>(
         }
     }
     let default_applied_effect_ctx = top_effect_ctx.derive(PathFragment::DefaultEffect)?;
-    let def = func.call(self_ref, default_applied_effect_ctx, Default::default())?;
+    let def = func.default_templates(self_ref, default_applied_effect_ctx)?;
     if !func.web_api() {
         return Ok(def);
     }
@@ -167,30 +167,6 @@ fn compute_all_effects<C, A: Default>(
             Ok(Box::new(v.chain(w)))
         });
     r
-}
-
-struct Renamer {
-    used_names: BTreeSet<String>,
-}
-
-impl Renamer {
-    fn new() -> Self {
-        Renamer {
-            used_names: Default::default(),
-        }
-    }
-    fn get_name(&mut self, a: &String) -> String {
-        let mut count = 0u64;
-        let mut name: String = a.clone();
-        loop {
-            if self.used_names.insert(name.clone()) {
-                return name;
-            } else {
-                name = format!("{}_renamed_{}", a, count);
-                count += 1;
-            }
-        }
-    }
 }
 
 impl<'a, T> Compilable for T
@@ -224,28 +200,26 @@ where
         // Extract each declared action's policy before deduplicating its
         // transaction payload. Equal CTV hashes do not imply equal guards.
         let mut action_ctx = ctx.derive(PathFragment::Action)?;
-        let mut renamer = Renamer::new();
+        let mut action_names = BTreeSet::new();
         let mut continue_apis = BTreeMap::new();
         let mut branches = vec![];
         let mut branch_bytes = 0usize;
         let mut recorded_policy_budget = script::RecordedPolicyBudget::default();
         let mut all_guard_simps: BTreeMap<ScriptPolicy, GuardSimps> = BTreeMap::new();
-        let then_fns = self.then_fns();
-        let finish_or_fns = self.finish_or_fns();
-        let actions = then_fns
-            .iter()
-            .filter_map(|factory| factory())
-            .map(|action| -> Box<dyn CallableAsFoF<_, _>> { Box::new(action) })
-            .chain(finish_or_fns.iter().filter_map(|factory| factory()));
-        for mut action in actions {
-            // Validate the source name before renaming: reserved fragments must
-            // never acquire a different meaning after a JSON round trip.
+        for action in self.actions().iter().filter_map(|factory| factory()) {
+            // An action handle's request path must remain stable. Duplicate
+            // names are rejected rather than silently rerouting a request.
             let original_name: PathFragment = action.get_name().clone().try_into()?;
             if !matches!(original_name, PathFragment::Named(_)) {
                 return Err(CompilationError::InvalidPathName);
             }
-            let name = Arc::new(renamer.get_name(action.get_name()));
-            action.rename(name.clone());
+            let name = action.get_name().clone();
+            if !action_names.insert(name.clone()) {
+                return Err(CompilationError::TerminateWith(format!(
+                    "duplicate action name: {}",
+                    action.get_name()
+                )));
+            }
             let mut action_context = action_ctx.derive_str(name)?;
             let mut condition_context = action_context.derive(PathFragment::CondCompIf)?;
             let nullability = match CCILWrapper(action.get_conditional_compile_if())
@@ -269,7 +243,7 @@ where
                 &mut guard_clauses,
             )?;
             let resolved_guards = script::resolve_emulation(&guards, &mut covenant_requirements)?;
-            let committed = action.template_kind() == super::actions::TemplateKind::Covenant;
+            let committed = action.template_kind() == super::actions::TemplateKind::Committed;
             let effect_context = action_context.derive(if committed {
                 PathFragment::Next
             } else {
@@ -340,17 +314,18 @@ where
                     }
                 }
             }
-            if committed {
-                if !produced_clause && nullability == Nullable::No {
-                    return Err(CompilationError::MissingTemplates);
-                }
-            } else {
+            if committed && !produced_clause && nullability == Nullable::No {
+                return Err(CompilationError::MissingTemplates);
+            }
+            if !committed || action.web_api() {
                 let mut continuation =
                     ContinuationPoint::at(action.get_schema().clone(), effect_path.clone());
                 for simp in action.gen_simps(self_ref, metadata_context)? {
                     continuation = continuation.add_simp(simp.as_ref())?;
                 }
                 continue_apis.insert(SArc(effect_path), continuation);
+            }
+            if !committed {
                 append_branches(
                     &mut branches,
                     &mut branch_bytes,
@@ -672,7 +647,9 @@ fn insert_template(
             // whichever action happens to be visited first.
             if let Some(field) = existing.binding_difference(&template) {
                 return Err(CompilationError::ConflictingTemplate {
-                    hash, at: path.clone(), field,
+                    hash,
+                    at: path.clone(),
+                    field,
                 });
             }
             let alternatives = source_alternatives(conjoin_source(existing.guards.iter()))
@@ -814,7 +791,6 @@ mod policy_leaf_tests {
     }
 
     impl Contract for PolicyContract {
-        crate::declare! {non updatable}
         crate::declare! {finish, Self::policy}
     }
 

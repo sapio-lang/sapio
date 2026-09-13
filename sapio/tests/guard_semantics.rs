@@ -157,23 +157,14 @@ impl ObservedGuards {
             .into()
     }
 
-    #[continuation(
-        guarded_by = "[Self::cached, Self::fresh]",
-        coerce_args = "identity",
-        web_api
-    )]
+    #[continuation(guarded_by = "[Self::cached, Self::fresh]", web_api)]
     fn suggest(self, _ctx: Context, _args: Option<()>) {
         sapio::contract::empty()
     }
 }
 
-fn identity(args: Option<()>) -> Result<Option<()>, CompilationError> {
-    Ok(args)
-}
-
 impl Contract for ObservedGuards {
-    declare! {then, Self::pay}
-    declare! {updatable<Option<()>>, Self::suggest}
+    declare! {actions, Self::pay, Self::suggest}
     declare! {finish, Self::cached, Self::fresh}
 }
 
@@ -321,8 +312,7 @@ impl ManyGuards {
 }
 
 impl Contract for ManyGuards {
-    declare! {then, Self::pay}
-    declare! {non updatable}
+    declare! {actions, Self::pay}
 }
 
 #[test]

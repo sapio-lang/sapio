@@ -89,7 +89,6 @@ impl Channel {
     #[continuation(
         guarded_by = "[Self::update_policy]",
         compile_if = "[Self::can_update]",
-        coerce_args = "Ok",
         web_api
     )]
     fn update(self, mut ctx: Context, candidate: Option<Candidate>) {
@@ -121,7 +120,6 @@ impl Channel {
     #[continuation(
         guarded_by = "[Self::settlement_policy]",
         compile_if = "[Self::can_settle]",
-        coerce_args = "Ok",
         web_api
     )]
     fn settle(self, ctx: Context, candidate: Option<Candidate>) {
@@ -152,7 +150,7 @@ impl Channel {
 
 impl Contract for Channel {
     declare! {finish, Self::cooperative}
-    declare! {updatable<Option<Candidate>>, Self::update, Self::settle}
+    declare! {actions, Self::update, Self::settle}
 
     fn ensure_amount(&self, _ctx: Context) -> Result<Amount, CompilationError> {
         Ok(Amount::from_sat(self.terms.capacity()))

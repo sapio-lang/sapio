@@ -273,7 +273,6 @@ impl Probe {
 }
 
 impl Contract for Probe {
-    declare! {non updatable}
     declare! {finish, Self::spend}
 
     fn metadata(&self, ctx: Context) -> Result<ObjectMetadata, CompilationError> {

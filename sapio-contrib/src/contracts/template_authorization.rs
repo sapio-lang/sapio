@@ -71,7 +71,7 @@ impl FragmentContract {
         }
     }
 
-    #[continuation(guarded_by = "[Self::authorize]", coerce_args = "Ok", web_api)]
+    #[continuation(guarded_by = "[Self::authorize]", web_api)]
     fn pay(self, ctx: Context, amount: Option<u64>) {
         let Some(amount) = amount else { return empty() };
         let amount = Amount::from_sat(amount);
@@ -92,7 +92,7 @@ impl FragmentContract {
 
 impl Contract for FragmentContract {
     declare! {finish, Self::key_path}
-    declare! {updatable<Option<u64>>, Self::pay}
+    declare! {actions, Self::pay}
 
     fn pinned_internal_key(
         &self,

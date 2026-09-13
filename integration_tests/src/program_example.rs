@@ -136,7 +136,15 @@ impl PaymentContract {
         self.emulation.clone()
     }
 
-    #[continuation(guarded_by = "[Self::payment_policy]", coerce_args = "Ok", web_api)]
+    fn default_payment(&self, ctx: Context) -> TxTmplIt {
+        self.continue_pay(ctx, None)
+    }
+
+    #[continuation(
+        guarded_by = "[Self::payment_policy]",
+        defaults = "Self::default_payment",
+        web_api
+    )]
     fn pay(self, ctx: Context, candidate: Option<PaymentCandidate>) {
         let candidate = candidate.unwrap_or(PaymentCandidate {
             amount: self.minimum,
@@ -186,7 +194,7 @@ impl PaymentContract {
 }
 
 impl Contract for PaymentContract {
-    declare! {updatable<Option<PaymentCandidate>>, Self::pay}
+    declare! {actions, Self::pay}
 }
 
 /// Attach candidates to a known synthetic funding transaction, without signing.

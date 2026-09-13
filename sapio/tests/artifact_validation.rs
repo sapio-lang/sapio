@@ -35,8 +35,7 @@ impl Payment {
 }
 
 impl Contract for Payment {
-    declare! {then, Self::pay}
-    declare! {non updatable}
+    declare! {actions, Self::pay}
 }
 
 fn payment(destination: Compiled, extra_input: bool, path: &str) -> Compiled {

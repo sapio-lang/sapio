@@ -77,40 +77,33 @@ impl OpenChannel {
             START_OF_TIME.try_into()
         }
     }
-    #[continuation(
-        guarded_by = "[Self::signed_update, Self::newer_sequence_check]",
-        coerce_args = "default_coerce"
-    )]
-    fn update_state(self, ctx: sapio::Context, o: Option<Update>) {
-        if let Some(update) = o {
-            Self::check_resolution(&update, ctx.funds())?;
-            if update.sequence > BIG_PAST_DATE {
-                Err(CompilationError::TerminateCompilation)?;
-            }
-            let prior_seq = self
-                .pending_update
-                .as_ref()
-                .map(|u| u.sequence)
-                .unwrap_or(START_OF_TIME);
-            if update.sequence <= prior_seq {
-                Err(CompilationError::TerminateCompilation)?;
-            }
-
-            let f = ctx.funds();
-            ctx.template()
-                .set_lock_time(AnyAbsTimeLock::from(update.sequence))?
-                .add_output(
-                    f,
-                    &OpenChannel {
-                        pending_update: Some(update),
-                        ..self.clone()
-                    },
-                    None,
-                )?
-                .into()
-        } else {
-            Ok(Box::new(std::iter::empty()))
+    #[continuation(guarded_by = "[Self::signed_update, Self::newer_sequence_check]")]
+    fn update_state(self, ctx: sapio::Context, update: Update) {
+        Self::check_resolution(&update, ctx.funds())?;
+        if update.sequence > BIG_PAST_DATE {
+            Err(CompilationError::TerminateCompilation)?;
         }
+        let prior_seq = self
+            .pending_update
+            .as_ref()
+            .map(|u| u.sequence)
+            .unwrap_or(START_OF_TIME);
+        if update.sequence <= prior_seq {
+            Err(CompilationError::TerminateCompilation)?;
+        }
+
+        let f = ctx.funds();
+        ctx.template()
+            .set_lock_time(AnyAbsTimeLock::from(update.sequence))?
+            .add_output(
+                f,
+                &OpenChannel {
+                    pending_update: Some(update),
+                    ..self.clone()
+                },
+                None,
+            )?
+            .into()
     }
 
     #[compile_if]
@@ -167,11 +160,9 @@ impl OpenChannel {
     }
     #[continuation(
         compile_if = "[Self::untriggered]",
-        guarded_by = "[Self::sign_cooperative_close]",
-        coerce_args = "default_coerce"
+        guarded_by = "[Self::sign_cooperative_close]"
     )]
-    fn coop_close(self, ctx: sapio::Context, update: Option<Update>) {
-        let Some(update) = update else { return empty() };
+    fn coop_close(self, ctx: sapio::Context, update: Update) {
         Self::check_resolution(&update, ctx.funds())?;
         let mut template = ctx.template();
         for output in update.resolution {
@@ -184,16 +175,9 @@ impl OpenChannel {
         template.into()
     }
 }
-/// Helper
-fn default_coerce(
-    k: <OpenChannel as Contract>::StatefulArguments,
-) -> Result<Option<Update>, CompilationError> {
-    Ok(k)
-}
 
 impl Contract for OpenChannel {
-    declare! {updatable<Option<Update>>, Self::update_state,  Self::coop_close}
-    declare! {then, Self::complete_update}
+    declare! {actions,Self::update_state,  Self::coop_close, Self::complete_update}
 
     fn ensure_amount(&self, ctx: Context) -> Result<bitcoin::Amount, CompilationError> {
         if let Some(update) = &self.pending_update {
@@ -239,7 +223,7 @@ mod tests {
         let contract = channel();
         contract.compile(context(1000)).unwrap().validate().unwrap();
         let template = contract
-            .continue_update_state(context(1000), Some(update(START_OF_TIME.get() + 1, 1000)))
+            .continue_update_state(context(1000), update(START_OF_TIME.get() + 1, 1000))
             .unwrap()
             .next()
             .unwrap()
@@ -264,10 +248,10 @@ mod tests {
         let mut contract = channel();
         contract.pending_update = Some(update(START_OF_TIME.get() + 2, 1000));
         assert!(contract
-            .continue_update_state(context(1000), Some(update(START_OF_TIME.get() + 2, 1000)))
+            .continue_update_state(context(1000), update(START_OF_TIME.get() + 2, 1000))
             .is_err());
         assert!(contract
-            .continue_update_state(context(1000), Some(update(START_OF_TIME.get() + 3, 999)))
+            .continue_update_state(context(1000), update(START_OF_TIME.get() + 3, 999))
             .is_err());
         contract.pending_update.as_mut().unwrap().sequence =
             AbsTime::try_from(0x7fff_ffff).unwrap();
@@ -278,7 +262,7 @@ mod tests {
             Clause::Unsatisfiable
         );
         let close = channel()
-            .continue_coop_close(context(1000), Some(update(START_OF_TIME.get() + 1, 1000)))
+            .continue_coop_close(context(1000), update(START_OF_TIME.get() + 1, 1000))
             .unwrap()
             .next()
             .unwrap()

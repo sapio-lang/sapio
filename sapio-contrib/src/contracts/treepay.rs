@@ -70,8 +70,7 @@ impl TreePay {
 }
 
 impl Contract for TreePay {
-    declare! {then, Self::expand}
-    declare! {non updatable}
+    declare! {actions, Self::expand}
 
     fn ensure_amount(&self, _ctx: Context) -> Result<bitcoin::Amount, CompilationError> {
         if self.radix < 2 || self.participants.is_empty() {

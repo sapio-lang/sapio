@@ -33,7 +33,6 @@ impl PolicyContract {
 }
 
 impl Contract for PolicyContract {
-    crate::declare! {non updatable}
     crate::declare! {finish, Self::first, Self::second}
 
     fn pinned_internal_key(&self, _: &Context) -> Result<Option<XOnlyPublicKey>, CompilationError> {

@@ -49,8 +49,7 @@ impl UndoSendInternal {
 }
 
 impl Contract for UndoSendInternal {
-    declare! {then, Self::undo, Self::complete}
-    declare! {non updatable}
+    declare! {actions, Self::undo, Self::complete}
 }
 
 #[cfg(test)]

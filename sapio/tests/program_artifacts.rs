@@ -39,7 +39,6 @@ impl Source {
 
 impl Contract for Source {
     declare! {finish, Self::spend}
-    declare! {non updatable}
 }
 
 fn context() -> Context {
@@ -162,8 +161,7 @@ impl Parent {
     }
 }
 impl Contract for Parent {
-    declare! {then, Self::advance}
-    declare! {non updatable}
+    declare! {actions, Self::advance}
 }
 
 #[test]

@@ -1,6 +1,6 @@
 use bitcoin::secp256k1::{Secp256k1, SecretKey};
 use bitcoin::{Amount, Network, XOnlyPublicKey};
-use sapio::contract::actions::ThenFuncAsFinishOrFunc;
+use sapio::contract::actions::ActionFactory;
 use sapio::contract::object::SupportedDescriptors;
 use sapio::contract::{Compilable, Context, Contract};
 use sapio::miniscript::ord::{envelope::Envelope, Inscription};
@@ -92,13 +92,11 @@ impl<const IN_TEMPLATE: bool> Repeated<IN_TEMPLATE> {
 }
 
 impl<const IN_TEMPLATE: bool> Contract for Repeated<IN_TEMPLATE> {
-    const THEN_FNS: &'static [fn() -> Option<ThenFuncAsFinishOrFunc<'static, Self, ()>>] =
-        if IN_TEMPLATE {
-            &[Self::template_guards]
-        } else {
-            &[Self::action_guards]
-        };
-    declare! {non updatable}
+    const ACTIONS: &'static [ActionFactory<Self>] = if IN_TEMPLATE {
+        &[Self::template_guards]
+    } else {
+        &[Self::action_guards]
+    };
 }
 
 #[test]
@@ -140,8 +138,7 @@ impl Ordered {
 }
 
 impl Contract for Ordered {
-    declare! {then, Self::pay}
-    declare! {non updatable}
+    declare! {actions, Self::pay}
 }
 
 #[test]

@@ -3,7 +3,6 @@ use bitcoin::hashes::Hash;
 use bitcoin::hex::DisplayHex;
 use bitcoin::Amount;
 use bitcoin::XOnlyPublicKey;
-use sapio::contract::empty;
 use sapio::contract::object::ObjectMetadata;
 use sapio::contract::CompilationError;
 use sapio::contract::Contract;
@@ -29,7 +28,7 @@ pub struct SimpleNFT {
 /// # The SimpleNFT Contract
 impl Contract for SimpleNFT {
     // NFTs... only good for selling?
-    declare! {updatable<Sell>, Self::sell}
+    declare! {actions, Self::sell}
     // embeds metadata
     declare! {finish, Self::metadata_commit}
     fn metadata(&self, _ctx: Context) -> Result<ObjectMetadata, CompilationError> {
@@ -63,53 +62,42 @@ impl SimpleNFT {
         Clause::Key(self.data.owner.clone())
     }
 }
-fn default_coerce(k: <SimpleNFT as Contract>::StatefulArguments) -> Result<Sell, CompilationError> {
-    Ok(k)
-}
-
 impl SellableNFT for SimpleNFT {
-    #[continuation(guarded_by = "[Self::signed]", web_api, coerce_args = "default_coerce")]
+    #[continuation(guarded_by = "[Self::signed]", web_api)]
     fn sell(self, mut ctx: Context, sale: Sell) {
-        if let Sell::MakeSale {
+        let Sell {
             sale_info_partial,
             mut which_sale,
-        } = sale
-        {
-            let sale_info = sale_info_partial.fill(self.data.clone());
-            let sale_ctx = ctx.derive_str(Arc::new("sell".into()))?;
-            // create a contract from the sale API passed in
-            let create_args: CreateArgs<sale_impl::Versions> = CreateArgs {
-                context: ContextualArguments {
-                    lowering: ctx.lowering_plan().clone(),
-                    amount: ctx.funds(),
-                    network: ctx.network,
-                    effects: unsafe { ctx.get_effects_internal() }.as_ref().clone(),
-                    ordinals_info: ctx.get_ordinals().clone(),
-                },
-                arguments: sale_impl::Versions::NFT_Sale_Trait_Version_0_1_0(sale_info.clone()),
-            };
-            // use the sale API we passed in
-            let compiled = which_sale.call(sale_ctx.path(), &create_args)?;
-            // send to this sale!
-            let pays = compiled
-                .required_input_amount
-                .checked_sub(ctx.funds())
-                .ok_or_else(|| {
-                    CompilationError::Custom("Sale must preserve the NFT's funds".into())
-                })?;
-            let mut builder = ctx.template();
-            if pays != Amount::ZERO {
-                builder = builder.add_sequence().add_amount(pays)?;
-            }
-            // todo: we need to cut-through the compiled contract address, but this
-            // upgrade to Sapio semantics will come Soon™.
-            builder = builder.add_output(compiled.required_input_amount, &compiled, None)?;
-
-            builder.into()
-        } else {
-            // Don't do anything if we're holding!
-            empty()
+        } = sale;
+        let sale_info = sale_info_partial.fill(self.data.clone());
+        let sale_ctx = ctx.derive_str(Arc::new("sell".into()))?;
+        // create a contract from the sale API passed in
+        let create_args: CreateArgs<sale_impl::Versions> = CreateArgs {
+            context: ContextualArguments {
+                lowering: ctx.lowering_plan().clone(),
+                amount: ctx.funds(),
+                network: ctx.network,
+                effects: unsafe { ctx.get_effects_internal() }.as_ref().clone(),
+                ordinals_info: ctx.get_ordinals().clone(),
+            },
+            arguments: sale_impl::Versions::NFT_Sale_Trait_Version_0_1_0(sale_info.clone()),
+        };
+        // use the sale API we passed in
+        let compiled = which_sale.call(sale_ctx.path(), &create_args)?;
+        // send to this sale!
+        let pays = compiled
+            .required_input_amount
+            .checked_sub(ctx.funds())
+            .ok_or_else(|| CompilationError::Custom("Sale must preserve the NFT's funds".into()))?;
+        let mut builder = ctx.template();
+        if pays != Amount::ZERO {
+            builder = builder.add_sequence().add_amount(pays)?;
         }
+        // todo: we need to cut-through the compiled contract address, but this
+        // upgrade to Sapio semantics will come Soon™.
+        builder = builder.add_output(compiled.required_input_amount, &compiled, None)?;
+
+        builder.into()
     }
 }
 
