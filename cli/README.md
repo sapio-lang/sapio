@@ -5,6 +5,52 @@ the Sapio Project.
 
 You can use the Sapio CLI to build contracts and run other programs.
 
+## Explain a contract
+
+Inspect a compiled artifact without a wallet, signer connection, or CLI configuration:
+
+```sh
+sapio-cli contract explain --file artifact.json
+sapio-cli contract explain --file artifact.json --json
+```
+
+The input is the compiled object itself. To inspect a successful `contract create`
+response directly, extract its artifact and send it through stdin:
+
+```sh
+jq '.result.Ok.Call.result' create-response.json | sapio-cli contract explain
+```
+
+The report validates the complete graph and shows ordered output allocations,
+funding roles, reserved fees and explicit fee caps, fixed lock fields, covenant
+lowering, program policies, descriptors, and advertised action request schemas.
+Each output occurrence has a JSON pointer back to the artifact, so reused child
+source paths remain distinguishable. Optional metadata does not create spending
+requirements. A suggested transaction remains a proposal; its presence does not
+make its outputs covenant-enforced.
+
+Supply a funded PSBT file and an optional public capability inventory to inspect
+the actual spending requirements:
+
+```sh
+sapio-cli contract explain --file artifact.json \
+  --psbt funded.psbt --input 0 --assets capabilities.json --json
+```
+
+`funded.psbt` contains a base64 PSBT. `capabilities.json` deserializes as
+`emulator_connect::program::SpendAssets`; `{}` declares no available credentials.
+For an ordinary signer, an inventory can be as small as
+`{"schnorr_keys":["<x-only public key>"]}`. Inventories contain public keys,
+hashlock identities, and explicit program/evidence capabilities, not private keys
+or evidence bytes.
+
+The spending report lists missing previous outputs, missing assets, selected
+witness layouts and known weight bounds. Matching transaction templates also
+report actual fees and whether final witness weight is still needed for a fee-rate
+check. Invalid funding or a violated fee cap fails before any signing. Planning
+does not produce signatures, execute evaluators, prove chain maturity, or broadcast
+transactions.
+
 Sapio CLI reads/writes local project directories for "org.judica.sapio-cli"
 based on your local system preferences. See
 https://docs.rs/directories/3.0.1/directories/ for more information.
