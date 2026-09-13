@@ -14,7 +14,7 @@ struct OptionItem {
 }
 enum OptionValue {
     Flag,
-    Expr(Expr),
+    Expr(Box<Expr>),
     Paths(Vec<Path>),
 }
 struct Options(Vec<OptionItem>);
@@ -32,7 +32,7 @@ impl Parse for Options {
             }
             let value = if input.peek(Token![=]) {
                 input.parse::<Token![=]>()?;
-                OptionValue::Expr(input.parse()?)
+                OptionValue::Expr(Box::new(input.parse()?))
             } else if input.peek(syn::token::Paren) {
                 let content;
                 syn::parenthesized!(content in input);
@@ -77,7 +77,7 @@ fn paths(value: OptionValue, name: &Ident) -> syn::Result<Vec<Path>> {
 }
 fn expr(value: OptionValue, name: &Ident) -> syn::Result<Expr> {
     match value {
-        OptionValue::Expr(value) => Ok(value),
+        OptionValue::Expr(value) => Ok(*value),
         _ => Err(syn::Error::new(
             name.span(),
             "expected `name = RustExpression`",
@@ -141,7 +141,7 @@ pub(crate) fn expand(args: TokenStream, input: TokenStream) -> syn::Result<Token
     let mut implementation: ItemImpl = syn::parse2(input)?;
     if implementation.trait_.is_some() {
         return Err(syn::Error::new_spanned(
-            &implementation.impl_token,
+            implementation.impl_token,
             "#[contract] belongs on an inherent impl",
         ));
     }
