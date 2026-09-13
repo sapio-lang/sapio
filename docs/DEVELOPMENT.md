@@ -160,14 +160,30 @@ mdbook build docs/learn-sapio
 ```
 
 CI renders the book on pull requests; the existing Pages workflow publishes on
-changes merged to master. A successful render does not validate every historical
-code sketch. Executable tutorial coverage remains a roadmap item.
+changes merged to master. The transaction-plans chapter includes the tested
+payment example directly from its source file. A successful render does not
+validate every other historical code sketch.
 
 ## Contract authoring
 
-Every `Contract` declares its continuation argument type through either
-`declare! {non updatable}` or `declare! {updatable<Arguments>, ...}`. There is no
-nightly feature or associated-type-default variant.
+The [transaction-plan guide](TRANSACTION_PLANS.md) covers named allocations and
+local funding rules. The [spend-planning guide](SPEND_PLANNING.md) covers complete
+witness requirements and explicit program evidence preparation.
+
+Use `#[sapio::contract]` with ordinary `&self` methods and explicit
+`#[action(committed)]` or `#[action(suggested)]` declarations. Each action has its
+own request type and generated schema; `Contract` has no global argument pack.
+`Type::action_name_action().request(&root_path, &request)` encodes the exact action
+path. Absent requests do not invoke handlers. Default proposals require an
+explicit callback, except argument-free committed actions, which generate their
+fixed templates during compilation.
+
+For manual or trait-based authoring, `declare! {actions, Self::a, Self::b}` exports
+factories returning `Option<Box<dyn ErasedAction<Self>>>`. `None` explicitly omits
+an optional interface action. `declare! {finish, ...}` exports independently
+sufficient spending policies. The standalone `then`, `continuation` and `guard`
+attributes generate this same representation; there is no coercion through a
+shared request enum.
 
 Context funding, template amounts, and `AmountU64` fields use integer satoshis.
 Some example inputs use `AmountF64` or explicit `as_btc` serialization for BTC
@@ -455,4 +471,4 @@ See [CONTRIBUTING](../CONTRIBUTING) for the existing contribution terms.
 No license or ownership transfer policy was changed in this branch.
 
 [cargo-patch]: https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html#the-patch-section
-[fork-inscriptions]: https://github.com/sapio-lang/rust-miniscript/blob/d9f9176a68a93efbfb303f24da154f9c72829892/SAPIO_EXTENSIONS.md
+[fork-inscriptions]: https://github.com/sapio-lang/rust-miniscript/blob/8d2aa4a60979a55f6ecd6222d48f94a482f4a2f6/SAPIO_EXTENSIONS.md

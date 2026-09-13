@@ -1,38 +1,34 @@
-# Contract Declarations
+# Contract declarations
 
-## Static Contracts
+`#[sapio::contract]` registers explicitly marked actions and spending policies.
+Ordinary helper methods remain ordinary helpers. `#[policy]` declares a policy
+that can guard actions; `#[spend]` also exports it as independently sufficient to
+spend the output.
 
-This is the usual way to declare a contract for Sapio.
+Contract hooks are ordinary methods marked `#[amount]` for minimum funding,
+`#[internal_key]` for an already authorized Taproot internal key, and `#[metadata]`
+for descriptive object metadata. Selecting an internal key never grants new
+spending authority.
 
-Once a contract and all relevant logic has been defined, a `impl Contract`
-should be written. This binds the functionality to the compiler interface.
+An explicit `Contract` implementation can register factories directly:
 
 ```rust
-impl Contract for T {
-    declare!{then, Self::a, Self::b}
-    declare!{finish, Self::guard_1, Self::guard_2}
-    /// if there are finish! functions
-    declare!{updatable<Z>, Self::updatable_1}
-    /// if there are no updatable functions
-    declare!{non updatable}
+impl Contract for Escrow {
+    declare! {actions, Self::refund, Self::propose_payment}
+    declare! {finish, Self::cooperative}
 }
 ```
 
-The type `Z` above becomes bound for the updatable functions.
+Each action has its own request type before registration. A factory returns
+`Option<Box<dyn ErasedAction<Self>>>`; returning `None` explicitly omits an
+optional interface member. Action names must be unique within a contract so typed
+request paths cannot be silently redirected.
 
-## Dynamic Contracts
+`DynamicContract<S>` assembles `actions` and independent `finish` factories in
+vectors alongside the contract data, metadata callback and minimum-funding
+callback. A custom `AnyContract` implementation can provide the same compiler
+interface without choosing a specific storage layout.
 
-Sapio also supports several "Dynamic Contract" paradigms which allows a user
-to assemble contracts at run-time. The two main paradigms are accomplished by
-either directly `impl AnyContract` or by using the `DynamicContract` struct
-which holds all functions in vecs.
-
-These are useful in rare circumstances.
-
-## External Addresses?
-
-The compiler is able to "lift" an address or a script into a contract via
-`Object::from_address` and `Object::from_script`. Care should be taken when
-doing so as Sapio will not be able to provide any further API data beyond such a bound.
-
-
+Existing addresses can be used through `Compiled::from_address`. They provide an
+output destination and minimum-funding information, but no action API or source
+policy beyond the supplied artifact.

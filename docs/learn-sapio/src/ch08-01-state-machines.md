@@ -1,161 +1,66 @@
-# Type Level State Machines
+# Type-level state machines
 
-In this example we use type level state machines to encode functionality that
-is potentially available. See the example below for a sketch of how this can work.
+Rust types can express which actions a contract implementation provides. An
+optional action factory returns `None` when a transition is unavailable; this is
+separate from an action returning an empty set of transactions.
 
-
-```rust
-/// The contract we're building, that can be in any type-state T.
-struct StatefulContract<T>(PhantomData<T>);
-
-/// We use empty structs as type tags.
-/// Note: we could add a `trait State`, but it is not required
-/// 
-/// A contract can be in the open state or the closed state.
-struct Opened;
-struct Closed;
-
-/// The "state machine" defines functionality that may be available
-trait FunctionalityAtState 
-where Self : Sized + Contract
-{
-    /// empty declaration *could* be a default implementation, but we leave it empty
-    /// so that other states may override it.
-    decl_then!{do_something}
-}
-
-
-/// Override the impl when state is Opened
-impl FunctionalityAtState for StatefulContract<Opened> {
-  /// Transition from Opened => Closed state
-    #[then]
-    fn do_something(self, ctx: Context) {
-        ctx.template()
-            .add_output(
-                ctx.funds(),
-                &StatefulContract::<Closed>(Default::default()),
-                None,
-            )?
-            .into()
-    }
-}
-
-/// do not override `do_something`, no branch will be generated
-impl FunctionalityAtState for StatefulContract<Closed> {}
-
-/// Register that all StatefulContract<T>'s that implement FunctionalityAtState
-/// are Contracts
-impl Contract for StatefulContract<T>
-where Self : FunctionalityAtState {
-    declare!{then, Self::do_something}
-}
-```
-
-This technique is *ridiculously* powerful. Imagine, for instance, that we
-wanted to have different sorts of state other than Open and Closed. E.g., Red
-and Green. We could then define Transition Rules that encode a graph like:
-
-```
-(Open, Green) ==> do_something ==> (Closed, Green)
-(Open, Red) ==> do_something ==> (Closed, Red)
-(Open, Green) ==> do_something_else ==>  (Open, Red)
-(Open, Red) ==> do_something_else ==> (Closed, Red)
-```
-using two separate `FunctionalityAtState` like traits:
+The following sketch uses `Opened` and `Closed` as state tags. Both states retain
+the owner's independent spending policy, while only the open state exports the
+committed `close` transition.
 
 ```rust
-/// The contract we're building, that can be in any type-state T.
-struct StatefulContract<T1, T2>(PhantomData<(T1, T2)>);
+use std::marker::PhantomData;
 
-/// We use empty structs as type tags.
-/// Note: we could add a `trait State`, but it is not required
-/// 
-/// A contract can be in the open state or the closed state.
 struct Opened;
 struct Closed;
-// And Red or Green
-struct Red;
-struct Green;
+struct StatefulContract<State> {
+    owner: bitcoin::XOnlyPublicKey,
+    state: PhantomData<State>,
+}
 
-/// The "state machine" defines functionality that may be available
-trait OpenAtState 
-where Self : Sized + Contract
+trait Moves: Sized + 'static {
+    sapio::decl_then! { close }
+}
+
+impl Moves for StatefulContract<Opened> {
+    #[sapio::then]
+    fn close(self, ctx: Context) {
+        let amount = ctx.funds();
+        ctx.template()
+            .add_output(amount, &StatefulContract::<Closed> {
+                owner: self.owner,
+                state: PhantomData,
+            }, None)?
+            .into()
+    }
+}
+
+impl Moves for StatefulContract<Closed> {}
+
+#[sapio::contract(actions(Self::close))]
+impl<State: 'static> StatefulContract<State>
+where
+    Self: Moves,
 {
-    /// empty declaration *could* be a default implementation, but we leave it empty
-    /// so that other states may override it.
-    delc_then!{do_something}
-}
-
-trait ColorAtState 
-where Self : Sized + Contract
-{
-    /// empty declaration *could* be a default implementation, but we leave it empty
-    /// so that other states may override it.
-    decl_then!{do_something}
-}
-
-
-/// Override the impl when state is Opened
-impl OpenAtState<DontCare> for StatefulContract<Opened, DontCare> {
-    /// Transition from Opened => Closed state
-    #[then]
-    fn do_something(self, ctx: Context) {
-        ctx.template()
-            .add_output(
-                ctx.funds(),
-                &StatefulContract::<Closed, DontCare>(Default::default()),
-                None,
-            )?
-            .into()
+    #[spend]
+    fn owner(&self) -> Clause {
+        Clause::Key(self.owner)
     }
-}
-
-/// do not override `do_something`, no branch will be generated
-impl OpenAtState<DontCare> for StatefulContract<Closed, DontCare> {}
-
-/// Override the impl when state is Opened
-impl ColorAtState for StatefulContract<Open, Green> {
-    /// Transition from Green => Red state
-    #[then]
-    fn do_something_else(self, ctx: Context) {
-        ctx.template()
-            .add_output(
-                ctx.funds(),
-                &StatefulContract::<Open, Red>(Default::default()),
-                None,
-            )?
-            .into()
-    }
-}
-
-impl ColorAtState for StatefulContract<Open, Red> {
-    /// Transition from Open => Closed state
-    #[then]
-    fn do_something_else(self, ctx: Context) {
-        ctx.template()
-            .add_output(
-                ctx.funds(),
-                &StatefulContract::<Closed, Red>(Default::default()),
-                None,
-            )?
-            .into()
-    }
-}
-
-/// do not override `do_something_else`, no branch will be generated
-impl ColorAtState<DontCare> for StatefulContract<DontCare, Red> {}
-
-/// Register that all StatefulContract<T>'s that implement OpenAtState
-/// are Contracts
-impl Contract for StatefulContract<T>
-where Self : OpenAtState + ColorAtState {
-    declare!{then, Self::do_something, Self::do_something_else}
 }
 ```
 
+`decl_then!` supplies an absent default factory. The open implementation replaces
+it; the closed implementation keeps it absent. The contract macro explicitly
+exports that optional interface and the independent owner policy.
 
-This technique showcases how Sapio could encode very sophisticated logic in
-program generation.
+For availability that depends on a value rather than a Rust type, use a
+`#[condition]` method with `compile_if(...)`. For example, an eltoo state can omit
+its update action after reaching the maximum state number. `Required` and
+`Nullable` still distinguish an action that must generate a transaction from one
+that may legitimately return none.
 
-It's also notable that following rustc v1.51, it is possible to use `const`'s
-as generic type parameters which enables even more computation at the type level.
+Rust enums, traits, generics and const generics can organize more elaborate state
+machines. They execute while constructing and compiling contracts. An ordinary
+Rust state check is not automatically enforced by a spending script: the
+committed transition or fixed policy/evaluator must enforce the corresponding
+on-chain rule.

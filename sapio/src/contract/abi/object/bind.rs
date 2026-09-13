@@ -247,7 +247,8 @@ impl Object {
                         amounts.push(None);
                     }
                 }
-                template.check_funding_amounts(&amounts)
+                template
+                    .check_funding_amounts(&amounts)
                     .map_err(|failure| invalid_funding(out, failure.to_string()))?;
                 if let Some(descriptor) = &object.descriptor {
                     descriptor.update_psbt_input(&mut psbt.inputs[0])?;
