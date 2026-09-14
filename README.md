@@ -36,7 +36,8 @@ For WASM modules and development checks, follow the
 contains broader examples; its older installation instructions are being revised.
 
 Start with [transaction plans and typed actions](docs/TRANSACTION_PLANS.md),
-then [spend planning](docs/SPEND_PLANNING.md) and the
+then [spend planning](docs/SPEND_PLANNING.md),
+[selected spend completion](docs/SPEND_COMPLETION.md), and the
 [artifact explainer](cli/README.md#explain-a-contract). These APIs distinguish construction,
 spending predicates and the evidence required to satisfy one branch.
 

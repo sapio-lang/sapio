@@ -83,11 +83,12 @@ Missing native signatures and preimages remain visible in `prepared.plan`.
 
 `prepared.program_requests` contains one request per selected unsigned program,
 using the existing validated request protocol. Each request preserves native
-PSBT assets and includes descriptor proofs. The application explicitly chooses
-an oracle/evaluator, submits requests, verifies and merges responses, obtains
-remaining native assets, and finalizes. Multiple responses start from a common
-PSBT; replacing the whole PSBT with the last response would discard earlier
-signatures.
+PSBT assets and includes descriptor proofs. Wrap the result with
+`SpendIntent::from_prepared` to retain the exact witness selection across
+processes. The application explicitly chooses its oracle/evaluator;
+`SpendIntent` validates and merges independent responses, signs only selected
+native slots, and completes that witness. See [spend completion](SPEND_COMPLETION.md)
+for the Rust API and CLI file workflow.
 
 ## Weight and final checks
 
@@ -104,6 +105,6 @@ count its serialized empty witness byte in whole-transaction accounting.
 `observed_final_witness_bytes` measures supplied final witness data separately;
 observing those bytes does not validate them. A `Planned` status likewise does
 not establish signature validity, evaluator success, relay policy or maturity.
-Use normal finalization, then `Template::check_funded_psbt` for retained funding
-and final fee-rate constraints before extracting a transaction. The eltoo runner
-demonstrates this ordering in `finalize_candidate`.
+Use `SpendIntent::finalize` to verify the exact selected witness and retained
+funding and final fee-rate constraints before extracting a transaction. The
+eltoo runner demonstrates this flow in `complete_candidate`.

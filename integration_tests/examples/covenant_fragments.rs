@@ -5,9 +5,11 @@ use bitcoin::secp256k1::Secp256k1;
 use emulator_connect::program::ProgramOracle;
 use sapio_contrib::contracts::template_authorization::Authorization;
 use sapio_integration_tests::fragment_example::{
-    compile_candidates, example_contract, participant_key, signing_request,
+    compile_candidates, example_contract, participant_key, prepare_fragment,
 };
-use sapio_integration_tests::program_example::{bind_candidates, example_root};
+use sapio_integration_tests::program_example::{
+    bind_candidates, complete_example_spend, example_root,
+};
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -35,21 +37,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         assert_eq!(baseline.descriptor, compiled.descriptor);
         let mut spends = vec![];
         for candidate in bind_candidates(&compiled)? {
-            let request = signing_request(
+            let intent = prepare_fragment(
                 &compiled,
                 mode,
                 candidate,
                 &authorizer,
                 Some(b"\x50sapio-fragments".to_vec()),
             )?;
-            let evidence = request.witness.clone();
-            let signed = oracle.sign(request)?;
-            let finalized = sapio_psbt::finalize::finalize(signed, &secp)
-                .map_err(|(_, errors)| format!("fragment finalization failed: {errors:?}"))?;
-            sapio_integration_tests::program_example::check_finalized_candidate(
-                &compiled, &finalized,
-            )?;
-            let tx = finalized.extract_tx()?;
+            let evidence = intent.requests()[0].witness.clone();
+            let tx = complete_example_spend(&compiled, &intent, &oracle)?;
             assert_eq!(
                 tx.input[0].witness.last(),
                 Some(&b"\x50sapio-fragments"[..])

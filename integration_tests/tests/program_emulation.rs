@@ -110,15 +110,21 @@ fn the_oracle_enforces_the_program_and_rejects_altered_authorization() {
         .unwrap();
     let underpaid = candidates.remove(underpaid);
     assert!(matches!(
-        oracle.sign(signing_request(&compiled, underpaid, 0).unwrap()),
+        oracle.sign(prepare_payment(&compiled, underpaid, 0).unwrap().requests()[0].clone()),
         Err(ProgramError::Rejected)
     ));
 
     let candidate = candidates.pop().unwrap();
-    let request = signing_request(&compiled, candidate.clone(), 0).unwrap();
+    let intent = prepare_payment(&compiled, candidate.clone(), 0).unwrap();
+    let request = intent.requests()[0].clone();
     let signed = oracle.sign(request.clone()).unwrap();
-    let mut finalized = signed.clone();
-    finalized.finalize_mut(&Secp256k1::new()).unwrap();
+    let mut current = intent.baseline_psbt().clone();
+    intent
+        .merge_response(&compiled, &mut current, 0, &signed)
+        .unwrap();
+    let finalized = intent
+        .finalize(&compiled, &current, &Secp256k1::new())
+        .unwrap();
     assert!(!finalized.extract_tx().unwrap().input[0].witness.is_empty());
 
     let mut wrong_recipient = request.clone();
@@ -129,7 +135,12 @@ fn the_oracle_enforces_the_program_and_rejects_altered_authorization() {
     ));
     for index in [1, 2, u32::MAX] {
         assert!(matches!(
-            oracle.sign(signing_request(&compiled, candidate.clone(), index).unwrap()),
+            oracle.sign(
+                prepare_payment(&compiled, candidate.clone(), index)
+                    .unwrap()
+                    .requests()[0]
+                    .clone()
+            ),
             Err(ProgramError::Rejected)
         ));
     }
@@ -195,7 +206,12 @@ async fn one_fixed_continuation_accepts_larger_and_reordered_payments_over_tcp()
     let server = tokio::spawn(oracle.serve(listener));
     assert!(matches!(
         client
-            .sign(signing_request(&compiled, candidates[0].clone(), u32::MAX).unwrap())
+            .sign(
+                prepare_payment(&compiled, candidates[0].clone(), u32::MAX)
+                    .unwrap()
+                    .requests()[0]
+                    .clone()
+            )
             .await,
         Err(ProgramClientError::Rejected(_))
     ));
@@ -209,12 +225,18 @@ async fn one_fixed_continuation_accepts_larger_and_reordered_payments_over_tcp()
             .unwrap();
         let value = candidate.unsigned_tx.output[index].value.to_sat();
         let original_txid = candidate.unsigned_tx.compute_txid();
-        let mut signed = client
-            .sign(signing_request(&compiled, candidate, index as u32).unwrap())
-            .await
+        let intent = prepare_payment(&compiled, candidate, index as u32).unwrap();
+        let mut current = intent.baseline_psbt().clone();
+        for (index, request) in intent.requests().iter().enumerate() {
+            let response = client.sign(request.clone()).await.unwrap();
+            intent
+                .merge_response(&compiled, &mut current, index, &response)
+                .unwrap();
+        }
+        let finalized = intent
+            .finalize(&compiled, &current, &Secp256k1::new())
             .unwrap();
-        signed.finalize_mut(&Secp256k1::new()).unwrap();
-        let transaction = signed.extract_tx().unwrap();
+        let transaction = finalized.extract_tx().unwrap();
         assert_eq!(transaction.compute_txid(), original_txid);
         assert!(!transaction.input[0].witness.is_empty());
         accepted.push((value, index));

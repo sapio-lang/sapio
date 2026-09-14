@@ -3,16 +3,19 @@ use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{schnorr::Signature, Secp256k1};
 use bitcoin::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::{taproot, ScriptBuf, Transaction};
+use emulator_connect::program::completion::SpendIntent;
 use emulator_connect::program::{
     prepare_program_request, validate_program_response, ProgramError, ProgramOracle,
     ProgramSigningRequest, ProgramSpendPath,
 };
+use sapio::contract::Compiled;
+use sapio::template::Template;
 use sapio_base::fragments::template_hash;
 use sapio_contrib::contracts::eltoo::{Channel, State, Terms};
 use sapio_integration_tests::eltoo_example::runner::{
     attach_inputs, authorize_update, compile, compile_settlement, compile_update, input,
-    settlement_leaf, settlement_program, settlement_request, settlement_transaction, sign_sponsor,
-    update_leaf, update_request, update_requirement, update_transaction,
+    prepare_settlement, prepare_update, settlement_leaf, settlement_program,
+    settlement_transaction, sign_sponsor, update_leaf, update_requirement, update_transaction,
 };
 use sapio_integration_tests::eltoo_example::{fixture, recovery::recover_update};
 
@@ -35,11 +38,26 @@ fn sign(oracle: &ProgramOracle, request: ProgramSigningRequest) -> Psbt {
     signed
 }
 
-fn finish(oracle: &ProgramOracle, request: ProgramSigningRequest) -> Transaction {
-    sapio_psbt::finalize::finalize(sign(oracle, request), &Secp256k1::new())
-        .unwrap()
-        .extract_tx()
-        .unwrap()
+fn finish(oracle: &ProgramOracle, (artifact, intent): (Compiled, SpendIntent)) -> Transaction {
+    sapio_integration_tests::eltoo_example::runner::complete_candidate(
+        &artifact,
+        &intent,
+        oracle,
+        &fixture::sponsor_key(),
+    )
+    .unwrap()
+}
+
+fn finish_recovered(
+    oracle: &ProgramOracle,
+    request: ProgramSigningRequest,
+    template: &Template,
+) -> Transaction {
+    sapio_integration_tests::eltoo_example::runner::finalize_recovered_candidate(
+        template,
+        sign(oracle, request),
+    )
+    .unwrap()
 }
 
 // Bypass only the candidate builder's monotonicity check, allowing tests to
@@ -77,7 +95,7 @@ fn funding_and_maximum_state_have_no_unintended_escape_leaf() {
     );
     assert!(settlement_program(&funding).is_err());
     assert!(compile_settlement(&funding).is_err());
-    assert!(settlement_request(&funding, funding_coin, fixture::sponsor(2_000, 11)).is_err());
+    assert!(prepare_settlement(&funding, funding_coin, fixture::sponsor(2_000, 11)).is_err());
 
     let last = terms.state(state(terms.max_state())).unwrap();
     let last_input = input(&last, &fixture::coin(&last, 12)).unwrap();
@@ -96,7 +114,7 @@ fn funding_and_maximum_state_have_no_unintended_escape_leaf() {
     // An exhausted state retains its delayed exit. Actual chain age remains
     // a consensus check, exercised by the separate Core driver.
     let request =
-        settlement_request(&last, fixture::coin(&last, 13), fixture::sponsor(2_000, 14)).unwrap();
+        prepare_settlement(&last, fixture::coin(&last, 13), fixture::sponsor(2_000, 14)).unwrap();
     let finalized = finish(&oracle(), request);
     assert_eq!(
         finalized.input[0].sequence.to_consensus_u32(),
@@ -119,14 +137,14 @@ fn repeated_payouts_do_not_allow_old_settlement_replay() {
     );
 
     let oracle = oracle();
-    let valid = settlement_request(
+    let valid = prepare_settlement(
         &current,
         fixture::coin(&current, 20),
         fixture::sponsor(2_000, 21),
     )
     .unwrap();
-    finish(&oracle, valid.clone());
-    let mut replay = valid;
+    let mut replay = valid.1.requests()[0].clone();
+    finish(&oracle, valid);
     replay.psbt.0.unsigned_tx.lock_time = old_template.lock_time;
     assert_eq!(
         template_hash(&replay.psbt.0.unsigned_tx, 0, None).unwrap(),
@@ -149,7 +167,7 @@ fn one_sided_balances_settle_the_full_capacity_without_zero_outputs() {
         let channel = terms.state(state).unwrap();
         let transaction = finish(
             &oracle,
-            settlement_request(
+            prepare_settlement(
                 &channel,
                 fixture::coin(&channel, tag),
                 fixture::sponsor(2_000, tag + 1),
@@ -197,7 +215,7 @@ fn update_evidence_does_not_authorize_the_cooperative_or_settlement_path() {
     let terms = fixture::terms();
     let source = terms.state(state(1)).unwrap();
     let certificate = authorize_update(&terms, state(3), &fixture::joint_key()).unwrap();
-    let request = update_request(
+    let candidate = prepare_update(
         &source,
         state(3),
         fixture::coin(&source, 30),
@@ -205,6 +223,7 @@ fn update_evidence_does_not_authorize_the_cooperative_or_settlement_path() {
         &certificate,
     )
     .unwrap();
+    let request = candidate.1.requests()[0].clone();
     let oracle = oracle();
     let mut key_path = request.clone();
     key_path.path = ProgramSpendPath::KeyPath;
@@ -237,7 +256,7 @@ fn certificate_rebinding_preserves_capacity_and_accepts_replaceable_fee_coins() 
     let oracle = oracle();
     let mut transactions = Vec::new();
     for (fee, tag) in [(2_000, 40), (5_000, 41)] {
-        let request = update_request(
+        let candidate = prepare_update(
             &source,
             state(3),
             fixture::coin(&source, 42),
@@ -245,6 +264,7 @@ fn certificate_rebinding_preserves_capacity_and_accepts_replaceable_fee_coins() 
             &certificate,
         )
         .unwrap();
+        let request = &candidate.1.requests()[0];
         assert_eq!(
             template_hash(&request.psbt.0.unsigned_tx, 0, None).unwrap(),
             expected
@@ -268,7 +288,7 @@ fn certificate_rebinding_preserves_capacity_and_accepts_replaceable_fee_coins() 
                 .to_sat(),
             fee
         );
-        let transaction = finish(&oracle, request);
+        let transaction = finish(&oracle, candidate);
         assert_eq!(
             transaction
                 .output
@@ -291,7 +311,7 @@ fn certificate_rebinding_preserves_capacity_and_accepts_replaceable_fee_coins() 
         transactions[0].input[1].witness,
         transactions[1].input[1].witness
     );
-    let mut reused_signature = update_request(
+    let candidate = prepare_update(
         &source,
         state(3),
         fixture::coin(&source, 42),
@@ -299,6 +319,7 @@ fn certificate_rebinding_preserves_capacity_and_accepts_replaceable_fee_coins() 
         &certificate,
     )
     .unwrap();
+    let mut reused_signature = candidate.1.requests()[0].clone();
     let ProgramSpendPath::ScriptPath(leaf) = reused_signature.path else {
         panic!("update must use its guarded script path");
     };
@@ -371,7 +392,7 @@ fn typed_actions_expose_distinct_requests_and_preserve_explicit_sponsor_limits()
     assert_eq!(compiled.address, discovered.address);
 
     let authorization = authorize_update(&terms, state(1), &fixture::joint_key()).unwrap();
-    assert!(update_request(
+    assert!(prepare_update(
         &funding,
         state(1),
         fixture::coin(&funding, 91),
@@ -379,7 +400,7 @@ fn typed_actions_expose_distinct_requests_and_preserve_explicit_sponsor_limits()
         &authorization
     )
     .is_err());
-    let allowed = update_request(
+    let allowed = prepare_update(
         &funding,
         state(1),
         fixture::coin(&funding, 93),
@@ -387,10 +408,7 @@ fn typed_actions_expose_distinct_requests_and_preserve_explicit_sponsor_limits()
         &authorization,
     )
     .unwrap();
-    let completed = sign(&oracle(), allowed);
-    let finalized =
-        sapio_integration_tests::eltoo_example::runner::finalize_candidate(template, completed)
-            .unwrap();
+    let finalized = finish(&oracle(), allowed);
     assert_eq!(finalized.output[0].value.to_sat(), terms.capacity());
 }
 
@@ -407,7 +425,7 @@ fn latest_certificate_recovers_an_old_state_without_old_payout_metadata() {
         };
         let authorization = authorize_update(&terms, old, &fixture::joint_key()).unwrap();
         let funding = terms.funding();
-        let request = update_request(
+        let request = prepare_update(
             &funding,
             old,
             fixture::coin(&funding, 50),
@@ -436,7 +454,11 @@ fn latest_certificate_recovers_an_old_state_without_old_payout_metadata() {
     let request = recovered
         .request(&terms, latest, fixture::sponsor(5_000, 52), &authorization)
         .unwrap();
-    let transaction = finish(&oracle, request);
+    let transaction = finish_recovered(
+        &oracle,
+        request,
+        &sapio_integration_tests::eltoo_example::runner::update_template(&terms, latest).unwrap(),
+    );
     assert_eq!(
         transaction.input[0].previous_output.txid,
         observed.compute_txid()

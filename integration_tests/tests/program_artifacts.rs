@@ -2,9 +2,8 @@
 
 use bitcoin::bip32::Xpub;
 use bitcoin::secp256k1::Secp256k1;
-use emulator_connect::program::{
-    prepare_program_request, validate_program_response, ProgramOracle, ProgramSigningRequest, PSBT,
-};
+use emulator_connect::program::completion::SpendIntent;
+use emulator_connect::program::{ProgramOracle, PSBT};
 use sapio::contract::abi::object::ProgramRequirement;
 use sapio::contract::Compiled;
 use sapio_contrib::contracts::eltoo::State;
@@ -12,7 +11,7 @@ use sapio_contrib::contracts::template_authorization::Authorization;
 use sapio_integration_tests::eltoo_example::{fixture, runner};
 use sapio_integration_tests::fragment_example::{
     authorization_requirement, compile_candidates, example_contract, participant_key,
-    signing_request,
+    prepare_fragment,
 };
 use sapio_integration_tests::program_example::{bind_candidates, example_root};
 use serde::{Deserialize, Serialize};
@@ -21,9 +20,8 @@ use std::process::{Command, Stdio};
 #[derive(Serialize, Deserialize)]
 struct SigningCase {
     artifact: Compiled,
-    requirement: ProgramRequirement,
+    intent: SpendIntent,
     psbt: PSBT,
-    witness: Vec<u8>,
     sponsor: bool,
     witness_items: Vec<usize>,
 }
@@ -32,25 +30,22 @@ impl SigningCase {
     fn new(
         mut artifact: Compiled,
         requirement: ProgramRequirement,
-        mut request: ProgramSigningRequest,
+        intent: SpendIntent,
         sponsor: bool,
         witness_items: Vec<usize>,
     ) -> Self {
-        assert_eq!(request.instance, *requirement.program.instance());
-        assert_eq!(request.path, requirement.path);
-        // Signing must reconstruct descriptor proofs from the artifact and
-        // cannot depend on the example's optional descriptive metadata.
+        assert_eq!(
+            intent.requests()[0].instance,
+            *requirement.program.instance()
+        );
+        assert_eq!(intent.requests()[0].path, requirement.path);
+        // Completion cannot depend on optional descriptive metadata or Rust source.
         artifact.metadata = Default::default();
-        let input = &mut request.psbt.0.inputs[0];
-        input.tap_internal_key = None;
-        input.tap_merkle_root = None;
-        input.tap_scripts.clear();
-        input.tap_key_origins.clear();
+        let psbt = PSBT(intent.baseline_psbt().clone());
         Self {
             artifact,
-            requirement,
-            psbt: request.psbt,
-            witness: request.witness,
+            intent,
+            psbt,
             sponsor,
             witness_items,
         }
@@ -74,9 +69,15 @@ fn exported_cases() -> Vec<SigningCase> {
             let contract = example_contract(mode, Xpub::from_priv(&secp, &root));
             compile_candidates(&contract, &[]).unwrap()
         };
-        let candidate = bind_candidates(&compiled).unwrap().remove(0);
+        let mut candidate = bind_candidates(&compiled).unwrap().remove(0);
+        // Preparation must reconstruct compiler proofs without the original contract.
+        let input = &mut candidate.inputs[0];
+        input.tap_internal_key = None;
+        input.tap_merkle_root = None;
+        input.tap_scripts.clear();
+        input.tap_key_origins.clear();
         let requirement = authorization_requirement(&compiled, mode).unwrap();
-        let request = signing_request(
+        let intent = prepare_fragment(
             &compiled,
             mode,
             candidate,
@@ -87,7 +88,7 @@ fn exported_cases() -> Vec<SigningCase> {
         cases.push(SigningCase::new(
             compiled,
             requirement,
-            request,
+            intent,
             false,
             vec![witness_items],
         ));
@@ -116,7 +117,7 @@ fn exported_cases() -> Vec<SigningCase> {
     // Both the source Channel and Terms have gone out of scope. Binding and
     // requirement selection now use only the exported artifacts and evidence.
     let requirement = runner::update_requirement(&update).unwrap();
-    let request = runner::update_request_from_artifact(
+    let intent = runner::prepare_update_from_artifact(
         &update,
         update_coin,
         fixture::sponsor(2_000, 72),
@@ -126,22 +127,22 @@ fn exported_cases() -> Vec<SigningCase> {
     cases.push(SigningCase::new(
         update,
         requirement,
-        request,
+        intent,
         true,
         vec![3, 1],
     ));
-    let request = runner::settlement_request_from_artifact(
+    let intent = runner::prepare_settlement_from_artifact(
         &settlement,
         settlement_coin,
         fixture::sponsor(3_000, 73),
     )
     .unwrap();
     let requirement =
-        runner::settlement_requirement(&settlement, &request.psbt.0.unsigned_tx).unwrap();
+        runner::settlement_requirement(&settlement, &intent.baseline_psbt().unsigned_tx).unwrap();
     cases.push(SigningCase::new(
         settlement,
         requirement,
-        request,
+        intent,
         true,
         vec![3, 1],
     ));
@@ -163,24 +164,26 @@ fn sign_exports() {
         let annex = sapio_psbt::annex::get(&case.psbt.0.inputs[0])
             .unwrap()
             .map(Vec::from);
-        let oracle = oracles
-            .iter()
-            .find(|oracle| oracle.public_root() == *case.requirement.program.root())
-            .unwrap();
-        let request = prepare_program_request(
-            &case.artifact,
-            &case.requirement,
-            case.psbt.0,
-            0,
-            case.witness,
-        )
-        .unwrap();
-        let mut signed = oracle.sign(request.clone()).unwrap();
-        validate_program_response(&request, &signed, case.requirement.program.root()).unwrap();
-        if case.sponsor {
-            runner::sign_sponsor(&mut signed, &fixture::sponsor_key()).unwrap();
+        let mut current = case.psbt.0;
+        case.intent.status(&case.artifact, &current).unwrap();
+        let requirements = case.intent.request_requirements(&case.artifact).unwrap();
+        for (index, request) in case.intent.requests().iter().enumerate() {
+            let oracle = oracles
+                .iter()
+                .find(|oracle| oracle.public_root() == *requirements[index].program.root())
+                .unwrap();
+            let response = oracle.sign(request.clone()).unwrap();
+            case.intent
+                .merge_response(&case.artifact, &mut current, index, &response)
+                .unwrap();
         }
-        let finalized = sapio_psbt::finalize::finalize(signed, &Secp256k1::new()).unwrap();
+        if case.sponsor {
+            runner::sign_sponsor(&mut current, &fixture::sponsor_key()).unwrap();
+        }
+        let finalized = case
+            .intent
+            .finalize(&case.artifact, &current, &Secp256k1::new())
+            .unwrap();
         let transaction = finalized.extract_tx().unwrap();
         assert_eq!(transaction.compute_txid(), unsigned.compute_txid());
         assert_eq!(

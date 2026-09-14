@@ -1,9 +1,7 @@
 //! Print a research artifact and locally validated spends; nothing is broadcast.
 
 use bitcoin::consensus::encode::serialize_hex;
-use bitcoin::secp256k1::Secp256k1;
 use emulator_connect::program::ProgramOracle;
-use miniscript::psbt::PsbtExt;
 use sapio_integration_tests::program_example::*;
 use std::error::Error;
 
@@ -31,12 +29,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             .iter()
             .position(|output| output.script_pubkey == recipient.script_pubkey())
             .expect("candidate pays the fixed recipient") as u32;
-        let mut signed = oracle.sign(signing_request(&compiled, candidate, output_index)?)?;
-        signed
-            .finalize_mut(&Secp256k1::new())
-            .map_err(|errors| format!("sample spend failed finalization: {errors:?}"))?;
-        sapio_integration_tests::program_example::check_finalized_candidate(&compiled, &signed)?;
-        let transaction = signed.extract_tx()?;
+        let intent = prepare_payment(&compiled, candidate, output_index)?;
+        let transaction = complete_example_spend(&compiled, &intent, &oracle)?;
         transactions.push(serde_json::json!({
             "output_witness": output_index,
             "transaction": serialize_hex(&transaction),

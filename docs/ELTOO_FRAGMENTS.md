@@ -163,11 +163,13 @@ or amount can be substituted within that ceiling before the ordinary
 transaction signatures are collected.
 
 The runner checks the selected template's funding requirements after attaching
-actual inputs. The normal executable paths retain the template through signing,
-then use `finalize_candidate`: verify witnesses, check the finalized PSBT's
-funding and fee requirements, and extract the transaction. Chain recovery
-checks the new target template's funding while authenticating the old state's
-spending proof independently.
+actual inputs. Normal executable paths retain the compiled artifact and a
+`SpendIntent` through signing. `complete_candidate` merges the explicitly
+configured oracle's response, signs the sponsor, and uses shared completion to
+verify the exact witness and final funding rules before extraction. Chain
+recovery uses the explicit `finalize_recovered_candidate` route: it checks the
+new target template's funding while authenticating the old state's spending
+proof independently. See [spend completion](SPEND_COMPLETION.md).
 
 TemplateHash commits the complete sequence vector. Adding an input after
 authorization changes the template and is not supported. The example uses

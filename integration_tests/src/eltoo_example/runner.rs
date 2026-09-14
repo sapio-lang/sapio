@@ -12,10 +12,9 @@ use bitcoin::{
     taproot, Address, Amount, Network, OutPoint, ScriptBuf, TapSighashType, Transaction, TxOut,
     XOnlyPublicKey,
 };
+use emulator_connect::program::completion::SpendIntent;
 use emulator_connect::program::spend_plan::{ProgramCapability, ProgramEvidence, SpendPath};
-use emulator_connect::program::{
-    prepare_spend, ProgramSigningRequest, ProgramSpendPath, SpendAssets,
-};
+use emulator_connect::program::{prepare_spend, ProgramOracle, ProgramSpendPath, SpendAssets};
 use sapio::contract::abi::object::ProgramRequirement;
 use sapio::contract::{Compilable, Compiled, Context};
 use sapio::template::Template;
@@ -103,8 +102,9 @@ pub fn settlement_template(terms: &Terms, state: State) -> Result<Template, Erro
     Ok(terms.settlement_template(state, context(terms)?)?)
 }
 
-/// Verify witnesses, check the retained funding rules, and then extract a transaction.
-pub fn finalize_candidate(template: &Template, psbt: Psbt) -> Result<Transaction, Error> {
+/// Complete the explicitly recovered-proof route, which has no historical artifact.
+/// Ordinary artifact-backed candidates use `SpendIntent::finalize` instead.
+pub fn finalize_recovered_candidate(template: &Template, psbt: Psbt) -> Result<Transaction, Error> {
     let finalized = sapio_psbt::finalize::finalize(psbt, &Secp256k1::new())
         .map_err(|(_, errors)| format!("eltoo finalization failed: {errors:?}"))?;
     template.check_funded_psbt(&finalized)?;
@@ -286,28 +286,25 @@ pub fn authorize_update(terms: &Terms, target: State, joint: &Keypair) -> Result
 }
 
 /// Compile a newer candidate and prepare its artifact-declared authorization.
-pub fn update_request(
+pub fn prepare_update(
     source: &Channel,
     target: State,
     channel: Coin,
     sponsor: Sponsor,
     authorization: &Signature,
-) -> Result<ProgramSigningRequest, Error> {
-    update_request_from_artifact(
-        &compile_update(source, target)?,
-        channel,
-        sponsor,
-        authorization,
-    )
+) -> Result<(Compiled, SpendIntent), Error> {
+    let compiled = compile_update(source, target)?;
+    let intent = prepare_update_from_artifact(&compiled, channel, sponsor, authorization)?;
+    Ok((compiled, intent))
 }
 
 /// Bind and authorize an exported update candidate without its Rust contract.
-pub fn update_request_from_artifact(
+pub fn prepare_update_from_artifact(
     compiled: &Compiled,
     channel: Coin,
     sponsor: Sponsor,
     authorization: &Signature,
-) -> Result<ProgramSigningRequest, Error> {
+) -> Result<SpendIntent, Error> {
     let requirement = update_requirement(compiled)?;
     let input = input_from_artifact(compiled, &channel)?;
     let template = only_candidate(compiled)?;
@@ -323,20 +320,22 @@ pub fn update_request_from_artifact(
 }
 
 /// Compile the delayed exit and prepare its artifact-declared predicate.
-pub fn settlement_request(
+pub fn prepare_settlement(
     source: &Channel,
     channel: Coin,
     sponsor: Sponsor,
-) -> Result<ProgramSigningRequest, Error> {
-    settlement_request_from_artifact(&compile_settlement(source)?, channel, sponsor)
+) -> Result<(Compiled, SpendIntent), Error> {
+    let compiled = compile_settlement(source)?;
+    let intent = prepare_settlement_from_artifact(&compiled, channel, sponsor)?;
+    Ok((compiled, intent))
 }
 
 /// Bind an exported settlement candidate without reconstructing its contract.
-pub fn settlement_request_from_artifact(
+pub fn prepare_settlement_from_artifact(
     compiled: &Compiled,
     channel: Coin,
     sponsor: Sponsor,
-) -> Result<ProgramSigningRequest, Error> {
+) -> Result<SpendIntent, Error> {
     let template = only_candidate(compiled)?;
     let requirement = settlement_requirement(compiled, &template.tx)?;
     let input = input_from_artifact(compiled, &channel)?;
@@ -357,7 +356,7 @@ fn prepare_authorization(
     psbt: Psbt,
     codec: &str,
     witness: Vec<u8>,
-) -> Result<ProgramSigningRequest, Error> {
+) -> Result<SpendIntent, Error> {
     let ProgramSpendPath::ScriptPath(leaf) = requirement.path else {
         return Err("eltoo authorization must use a script path".into());
     };
@@ -375,7 +374,7 @@ fn prepare_authorization(
         codec: codec.into(),
         witness,
     }];
-    let mut prepared = prepare_spend(
+    let prepared = prepare_spend(
         compiled,
         SpendPath::ScriptPath(leaf),
         psbt,
@@ -383,10 +382,25 @@ fn prepare_authorization(
         &assets,
         &evidence,
     )?;
-    if prepared.program_requests.len() != 1 {
-        return Err("eltoo branch needs exactly one unsigned program".into());
+    Ok(SpendIntent::from_prepared(prepared))
+}
+
+/// Explicitly obtain oracle and sponsor signatures, then complete the pinned branch.
+pub fn complete_candidate(
+    compiled: &Compiled,
+    intent: &SpendIntent,
+    oracle: &ProgramOracle,
+    sponsor: &Keypair,
+) -> Result<Transaction, Error> {
+    let mut current = intent.baseline_psbt().clone();
+    intent.status(compiled, &current)?;
+    for (index, request) in intent.requests().iter().enumerate() {
+        let response = oracle.sign(request.clone())?;
+        intent.merge_response(compiled, &mut current, index, &response)?;
     }
-    Ok(prepared.program_requests.pop().unwrap())
+    sign_sponsor(&mut current, sponsor)?;
+    let finalized = intent.finalize(compiled, &current, &Secp256k1::new())?;
+    Ok(finalized.extract_tx()?)
 }
 
 /// Add the sponsor's real SIGHASH_ALL signature after the oracle accepts input zero.

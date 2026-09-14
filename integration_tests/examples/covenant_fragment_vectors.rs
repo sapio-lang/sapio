@@ -6,9 +6,11 @@ use bitcoin::{Address, Network, OutPoint, Transaction, Witness};
 use emulator_connect::program::ProgramOracle;
 use sapio_contrib::contracts::template_authorization::Authorization;
 use sapio_integration_tests::fragment_example::{
-    compile_candidates, example_contract, participant_key, signing_request,
+    compile_candidates, example_contract, participant_key, prepare_fragment,
 };
-use sapio_integration_tests::program_example::{bind_candidates, example_root, FUNDING_SATS};
+use sapio_integration_tests::program_example::{
+    bind_candidates, complete_example_spend, example_root, FUNDING_SATS,
+};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::error::Error;
@@ -47,18 +49,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         candidate.unsigned_tx.input[0].previous_output =
             funding.get(name).copied().unwrap_or_default();
         candidate.inputs[0].non_witness_utxo = None;
-        let request = signing_request(
+        let intent = prepare_fragment(
             &compiled,
             mode,
             candidate,
             &authorizer,
             Some(b"\x50sapio-fragments".to_vec()),
         )?;
-        let signed = oracle.sign(request)?;
-        let finalized = sapio_psbt::finalize::finalize(signed, &secp)
-            .map_err(|(_, errors)| format!("fragment vector finalization failed: {errors:?}"))?;
-        sapio_integration_tests::program_example::check_finalized_candidate(&compiled, &finalized)?;
-        let transaction = finalized.extract_tx()?;
+        let transaction = complete_example_spend(&compiled, &intent, &oracle)?;
         let mut amount_changed = transaction.clone();
         amount_changed.output[0].value -= bitcoin::Amount::ONE_SAT;
         let mut annex_changed = transaction.clone();

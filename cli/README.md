@@ -5,6 +5,32 @@ the Sapio Project.
 
 You can use the Sapio CLI to build contracts and run other programs.
 
+## Complete a selected spend
+
+`contract spend` resumes one exact spending branch from a trusted artifact,
+immutable intent JSON, and current base64 PSBT. It needs no CLI configuration
+or coordinator service:
+
+```sh
+sapio-cli contract spend prepare --artifact artifact.json --psbt funded.psbt \
+  --path key --assets assets.json --evidence evidence.json --output intent.json
+sapio-cli contract spend requests --artifact artifact.json --intent intent.json
+sapio-cli contract spend apply --artifact artifact.json --intent intent.json \
+  --response 0=response.psbt --output current.psbt
+sapio-cli contract spend status --artifact artifact.json --intent intent.json \
+  --psbt current.psbt
+sapio-cli contract spend finalize --artifact artifact.json --intent intent.json \
+  --psbt current.psbt --transaction --output transaction.hex
+```
+
+Choose each request's signer explicitly. Responses are verified against their
+original requests and can arrive out of order. `sign-native --key native.key`
+signs only the selected input's native slots. Finalization verifies the selected
+witness, other funded inputs and retained fee rules before extraction. Output
+files must be new; every resumed command accepts the latest `--psbt` separately
+from the unchanged intent. See [spend completion](../docs/SPEND_COMPLETION.md)
+for script paths, multiple signers and restarting between operations.
+
 ## Explain a contract
 
 Inspect a compiled artifact without a wallet, signer connection, or CLI configuration:

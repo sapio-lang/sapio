@@ -42,6 +42,7 @@ use util::*;
 pub mod config;
 mod contracts;
 mod explain;
+mod spend;
 mod util;
 
 async fn config(custom_config: Option<&str>) -> Result<Config, Box<dyn Error>> {
@@ -140,6 +141,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
      (@subcommand contract =>
       (@setting SubcommandRequiredElseHelp)
       (about: "Create or Manage a Contract")
+      (subcommand: spend::command())
       (@subcommand explain =>
        (about: "Validate and explain a compiled artifact without wallet or network configuration")
        (@arg file: -f --file +takes_value "Compiled artifact JSON file; omit or use - for stdin")
@@ -383,6 +385,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(("contract", matches)) => {
             if let Some(("explain", args)) = matches.subcommand() {
                 return explain::run(args);
+            }
+            if let Some(("spend", args)) = matches.subcommand() {
+                return spend::run(args);
             }
             let config = config(custom_config).await?;
             let module_path = |args: &clap::ArgMatches| {

@@ -5,7 +5,7 @@ use sapio::contract::{Compilable, CompilationError, Context};
 use sapio_base::effects::EffectPath;
 use sapio_contrib::contracts::template_authorization::{Authorization, FragmentContract};
 use sapio_integration_tests::fragment_example::{
-    compile_candidates, example_contract, participant_key, signing_request,
+    compile_candidates, example_contract, participant_key, prepare_fragment,
 };
 use sapio_integration_tests::program_example::{bind_candidates, example_root, recipient};
 use std::sync::Arc;
@@ -91,7 +91,7 @@ fn compiled_fragment_contracts_authorize_both_paths_and_preserve_annexes() {
                     Some(participant.x_only_public_key().0)
                 );
             }
-            let request = signing_request(
+            let intent = prepare_fragment(
                 &compiled,
                 mode,
                 candidate,
@@ -99,6 +99,7 @@ fn compiled_fragment_contracts_authorize_both_paths_and_preserve_annexes() {
                 Some(b"\x50fragments-test".to_vec()),
             )
             .unwrap();
+            let request = intent.requests()[0].clone();
             assert_eq!(
                 matches!(request.path, ProgramSpendPath::ScriptPath(_)),
                 script_path
@@ -124,11 +125,11 @@ fn compiled_fragment_contracts_authorize_both_paths_and_preserve_annexes() {
                 Err(ProgramError::Evaluation(_))
             ));
             let signed = oracle.sign(request).unwrap();
-            let finalized = sapio_psbt::finalize::finalize(signed, &secp).unwrap();
-            sapio_integration_tests::program_example::check_finalized_candidate(
-                &compiled, &finalized,
-            )
-            .unwrap();
+            let mut current = intent.baseline_psbt().clone();
+            intent
+                .merge_response(&compiled, &mut current, 0, &signed)
+                .unwrap();
+            let finalized = intent.finalize(&compiled, &current, &secp).unwrap();
             let tx = finalized.extract_tx().unwrap();
             assert_eq!(tx.input[0].witness.last(), Some(&b"\x50fragments-test"[..]));
             assert_eq!(tx.input[0].witness.len(), if script_path { 4 } else { 2 });

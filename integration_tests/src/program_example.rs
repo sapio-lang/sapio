@@ -8,8 +8,9 @@ use bitcoin::bip32::{Xpriv, Xpub};
 use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{Secp256k1, SecretKey};
 use bitcoin::{Address, Amount, Network, OutPoint, Transaction, TxIn, TxOut};
+use emulator_connect::program::completion::SpendIntent;
 use emulator_connect::program::{
-    prepare_spend, ProgramCapability, ProgramEvidence, ProgramSigningRequest, ProgramSpendPath,
+    prepare_spend, ProgramCapability, ProgramEvidence, ProgramOracle, ProgramSpendPath,
     SpendAssets, SpendPath, WasmEvaluator,
 };
 use emulator_connect::CTVAvailable;
@@ -65,11 +66,11 @@ pub fn instance(minimum: u64, recipient: &bitcoin::Script) -> ProgramInstance {
 }
 
 /// Prepare the compiled payment's key-path signature with an output-index witness.
-pub fn signing_request(
+pub fn prepare_payment(
     compiled: &Compiled,
     psbt: Psbt,
     output_index: u32,
-) -> Result<ProgramSigningRequest, Box<dyn Error>> {
+) -> Result<SpendIntent, Box<dyn Error>> {
     let mut requirements = compiled
         .program_requirements()?
         .into_iter()
@@ -80,7 +81,7 @@ pub fn signing_request(
     if requirements.next().is_some() {
         return Err("payment has more than one program for its key path".into());
     }
-    prepare_example_request(
+    prepare_example_spend(
         compiled,
         requirement,
         psbt,
@@ -91,13 +92,13 @@ pub fn signing_request(
 
 /// Prepare the complete branch for these single-program examples.
 /// The codec and signer are configured explicitly; preparation does not sign.
-pub fn prepare_example_request(
+pub fn prepare_example_spend(
     compiled: &Compiled,
     requirement: sapio::contract::abi::object::ProgramRequirement,
     psbt: Psbt,
     codec: &str,
     witness: Vec<u8>,
-) -> Result<ProgramSigningRequest, Box<dyn Error>> {
+) -> Result<SpendIntent, Box<dyn Error>> {
     let path = match requirement.path {
         ProgramSpendPath::KeyPath => SpendPath::KeyPath,
         ProgramSpendPath::ScriptPath(leaf) => SpendPath::ScriptPath(leaf),
@@ -116,25 +117,31 @@ pub fn prepare_example_request(
         codec: codec.into(),
         witness,
     };
-    let mut prepared = prepare_spend(compiled, path, psbt, 0, &assets, &[evidence])?;
-    if prepared.program_requests.len() != 1 {
-        return Err("example branch must require exactly one program signature".into());
-    }
-    Ok(prepared.program_requests.remove(0))
+    Ok(SpendIntent::from_prepared(prepare_spend(
+        compiled,
+        path,
+        psbt,
+        0,
+        &assets,
+        &[evidence],
+    )?))
 }
 
-/// Check retained local funding policy after normal signature finalization.
-/// The examples call this before extracting a transaction for display.
-pub fn check_finalized_candidate(compiled: &Compiled, psbt: &Psbt) -> Result<(), Box<dyn Error>> {
-    use sapio_base::CTVHash;
-    let hash = psbt.unsigned_tx.get_ctv_hash(0);
-    let template = compiled
-        .ctv_to_tx
-        .get(&hash)
-        .or_else(|| compiled.suggested_txs.get(&hash))
-        .ok_or("transaction is not a candidate in this artifact")?;
-    template.check_funded_psbt(psbt)?;
-    Ok(())
+/// Use the explicitly supplied sample oracle, merging responses into one PSBT.
+/// Shared completion validates the exact witness and retained funding rules.
+pub fn complete_example_spend(
+    compiled: &Compiled,
+    intent: &SpendIntent,
+    oracle: &ProgramOracle,
+) -> Result<Transaction, Box<dyn Error>> {
+    let mut current = intent.baseline_psbt().clone();
+    intent.status(compiled, &current)?;
+    for (index, request) in intent.requests().iter().enumerate() {
+        let response = oracle.sign(request.clone())?;
+        intent.merge_response(compiled, &mut current, index, &response)?;
+    }
+    let finalized = intent.finalize(compiled, &current, &Secp256k1::new())?;
+    Ok(finalized.extract_tx()?)
 }
 
 /// Deterministic, disposable keys for this research example only.
