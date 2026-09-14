@@ -16,7 +16,7 @@ schemars = { version = "=1.2.2", features = ["bitcoin032", "miniscript13"] }
 serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
-clap = "=3.0.0-beta.2"
+clap = { version = "=4.6.6", features = ["derive"] }
 base64 = "0.13.0"
 lazy_static = "1.4.0"
 bitcoincore-rpc = "0.19.0"

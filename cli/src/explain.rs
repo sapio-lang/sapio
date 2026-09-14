@@ -1,7 +1,7 @@
 //! Read-only artifact and spending explanations without runtime configuration.
 
-use bitcoin::psbt::Psbt;
-use clap::ArgMatches;
+use crate::args::Explain;
+use crate::util::{read_json, read_psbt, write_json, write_output};
 use emulator_connect::program::spend_plan::SpendRequirement;
 use emulator_connect::program::{plan_spends, SpendAssets, SpendReport};
 use sapio::contract::actions::TemplateKind;
@@ -11,7 +11,6 @@ use sapio_base::policy::ScriptPolicy;
 use serde::Serialize;
 use std::error::Error;
 use std::fmt::Write as _;
-use std::io::Read;
 
 #[derive(Serialize)]
 struct Explanation {
@@ -20,35 +19,22 @@ struct Explanation {
     spend: Option<SpendReport>,
 }
 
-pub(crate) fn run(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
-    let mut input = String::new();
-    match args.value_of("file") {
-        None | Some("-") => {
-            std::io::stdin().read_to_string(&mut input)?;
-        }
-        Some(path) => input = std::fs::read_to_string(path)?,
-    }
-    let object: Compiled = serde_json::from_str(&input)?;
+pub(crate) fn run(args: Explain) -> Result<(), Box<dyn Error>> {
+    let object: Compiled = read_json(args.file.as_deref())?;
     let artifact = object.explain()?;
     let psbt = args
-        .value_of("psbt")
-        .map(|path| -> Result<Psbt, Box<dyn Error>> {
-            let encoded = std::fs::read_to_string(path)?;
-            Ok(Psbt::deserialize(&base64::decode(encoded.trim())?)?)
-        })
+        .psbt
+        .as_deref()
+        .map(|path| read_psbt(Some(path)))
         .transpose()?;
-    if args.is_present("input") && psbt.is_none() {
-        return Err("--input requires --psbt".into());
-    }
-    let index: usize = args.value_of("input").unwrap_or("0").parse()?;
-    let assets = args
-        .value_of("assets")
-        .map(|path| -> Result<SpendAssets, Box<dyn Error>> {
-            Ok(serde_json::from_str(&std::fs::read_to_string(path)?)?)
-        })
+    let index = args.input.unwrap_or(0);
+    let assets: SpendAssets = args
+        .assets
+        .as_deref()
+        .map(|path| read_json(Some(path)))
         .transpose()?
         .unwrap_or_default();
-    let spend = if psbt.is_some() || args.is_present("assets") {
+    let spend = if psbt.is_some() || args.assets.is_some() {
         Some(plan_spends(
             &object,
             psbt.as_ref().map(|psbt| (psbt, index)),
@@ -58,10 +44,13 @@ pub(crate) fn run(args: &ArgMatches) -> Result<(), Box<dyn Error>> {
         None
     };
     let explanation = Explanation { artifact, spend };
-    if args.is_present("json") {
-        println!("{}", serde_json::to_string_pretty(&explanation)?);
+    if args.json {
+        write_json(args.output.output.as_deref(), &explanation)?;
     } else {
-        print!("{}", human(&explanation)?);
+        write_output(
+            args.output.output.as_deref(),
+            human(&explanation)?.trim_end().as_bytes(),
+        )?;
     }
     Ok(())
 }

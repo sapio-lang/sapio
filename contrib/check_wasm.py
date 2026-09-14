@@ -18,8 +18,10 @@ REQUEST_TIMEOUT_SECONDS = 180
 
 with tempfile.TemporaryDirectory(prefix="sapio-wasm-") as workspace:
     def request(command, module=None, parameters=None, extra_args=(), config=None):
-        args = [str(cli), "--config", str(config or vectors / "basic_config.json"),
-                "contract", command]
+        args = [str(cli)]
+        if command == "bind" or config is not None:
+            args.extend(["--config", str(config or vectors / "basic_config.json")])
+        args.extend(["contract", command])
         if module is not None:
             args.extend(["--workspace", workspace, "--file", str(modules / module)])
         args.extend(extra_args)
@@ -31,14 +33,11 @@ with tempfile.TemporaryDirectory(prefix="sapio-wasm-") as workspace:
         )
         print(f"WASM {command} {module or ''}: {time.monotonic() - started:.2f}s",
               file=sys.stderr)
-        response = json.loads(result.stdout)["result"]
-        if "Err" in response:
-            raise RuntimeError(response["Err"])
-        return response["Ok"]
+        return json.loads(result.stdout)
 
     expected = json.loads((vectors / "clause_output.json").read_text())
     parameters = json.loads((vectors / "clause_input.json").read_text())
-    direct = request("create", "sapio_wasm_clause.wasm", parameters)["Call"]["result"]
+    direct = request("create", "sapio_wasm_clause.wasm", parameters)
     assert direct == expected, (direct, expected)
 
     # Public lowering inputs completely determine compilation. Runtime signer
@@ -53,15 +52,15 @@ with tempfile.TemporaryDirectory(prefix="sapio-wasm-") as workspace:
     unused_signers = Path(workspace) / "unused-signers.json"
     unused_signers.write_text(json.dumps(binding_config))
     unchanged = request("create", "sapio_wasm_clause.wasm", parameters,
-                        config=unused_signers)["Call"]["result"]
+                        config=unused_signers)
     assert unchanged == direct
     request("api", "sapio_wasm_clause.wasm", config=unused_signers)
 
-    key = request("load", "sapio_wasm_clause.wasm")["Load"]["key"]
+    key = request("load", "sapio_wasm_clause.wasm")["key"]
     parameters = json.loads(
         (vectors / "trampoline_clause_input.json").read_text().replace("TEMPLATE_ARG_A", key)
     )
-    indirect = request("create", "sapio_wasm_clause_trampoline.wasm", parameters)["Call"]["result"]
+    indirect = request("create", "sapio_wasm_clause_trampoline.wasm", parameters)
     assert indirect == expected, (indirect, expected)
 
     owner = "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
@@ -82,7 +81,7 @@ with tempfile.TemporaryDirectory(prefix="sapio-wasm-") as workspace:
     }
     inscription = request(
         "create", "sapio_wasm_ordinal_inscription.wasm", parameters
-    )["Call"]["result"]
+    )
     descriptor = inscription["known_descriptor"]["XOnly"]
     # The body crosses the 520-byte push boundary, inside a false Ord envelope.
     envelope = (
@@ -95,7 +94,7 @@ with tempfile.TemporaryDirectory(prefix="sapio-wasm-") as workspace:
     assert len(templates) == 1, templates
     outputs = templates[0]["transaction_literal"]["output"]
     assert len(outputs) == 1 and outputs[0]["value"] == 9_500, outputs
-    bound = request("bind", parameters=inscription, extra_args=["--mock"])["Bind"]["program"]
+    bound = request("bind", parameters=inscription, extra_args=["--mock"])["program"]
     root = inscription["root_path"]
     template_hash = next(iter(inscription["suggested_template_hash_to_template_map"]))
     child = f"{root}/@suggested/{template_hash}/#0"

@@ -6,45 +6,105 @@
 
 use bitcoin::hashes::Hash;
 use bitcoin::psbt::Psbt;
+use serde::{de::DeserializeOwned, Serialize};
 use std::error::Error;
-use std::path::PathBuf;
-use tokio::io::AsyncReadExt;
-/// Checks that a file exists during argument parsing
-///
-/// **Race Conditions** if file is deleted after this call
-pub fn check_file(p: &str) -> Result<(), String> {
-    std::fs::metadata(p).map_err(|_| String::from("File doesn't exist"))?;
+use std::fs::OpenOptions;
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+
+pub(crate) type Result<T> = std::result::Result<T, Box<dyn Error>>;
+
+fn input_name(path: Option<&Path>) -> String {
+    path.filter(|path| *path != Path::new("-"))
+        .map(|path| format!("'{}'", path.display()))
+        .unwrap_or_else(|| "stdin".into())
+}
+
+pub(crate) fn read_input(path: Option<&Path>) -> Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    match path {
+        None => {
+            std::io::stdin().read_to_end(&mut bytes)?;
+        }
+        Some(path) if path == Path::new("-") => {
+            std::io::stdin().read_to_end(&mut bytes)?;
+        }
+        Some(path) => {
+            bytes = std::fs::read(path)
+                .map_err(|error| format!("cannot read '{}': {error}", path.display()))?
+        }
+    }
+    Ok(bytes)
+}
+
+pub(crate) fn read_json<T: DeserializeOwned>(path: Option<&Path>) -> Result<T> {
+    serde_json::from_slice(&read_input(path)?)
+        .map_err(|error| format!("invalid JSON in {}: {error}", input_name(path)).into())
+}
+
+pub(crate) fn read_psbt(path: Option<&Path>) -> Result<Psbt> {
+    let bytes = read_input(path)?;
+    let encoded = std::str::from_utf8(&bytes)
+        .map_err(|error| format!("invalid base64 text in {}: {error}", input_name(path)))?;
+    let bytes = base64::decode(encoded.trim())
+        .map_err(|error| format!("invalid base64 PSBT in {}: {error}", input_name(path)))?;
+    Psbt::deserialize(&bytes)
+        .map_err(|error| format!("invalid PSBT in {}: {error}", input_name(path)).into())
+}
+
+/// Create private files exclusively; argument-time existence checks cannot
+/// prevent concurrent replacement of key material or collected signatures.
+pub(crate) fn write_new(path: &Path, bytes: &[u8]) -> Result<()> {
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(path)
+        .map_err(|error| format!("cannot create '{}': {error}", path.display()))?;
+    file.write_all(bytes)
+        .map_err(|error| format!("cannot write '{}': {error}", path.display()))?;
     Ok(())
 }
-/// Checks that a file does not exist during argument parsing
-///
-/// **Race Conditions** if file is created after this call
-pub fn check_file_not(p: &str) -> Result<(), String> {
-    if std::fs::metadata(p).is_ok() {
-        return Err(String::from("File exists already"));
+
+pub(crate) fn write_output(path: Option<&Path>, bytes: &[u8]) -> Result<()> {
+    match path {
+        Some(path) if path != Path::new("-") => {
+            let mut line = bytes.to_vec();
+            line.push(b'\n');
+            write_new(path, &line)?;
+        }
+        _ => {
+            let mut stdout = std::io::stdout().lock();
+            stdout.write_all(bytes)?;
+            stdout.write_all(b"\n")?;
+        }
     }
     Ok(())
 }
 
-/// Reads a PSBT from a file and checks that it is correctly formatted
-pub fn decode_psbt_file(a: &clap::ArgMatches, b: &str) -> Result<Psbt, Box<dyn std::error::Error>> {
-    let bytes = std::fs::read_to_string(a.value_of_os(b).unwrap())?;
-    let bytes = base64::decode(bytes.trim())?;
-    let psbt = Psbt::deserialize(&bytes)?;
-    Ok(psbt)
+pub(crate) fn write_json(path: Option<&Path>, value: &impl Serialize) -> Result<()> {
+    write_output(path, &serde_json::to_vec_pretty(value)?)
 }
 
-/// Reads a PSBT either from a string or from stdin
-pub async fn get_psbt_from(psbt_str: Option<&str>) -> Result<Psbt, Box<dyn Error>> {
-    let encoded = if let Some(psbt) = psbt_str {
-        psbt.to_owned()
-    } else {
-        let mut encoded = String::new();
-        tokio::io::stdin().read_to_string(&mut encoded).await?;
-        encoded
+pub(crate) fn write_psbt(path: Option<&Path>, psbt: &Psbt) -> Result<()> {
+    write_output(path, base64::encode(psbt.serialize()).as_bytes())
+}
+
+pub(crate) fn project_dirs() -> Result<directories::ProjectDirs> {
+    directories::ProjectDirs::from("org", "judica", "sapio-cli")
+        .ok_or_else(|| "cannot determine Sapio configuration and data directories".into())
+}
+
+pub(crate) fn module_path(workspace: Option<PathBuf>) -> Result<PathBuf> {
+    let workspace = match workspace {
+        Some(workspace) => workspace,
+        None => project_dirs()?.data_dir().into(),
     };
-    let psbt = Psbt::deserialize(&base64::decode(encoded.trim())?)?;
-    Ok(psbt)
+    Ok(workspace.join("modules"))
 }
 
 /// Compute the key's CTV commitment from all known final scriptSigs.
@@ -52,7 +112,7 @@ pub async fn get_psbt_from(psbt_str: Option<&str>) -> Result<Psbt, Box<dyn Error
 /// require the previous-output metadata needed by checked spend extraction.
 pub fn ctv_hash(
     psbt: &Psbt,
-) -> Result<bitcoin::hashes::sha256::Hash, sapio_psbt::PSBTValidationError> {
+) -> std::result::Result<bitcoin::hashes::sha256::Hash, sapio_psbt::PSBTValidationError> {
     use sapio_base::CTVHash;
 
     sapio_psbt::validate_psbt(psbt)?;
@@ -63,13 +123,6 @@ pub fn ctv_hash(
         }
     }
     Ok(transaction.get_ctv_hash(0))
-}
-
-/// get the path for the compiled modules
-pub(crate) fn get_data_dir(typ: &str, org: &str, proj: &str) -> PathBuf {
-    let proj =
-        directories::ProjectDirs::from(typ, org, proj).expect("Failed to find config directory");
-    proj.data_dir().into()
 }
 
 pub(crate) fn create_mock_output() -> bitcoin::OutPoint {
@@ -114,15 +167,24 @@ mod tests {
         assert!(ctv_hash(&psbt).is_err());
     }
 
-    #[tokio::test]
-    async fn psbt_text_input_consumes_the_complete_binary_encoding() {
-        let psbt = psbt();
-        let encoded = format!("{}\n", base64::encode(psbt.serialize()));
-        assert_eq!(get_psbt_from(Some(&encoded)).await.unwrap(), psbt);
-        let mut trailing = psbt.serialize();
-        trailing.push(0);
-        assert!(get_psbt_from(Some(&base64::encode(trailing)))
-            .await
-            .is_err());
+    #[test]
+    fn output_creation_never_replaces_an_existing_file() {
+        let path = std::env::temp_dir().join(format!(
+            "sapio-output-{}-{}",
+            std::process::id(),
+            rand::random::<u64>()
+        ));
+        write_new(&path, b"original").unwrap();
+        assert!(write_output(Some(&path), b"replacement").is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"original");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                0o600
+            );
+        }
+        std::fs::remove_file(path).unwrap();
     }
 }
