@@ -13,6 +13,9 @@ use wasmer::wasmparser::{Parser, Payload, TypeRef, ValType};
 use wasmer::{Imports, Instance, Module, RuntimeError, Store, TypedFunction};
 use wasmer_middlewares::metering::{get_remaining_points, MeteringPoints};
 
+mod context;
+use context::{add_context_imports, bind_context, CONTEXT_NAMESPACE_V2};
+
 // Pointer/length pairs for program, parameters, signed view and witness.
 type EvaluationArguments = (i32, i32, i32, i32, i32, i32, i32, i32);
 
@@ -118,14 +121,15 @@ fn check_compilation_budget(version: WasmVersion, module: &[u8]) -> Result<(), E
                         {
                             4
                         }
+                        (CONTEXT_NAMESPACE_V2, "tapleaf_hash") if version == WasmVersion::V2 => 1,
                         _ => {
                             return Err(failure(
-                                "unsupported WASM evaluator crypto import or namespace",
+                                "unsupported WASM evaluator host import or namespace",
                             ))
                         }
                     };
                     let TypeRef::Func(index) = import.ty else {
-                        return Err(failure("WASM evaluator imports must be crypto functions"));
+                        return Err(failure("WASM evaluator imports must be host functions"));
                     };
                     let ty = function_types
                         .get(index as usize)
@@ -135,7 +139,7 @@ fn check_compilation_budget(version: WasmVersion, module: &[u8]) -> Result<(), E
                         || ty.results() != [ValType::I32]
                     {
                         return Err(failure(
-                            "WASM evaluator crypto import has an invalid signature",
+                            "WASM evaluator host import has an invalid signature",
                         ));
                     }
                 }
@@ -205,8 +209,13 @@ pub(super) fn evaluate(
         WasmVersion::V1 => add_crypto_imports(&mut store, &mut imports),
         WasmVersion::V2 => add_crypto_imports_v2(&mut store, &mut imports),
     };
+    let context = (version == WasmVersion::V2)
+        .then(|| add_context_imports(&mut store, &mut imports, view.tapleaf_hash()));
     let instance = Instance::new(&mut store, &module, &imports).map_err(failure)?;
     bind_crypto(&crypto, &mut store, &instance).map_err(failure)?;
+    if let Some(context) = context {
+        bind_context(&context, &mut store, &instance).map_err(failure)?;
+    }
     let memory = instance
         .exports
         .get_memory("memory")
