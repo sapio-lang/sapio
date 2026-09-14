@@ -121,6 +121,18 @@ the signer; raw requests do not carry that root. Omitting `--psbt` resumes from
 the original baseline. Without `--transaction`, `finalize` returns the checked,
 finalized PSBT.
 
+To evaluate an exported request locally, select the key and evaluator explicitly:
+
+```sh
+sapio-cli signer program --key oracle.key --request request-0.json \
+  --evaluator evaluator.wasm --output response-0.psbt
+```
+
+This command uses the same evaluated-signing protocol as the Rust API. It never
+loads executable code from artifact metadata or chooses a network endpoint. The
+[starter walkthrough](../cli/templates/starter/README.md) generates a complete
+matching set of files for an allowed payment and a rejected underpayment.
+
 ## Examples and recovered proofs
 
 The payment, covenant-fragment and normal eltoo runners all use `SpendIntent`.

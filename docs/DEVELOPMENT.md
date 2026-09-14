@@ -1,5 +1,10 @@
 # Developing Sapio
 
+For your first contract, start with the [maintained quickstart](QUICKSTART.md).
+It generates an independent project with complete dependency pins and walks
+through artifact inspection and an explicitly signed synthetic spend. This
+guide covers work on Sapio itself and its wider validation suites.
+
 ## Reproducible builds
 
 Use rustup and the checked-in `rust-toolchain.toml` (Rust 1.98.1). All workspaces
@@ -22,6 +27,11 @@ dependencies. The `bitcoin_hashes` entry keeps Bitcoin and secp256k1 on one
 identical hash implementation. See [Cargo's patch rules][cargo-patch]. Publishing
 supported Sapio crates requires repaired dependency releases and updated
 requirements.
+
+`sapio-cli new` supplies that complete table, a matching lockfile and toolchain
+for the maintained starter, so its users do not assemble these dependencies by
+hand. Updating the starter's Sapio pin requires reviewing its patches and
+validating the generated project outside this workspace.
 
 A native C compiler is required for secp256k1. The WASM build additionally needs
 LLVM Clang with the `wasm32` target. Apple's system Clang does not provide that

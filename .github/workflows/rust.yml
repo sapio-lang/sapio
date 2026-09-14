@@ -27,6 +27,12 @@ jobs:
         run: rustup show
       - run: cargo test --workspace --all-features --locked
       - run: cargo test -p sapio --example payment --locked
+      - name: Build the developer CLI
+        run: cargo build --locked -p sapio-cli
+      - name: Run the generated quickstart outside the workspace
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
+        run: python3 contrib/check_quickstart.py target/debug/sapio-cli
       - name: Install pinned Bitcoin Core
         if: runner.os == 'Linux'
         run: |
