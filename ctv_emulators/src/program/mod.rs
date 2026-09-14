@@ -38,6 +38,8 @@ pub use crate::msgs::PSBT;
 
 mod artifacts;
 pub use artifacts::{prepare_program_request, ArtifactProgramError};
+pub mod completion;
+pub use completion::{SpendCompletionError, SpendIntent};
 pub mod spend_plan;
 pub use spend_plan::{
     plan_spends, prepare_spend, PreparedSpend, ProgramCapability, ProgramEvidence,

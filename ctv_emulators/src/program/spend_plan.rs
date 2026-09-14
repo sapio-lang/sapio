@@ -21,6 +21,8 @@ use sapio_base::miniscript::{
     self, DefiniteDescriptorKey, Descriptor, Miniscript, Satisfier, Tap, ToPublicKey,
 };
 use sapio_base::CTVHash;
+pub use sapio_psbt::selected::HashRequirement;
+use sapio_psbt::selected::{SatisfactionRecipe, SignatureSlot, StackElement};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
@@ -49,19 +51,6 @@ impl PlanningWork {
             }
         }
     }
-}
-
-/// Exact preimage required by a selected satisfaction. Miniscript uses 32 bytes.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
-pub enum HashRequirement {
-    /// A single SHA256 digest.
-    Sha256(sha256::Hash),
-    /// A double SHA256 digest, in consensus byte order.
-    Hash256(sha256d::Hash),
-    /// A RIPEMD160 digest.
-    Ripemd160(ripemd160::Hash),
-    /// A SHA256 followed by RIPEMD160 digest.
-    Hash160(hash160::Hash),
 }
 
 /// A caller-configured evidence adapter and signer for exactly one program slot.
@@ -324,8 +313,14 @@ pub struct SpendReport {
 /// One explicitly selected branch and its unsigned program requests.
 #[derive(Debug)]
 pub struct PreparedSpend {
+    /// The explicitly selected input in the funded transaction.
+    pub input_index: usize,
     /// Freshly computed full-branch requirements; native assets may be pending.
     pub plan: BranchPlan,
+    /// Exact selected stack, including inner alternatives and public proof bytes.
+    pub recipe: SatisfactionRecipe,
+    /// Ordinary native signatures only; program slots require evaluator requests.
+    pub native_signatures: Vec<SignatureSlot>,
     /// Funding and existing native assets, with descriptor proofs supplied.
     pub psbt: Psbt,
     /// Only the selected witness's unsigned program slots, in witness order.
@@ -351,11 +346,13 @@ pub enum SpendPlanError {
     /// Preparing a spend requires all input amounts and scripts.
     MissingPrevouts(Vec<usize>),
     /// Evidence for a selected unsigned program was not supplied.
-    MissingEvidence(ProgramRequirement),
+    MissingEvidence(Box<ProgramRequirement>),
     /// An evidence adapter has the wrong identity, codec, or duplicate slot.
     InvalidEvidence,
     /// An existing witness or redeem script disagrees with the native descriptor.
     ConflictingScripts,
+    /// An imported recipe is not the canonical completion of its selected slots.
+    InvalidSelection,
 }
 
 impl fmt::Display for SpendPlanError {
@@ -371,6 +368,7 @@ impl fmt::Display for SpendPlanError {
             Self::MissingEvidence(requirement) => write!(f, "missing evidence for program {} at {:?}", requirement.program.instance().id().0, requirement.path),
             Self::InvalidEvidence => f.write_str("evidence must match one selected program requirement and its explicit codec"),
             Self::ConflictingScripts => f.write_str("PSBT witness or redeem script conflicts with the artifact descriptor"),
+            Self::InvalidSelection => f.write_str("selected witness recipe does not match the validated artifact and transaction"),
         }
     }
 }
@@ -405,6 +403,49 @@ pub fn plan_spends(
     psbt: Option<(&Psbt, usize)>,
     assets: &SpendAssets,
 ) -> Result<SpendReport, SpendPlanError> {
+    plan_spends_inner(object, psbt, assets, None, None).map(|(report, _)| report)
+}
+
+struct PlannedBranch {
+    report: BranchPlan,
+    recipe: Option<SatisfactionRecipe>,
+}
+
+#[derive(Default)]
+struct SelectedAssets {
+    schnorr: BTreeSet<(XOnlyPublicKey, Option<TapLeafHash>)>,
+    ecdsa: BTreeSet<PublicKey>,
+    preimages: BTreeSet<HashRequirement>,
+}
+
+impl SelectedAssets {
+    fn from_recipe(recipe: &SatisfactionRecipe) -> Self {
+        let mut selected = Self::default();
+        for element in recipe.script_sig.iter().chain(&recipe.witness) {
+            match element {
+                StackElement::SchnorrSignature { key, leaf } => {
+                    selected.schnorr.insert((*key, *leaf));
+                }
+                StackElement::EcdsaSignature(key) => {
+                    selected.ecdsa.insert(*key);
+                }
+                StackElement::Preimage(hash) => {
+                    selected.preimages.insert(hash.clone());
+                }
+                StackElement::Literal(_) => (),
+            }
+        }
+        selected
+    }
+}
+
+fn plan_spends_inner(
+    object: &Object,
+    psbt: Option<(&Psbt, usize)>,
+    assets: &SpendAssets,
+    selected_path: Option<SpendPath>,
+    selected_assets: Option<&SelectedAssets>,
+) -> Result<(SpendReport, Option<SatisfactionRecipe>), SpendPlanError> {
     let programs = object
         .program_requirements()
         .map_err(ArtifactProgramError::Artifact)?;
@@ -464,6 +505,7 @@ pub fn plan_spends(
         hypothetical_template: None,
         actual_template,
         work: &work,
+        selected_assets,
     };
     let mut report = SpendReport {
         branches: Vec::new(),
@@ -477,8 +519,17 @@ pub fn plan_spends(
                 .map(|witness| witness.size() as u64)
         }),
     };
+    let mut selected_recipe = None;
+    let mut push = |branch: PlannedBranch| {
+        if selected_path.is_some() {
+            selected_recipe = branch.recipe;
+        }
+        report.branches.push(branch.report);
+    };
     if let Some(key) = expected.tap_internal_key {
-        report.branches.push(key_plan(key, &provider));
+        if selected_path.is_none_or(|path| path == SpendPath::KeyPath) {
+            push(key_plan(key, &provider));
+        }
         // A duplicate leaf may have several control blocks. The shortest proof
         // gives a sound bound for the concrete proof displayed by this plan.
         let mut leaves = std::collections::BTreeMap::new();
@@ -490,6 +541,9 @@ pub fn plan_spends(
             }
         }
         for (leaf, (script, control)) in leaves {
+            if selected_path.is_some_and(|path| path != SpendPath::ScriptPath(leaf)) {
+                continue;
+            }
             let native = match &object.descriptor {
                 Some(SupportedDescriptors::XOnly(Descriptor::Tr(tree))) => tree
                     .leaves()
@@ -497,7 +551,7 @@ pub fn plan_spends(
                     .map(|candidate| candidate.miniscript().clone()),
                 _ => None,
             };
-            report.branches.push(tap_plan(
+            push(tap_plan(
                 leaf,
                 script,
                 control,
@@ -506,16 +560,95 @@ pub fn plan_spends(
             ));
         }
     } else if let Some(SupportedDescriptors::Pk(descriptor)) = &object.descriptor {
-        report
-            .branches
-            .push(descriptor_plan(&descriptor.to_string(), &provider));
-    } else {
-        report.branches.push(unsupported(
+        if selected_path.is_none_or(|path| path == SpendPath::Descriptor) {
+            push(descriptor_plan(&descriptor.to_string(), &provider));
+        }
+    } else if selected_path.is_none_or(|path| path == SpendPath::Descriptor) {
+        push(unsupported(
             SpendPath::Descriptor,
             "No supported spending descriptor".into(),
         ));
     }
-    Ok(report)
+    Ok((report, selected_recipe))
+}
+
+fn canonical_selection(
+    object: &Object,
+    path: SpendPath,
+    psbt: &Psbt,
+    input_index: usize,
+    recipe: &SatisfactionRecipe,
+    assets: &SpendAssets,
+) -> Result<(BranchPlan, SatisfactionRecipe), SpendPlanError> {
+    let selected = SelectedAssets::from_recipe(recipe);
+    let (report, recipe) = plan_spends_inner(
+        object,
+        Some((psbt, input_index)),
+        assets,
+        Some(path),
+        Some(&selected),
+    )?;
+    if !report.missing_prevouts.is_empty() {
+        return Err(SpendPlanError::MissingPrevouts(report.missing_prevouts));
+    }
+    let plan = report
+        .branches
+        .into_iter()
+        .next()
+        .ok_or(SpendPlanError::UnknownPath)?;
+    match plan.status {
+        BranchStatus::Unsupported => return Err(SpendPlanError::UnsupportedBranch),
+        BranchStatus::IncompatibleTransaction => {
+            return Err(SpendPlanError::IncompatibleTransaction)
+        }
+        _ => (),
+    }
+    Ok((plan, recipe.ok_or(SpendPlanError::UnsupportedBranch)?))
+}
+
+fn native_signature_slots(plan: &BranchPlan) -> Vec<SignatureSlot> {
+    plan.requirements
+        .iter()
+        .filter_map(|requirement| match requirement {
+            SpendRequirement::EcdsaSignature { key, .. } => Some(SignatureSlot::Ecdsa(*key)),
+            SpendRequirement::SchnorrSignature { key, .. } => Some(SignatureSlot::Schnorr {
+                key: *key,
+                leaf: match plan.path {
+                    SpendPath::ScriptPath(leaf) => Some(leaf),
+                    _ => None,
+                },
+            }),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Revalidate an exact imported selection against a trusted artifact and funding.
+///
+/// Only the selected path is planned. The recipe supplies a restricted inventory,
+/// never authority: native locks, CTV commitments, public bytes and stack choices
+/// are derived again from the artifact and current transaction. Additional PSBT
+/// signatures cannot change the selected completion. Missing assets stay visible.
+pub fn validate_spend_selection(
+    object: &Object,
+    path: SpendPath,
+    psbt: &Psbt,
+    input_index: usize,
+    recipe: &SatisfactionRecipe,
+) -> Result<(BranchPlan, Vec<SignatureSlot>), SpendPlanError> {
+    let (plan, canonical) = canonical_selection(
+        object,
+        path,
+        psbt,
+        input_index,
+        recipe,
+        &SpendAssets::default(),
+    )?;
+    if &canonical != recipe {
+        return Err(SpendPlanError::InvalidSelection);
+    }
+    let native = native_signature_slots(&plan);
+    Ok((plan, native))
 }
 
 /// Prepare a caller-selected full branch using exact, explicitly supplied evidence.
@@ -557,22 +690,38 @@ pub fn prepare_spend(
         }
         capability.evidence_available = true;
     }
-    let report = plan_spends(object, Some((&psbt, input_index)), &planning_assets)?;
+    let (report, recipe) = plan_spends_inner(
+        object,
+        Some((&psbt, input_index)),
+        &planning_assets,
+        Some(path),
+        None,
+    )?;
     if !report.missing_prevouts.is_empty() {
         return Err(SpendPlanError::MissingPrevouts(report.missing_prevouts));
     }
-    let plan = report
+    let initial = report
         .branches
         .into_iter()
         .find(|plan| plan.path == path)
         .ok_or(SpendPlanError::UnknownPath)?;
-    match plan.status {
+    match initial.status {
         BranchStatus::Unsupported => return Err(SpendPlanError::UnsupportedBranch),
         BranchStatus::IncompatibleTransaction => {
             return Err(SpendPlanError::IncompatibleTransaction)
         }
         _ => (),
     }
+    // Project to the exact selected slots before exporting. This makes the
+    // canonical recipe independent of unrelated assets during restart.
+    let (plan, recipe) = canonical_selection(
+        object,
+        path,
+        &psbt,
+        input_index,
+        &recipe.ok_or(SpendPlanError::UnsupportedBranch)?,
+        &planning_assets,
+    )?;
     let selected: Vec<_> = plan
         .requirements
         .iter()
@@ -590,12 +739,20 @@ pub fn prepare_spend(
             return Err(SpendPlanError::InvalidEvidence);
         }
     }
+    // Establish the shared request baseline before preparing any program slot.
+    let expected = spending_metadata(object)?;
+    let input = &mut psbt.inputs[input_index];
+    input.tap_internal_key = expected.tap_internal_key;
+    input.tap_merkle_root = expected.tap_merkle_root;
+    input.tap_scripts.extend(expected.tap_scripts);
+    input.witness_script = expected.witness_script;
+    input.redeem_script = expected.redeem_script;
     let mut requests = Vec::with_capacity(selected.len());
     for requirement in selected {
         let adapter = evidence
             .iter()
             .find(|adapter| adapter.requirement() == requirement)
-            .ok_or_else(|| SpendPlanError::MissingEvidence(requirement.clone()))?;
+            .ok_or_else(|| SpendPlanError::MissingEvidence(Box::new(requirement.clone())))?;
         let request = prepare_program_request(
             object,
             requirement,
@@ -606,17 +763,11 @@ pub fn prepare_spend(
         psbt = request.psbt.0.clone();
         requests.push(request);
     }
-    if requests.is_empty() {
-        let expected = spending_metadata(object)?;
-        let input = &mut psbt.inputs[input_index];
-        input.tap_internal_key = expected.tap_internal_key;
-        input.tap_merkle_root = expected.tap_merkle_root;
-        input.tap_scripts.extend(expected.tap_scripts);
-        input.witness_script = expected.witness_script;
-        input.redeem_script = expected.redeem_script;
-    }
     Ok(PreparedSpend {
+        input_index,
+        native_signatures: native_signature_slots(&plan),
         plan,
+        recipe,
         psbt,
         program_requests: requests,
     })
@@ -718,6 +869,7 @@ struct Provider<'a> {
     hypothetical_template: Option<sha256::Hash>,
     actual_template: Option<sha256::Hash>,
     work: &'a PlanningWork,
+    selected_assets: Option<&'a SelectedAssets>,
 }
 
 impl<'a> Provider<'a> {
@@ -812,14 +964,6 @@ impl<'a> Provider<'a> {
                 .map(<[u8]>::len)
         })
     }
-    fn sig_size(&self, key: XOnlyPublicKey, path: ProgramSpendPath) -> usize {
-        self.input()
-            .and_then(|input| match path {
-                ProgramSpendPath::KeyPath => input.tap_key_sig.as_ref(),
-                ProgramSpendPath::ScriptPath(leaf) => input.tap_script_sigs.get(&(key, leaf)),
-            })
-            .map_or(65, |signature| signature.to_vec().len())
-    }
 }
 
 // Concrete key implementations avoid overlapping Miniscript's blanket
@@ -828,14 +972,23 @@ macro_rules! impl_provider {
     ($pk:ident) => {
         impl AssetProvider<$pk> for Provider<'_> {
             fn provider_lookup_ecdsa_sig(&self, key: &$pk) -> bool {
+                if let Some(selected) = self.selected_assets {
+                    return selected.ecdsa.contains(&key.to_public_key());
+                }
                 self.hypothetical_assets || self.ecdsa(key.to_public_key()).available()
             }
             fn provider_lookup_tap_key_spend_sig(&self, key: &$pk) -> Option<usize> {
+                if let Some(selected) = self.selected_assets {
+                    return selected
+                        .schnorr
+                        .contains(&(key.to_x_only_pubkey(), None))
+                        .then_some(65);
+                }
                 (self.hypothetical_assets
                     || self
                         .schnorr(key.to_x_only_pubkey(), ProgramSpendPath::KeyPath)
                         .available())
-                .then(|| self.sig_size(key.to_x_only_pubkey(), ProgramSpendPath::KeyPath))
+                .then_some(65)
             }
             fn provider_lookup_tap_leaf_script_sig(
                 &self,
@@ -843,14 +996,28 @@ macro_rules! impl_provider {
                 leaf: &TapLeafHash,
             ) -> Option<usize> {
                 let path = ProgramSpendPath::ScriptPath(*leaf);
+                if let Some(selected) = self.selected_assets {
+                    return selected
+                        .schnorr
+                        .contains(&(key.to_x_only_pubkey(), Some(*leaf)))
+                        .then_some(65);
+                }
                 (self.hypothetical_assets || self.schnorr(key.to_x_only_pubkey(), path).available())
-                    .then(|| self.sig_size(key.to_x_only_pubkey(), path))
+                    .then_some(65)
             }
             fn provider_lookup_sha256(&self, hash: &sha256::Hash) -> bool {
+                if let Some(selected) = self.selected_assets {
+                    return selected.preimages.contains(&HashRequirement::Sha256(*hash));
+                }
                 self.hypothetical_assets
                     || self.preimage(&HashRequirement::Sha256(*hash)).available()
             }
             fn provider_lookup_hash256(&self, hash: &miniscript::hash256::Hash) -> bool {
+                if let Some(selected) = self.selected_assets {
+                    return selected.preimages.contains(&HashRequirement::Hash256(
+                        sha256d::Hash::from_byte_array(hash.to_byte_array()),
+                    ));
+                }
                 self.hypothetical_assets
                     || self
                         .preimage(&HashRequirement::Hash256(sha256d::Hash::from_byte_array(
@@ -859,12 +1026,22 @@ macro_rules! impl_provider {
                         .available()
             }
             fn provider_lookup_ripemd160(&self, hash: &ripemd160::Hash) -> bool {
+                if let Some(selected) = self.selected_assets {
+                    return selected
+                        .preimages
+                        .contains(&HashRequirement::Ripemd160(*hash));
+                }
                 self.hypothetical_assets
                     || self
                         .preimage(&HashRequirement::Ripemd160(*hash))
                         .available()
             }
             fn provider_lookup_hash160(&self, hash: &hash160::Hash) -> bool {
+                if let Some(selected) = self.selected_assets {
+                    return selected
+                        .preimages
+                        .contains(&HashRequirement::Hash160(*hash));
+                }
                 self.hypothetical_assets
                     || self.preimage(&HashRequirement::Hash160(*hash)).available()
             }
@@ -899,16 +1076,19 @@ macro_rules! impl_provider {
 impl_provider!(XOnlyPublicKey);
 impl_provider!(DefiniteDescriptorKey);
 
-fn unsupported(path: SpendPath, policy: String) -> BranchPlan {
-    BranchPlan {
-        path,
-        policy,
-        status: BranchStatus::Unsupported,
-        requirements: vec![],
-        witness_template: vec![],
-        satisfaction_weight_upper_bound: None,
-        witness_bytes_upper_bound: None,
-        transaction_compatible: PlanCheck::Unknown,
+fn unsupported(path: SpendPath, policy: String) -> PlannedBranch {
+    PlannedBranch {
+        report: BranchPlan {
+            path,
+            policy,
+            status: BranchStatus::Unsupported,
+            requirements: vec![],
+            witness_template: vec![],
+            satisfaction_weight_upper_bound: None,
+            witness_bytes_upper_bound: None,
+            transaction_compatible: PlanCheck::Unknown,
+        },
+        recipe: None,
     }
 }
 
@@ -939,31 +1119,40 @@ fn signature_requirement(
     }
 }
 
-fn key_plan(key: XOnlyPublicKey, provider: &Provider<'_>) -> BranchPlan {
+fn key_plan(key: XOnlyPublicKey, provider: &Provider<'_>) -> PlannedBranch {
     if let Err(reason) = provider.work.charge(1) {
         return unsupported(SpendPath::KeyPath, reason.into());
     }
     let requirement = signature_requirement(key, ProgramSpendPath::KeyPath, provider);
-    let size = provider.sig_size(key, ProgramSpendPath::KeyPath);
+    // A fixed bound keeps selection stable when a 64-byte signature arrives.
+    let size = 65;
     let mut stack = vec![WitnessItem {
         description: format!("Schnorr key-path signature for {key}"),
         serialized_bytes: item_size(size),
     }];
     append_annex(&mut stack, provider);
     let bytes = stack_size(&stack);
-    BranchPlan {
-        path: SpendPath::KeyPath,
-        policy: format!("pk({key})"),
-        status: if missing(&requirement) {
-            BranchStatus::MissingAssets
-        } else {
-            BranchStatus::Planned
+    let mut recipe = SatisfactionRecipe {
+        script_sig: vec![],
+        witness: vec![StackElement::SchnorrSignature { key, leaf: None }],
+    };
+    append_recipe_annex(&mut recipe, provider);
+    PlannedBranch {
+        report: BranchPlan {
+            path: SpendPath::KeyPath,
+            policy: format!("pk({key})"),
+            status: if missing(&requirement) {
+                BranchStatus::MissingAssets
+            } else {
+                BranchStatus::Planned
+            },
+            requirements: vec![requirement],
+            witness_template: stack,
+            satisfaction_weight_upper_bound: Some(Weight::from_wu(bytes + 4)),
+            witness_bytes_upper_bound: Some(bytes),
+            transaction_compatible: PlanCheck::Met,
         },
-        requirements: vec![requirement],
-        witness_template: stack,
-        satisfaction_weight_upper_bound: Some(Weight::from_wu(bytes + 4)),
-        witness_bytes_upper_bound: Some(bytes),
-        transaction_compatible: PlanCheck::Met,
+        recipe: Some(recipe),
     }
 }
 
@@ -973,7 +1162,7 @@ fn tap_plan(
     control: &ControlBlock,
     native: Option<&Miniscript<XOnlyPublicKey, Tap>>,
     provider: &Provider<'_>,
-) -> BranchPlan {
+) -> PlannedBranch {
     let path = SpendPath::ScriptPath(leaf);
     if let Err(reason) = provider.work.charge(1) {
         return unsupported(path, reason.into());
@@ -1005,9 +1194,8 @@ fn tap_plan(
         Ok(None) => return unsupported(path, miniscript.to_string()),
         Err(reason) => return unsupported(path, reason.into()),
     };
-    let mut plan = satisfaction_plan(
-        path,
-        miniscript.to_string(),
+    let mut planned = satisfaction_plan(
+        unsupported(path, miniscript.to_string()),
         satisfaction.stack,
         satisfaction.absolute_timelock.map(Into::into),
         satisfaction.relative_timelock.map(Into::into),
@@ -1015,9 +1203,10 @@ fn tap_plan(
         provider,
         transaction,
     );
-    if plan.status == BranchStatus::Unsupported {
-        return plan;
+    if planned.report.status == BranchStatus::Unsupported {
+        return planned;
     }
+    let plan = &mut planned.report;
     let present = provider.input().is_some_and(|input| {
         input.tap_scripts.get(control) == Some(&(script.clone(), LeafVersion::TapScript))
     });
@@ -1041,10 +1230,18 @@ fn tap_plan(
     let bytes = stack_size(&plan.witness_template);
     plan.witness_bytes_upper_bound = Some(bytes);
     plan.satisfaction_weight_upper_bound = Some(Weight::from_wu(bytes + 4));
-    plan
+    let recipe = planned.recipe.as_mut().expect("supported native recipe");
+    recipe
+        .witness
+        .push(StackElement::Literal(script.to_bytes()));
+    recipe
+        .witness
+        .push(StackElement::Literal(control.serialize()));
+    append_recipe_annex(recipe, provider);
+    planned
 }
 
-fn descriptor_plan(expression: &str, provider: &Provider<'_>) -> BranchPlan {
+fn descriptor_plan(expression: &str, provider: &Provider<'_>) -> PlannedBranch {
     let path = SpendPath::Descriptor;
     if let Err(reason) = provider.work.charge(1) {
         return unsupported(path, reason.into());
@@ -1069,9 +1266,8 @@ fn descriptor_plan(expression: &str, provider: &Provider<'_>) -> BranchPlan {
         Ok(None) => return unsupported(path, expression.into()),
         Err(reason) => return unsupported(path, reason.into()),
     };
-    let mut plan = satisfaction_plan(
-        SpendPath::Descriptor,
-        expression.into(),
+    let mut planned = satisfaction_plan(
+        unsupported(SpendPath::Descriptor, expression.into()),
         Witness::Stack(native.witness_template().clone()),
         native.absolute_timelock,
         native.relative_timelock,
@@ -1079,9 +1275,10 @@ fn descriptor_plan(expression: &str, provider: &Provider<'_>) -> BranchPlan {
         provider,
         transaction,
     );
-    if plan.status == BranchStatus::Unsupported {
-        return plan;
+    if planned.report.status == BranchStatus::Unsupported {
+        return planned;
     }
+    let plan = &mut planned.report;
     let witness = native.witness_version().is_some();
     // The pinned Plan contains the satisfaction stack but omits WSH/P2SH's
     // script. Build its enclosing encoding here, including legacy PUSHDATA
@@ -1105,7 +1302,7 @@ fn descriptor_plan(expression: &str, provider: &Provider<'_>) -> BranchPlan {
         },
         _ => None,
     };
-    if let Some(script) = script {
+    if let Some(script) = &script {
         plan.witness_template.push(WitnessItem {
             description: format!(
                 "{}({})",
@@ -1139,7 +1336,25 @@ fn descriptor_plan(expression: &str, provider: &Provider<'_>) -> BranchPlan {
     plan.witness_bytes_upper_bound = Some(witness_bytes);
     plan.satisfaction_weight_upper_bound =
         Some(Weight::from_wu(witness_bytes + script_sig_bytes * 4));
-    plan
+    let recipe = planned.recipe.as_mut().expect("supported native recipe");
+    if let Some(script) = script {
+        recipe
+            .witness
+            .push(StackElement::Literal(script.into_bytes()));
+    }
+    if !witness {
+        recipe.script_sig = std::mem::take(&mut recipe.witness);
+    } else if let Descriptor::Sh(sh) = &native.descriptor {
+        let redeem = match sh.as_inner() {
+            miniscript::descriptor::ShInner::Wsh(wsh) => wsh.inner_script().to_p2wsh(),
+            miniscript::descriptor::ShInner::Wpkh(wpkh) => wpkh.script_pubkey(),
+            _ => unreachable!("only Segwit wrappers have a witness"),
+        };
+        recipe
+            .script_sig
+            .push(StackElement::Literal(redeem.into_bytes()));
+    }
+    planned
 }
 
 struct NativeProfile {
@@ -1263,67 +1478,43 @@ fn select_satisfaction<T>(
 }
 
 fn satisfaction_plan<Pk: ToPublicKey>(
-    path: SpendPath,
-    policy: String,
+    mut planned: PlannedBranch,
     stack: Witness<Placeholder<Pk>>,
     absolute: Option<absolute::LockTime>,
     relative: Option<relative::LockTime>,
     tx_template: Option<sha256::Hash>,
     provider: &Provider<'_>,
     transaction: PlanCheck,
-) -> BranchPlan {
+) -> PlannedBranch {
     let Witness::Stack(stack) = stack else {
-        return unsupported(path, policy);
+        return planned;
     };
-    let mut plan = unsupported(path, policy);
+    let path = planned.report.path;
+    let plan = &mut planned.report;
+    let mut recipe = SatisfactionRecipe {
+        script_sig: vec![],
+        witness: vec![],
+    };
     plan.transaction_compatible = transaction;
     for item in &stack {
-        let requirement = match item {
-            Placeholder::SchnorrSigPk(
-                key,
-                miniscript::miniscript::satisfy::SchnorrSigType::ScriptSpend { leaf_hash },
-                _,
-            ) => Some(signature_requirement(
-                key.to_x_only_pubkey(),
-                ProgramSpendPath::ScriptPath(*leaf_hash),
+        let Some(element) = executable_placeholder(item) else {
+            return unsupported(
+                path,
+                "Unresolved hashed public key in native satisfaction".into(),
+            );
+        };
+        let requirement = match &element {
+            StackElement::SchnorrSignature { key, leaf } => Some(signature_requirement(
+                *key,
+                leaf.map_or(ProgramSpendPath::KeyPath, ProgramSpendPath::ScriptPath),
                 provider,
             )),
-            Placeholder::SchnorrSigPk(key, _, _) => Some(signature_requirement(
-                key.to_x_only_pubkey(),
-                ProgramSpendPath::KeyPath,
-                provider,
-            )),
-            Placeholder::EcdsaSigPk(key) => Some(SpendRequirement::EcdsaSignature {
-                key: key.to_public_key(),
-                availability: provider.ecdsa(key.to_public_key()),
+            StackElement::EcdsaSignature(key) => Some(SpendRequirement::EcdsaSignature {
+                key: *key,
+                availability: provider.ecdsa(*key),
             }),
-            Placeholder::Sha256Preimage(hash) => Some(hash_requirement(
-                HashRequirement::Sha256(Pk::to_sha256(hash)),
-                provider,
-            )),
-            Placeholder::Hash256Preimage(hash) => Some(hash_requirement(
-                HashRequirement::Hash256(sha256d::Hash::from_byte_array(
-                    Pk::to_hash256(hash).to_byte_array(),
-                )),
-                provider,
-            )),
-            Placeholder::Ripemd160Preimage(hash) => Some(hash_requirement(
-                HashRequirement::Ripemd160(Pk::to_ripemd160(hash)),
-                provider,
-            )),
-            Placeholder::Hash160Preimage(hash) => Some(hash_requirement(
-                HashRequirement::Hash160(Pk::to_hash160(hash)),
-                provider,
-            )),
-            Placeholder::PubkeyHash(_, _)
-            | Placeholder::EcdsaSigPkHash(_)
-            | Placeholder::SchnorrSigPkHash(_, _, _) => {
-                return unsupported(
-                    path,
-                    "Unresolved hashed public key in native satisfaction".into(),
-                )
-            }
-            _ => None,
+            StackElement::Preimage(hash) => Some(hash_requirement(hash.clone(), provider)),
+            StackElement::Literal(_) => None,
         };
         if let Some(requirement) = requirement {
             if !plan.requirements.contains(&requirement) {
@@ -1334,6 +1525,7 @@ fn satisfaction_plan<Pk: ToPublicKey>(
             description: item.to_string(),
             serialized_bytes: placeholder_size(item),
         });
+        recipe.witness.push(element);
     }
     if let Some(hash) = tx_template {
         plan.requirements
@@ -1375,7 +1567,55 @@ fn satisfaction_plan<Pk: ToPublicKey>(
     } else {
         BranchStatus::Planned
     };
-    plan
+    planned.recipe = Some(recipe);
+    planned
+}
+
+fn executable_placeholder<Pk: ToPublicKey>(item: &Placeholder<Pk>) -> Option<StackElement> {
+    use miniscript::miniscript::satisfy::SchnorrSigType;
+    Some(match item {
+        Placeholder::Pubkey(key, 33) => {
+            StackElement::Literal(key.to_x_only_pubkey().serialize().to_vec())
+        }
+        Placeholder::Pubkey(key, _) => StackElement::Literal(key.to_public_key().to_bytes()),
+        Placeholder::EcdsaSigPk(key) => StackElement::EcdsaSignature(key.to_public_key()),
+        Placeholder::SchnorrSigPk(key, kind, _) => StackElement::SchnorrSignature {
+            key: key.to_x_only_pubkey(),
+            leaf: match kind {
+                SchnorrSigType::ScriptSpend { leaf_hash } => Some(*leaf_hash),
+                SchnorrSigType::KeySpend { .. } => None,
+            },
+        },
+        Placeholder::Sha256Preimage(hash) => {
+            StackElement::Preimage(HashRequirement::Sha256(Pk::to_sha256(hash)))
+        }
+        Placeholder::Hash256Preimage(hash) => StackElement::Preimage(HashRequirement::Hash256(
+            sha256d::Hash::from_byte_array(Pk::to_hash256(hash).to_byte_array()),
+        )),
+        Placeholder::Ripemd160Preimage(hash) => {
+            StackElement::Preimage(HashRequirement::Ripemd160(Pk::to_ripemd160(hash)))
+        }
+        Placeholder::Hash160Preimage(hash) => {
+            StackElement::Preimage(HashRequirement::Hash160(Pk::to_hash160(hash)))
+        }
+        Placeholder::HashDissatisfaction => StackElement::Literal(vec![0; 32]),
+        Placeholder::PushOne => StackElement::Literal(vec![1]),
+        Placeholder::PushZero => StackElement::Literal(vec![]),
+        Placeholder::TapScript(script) => StackElement::Literal(script.to_bytes()),
+        Placeholder::TapControlBlock(control) => StackElement::Literal(control.serialize()),
+        Placeholder::PubkeyHash(_, _)
+        | Placeholder::EcdsaSigPkHash(_)
+        | Placeholder::SchnorrSigPkHash(_, _, _) => return None,
+    })
+}
+
+fn append_recipe_annex(recipe: &mut SatisfactionRecipe, provider: &Provider<'_>) {
+    if let Some(annex) = provider
+        .input()
+        .and_then(|input| sapio_psbt::annex::get(input).ok().flatten())
+    {
+        recipe.witness.push(StackElement::Literal(annex.to_vec()));
+    }
 }
 
 fn hash_requirement(hash: HashRequirement, provider: &Provider<'_>) -> SpendRequirement {
