@@ -22,6 +22,8 @@ pub(crate) struct Cli {
 
 #[derive(Subcommand)]
 pub(crate) enum Command {
+    /// Create a pinned contract starter in a new directory.
+    New(crate::project::NewArgs),
     /// Inspect or create runtime configuration.
     Configure {
         #[command(subcommand)]
@@ -80,6 +82,8 @@ pub(crate) struct Output {
 
 #[derive(Subcommand)]
 pub(crate) enum Signer {
+    /// Evaluate and sign an explicitly selected Program request locally.
+    Program(crate::program_sign::ProgramSignArgs),
     /// Sign a base64 PSBT with an explicitly selected binary Xpriv key file.
     Sign {
         #[arg(short, long)]

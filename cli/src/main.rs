@@ -32,6 +32,8 @@ mod args;
 pub mod config;
 mod contracts;
 mod explain;
+mod program_sign;
+mod project;
 mod spend;
 mod util;
 
@@ -53,8 +55,10 @@ async fn main() -> ExitCode {
 async fn run(cli: Cli) -> Result<()> {
     let custom_config = cli.config.as_deref();
     match cli.command {
+        Command::New(args) => project::run(args),
         Command::Configure { command } => configure(command, custom_config).await,
         Command::Signer { command } => match command {
+            args::Signer::Program(args) => program_sign::run(args),
             args::Signer::Sign { key, psbt, output } => {
                 let key = sapio_psbt::SigningKey::read_key_from_buf(&read_input(Some(&key))?)?;
                 let signed = key.sign(
