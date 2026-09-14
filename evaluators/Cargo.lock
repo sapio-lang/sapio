@@ -11,6 +11,13 @@ name = "sapio-ctv-evaluator"
 version = "0.1.0"
 
 [[package]]
+name = "sapio-op-vault-evaluator"
+version = "0.1.0"
+dependencies = [
+ "sapio-covenant-fragments",
+]
+
+[[package]]
 name = "sapio-pay-at-least-evaluator"
 version = "0.1.0"
 

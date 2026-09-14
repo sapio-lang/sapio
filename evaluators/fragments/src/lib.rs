@@ -12,6 +12,7 @@ extern crate std;
 mod crypto;
 mod view;
 pub use view::Context;
+pub mod vault;
 
 /// Maximum encoded context and scratch space needed by these fragments.
 pub const MAX_VIEW_BYTES: usize = 1_048_576;
