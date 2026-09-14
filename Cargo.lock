@@ -2066,6 +2066,7 @@ dependencies = [
  "bitcoin",
  "miniscript",
  "sapio-base",
+ "schemars",
  "serde",
  "serde_json",
  "tokio",
