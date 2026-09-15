@@ -85,7 +85,7 @@ pub enum ModuleLocator {
 }
 
 impl ModuleLocator {
-    async fn locate(self) -> Result<SyncModuleLocator, Box<dyn std::error::Error>> {
+    pub(crate) async fn locate(self) -> Result<SyncModuleLocator, Box<dyn std::error::Error>> {
         match self {
             ModuleLocator::Key(k) => {
                 let key = WASMCacheID::from_str(&k)?;

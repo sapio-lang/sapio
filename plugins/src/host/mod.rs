@@ -18,6 +18,7 @@ use wasmer::*;
 
 mod invocation;
 mod memory;
+pub mod metadata;
 pub mod plugin_handle;
 mod runtime;
 mod validation;
