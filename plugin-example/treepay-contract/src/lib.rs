@@ -184,6 +184,15 @@ impl TryFrom<BatchingTraitVersion0_1_1> for TreePay {
         })
     }
 }
+impl TryFrom<batching_trait::Versions> for TreePay {
+    type Error = CompilationError;
+    fn try_from(v: batching_trait::Versions) -> Result<Self, Self::Error> {
+        let batching_trait::Versions::BatchingTraitVersion0_1_1(args) = v;
+        let tree = TreePay::try_from(args)?;
+        tree.validate()?;
+        Ok(tree)
+    }
+}
 impl TryFrom<Versions> for TreePay {
     type Error = CompilationError;
     fn try_from(v: Versions) -> Result<TreePay, Self::Error> {

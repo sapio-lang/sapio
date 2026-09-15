@@ -11,7 +11,7 @@ import time
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "contrib" / "vectors" / "examples"
 LIBRARIES = {"batching-trait", "nft-trait", "treepay-contract"}
-SIGNER_CASES = ("treepay", "trampolinepay")
+SIGNER_CASES = ("treepay", "treepay-batching", "trampolinepay")
 # Each fixture performs two full create requests to check repeatability.
 REQUEST_TIMEOUT_SECONDS = 360
 

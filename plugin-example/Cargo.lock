@@ -324,6 +324,7 @@ dependencies = [
  "sapio-base",
  "schemars",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -659,6 +660,18 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+]
+
+[[package]]
+name = "sapio-wasm-treepay-batching"
+version = "0.1.0"
+dependencies = [
+ "batching-trait",
+ "sapio",
+ "sapio-treepay-contract",
+ "sapio-wasm-plugin",
+ "schemars",
+ "serde",
 ]
 
 [[package]]

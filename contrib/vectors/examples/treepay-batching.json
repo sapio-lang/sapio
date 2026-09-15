@@ -1,11 +1,6 @@
 {
   "arguments": {
-    "handle": {
-      "which_plugin": {
-        "HashKey": "MODULE_treepay-batching"
-      }
-    },
-    "data": {
+    "BatchingTraitVersion0_1_1": {
       "payments": [
         {
           "amount": 1e-05,

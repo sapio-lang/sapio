@@ -1,6 +1,6 @@
 # Sapio WASM examples
 
-This workspace contains **20 executable guests and three shared libraries**.
+This workspace contains **21 executable guests and three shared libraries**.
 The examples are maintained demonstrations of contract construction. They do not
 include a production wallet, a deployed federation, or audited financial protocols.
 
@@ -46,7 +46,8 @@ network policy acceptability.
 | Directory | Purpose and assumptions | Focused coverage |
 | --- | --- | --- |
 | [treepay](treepay/) | **Tree payments.** Builds a bounded-radix tree with a fixed fee per transaction. Recipients and amounts must be nonempty and positive; radix must be at least two. | Tree shape, payment totals, fees, invalid radix and overflow. |
-| [trampolinepay](trampolinepay/) | **Delegated tree payments.** Calls a batching module and funds the returned contract. The selected module must implement a compatible batching wire interface. | Catalog calls the actual treepay guest. |
+| [treepay-batching](treepay-batching/) | **Batching adapter.** Exposes exactly the batching interface using the shared TreePay implementation with radix four and checked fee estimation. | Constructor parity and rejection; direct and delegated WASM calls, including signer lowering. |
+| [trampolinepay](trampolinepay/) | **Delegated tree payments.** Calls a batching module and funds the returned contract. The selected module must implement a compatible batching wire interface. | Catalog calls the TreePay batching adapter through the exact typed interface. |
 | [vault](vault/) | **Staged vault.** Wraps the library vault with address or tree cold-storage destinations. Timelocks, step counts, payouts and tree limits are validated by the library. | Catalog plus library vault tests. |
 | [staker](staker/) | **Bonded signer.** Provides redemption and burn paths for a signing key. This example does not implement a complete staking protocol. | Catalog plus library staker tests. |
 | [coin_pool](coin_pool/) | **Coin pool.** Splits a pool into participant refunds and exposes cooperative updates. The guest exposes the Basic key-and-amount interface. | Catalog plus library coin-pool tests. |
@@ -74,14 +75,13 @@ network policy acceptability.
   continuation. Royalties must be finite fractions from zero to one. They are
   rounded to millionths, then each payout is rounded down to whole satoshis using
   integer arithmetic. The shared royalty code has boundary and overflow tests.
-
 - [`treepay-contract`](treepay-contract/) provides the TreePay implementation
   and checked constructors without a plugin entry point.
 
 These three crates produce Rust libraries, not executable guest modules. The
-interface crates' versioned JSON enum names remain the wire interface. Resolving a typed handle
-only resolves a module identity; the host checks actual arguments and successful
-results against the receiver's schema on every call.
+interface crates' versioned JSON enum names remain the wire interface. A typed
+handle checks the selected module's advertised argument and result interfaces.
+The host also validates actual arguments and successful results on every call.
 
 The former `dao` directory contained only a manifest pointing at missing source.
 That placeholder has been removed; this workspace does not provide a DAO module.
