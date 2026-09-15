@@ -26,6 +26,16 @@ type CheckResult<T> = Result<T, Box<dyn Error>>;
 struct Manifest {
     modules: Vec<Module>,
     recipes: Vec<Recipe>,
+    samples: Vec<Sample>,
+}
+
+#[derive(Deserialize)]
+struct Sample {
+    name: String,
+    module: String,
+    arguments: Value,
+    context: ContextualArguments,
+    value: Value,
 }
 
 #[derive(Deserialize)]
@@ -46,15 +56,39 @@ struct Patch {
     version: u32,
     nodes: Vec<Node>,
     connections: Vec<Connection>,
+    outputs: Vec<Output>,
+    output: String,
     context: ContextualArguments,
 }
 
 #[derive(Deserialize)]
-struct Node {
-    id: String,
-    #[serde(rename = "moduleKey")]
-    module_key: String,
-    arguments: Value,
+#[serde(tag = "kind", rename_all = "lowercase")]
+enum Node {
+    Module {
+        id: String,
+        #[serde(rename = "moduleKey")]
+        module_key: String,
+        arguments: Value,
+    },
+    Variable {
+        id: String,
+        value: Value,
+    },
+}
+
+impl Node {
+    fn id(&self) -> &str {
+        match self {
+            Self::Module { id, .. } | Self::Variable { id, .. } => id,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct Output {
+    name: String,
+    node: String,
+    path: String,
 }
 
 #[derive(Deserialize)]
@@ -166,24 +200,56 @@ fn main() -> CheckResult<()> {
         return Err("manifest must contain ten distinct modules and generated recipes".into());
     }
     let mut exercised = BTreeSet::new();
+    for sample in &manifest.samples {
+        let name = modules
+            .get(sample.module.as_str())
+            .ok_or("sample module absent from manifest")?;
+        let actual = invoke(
+            name,
+            sample.arguments.clone(),
+            context(&sample.context, &sample.module)?,
+        )?;
+        if actual != sample.value {
+            return Err(format!(
+                "{}: native constructor differs from WASM value",
+                sample.name
+            )
+            .into());
+        }
+        exercised.insert(*name);
+    }
     for recipe in &manifest.recipes {
         let patch: Patch = read(&directory.join(&recipe.patch))?;
-        if patch.version != 1 || patch.nodes.is_empty() {
-            return Err(format!("{}: expected a nonempty version-one patch", recipe.name).into());
+        if patch.version != 2 || patch.nodes.is_empty() {
+            return Err(format!("{}: expected a nonempty version-two patch", recipe.name).into());
         }
         let mut values: BTreeMap<&str, Value> = BTreeMap::new();
+        let mut module_calls = 0;
         // build.py emits recipes in dependency order; fail explicitly if a
         // saved recipe no longer meets that convention.
         for node in &patch.nodes {
+            if let Node::Variable { id, value } = node {
+                if patch.connections.iter().any(|wire| wire.target == *id) {
+                    return Err("a Variable cannot have incoming connections".into());
+                }
+                if values.insert(id, value.clone()).is_some() {
+                    return Err("recipe contains duplicate node identifiers".into());
+                }
+                continue;
+            }
+            let Node::Module {
+                id,
+                module_key,
+                arguments,
+            } = node
+            else {
+                unreachable!()
+            };
             let name = modules
-                .get(node.module_key.as_str())
+                .get(module_key.as_str())
                 .ok_or("patch refers to a module absent from the manifest")?;
-            let mut arguments = node.arguments.clone();
-            for connection in patch
-                .connections
-                .iter()
-                .filter(|wire| wire.target == node.id)
-            {
+            let mut arguments = arguments.clone();
+            for connection in patch.connections.iter().filter(|wire| wire.target == *id) {
                 let source = values
                     .get(connection.source.as_str())
                     .ok_or("recipe nodes are not in dependency order")?;
@@ -192,17 +258,23 @@ fn main() -> CheckResult<()> {
                     .ok_or("recipe source value has no advertised result field")?;
                 connect(&mut arguments, &connection.target_path, value.clone())?;
             }
-            let result = invoke(name, arguments, context(&patch.context, &node.module_key)?)
-                .map_err(|error| format!("{} / {}: {error}", recipe.name, node.id))?;
-            if values.insert(&node.id, result).is_some() {
+            let result = invoke(name, arguments, context(&patch.context, module_key)?)
+                .map_err(|error| format!("{} / {}: {error}", recipe.name, id))?;
+            if values.insert(node.id(), result).is_some() {
                 return Err("recipe contains duplicate node identifiers".into());
             }
             exercised.insert(*name);
+            module_calls += 1;
         }
-        let terminal = patch.nodes.last().ok_or("recipe has no terminal block")?;
+        let terminal = patch
+            .outputs
+            .iter()
+            .find(|output| output.name == patch.output)
+            .ok_or("recipe has no selected named output")?;
         let actual = values
-            .get(terminal.id.as_str())
-            .ok_or("terminal did not run")?;
+            .get(terminal.node.as_str())
+            .and_then(|value| value.pointer(&terminal.path))
+            .ok_or("selected output has no evaluated value")?;
         let compiled: Compiled = serde_json::from_value(actual.clone())?;
         compiled.validate()?;
         let expected: Value = read(&directory.join(&recipe.artifact))?;
@@ -215,13 +287,16 @@ fn main() -> CheckResult<()> {
         }
         println!(
             "{}: {} native block calls reproduce the full WASM artifact",
-            recipe.name,
-            patch.nodes.len()
+            recipe.name, module_calls
         );
     }
     for module in &manifest.modules {
         if !exercised.contains(module.name.as_str()) {
-            return Err(format!("{}: no recipe exercised this native block", module.name).into());
+            return Err(format!(
+                "{}: no sample or recipe exercised this native block",
+                module.name
+            )
+            .into());
         }
     }
     println!(

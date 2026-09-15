@@ -1,6 +1,6 @@
 /**
  * Run the generated custody recipes through Studio's actual patch engine.
- * Requires Node 24 and an installed, built Sapio Studio checkout (PR #89).
+ * Requires Node 24 and a built Sapio Studio checkout with typed patch v2.
  *
  * From that Studio checkout:
  *   npm run build:desktop
@@ -36,6 +36,14 @@ interface RecipeRecord {
 interface Manifest {
   modules: ModuleRecord[];
   recipes: RecipeRecord[];
+  samples: {
+    name: string;
+    module: string;
+    arguments: unknown;
+    value: unknown;
+    context: unknown;
+  }[];
+  reusable: (RecipeRecord & { definition: string })[];
 }
 
 async function main(): Promise<void> {
@@ -79,8 +87,16 @@ async function main(): Promise<void> {
     "Build-a-vault exports ten building blocks.",
   );
   assert(
-    Array.isArray(manifest.recipes) && manifest.recipes.length > 0,
-    "Manifest must list its recipes.",
+    Array.isArray(manifest.recipes) && manifest.recipes.length === 5,
+    "Manifest must list the five custody recipes.",
+  );
+  assert(
+    Array.isArray(manifest.samples) && manifest.samples.length > 0,
+    "Manifest must include the public constructor samples.",
+  );
+  assert(
+    Array.isArray(manifest.reusable) && manifest.reusable.length > 0,
+    "Manifest must include a reusable patch example.",
   );
   assert.equal(
     new Set(manifest.modules.map((module) => module.key)).size,
@@ -138,30 +154,51 @@ async function main(): Promise<void> {
         ),
       validate: (key: string, side: "arguments" | "returns", value: unknown) =>
         bridge.modules.validate({ key, side, value }),
+      validateValue: (schema: unknown, value: unknown) =>
+        bridge.modules.validateValue({ schema, value }),
     };
     const executedModules = new Set<string>();
-    for (const recipe of manifest.recipes) {
+    for (const sample of manifest.samples) {
+      const invocation = {
+        arguments: sample.arguments,
+        context: sample.context,
+      };
+      assert(
+        (await runtime.validate(sample.module, "arguments", invocation)).valid,
+        `${sample.name}: constructor input does not validate.`,
+      );
+      const result = await runtime.invoke(sample.module, invocation);
+      assert(
+        (await runtime.validate(sample.module, "returns", result)).valid,
+        `${sample.name}: constructor result does not validate.`,
+      );
+      assert.deepEqual(
+        result,
+        sample.value,
+        `${sample.name}: constructor differs from the Variable's saved value.`,
+      );
+      executedModules.add(sample.module);
+    }
+    for (const recipe of [...manifest.recipes, ...manifest.reusable]) {
       const recipeStarted = performance.now();
       console.log(`Executing ${recipe.name} through Studio's patch engine…`);
       const patch = parsePatch(
         await readFile(path.resolve(artifacts, recipe.patch), "utf8"),
       );
-      const sources = new Set<string>();
-      for (const connection of patch.connections)
-        sources.add(connection.source);
-      const terminals: string[] = [];
-      for (const node of patch.nodes) {
-        if (!sources.has(node.id)) terminals.push(node.id);
-      }
+      assert.equal(patch.version, 2);
       assert.equal(
-        terminals.length,
-        1,
-        `${recipe.name}: recipe must have one terminal contract block.`,
+        patch.output,
+        "contract",
+        `${recipe.name}: designate the contract output explicitly.`,
+      );
+      assert(
+        patch.nodes.some((node: { kind: string }) => node.kind === "variable"),
+        `${recipe.name}: constants should be editable Variables.`,
       );
       const result: { output: unknown; executed: string[] } = await runPatch(
         patch,
         modules,
-        terminals[0]!,
+        null,
         patch.context,
         runtime,
       );
@@ -180,12 +217,29 @@ async function main(): Promise<void> {
         explanation.artifact.nodes.length > 0,
         `${recipe.name}: result has no inspectable contract.`,
       );
-      for (const node of patch.nodes) {
-        if (result.executed.includes(node.id))
-          executedModules.add(node.moduleKey);
-      }
+      type ExecutionNode = {
+        id: string;
+        kind: string;
+        moduleKey?: string;
+        patch?: { nodes: ExecutionNode[] };
+      };
+      const recordCalls = (nodes: ExecutionNode[], prefix = "") => {
+        for (const node of nodes) {
+          const id = prefix + node.id;
+          if (node.kind === "module" && result.executed.includes(id))
+            executedModules.add(node.moduleKey!);
+          else if (node.kind === "subpatch")
+            recordCalls(node.patch!.nodes, `${id}/`);
+          else if (node.kind === "variable")
+            assert(
+              !result.executed.includes(id),
+              "Variables must not invoke WASM.",
+            );
+        }
+      };
+      recordCalls(patch.nodes);
       console.log(
-        `${recipe.name}: ${result.executed.length} blocks, matching artifact, ${explanation.artifact.nodes.length} contract occurrences in ${secondsSince(recipeStarted)}s.`,
+        `${recipe.name}: ${result.executed.length} WASM calls, typed Variables, matching artifact, ${explanation.artifact.nodes.length} contract occurrences in ${secondsSince(recipeStarted)}s.`,
       );
     }
     for (const module of manifest.modules) {
@@ -195,7 +249,7 @@ async function main(): Promise<void> {
       );
     }
     console.log(
-      `All ${manifest.recipes.length} recipes passed through Studio, covering every building block in ${secondsSince(started)}s.`,
+      `All ${manifest.recipes.length} recipes and ${manifest.reusable.length} reusable patches passed through Studio, covering every building block in ${secondsSince(started)}s.`,
     );
   } finally {
     await rm(temporary, { recursive: true, force: true });

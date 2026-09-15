@@ -1,24 +1,21 @@
 # Build a vault in Sapio Studio
 
-This example turns ten small WASM modules into a custody construction kit.
-Connect public keys, authorization rules, delays and destinations in Sapio
-Studio, then compile the result into a contract you can inspect. Five saved
-patches demonstrate a fixed vault, a quorum treasury, a delayed wallet, a
-dynamic OP_VAULT withdrawal and a partial withdrawal with revaulting.
+Start with named public values, connect them to custody rules, and compile a
+contract. The five supplied Studio patches cover a fixed vault, a quorum
+treasury, a delayed wallet, an OP_VAULT withdrawal and partial revaulting. A
+sixth exercise packages a recovery rule as a reusable patch.
 
-The examples use regtest, 100,000 satoshis of principal and public teaching
-identities from [demo-identity.json](demo-identity.json). They generate modules,
-patches and contract artifacts. Funding transactions, private keys, signer
-configuration, a watchtower and broadcasting remain separate responsibilities.
-The fixture's private keys are publicly derivable from its source. Use these
-identities only for synthetic transactions or regtest funds.
+The examples use regtest, 100,000 satoshis of principal and teaching identities
+from [demo-identity.json](demo-identity.json). Those private keys are publicly
+derivable from the source. Use these identities only for synthetic transactions
+or regtest funds. Funding, private signing keys, monitoring and broadcasting
+remain outside the saved public patches.
 
 ## Build the kit and connect Studio
 
-Use the current Sapio checkout containing this example and the modernized
-[Sapio Studio](https://github.com/sapio-lang/sapio-studio), introduced in
-[Studio PR #89](https://github.com/sapio-lang/sapio-studio/pull/89). Run these
-commands from the Sapio repository root:
+Use the current Sapio checkout containing this example and
+[Sapio Studio](https://github.com/sapio-lang/sapio-studio) with typed patch v2
+support. From the Sapio repository root:
 
 ```sh
 rustup show
@@ -29,249 +26,295 @@ python3 contrib/build-a-vault/build.py \
   --output contrib/build-a-vault/target/generated
 ```
 
-The pinned Rust toolchain includes `wasm32-unknown-unknown`. Building the
-Bitcoin dependencies for WASM also needs a Clang with WebAssembly support.
-On macOS, install Homebrew LLVM and set its compiler before running the build:
+The pinned toolchain includes `wasm32-unknown-unknown`. Bitcoin's WASM build
+also needs Clang with WebAssembly support. On macOS, install Homebrew LLVM:
 
 ```sh
 brew install llvm
 export CC_wasm32_unknown_unknown="$(brew --prefix llvm)/bin/clang"
 ```
 
-On Linux, set `CC_wasm32_unknown_unknown=clang` if Clang is not already selected.
-The generator builds the release modules, loads them into the requested
-workspace, executes every recipe and writes:
+On Linux, set `CC_wasm32_unknown_unknown=clang` if needed. The generator builds
+ten WASM blocks, validates the teaching values through their constructors and
+compiles every recipe. It writes:
 
 | Generated files | Purpose |
 | --- | --- |
-| `modules/*.wasm` | The ten modules to load into Studio. |
-| `schemas/*.json` | Each module's actual input and result schemas. |
-| `*.patch.json` | Editable Studio graphs, pinned to these exact WASM hashes. |
-| `*.artifact.json` | Compiled custody programs. |
-| `*.explanation.json` | CLI inspection results for those programs. |
-| `manifest.json` | Module identities and the five matching patch/artifact pairs. |
+| `modules/*.wasm` | Ten public constructors, composers and contract builders |
+| `schemas/*.json` | Their exact typed input and result interfaces |
+| `*.patch.json` | Editable v2 graphs, including Variables and named outputs |
+| `*.artifact.json` | Compiled custody programs |
+| `*.explanation.json` | CLI inspection of those programs |
+| `recovery-policy.patch.json` | Reusable recovery definition with two named inputs |
+| `reusable-recovery.patch.json` | A fixed vault using that embedded definition |
+| `manifest.json` | Module identities, constructor samples and matching artifacts |
 
 In the Studio checkout, use Node 24 and run `npm ci`, `npm run build`, then
-`npm start`. Use the desktop application to execute local modules; the browser
+`npm start`. The desktop application executes the local modules; the browser
 preview does not run this kit.
 
 1. Open **Studio settings** or **Set up Sapio CLI**.
-2. Set **Sapio CLI** to the absolute path of the executable you just built.
-3. Set **Workspace** to the absolute path of
-   `contrib/build-a-vault/target/studio-workspace` in this Sapio checkout.
-4. Click **Save & check CLI**. No **Optional runtime config** is needed for
-   compiling, inspecting or preparing local spends.
-5. Select **Patch**, then **Open patch**, and open
-   `target/generated/fixed-vault.patch.json` relative to this example.
+2. Set **Sapio CLI** to the absolute path of the executable you built.
+3. Set **Workspace** to the absolute path of this example's
+   `target/studio-workspace` directory.
+4. Click **Save & check CLI**. No optional runtime config is needed to compile
+   or inspect these examples.
+5. Choose **Patch → Open patch** and open
+   `target/generated/fixed-vault.patch.json`.
 
-Opening a patch fetches its module interfaces from the configured workspace.
-If you use a different workspace, first use **Load WASM module** for each
-required file under `target/generated/modules`, then reopen the patch.
+Studio reads each required module's interface from the workspace. A module
+interface is cached under its exact immutable module hash. If you selected a
+different workspace, use **Load WASM module** for the required files under
+`target/generated/modules`, then reopen the patch.
 
-## Understand the sockets
+## What plugs into what
 
-These patches connect **values**. For example, Signer produces a `KeySet`,
-which fits Release's `/authorization` input. Release produces a `ReleaseRule`,
-which fits FixedVault's `/release` input. Studio checks the advertised schemas
-when connecting sockets and validates actual values during execution.
+Every socket names the value it expects. A **Waiting period** Variable emits a
+**Block delay**; it fits Release's **Delay** input. A **Withdrawal destination**
+Variable emits a **Destination**; it fits Release's **Destination** input.
+Release combines those values with **Authorization** and emits a **Release
+rule**, which fits FixedVault's **Release** input.
 
-Use the whole **result** socket in each module's **RESULT** column. The separate
-**Module reference** outlet passes a WASM module identity for a nested call;
-none of these five recipes uses it.
-
-| Module | Literal arguments and connected inputs | Result |
+| Node category | What it does | Examples in this kit |
 | --- | --- | --- |
-| **Signer** | `key`: one x-only public key | `KeySet` requiring that signature |
-| **Quorum** | `threshold`, `keys`: distinct x-only public keys | `KeySet` requiring the chosen threshold |
-| **BlockDelay** | `blocks`: 1–65,535 | `RelativeDelay` |
-| **Destination** | `address`: a destination on the compilation network | `AddressTarget` |
-| **Recovery** | `/authorization`: `KeySet`; `/destination`: `AddressTarget` | `RecoveryRule` |
-| **Release** | `/authorization`: `KeySet`; `/delay`: `RelativeDelay`; `/destination`: `AddressTarget` | `ReleaseRule` |
-| **FixedVault** | `/trigger`: `KeySet`; `/release`: `ReleaseRule`; `/recovery`: `RecoveryRule`; `fee_sats` | Compiled fixed vault |
-| **DelayedWallet** | `/hot`: `KeySet`; `/delay`: `RelativeDelay`; `/recovery`: `KeySet` | Compiled wallet |
-| **EmulationOracle** | `xpub`: the emulator's public BIP32 root | `OracleRoot` |
-| **OpVault** | `/trigger`: `KeySet`; `/recovery`: `RecoveryRule`; `/delay`: `RelativeDelay`; `/oracle`: `OracleRoot`; `/proposal/destination`: `AddressTarget`; `proposal.withdrawal_sats` | Compiled dynamic vault and its suggested withdrawal |
+| Variable | Supplies an editable public value without invoking WASM | Hot authorization, Waiting period, Emulation root |
+| Composer | Calls a WASM module to assemble a typed value | Release, Recovery, Quorum |
+| Contract builder | Compiles custody rules into an inspectable contract | FixedVault, DelayedWallet, OpVault |
+| Reusable patch | Supplies named values to a saved graph and returns its named outputs | Recovery policy |
 
-The canvas describes compilation dependencies. Its wires do not represent
-Bitcoin transactions, signature delivery or the passage of time. Those
-transaction relationships appear after compilation in **Inspect**. A delay
-module is public data; the consuming contract determines which coin's
-confirmation starts the delay.
+A wire carries either a **value** or a **callable module implementation**.
+These custody recipes use value wires. Callable outlets use a square socket
+and appear explicitly when using a module as a callable. The calling module
+supplies a callable's arguments; editing that module card's own inputs does
+not configure the nested call.
 
-Every node receives the same explicit **Compilation context**. Click the
-network/amount control above the canvas to inspect it. The supplied patches use:
+Each input has one visible source:
 
-```json
-{
-  "amount": 100000,
-  "network": "Regtest",
-  "lowering": "Native"
-}
-```
+- A local value, entered in the structured inspector.
+- An explicitly chosen default, where the schema provides one.
+- A connection from a named provider.
 
-The context editor exposes **Network**, **Available amount (sat)** and
-**Covenant lowering**; **Use context** applies your edits. Amounts are satoshis.
-Changing the context rebuilds every relevant dependency with that context.
+Connecting an input removes its local literal. Disconnecting leaves it unset;
+there is no hidden fallback. A connection to an entire record owns its fields.
+Connecting individual fields leaves their siblings editable. Two connections
+cannot silently overwrite the same input.
+
+Click an input to **Configure input**. Studio offers matching existing values,
+**Create matching Variable**, and modules that produce the required type.
+Alternatively use **Add Variable**, choose a type, and enter its value. Scalars,
+records, lists and enum choices have structured editors. Values start unset;
+an empty string, zero or the first enum choice is never silently invented.
+Use **Extract Variable** to move an existing local value into a shared node.
+
+Types distinguish public keys, addresses, amounts and block counts even where
+their JSON representations look alike. A matching socket does not establish
+available funding, confirmation maturity or the soundness of a complete
+custody program. Studio validates actual values during a build, and the
+consuming Sapio contracts enforce their domain constraints.
+
+### The ten available WASM blocks
+
+The generated recipes use Variables for their fixed public values. The
+constructor modules remain available when another module needs to produce
+those values programmatically, and the integration checks still exercise all
+ten blocks.
+
+| Block | Inputs | Result |
+| --- | --- | --- |
+| Single-key authorization (`signer`) | One x-only public key | Authorization requiring that key |
+| Quorum | Threshold and distinct public keys | Authorization requiring the threshold |
+| BlockDelay | 1–65,535 blocks | Block delay |
+| Destination | Address on the compilation network | Destination |
+| Recovery | Authorization, destination | Recovery rule |
+| Release | Authorization, block delay, destination | Release rule |
+| FixedVault | Trigger authorization, release rule, recovery rule, fee | Compiled fixed vault |
+| DelayedWallet | Hot authorization, block delay, recovery authorization | Compiled wallet |
+| EmulationOracle | Public BIP32 emulator root | Emulation root |
+| OpVault | Trigger authorization, recovery rule, delay, emulation root, withdrawal proposal | Compiled dynamic vault and suggested withdrawal |
+
+The canvas shows dependencies between public values. Transaction relationships
+appear after compilation in **Inspect**. Wires do not deliver signatures or
+advance time; the consuming contract determines which coin starts a delay.
+
+Every WASM call, including calls inside reusable patches, receives the same
+explicit **Compilation context**. The network/amount control above the canvas
+opens **Network**, **Available amount (sat)** and **Covenant lowering**. These
+patches use Regtest, 100,000 satoshis and Native lowering. Apply changes with
+**Use context**. Variables themselves do not invoke WASM or consume its fuel.
 
 ## First patch: a fixed vault
 
-In `fixed-vault.patch.json`, the left-hand Signer, BlockDelay and Destination
-nodes feed Release and Recovery. Those assembled rules feed FixedVault:
+Open `fixed-vault.patch.json`. The named Variables on the left supply Release
+and Recovery; their assembled rules feed FixedVault:
 
 ```mermaid
 flowchart LR
-    hot[Hot Signer] -->|authorization| release[Release]
-    delay[BlockDelay] -->|delay| release
-    hotdest[Hot Destination] -->|destination| release
-    cold[Cold Signer] -->|authorization| recovery[Recovery]
-    colddest[Cold Destination] -->|destination| recovery
-    hot -->|trigger| vault[FixedVault]
-    release -->|release| vault
-    recovery -->|recovery| vault
+    hot[Hot authorization] -->|Authorization| release[Release]
+    delay[Waiting period] -->|Block delay| release
+    hotdest[Withdrawal destination] -->|Destination| release
+    cold[Recovery authorization] -->|Authorization| recovery[Recovery]
+    colddest[Recovery destination] -->|Destination| recovery
+    hot -->|Authorization| vault[FixedVault]
+    release -->|Release rule| vault
+    recovery -->|Recovery rule| vault
 ```
 
-1. Select the **BlockDelay** node. Its **Arguments JSON** contains
-   `{"blocks":144}`.
-2. Select **FixedVault**. Its literal argument is `{"fee_sats":500}`; the
-   incoming wires supply `trigger`, `release` and `recovery` during the build.
-3. Click **Build selected**. Select the terminal FixedVault node to build the
-   whole contract; selecting Signer builds only that public authorization value.
-4. Click **Review output**, then **Inspect as contract** in **Module result**.
-5. In **Inspect**, select outputs and transactions to examine their policies,
-   amounts, guards, sequences and funding constraints. **Show output list** is
-   useful when the graph becomes crowded.
+1. Select **Waiting period**. Its type is **Block delay** and its **Blocks**
+   field is 144. Change it to 288 using the number field.
+2. Select Release. Its inputs name their providers. Click the connected delay
+   to navigate to the Waiting period Variable; edit the provider to change a
+   connected value.
+3. Select FixedVault. Its trigger, release and recovery inputs are connected;
+   its fee is a local value of 500 satoshis.
+4. The patch already designates FixedVault as **Patch output**. Click
+   **Compile contract** to build that output and all its dependencies. You do
+   not need to keep the terminal node selected. When building a patch whose
+   output is an ordinary value, the action is **Build output**.
+5. Use **Review output**, then **Inspect as contract**, to inspect the compiled
+   transactions, amounts, guards, policies and funding constraints.
 
-The supplied program has these movements:
+A new patch needs an explicit result: select its terminal builder and choose
+**Use as output**. Moving or renaming nodes changes the presentation; changing
+a value, connection, definition or compilation context invalidates the result.
+
+With the original 144-block delay, the supplied program has these movements:
 
 | Movement | Required authorization | Result |
 | --- | --- | --- |
-| Trigger | Hot signature | 99,500 sat pending output; 500 sat reserved fee |
-| Release pending output | Hot signature and 144-block relative delay | 99,000 sat to the fixed hot destination; another 500 sat fee |
+| Trigger | Hot signature | 99,500 sat pending; 500 sat reserved fee |
+| Release pending output | Hot signature and 144-block delay | 99,000 sat to the fixed hot destination; another 500 sat fee |
 | Recover directly | Cold signature | 99,500 sat to the fixed recovery destination |
 | Recover while pending | Cold signature | 99,000 sat to that same recovery destination |
 
-The 144-block clock starts when the **pending output confirms**, not when the
-original vault was funded. It is a block count, not an exact wall-clock day.
-Both destinations and the transaction amounts are committed when compiling
-this fixed-vault recipe. Each hop pays its own fixed 500-sat fee.
+The delay starts when the **pending output confirms**. It is a block count,
+not an exact wall-clock day. Destinations and amounts are committed during
+compilation, and each hop pays its fixed fee. With the edited 288-block value,
+Inspect should show the longer pending-release sequence requirement.
 
-These actions use native CTV under the supplied `Native` lowering. Studio
-displays the native-CTV assumption in Inspect. Merely selecting Regtest does
-not activate CTV on stock Bitcoin Core. To explore CTV signer emulation instead,
-choose **CTV emulation with public signer roots** in the context editor, supply
-the intended public roots and threshold, and rebuild. That produces a different
-custody program with an explicit signer trust assumption.
+These actions use native CTV with the supplied Native lowering. Selecting
+Regtest does not activate CTV on stock Bitcoin Core. To explore signer
+emulation, choose **CTV emulation with public signer roots** in the context
+editor, provide the intended roots and threshold, and rebuild. That produces a
+different custody program with an explicit signer trust assumption.
 
-### Make a change and wire a block yourself
+### Practice a connection
 
-Change BlockDelay to `{"blocks":288}`, select FixedVault and rebuild. Inspect
-the pending release's sequence requirement, then **Save** the patch under a
-new filename. Save an artifact separately with **Export JSON** or Inspect's
-**Export** button. Saving a patch preserves the editable recipe; an artifact
-preserves its compiled result.
+Disconnect Release's delay input. It becomes visibly unset. Click that input,
+choose the existing **Waiting period** provider and reconnect it. You can also
+drag the Variable's value socket to Release's matching input. A Destination
+value does not fit a Block delay input; Studio explains the type mismatch.
 
-To practice wiring, select the connection from BlockDelay to Release and use
-the trash button, **Remove selected node or connection**. Then reconnect the
-BlockDelay **result** socket to Release's `/delay` socket. You can also expand
-**Connect sockets without dragging** in the selected node's inspector:
+To practice creating a value from an input, disconnect it again, choose
+**Create matching Variable**, name the new Variable **Withdrawal delay**, and
+enter its block count. Its type is selected from the input's actual interface.
+One Variable can feed several compatible inputs.
 
-1. **Source module**: BlockDelay.
-2. **Output**: `result`, rather than `Module reference (hash)`.
-3. **Destination module**: Release.
-4. **Input**: `/delay`.
-5. Click **Connect**, select FixedVault and **Build selected**.
-
-Connected values override the corresponding literal field at build time. Edit
-the upstream BlockDelay to change a wired delay. Studio rejects a second
-writer to the same input; remove the existing connection before replacing it.
-Using Destination's result for `/delay` should produce an incompatible-schema
-message, which is useful feedback while constructing a patch.
+Save the edited graph with **Save** under a new filename. **Export JSON** or
+Inspect's **Export** saves the compiled artifact separately. A saved patch
+preserves the recipe; a saved artifact preserves its current compiled result.
 
 ## Four more custody programs
 
 ### Quorum treasury
 
-Open `quorum-treasury.patch.json`. A **Quorum** node supplies a 2-of-3 `KeySet`
-to both FixedVault's `/trigger` and Release's `/authorization`. Cold recovery
-remains controlled by its separate Signer. The 144-block delay and fee amounts
-match the first recipe.
+Open `quorum-treasury.patch.json`. **Hot authorization** is an Authorization
+Variable with threshold 2 and three distinct keys. It feeds both the trigger
+and Release's authorization. Recovery uses its separate authorization Variable.
 
-Select Quorum and change its `threshold` to `3`, keeping the three distinct
-keys. Rebuild FixedVault and inspect both the trigger and release policies.
-This demonstrates why one authorization block can feed several compatible
-inputs. You can also add a separate Signer or Quorum using **Choose a module**
-and **Add**, and wire it only to Release if triggering and releasing should
-require different people. Keep keys distinct and thresholds between one and
-the number of keys.
+Change **Threshold** to 3 and rebuild. Inspect both trigger and release
+policies. To use different people for release, create a separate Authorization
+Variable at Release's input instead of sharing the hot one. You can also add a
+Quorum composer and supply its public-key list through a Variable.
 
-`KeySet` accepts up to 16 keys. Unusually large combinations of trigger and
-recovery quorums can still exceed the normal WASM compiler fuel budget when
-the whole contract is compiled. A valid socket schema does not guarantee that
-every composition fits that budget; build the complete contract as you edit.
+Authorization accepts up to 16 distinct keys and a threshold between one and
+the number of keys. Some unusually large combinations of trigger and recovery
+quorums can exceed the WASM compiler's fuel budget. Compile the complete
+contract as you edit; valid socket types alone do not establish a fuel bound.
 
 ### Delayed wallet
 
-Open `delayed-wallet.patch.json`, select **DelayedWallet** and build it. Hot
-spending requires its Signer and a 1,008-block delay; recovery requires a
-separate 2-of-3 Quorum without that delay.
+Open `delayed-wallet.patch.json` and compile its designated output. Hot spending
+requires its authorization and a 1,008-block delay; recovery requires a separate
+2-of-3 authorization without that delay.
 
 Here the clock starts when the **wallet's funding output confirms**. There is
-no trigger transaction or pending withdrawal stage. The paths authorize
-ordinary spending and do not fix destination addresses. Inspect shows spending
-policies rather than the transaction tree of the fixed vault. This recipe uses
-ordinary signature and CSV conditions and does not need a covenant emulator.
-
-Try replacing the recovery Quorum with a Signer. A single recovery key may
-become the Taproot internal key, so inspect the resulting key-path and
-script-path choices instead of assuming every authorization appears in a leaf.
+no trigger or pending withdrawal, and neither path fixes a destination. This
+uses ordinary signatures and CSV without covenant emulation. Change Recovery
+authorization to threshold 1 with a single key to compare the resulting key
+path and script paths; a single recovery key may become the Taproot internal
+key.
 
 ### Dynamic OP_VAULT withdrawal
 
-Open `op-vault.patch.json`, select **OpVault** and build it. This recipe uses
-the contributed WASM OP_VAULT emulator, with its public root supplied by
-**EmulationOracle**, and a 2-of-3 trigger authorization.
+Open `op-vault.patch.json` and compile its designated output. **Emulation root**
+is a public Variable, and Hot authorization requires two of three keys. The
+vault commits its trigger and recovery authorizations, fixed recovery
+destination, 144-block delay and emulator root.
 
-The vault commits its trigger authorization, fixed recovery destination,
-recovery authorization, 144-block delay and emulator root. The withdrawal
-destination is chosen in a **proposal**, supplied by the Destination wire into
-`/proposal/destination`. Triggering replaces the trigger leaf with a delayed
-CTV-emulated withdrawal leaf while retaining the recovery leaf and internal
-key. The pending coin can still be recovered before withdrawal.
+**Withdrawal destination** supplies the destination inside the withdrawal
+proposal. That proposal selects where funds will go after triggering. The
+trigger replaces one leaf with a delayed CTV-emulated withdrawal while
+retaining the recovery leaf and internal key. The pending coin remains
+recoverable before withdrawal.
 
 The default proposal moves all 100,000 sat into the pending output. After its
-144-block confirmation delay, the selected withdrawal template sends all
-100,000 sat to the proposed destination. A separate fee sponsor pays fees.
+144-block confirmation delay, the selected withdrawal sends those 100,000 sat
+to the proposed destination. An external sponsor pays the fees.
 
-To see the distinction from a fixed vault, change the withdrawal Destination's
-address to another regtest address and rebuild OpVault. Compare the source
-vault address and the pending output address in Inspect: the source address
-stays the same while the proposed pending output changes. Changing the recovery
-destination, delay, trigger keys or oracle root changes the source policy.
-The preview is a **suggested** transaction, not a commitment to use that one
-withdrawal proposal forever.
+Change Withdrawal destination to another regtest address and rebuild. Compare
+the source and pending addresses in Inspect: the source remains the same while
+the proposed pending output changes. Changing recovery destination, delay,
+authorization or emulation root changes the source policy. The preview is a
+suggested transaction, not a commitment to use that proposal forever.
 
 ### Partial withdrawal and revaulting
 
-Open `op-vault-revault.patch.json`. The OpVault node contains:
+Open `op-vault-revault.patch.json`. Select OpVault and expand its **Proposal**
+fields. The withdrawal amount is a local 60,000-sat value; its destination is
+connected to Withdrawal destination.
 
-```json
-{
-  "proposal": {
-    "withdrawal_sats": 60000
-  }
-}
-```
+The trigger creates a 60,000-sat pending output and returns 40,000 sat to the
+original vault script. The pending portion has the same 144-block recovery
+window. The remaining principal can begin a separate withdrawal later, with
+fees supplied externally.
 
-Its incoming wire supplies `proposal.destination`. The trigger creates a
-60,000-sat pending output and returns 40,000 sat to the original vault script.
-The pending 60,000 sat retain the same 144-block recovery window; the remaining
-40,000 sat can start a separate withdrawal later. Fees come from a sponsor.
+Change the proposal's withdrawal amount to 75,000 and rebuild. Inspect should
+show 75,000 sat pending and 25,000 sat revaulted, with the same source address.
+Try **Extract Variable** on that amount to make a named **Withdrawal amount**
+node. The compiled program stays the same when extracting the existing value.
+A zero withdrawal or one above available principal is rejected.
 
-Change `withdrawal_sats` to `75000` and rebuild. Inspect should show 75,000 sat
-pending and 25,000 sat revaulted, with the same source vault address. The
-revault output is represented by its exact script without recursively expanding
-every future withdrawal. Reusing its public vault terms constructs its next
-proposal. A zero withdrawal or one above available principal is rejected.
+The revault output contains its exact script without recursively expanding
+every future withdrawal. Reusing its public terms constructs its next proposal.
+
+## Package a reusable recovery rule
+
+Open `reusable-recovery.patch.json`. It compiles the same fixed vault as the
+first recipe, but the Recovery composer is inside a **Recovery policy**
+reusable patch. Its outer inputs are **Authorization** and **Destination**;
+its named output is **Recovery**.
+
+Select Recovery policy and use **Edit definition** to inspect its two named
+patch inputs and the Recovery composer. **Import reusable patch** can add the
+standalone `recovery-policy.patch.json` definition to another graph. Connect an
+Authorization and Destination to its exposed inputs, then connect its Recovery
+output to a vault. The definition travels inside the saved outer patch, so
+editing another copy does not silently change this custody program.
+
+To author the same abstraction yourself:
+
+1. Make a small graph with Authorization and Destination Variables feeding a
+   Recovery composer.
+2. Select each Variable and **Expose as parameter**. Give the inputs the names
+   `authorization` and `destination`.
+3. Select Recovery, choose **Use as output**, and name that output `recovery`.
+4. Save the patch. **Import reusable patch** in the consuming graph exposes
+   those names as typed sockets.
+
+The generated standalone definition intentionally has no default inputs; its
+caller must supply both. All nested calls inherit the outer compilation
+context. The integration check compares this embedded recipe with the original
+fixed-vault artifact, including every field of the compiled JSON value.
 
 ## What the OP_VAULT emulator enforces
 
@@ -381,7 +424,7 @@ cargo test --manifest-path contrib/build-a-vault/Cargo.toml --workspace --locked
 ```
 
 After generating the recipes, compare their WASM-produced artifacts against
-native Rust execution of the same ten `Callable` building blocks:
+native Rust execution of the same constructors, Variables and `Callable` builders:
 
 ```sh
 cargo run --manifest-path contrib/build-a-vault/Cargo.toml \
@@ -390,7 +433,8 @@ cargo run --manifest-path contrib/build-a-vault/Cargo.toml \
 ```
 
 The native runner reconstructs the CLI/plugin compilation path from each
-module hash and uses the saved context and value connections. It compares the
+module hash and uses the saved context, literal Variables and value connections.
+It also checks the constructor samples that supplied the original literals. It compares the
 complete compiled JSON, including derived keys, script commitments and public
 metadata. This checks that host-accelerated WASM operations retain native Rust
 semantics.
@@ -407,9 +451,10 @@ node --import tsx /path/to/sapio/contrib/build-a-vault/studio-check.ts \
   --artifacts /path/to/sapio/contrib/build-a-vault/target/generated
 ```
 
-The check loads all ten exact module hashes, compiles their schemas, executes
-every recipe through Studio and compares each output with the generated
-artifact. It also asks the CLI to inspect each result. This checks composition
+The check loads all ten exact module hashes, validates the constructor samples,
+executes all five typed recipes and the reusable recovery example, and compares
+each output with its generated artifact. It verifies that Variables bypass WASM
+and asks the CLI to inspect each result. This checks composition
 and serialization; it is not a funded-chain demonstration.
 
 The source keeps contract definitions separate from orchestration:
@@ -427,7 +472,9 @@ The source keeps contract definitions separate from orchestration:
 | [../../evaluators/op-vault](../../evaluators/op-vault) | The WASM predicate used by the emulator |
 
 To add a building block, define a small public input/result type, validate it at
-its module boundary and register a WASM module. Reuse these public types for
-compatible sockets. Keep wallet access, private keys, signing and monitoring
+its module boundary and register a WASM module. Reuse the shared Rust DTOs and
+their semantic `x-sapio-type` annotations for compatible sockets. A callable
+reference exports its expected arguments and returns under `x-sapio-module`;
+Sapio checks that interface before invoking the referenced implementation. Keep wallet access, private keys, signing and monitoring
 in the integration layer so a saved patch stays a reproducible public custody
 program.
