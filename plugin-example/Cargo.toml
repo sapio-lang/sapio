@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["treepay"
+          , "treepay-contract"
           , "trampolinepay"
           , "batching-trait"
           , "vault"

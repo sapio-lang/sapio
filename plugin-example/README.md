@@ -1,6 +1,6 @@
 # Sapio WASM examples
 
-This workspace contains **19 executable guests and two interface libraries**.
+This workspace contains **20 executable guests and three shared libraries**.
 The examples are maintained demonstrations of contract construction. They do not
 include a production wallet, a deployed federation, or audited financial protocols.
 
@@ -66,7 +66,7 @@ network policy acceptability.
 | [custom-policy](custom-policy/) | **Custom policy backend.** Implements a checked arithmetic signature predicate composed with a template covenant through `PolicyCompiler`. Witness construction remains the backend's responsibility. | Native checked payment and underfunding rejection; real WASM catalog checks the raw Taproot artifact and payout. |
 | [program-policy](program-policy/) | **Program guard.** Composes a supplied emulated program with a native CSV delay. Evaluator registration and signing remain explicit runtime operations. | Native compilation and real WASM catalog checks preserve exact program identity, oracle root and script-path requirements. |
 
-## Interface libraries
+## Shared Rust libraries
 
 - [`batching-trait`](batching-trait/) defines versioned payments and batching
   handles shared by TreePay and TrampolinePay.
@@ -75,8 +75,11 @@ network policy acceptability.
   rounded to millionths, then each payout is rounded down to whole satoshis using
   integer arithmetic. The shared royalty code has boundary and overflow tests.
 
-These two crates produce Rust libraries, not executable guest modules. Their
-versioned JSON enum names remain the wire interface. Resolving a typed handle
+- [`treepay-contract`](treepay-contract/) provides the TreePay implementation
+  and checked constructors without a plugin entry point.
+
+These three crates produce Rust libraries, not executable guest modules. The
+interface crates' versioned JSON enum names remain the wire interface. Resolving a typed handle
 only resolves a module identity; the host checks actual arguments and successful
 results against the receiver's schema on every call.
 

@@ -315,6 +315,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sapio-treepay-contract"
+version = "0.1.0"
+dependencies = [
+ "batching-trait",
+ "bitcoin",
+ "sapio",
+ "sapio-base",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "sapio-wasm"
 version = "0.2.4"
 
@@ -613,6 +625,7 @@ dependencies = [
  "sapio",
  "sapio-base",
  "sapio-ctv-emulator-trait",
+ "sapio-treepay-contract",
  "sapio-wasm-plugin",
  "schemars",
  "serde",

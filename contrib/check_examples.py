@@ -10,7 +10,7 @@ import time
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "contrib" / "vectors" / "examples"
-INTERFACES = {"batching-trait", "nft-trait"}
+LIBRARIES = {"batching-trait", "nft-trait", "treepay-contract"}
 SIGNER_CASES = ("treepay", "trampolinepay")
 # Each fixture performs two full create requests to check repeatability.
 REQUEST_TIMEOUT_SECONDS = 360
@@ -24,7 +24,7 @@ def main():
          "--manifest-path", str(ROOT / "plugin-example" / "Cargo.toml")], text=True,
     ))
     workspace = set(metadata["workspace_members"])
-    guests, interfaces = {}, set()
+    guests, libraries = {}, set()
     for package in metadata["packages"]:
         if package["id"] not in workspace:
             continue
@@ -34,8 +34,8 @@ def main():
             assert len(targets) == 1, package
             guests[directory] = targets[0]["name"] + ".wasm"
         else:
-            interfaces.add(directory)
-    assert interfaces == INTERFACES, (interfaces, INTERFACES)
+            libraries.add(directory)
+    assert libraries == LIBRARIES, (libraries, LIBRARIES)
     assert {name: case["wasm"] for name, case in catalog.items()} == guests
     cases = [(name, "native") for name in sorted(catalog)]
     cases.extend((name, "signer") for name in SIGNER_CASES)
@@ -62,7 +62,7 @@ def main():
     print(
         f"All {len(guests)} WASM modules checked in {len(cases)} cases "
         f"({len(SIGNER_CASES)} signer propagation cases); "
-        f"{len(interfaces)} shared interfaces inventoried"
+        f"{len(libraries)} shared libraries inventoried"
     )
 
 
