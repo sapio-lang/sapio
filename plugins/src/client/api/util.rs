@@ -26,19 +26,53 @@ pub fn call_path<S: Serialize, T>(
 where
     T: for<'a> Deserialize<'a> + JsonSchema,
 {
+    call_path_inner(path, key, args, None)
+}
+
+pub(crate) fn call_path_typed<S: Serialize + JsonSchema, T>(
+    path: &EffectPath,
+    key: &[u8; 32],
+    args: CreateArgs<S>,
+) -> Result<T, CompilationError>
+where
+    T: for<'a> Deserialize<'a> + JsonSchema,
+{
+    let api = serde_json::to_string(&API::<CreateArgs<S>, T>::new())
+        .map_err(CompilationError::SerializationError)?;
+    call_path_inner(path, key, args, Some(&api))
+}
+
+fn call_path_inner<S: Serialize, T: for<'a> Deserialize<'a>>(
+    path: &EffectPath,
+    key: &[u8; 32],
+    args: CreateArgs<S>,
+    expected: Option<&str>,
+) -> Result<T, CompilationError> {
     let path = serde_json::to_string(path).map_err(CompilationError::SerializationError)?;
     let s = serde_json::to_value(args)
         .map_err(CompilationError::SerializationError)?
         .to_string();
     let l = s.len();
     let p = unsafe {
-        sapio_v1_wasm_plugin_create_contract(
-            path.as_ptr() as i32,
-            path.len() as i32,
-            key.as_ptr() as i32,
-            s.as_ptr() as i32,
-            l as i32,
-        )
+        if let Some(api) = expected {
+            sapio_v1_wasm_plugin_create_contract_typed(
+                path.as_ptr() as i32,
+                path.len() as i32,
+                key.as_ptr() as i32,
+                s.as_ptr() as i32,
+                l as i32,
+                api.as_ptr() as i32,
+                api.len() as i32,
+            )
+        } else {
+            sapio_v1_wasm_plugin_create_contract(
+                path.as_ptr() as i32,
+                path.len() as i32,
+                key.as_ptr() as i32,
+                s.as_ptr() as i32,
+                l as i32,
+            )
+        }
     };
     if p != 0 {
         let cs = unsafe { CString::from_raw(p as *mut c_char) };

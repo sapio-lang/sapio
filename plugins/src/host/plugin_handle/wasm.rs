@@ -377,6 +377,7 @@ impl<Output> WasmPluginHandle<Output> {
             host_env,
             sapio_v1_wasm_plugin_debug_log_string,
             sapio_v1_wasm_plugin_create_contract,
+            sapio_v1_wasm_plugin_create_contract_typed,
             sapio_v1_wasm_plugin_get_api,
             sapio_v1_wasm_plugin_get_name,
             sapio_v1_wasm_plugin_get_logo,
@@ -472,19 +473,30 @@ fn load_module_from_cache<I: Into<PathBuf> + Clone>(
     }
 }
 
-impl<GOutput> PluginHandle for WasmPluginHandle<GOutput>
-where
-    GOutput: for<'a> Deserialize<'a>,
-{
-    type Input = CreateArgs<serde_json::Value>;
-    type Output = GOutput;
-    fn call(
+impl<GOutput: for<'a> Deserialize<'a>> WasmPluginHandle<GOutput> {
+    pub(crate) fn call_checked(
         &mut self,
         path: &EffectPath,
-        c: &Self::Input,
-    ) -> Result<Self::Output, CompilationError> {
+        c: &CreateArgs<serde_json::Value>,
+        expected: Option<&[u8]>,
+    ) -> Result<GOutput, CompilationError> {
         c.context.lowering.validate()?;
-        let schema = crate::host::validation::CallSchema::from_json(&self.api_json()?)?;
+        let api = self.api_json()?;
+        let schema = crate::host::validation::CallSchema::from_json(&api)?;
+        if let Some(expected) = expected {
+            crate::host::validation::CallSchema::from_json(expected)?;
+            let expected: serde_json::Value =
+                serde_json::from_slice(expected).map_err(CompilationError::DeserializationError)?;
+            let actual: serde_json::Value =
+                serde_json::from_slice(&api).map_err(CompilationError::DeserializationError)?;
+            for side in ["arguments", "returns"] {
+                if !crate::interface::schemas_match(&expected[side], &actual[side]) {
+                    return Err(CompilationError::ModuleFailedAPICheck(format!(
+                        "Typed module {side} signature does not match the caller's expected interface"
+                    )));
+                }
+            }
+        }
         let arguments = serde_json::to_value(c).map_err(CompilationError::SerializationError)?;
         schema.validate_input(&arguments)?;
         let arg_str =
@@ -511,6 +523,22 @@ where
         schema.validate_output(&value)?;
         serde_json::from_value(value).map_err(CompilationError::DeserializationError)
     }
+}
+
+impl<GOutput> PluginHandle for WasmPluginHandle<GOutput>
+where
+    GOutput: for<'a> Deserialize<'a>,
+{
+    type Input = CreateArgs<serde_json::Value>;
+    type Output = GOutput;
+    fn call(
+        &mut self,
+        path: &EffectPath,
+        c: &Self::Input,
+    ) -> Result<Self::Output, CompilationError> {
+        self.call_checked(path, c, None)
+    }
+
     fn get_api(&mut self) -> Result<API<Self::Input, Self::Output>, CompilationError> {
         serde_json::from_slice(&self.api_json()?).map_err(CompilationError::DeserializationError)
     }

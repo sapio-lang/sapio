@@ -168,6 +168,32 @@ mod exports {
                 path_len,
                 json,
                 json_len,
+                api: None,
+            },
+        )
+    }
+
+    /// Call a module only when its live API matches the caller's typed signature.
+    #[allow(clippy::too_many_arguments)] // The WASM ABI passes scalar buffer pointers and lengths.
+    pub fn sapio_v1_wasm_plugin_create_contract_typed(
+        env: HostEnvironment,
+        path: i32,
+        path_len: i32,
+        key: i32,
+        json: i32,
+        json_len: i32,
+        api: i32,
+        api_len: i32,
+    ) -> Result<i32, RuntimeError> {
+        wasm_plugin_action(
+            env,
+            key,
+            Action::Create {
+                path,
+                path_len,
+                json,
+                json_len,
+                api: Some((api, api_len)),
             },
         )
     }
@@ -178,6 +204,7 @@ mod exports {
             path_len: i32,
             json: i32,
             json_len: i32,
+            api: Option<(i32, i32)>,
         },
         GetAPI,
         GetName,
@@ -197,6 +224,7 @@ mod exports {
             path_len,
             json,
             json_len,
+            api,
         } = action
         {
             let memory = guest_memory(env, &store)?;
@@ -211,7 +239,10 @@ mod exports {
             let path: EffectPath =
                 serde_json::from_slice(&read_buffer(&memory, path, path_len as u32 as usize)?)
                     .map_err(runtime_error)?;
-            Some((arguments, path))
+            let expected = api
+                .map(|(ptr, len)| read_buffer(&memory, ptr, len as u32 as usize))
+                .transpose()?;
+            Some((arguments, path, expected))
         } else {
             None
         };
@@ -238,9 +269,9 @@ mod exports {
                     serde_json::to_value(plugin.get_logo().map_err(|error| error.to_string())?)
                 }
                 Action::Create { .. } => {
-                    let (arguments, path) = create.ok_or("Missing contract arguments")?;
+                    let (arguments, path, expected) = create.ok_or("Missing contract arguments")?;
                     return plugin
-                        .call(&path, &arguments)
+                        .call_checked(&path, &arguments, expected.as_deref())
                         .map_err(|error| error.to_string());
                 }
             }

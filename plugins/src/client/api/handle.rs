@@ -16,10 +16,10 @@ use std::marker::PhantomData;
 
 /// A resolved module key with typed call arguments and results.
 ///
-/// Construction resolves the locator; it does not prove interface compatibility.
-/// The host validates each actual input and successful output against the
-/// module's advertised schemas, and the caller deserializes the result as `R`.
-#[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Eq)]
+/// Construction resolves the locator. Each typed call supplies its expected
+/// argument/result schemas for comparison with the running module's API before
+/// execution. Actual values are also validated against the advertised schemas.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(try_from = "SapioHostAPIResolver")]
 #[serde(bound(serialize = "", deserialize = ""))]
 pub struct SapioHostAPI<T: Serialize + JsonSchema + Clone, R: for<'a> Deserialize<'a> + JsonSchema>
@@ -31,6 +31,30 @@ pub struct SapioHostAPI<T: Serialize + JsonSchema + Clone, R: for<'a> Deserializ
     pub key: [u8; 32],
     #[serde(default, skip)]
     _pd: PhantomData<(T, R)>,
+}
+
+impl<T, R> JsonSchema for SapioHostAPI<T, R>
+where
+    T: Serialize + JsonSchema + Clone,
+    R: for<'a> Deserialize<'a> + JsonSchema,
+{
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        format!("Module_{}_to_{}", T::schema_name(), R::schema_name()).into()
+    }
+
+    fn schema_id() -> std::borrow::Cow<'static, str> {
+        format!("SapioHostAPI<{},{}>", T::schema_id(), R::schema_id()).into()
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        let mut schema = SapioHostAPIResolver::json_schema(generator);
+        schema.insert(
+            "x-sapio-module".into(),
+            serde_json::to_value(API::<CreateArgs<T>, R>::new())
+                .expect("generated schemas are JSON"),
+        );
+        schema
+    }
 }
 
 /// Convenience Label for [`SapioHostAPI<T, Compiled>`]
@@ -49,7 +73,7 @@ where
         path: &EffectPath,
         c: &Self::Input,
     ) -> Result<Self::Output, CompilationError> {
-        call_path(path, &self.key, c.clone())
+        super::util::call_path_typed(path, &self.key, c.clone())
     }
     fn get_api(&mut self) -> Result<API<Self::Input, Self::Output>, CompilationError> {
         get_api(&self.key)
@@ -114,5 +138,41 @@ where
             key,
             _pd: Default::default(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Clone, Serialize, JsonSchema)]
+    struct Arguments {
+        #[schemars(schema_with = "sapio_base::schema::satoshis")]
+        amount: u64,
+    }
+
+    #[derive(JsonSchema)]
+    #[serde(transparent)]
+    #[allow(dead_code)]
+    struct RegistrationWrapper(Arguments);
+
+    #[test]
+    fn typed_module_schema_exports_both_generic_signatures() {
+        let schema = schemars::schema_for!(SapioHostAPI<Arguments, u64>);
+        let marker = &schema.as_value()["x-sapio-module"];
+        let actual = API::<CreateArgs<RegistrationWrapper>, u64>::new();
+        assert!(crate::interface::schemas_match(
+            &marker["arguments"],
+            actual.input().as_value()
+        ));
+        assert!(crate::interface::schemas_match(
+            &marker["returns"],
+            actual.output().as_value()
+        ));
+        assert!(!crate::interface::schemas_match(
+            &marker["returns"],
+            API::<(), String>::new().output().as_value()
+        ));
+        assert!(schema.as_value()["properties"]["which_plugin"].is_object());
     }
 }
