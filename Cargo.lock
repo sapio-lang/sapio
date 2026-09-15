@@ -2155,7 +2155,7 @@ dependencies = [
 [[package]]
 name = "schemars"
 version = "1.2.2"
-source = "git+https://github.com/sapio-lang/sapio-jsonschema?rev=ba2b06d0181a92ce5b4fddd86977f480cb9d086a#ba2b06d0181a92ce5b4fddd86977f480cb9d086a"
+source = "git+https://github.com/sapio-lang/sapio-jsonschema?rev=1ab5dcacb79fa9f068b1f3d8759bcd489564c989#1ab5dcacb79fa9f068b1f3d8759bcd489564c989"
 dependencies = [
  "bitcoin",
  "dyn-clone",
@@ -2169,7 +2169,7 @@ dependencies = [
 [[package]]
 name = "schemars_derive"
 version = "1.2.2"
-source = "git+https://github.com/sapio-lang/sapio-jsonschema?rev=ba2b06d0181a92ce5b4fddd86977f480cb9d086a#ba2b06d0181a92ce5b4fddd86977f480cb9d086a"
+source = "git+https://github.com/sapio-lang/sapio-jsonschema?rev=1ab5dcacb79fa9f068b1f3d8759bcd489564c989#1ab5dcacb79fa9f068b1f3d8759bcd489564c989"
 dependencies = [
  "proc-macro2",
  "quote",

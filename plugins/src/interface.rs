@@ -11,9 +11,20 @@ use std::collections::BTreeSet;
 /// productive recursive types are supported; external references fail closed.
 /// Callers must separately validate both schemas before using their values.
 pub fn schemas_match(expected: &Value, actual: &Value) -> bool {
+    schema_nodes_match(expected, expected, actual, actual)
+}
+
+/// Compare schema nodes using the roots that contain their local references.
+/// Callable argument/result annotations share the same roots as their handles.
+pub fn schema_nodes_match(
+    expected: &Value,
+    expected_root: &Value,
+    actual: &Value,
+    actual_root: &Value,
+) -> bool {
     Matcher {
-        left: expected,
-        right: actual,
+        left: expected_root,
+        right: actual_root,
         seen: BTreeSet::new(),
         remaining: 65_536,
     }
@@ -118,7 +129,7 @@ impl Matcher<'_> {
                                     && r.as_object().is_some_and(|map| map.len() == 2)
                                     && ["arguments", "returns"].iter().all(|side| {
                                         match (l.get(side), r.get(side)) {
-                                            (Some(l), Some(r)) => schemas_match(l, r),
+                                            (Some(l), Some(r)) => self.schema(l, r, depth + 1),
                                             _ => false,
                                         }
                                     })
@@ -215,6 +226,30 @@ mod tests {
         .unwrap();
         assert!(schemas_match(&left, &right));
         right["definitions"]["B"]["properties"]["key"]["type"] = "integer".into();
+        assert!(!schemas_match(&left, &right));
+    }
+
+    #[test]
+    fn recursive_callable_markers_use_the_containing_reference_graph() {
+        let left = json!({
+            "type":"object",
+            "properties": {
+                "next": {
+                    "type":"object",
+                    "x-sapio-module": {
+                        "arguments":{"$ref":"#"},
+                        "returns":{"$ref":"#/definitions/Balance"}
+                    }
+                }
+            },
+            "definitions": {
+                "Balance":{"type":"integer", "x-sapio-type":"bitcoin.satoshis"}
+            }
+        });
+        let mut right: Value =
+            serde_json::from_str(&left.to_string().replace("Balance", "Amount")).unwrap();
+        assert!(schemas_match(&left, &right));
+        right["definitions"]["Amount"]["x-sapio-type"] = "bitcoin.relative-blocks".into();
         assert!(!schemas_match(&left, &right));
     }
 }

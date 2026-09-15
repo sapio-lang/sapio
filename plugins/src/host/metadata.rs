@@ -16,7 +16,7 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use wasmer_cache::Hash;
 
-const FORMAT_VERSION: u32 = 1;
+const FORMAT_VERSION: u32 = 2;
 const MAX_METADATA_BYTES: u64 = 48 * 1024 * 1024;
 static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
 

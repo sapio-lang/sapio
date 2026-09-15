@@ -34,7 +34,14 @@ They do not replace JSON Schema constraints, network checks, threshold
 validation, or cross-field invariants enforced by the consuming module.
 
 `SapioHostAPI<T, R>` exports `x-sapio-module` with the expected `arguments`
-and `returns` schemas in the same full-envelope format as a module API.
+and `returns` schema nodes. `arguments` describes the full `CreateArgs<T>`
+envelope. Both nodes use local references in the containing top-level API
+schema root, sharing its definitions; they are not independent schema roots.
+This keeps recursive callable interfaces finite. Arguments use the
+deserialization contract and returns use the serialization contract, even
+when the handle is itself nested inside an input or a returned value.
+Editors extracting a field must retain its containing root and rebase local
+references inside callable annotations along with ordinary schema references.
 This is a callable implementation socket, not a socket for its returned value.
 The serialized reference still contains only `which_plugin`; the expected
 signature comes from the consumer's Rust declaration. `ContractModule<T>` and

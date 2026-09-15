@@ -400,6 +400,17 @@ fn checked_calls_reject_same_shape_different_types_before_execution() {
     assert_eq!(calls(&mut plugin), 1);
 }
 
+#[cfg(feature = "client")]
+#[test]
+fn recursive_callable_metadata_compiles_as_a_host_schema() {
+    #[derive(Clone, serde::Serialize, schemars::JsonSchema)]
+    struct Arguments {
+        next: Option<crate::client::SapioHostAPI<Arguments, u64>>,
+    }
+    let api = crate::API::<crate::CreateArgs<Arguments>, u64>::new();
+    CallSchema::from_json(&serde_json::to_vec(&api).unwrap()).unwrap();
+}
+
 #[test]
 fn nested_typed_import_checks_the_live_child_signature() {
     let cache = FixtureCache::new();

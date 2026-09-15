@@ -12,6 +12,7 @@ use core::convert::TryFrom;
 use sapio::contract::CompilationError;
 use sapio_base::effects::EffectPath;
 use sapio_base::Clause;
+use schemars::generate::Contract;
 use std::marker::PhantomData;
 
 /// A resolved module key with typed call arguments and results.
@@ -50,8 +51,11 @@ where
         let mut schema = SapioHostAPIResolver::json_schema(generator);
         schema.insert(
             "x-sapio-module".into(),
-            serde_json::to_value(API::<CreateArgs<T>, R>::new())
-                .expect("generated schemas are JSON"),
+            serde_json::json!({
+                "arguments": generator
+                    .subschema_for_with_contract::<CreateArgs<T>>(Contract::Deserialize),
+                "returns": generator.subschema_for_with_contract::<R>(Contract::Serialize),
+            }),
         );
         schema
     }
@@ -158,21 +162,72 @@ mod tests {
 
     #[test]
     fn typed_module_schema_exports_both_generic_signatures() {
-        let schema = schemars::schema_for!(SapioHostAPI<Arguments, u64>);
+        let schema = schemars::generate::SchemaSettings::draft07()
+            .into_generator()
+            .into_root_schema_for::<SapioHostAPI<Arguments, u64>>();
         let marker = &schema.as_value()["x-sapio-module"];
         let actual = API::<CreateArgs<RegistrationWrapper>, u64>::new();
-        assert!(crate::interface::schemas_match(
+        assert!(crate::interface::schema_nodes_match(
             &marker["arguments"],
-            actual.input().as_value()
+            schema.as_value(),
+            actual.input().as_value(),
+            actual.input().as_value(),
         ));
-        assert!(crate::interface::schemas_match(
+        assert!(crate::interface::schema_nodes_match(
             &marker["returns"],
-            actual.output().as_value()
+            schema.as_value(),
+            actual.output().as_value(),
+            actual.output().as_value(),
         ));
-        assert!(!crate::interface::schemas_match(
+        let wrong = API::<(), String>::new();
+        assert!(!crate::interface::schema_nodes_match(
             &marker["returns"],
-            API::<(), String>::new().output().as_value()
+            schema.as_value(),
+            wrong.output().as_value(),
+            wrong.output().as_value(),
         ));
         assert!(schema.as_value()["properties"]["which_plugin"].is_object());
+    }
+
+    #[derive(Clone, Serialize, Deserialize, JsonSchema)]
+    struct RecursiveArguments {
+        #[serde(rename(serialize = "sent", deserialize = "accepted"))]
+        value: u64,
+        child: Option<SapioHostAPI<RecursiveArguments, RecursiveResult>>,
+    }
+
+    #[derive(Clone, Serialize, Deserialize, JsonSchema)]
+    struct RecursiveResult {
+        #[serde(rename(serialize = "produced", deserialize = "received"))]
+        value: u64,
+        next: Option<SapioHostAPI<RecursiveArguments, RecursiveResult>>,
+    }
+
+    #[test]
+    fn recursive_callable_signatures_share_graphs_and_keep_each_direction() {
+        let api = API::<CreateArgs<RecursiveArguments>, RecursiveResult>::new();
+        for root in [api.input().as_value(), api.output().as_value()] {
+            let definitions = root["definitions"].as_object().unwrap();
+            let marker = definitions
+                .values()
+                .find_map(|value| value.get("x-sapio-module"))
+                .expect("recursive handle definition");
+            for (side, actual) in [
+                ("arguments", api.input().as_value()),
+                ("returns", api.output().as_value()),
+            ] {
+                assert!(crate::interface::schema_nodes_match(
+                    &marker[side],
+                    root,
+                    actual,
+                    actual,
+                ));
+            }
+        }
+        assert!(api.output().as_value()["properties"]["produced"].is_object());
+        assert!(
+            api.input().as_value()["definitions"]["RecursiveArguments"]["properties"]["accepted"]
+                .is_object()
+        );
     }
 }
