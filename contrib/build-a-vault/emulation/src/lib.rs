@@ -19,8 +19,10 @@ pub(crate) fn invalid(message: impl ToString) -> CompilationError {
 /// Public oracle identity. Its private root never belongs in a Studio patch.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(title = "Emulation root", extend("x-sapio-type" = "sapio.oracle-root"))]
 pub struct OracleRoot {
     /// BIP32 public root used to derive every evaluator signing key.
+    #[schemars(schema_with = "sapio_base::schema::xpub")]
     pub xpub: Xpub,
 }
 
@@ -29,6 +31,7 @@ pub struct OracleRoot {
 #[serde(deny_unknown_fields)]
 pub struct EmulationOracle {
     /// Public extended key, obtained from the intended signing service.
+    #[schemars(schema_with = "sapio_base::schema::xpub")]
     pub xpub: Xpub,
 }
 
@@ -55,10 +58,12 @@ impl OracleRoot {
 /// A proposed withdrawal; changing it does not change the funding address.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(title = "Withdrawal proposal", extend("x-sapio-type" = "sapio.withdrawal-proposal"))]
 pub struct WithdrawalProposal {
     /// Destination selected at trigger time, committed by the pending CTV leaf.
     pub destination: AddressTarget,
     /// Principal moved into the waiting period; the remainder is revaulted.
+    #[schemars(schema_with = "sapio_base::schema::satoshis")]
     pub withdrawal_sats: u64,
 }
 

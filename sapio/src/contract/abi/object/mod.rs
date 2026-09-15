@@ -140,6 +140,7 @@ impl Default for CovenantRequirements {
 /// Public fields and deserialization can produce inconsistent objects. Call
 /// [`Object::validate`] before using an artifact; binding performs this check.
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
+#[schemars(extend("x-sapio-type" = "sapio.compiled-contract", "x-sapio-role" = "contract"))]
 pub struct Object {
     /// Complete program-bearing source branches and their validated signing locations.
     pub program_policies: Vec<ProgramPolicy>,

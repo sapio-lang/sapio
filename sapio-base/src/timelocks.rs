@@ -101,6 +101,12 @@ impl<A: Absolutivity, TT: TimeType> JsonSchema for LockTime<A, TT> {
         let (min, max) = encoded_bounds::<A, TT>();
         schemars::json_schema!({
             "type": "integer",
+            "x-sapio-type": match (A::IS_ABSOLUTE, TT::IS_HEIGHT) {
+                (false, true) => "bitcoin.relative-blocks",
+                (false, false) => "bitcoin.relative-time",
+                (true, true) => "bitcoin.block-height",
+                (true, false) => "bitcoin.absolute-time",
+            },
             "minimum": min,
             "maximum": max
         })
