@@ -7,6 +7,12 @@ regressions for their supported paths. They remain research examples: compiling
 an artifact does not establish a deployed protocol, a complete wallet, or an
 independent security audit.
 
+The separate [build-a-vault kit](../contrib/build-a-vault/README.md) adds ten
+typed WASM blocks and five runnable Studio patches. Its contracts include
+fixed-destination vaults, quorum custody, a delayed wallet, and a restricted
+OP_VAULT emulator with dynamic withdrawals and partial revaulting. Its tutorial
+explains the distinct fee, delay and emulation assumptions for each recipe.
+
 The examples use the repository's CTV research semantics. Native demonstrations
 and the WASM catalog use Regtest without funding or broadcasting transactions.
 Read [development setup](DEVELOPMENT.md), [transaction binding](BINDING.md), and

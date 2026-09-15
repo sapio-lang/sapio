@@ -113,3 +113,67 @@ jobs:
       - uses: actions/checkout@v7
       - run: rustup show
       - run: bash contrib/sapio_wasm.sh
+
+  build-a-vault:
+    name: Build-a-vault modules and custody recipes
+    runs-on: ubuntu-24.04
+    env:
+      CC_wasm32_unknown_unknown: clang
+      CARGO_BUILD_JOBS: 2
+      CARGO_INCREMENTAL: 0
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup show
+      - name: Check custody building-block formatting
+        run: cargo fmt --manifest-path contrib/build-a-vault/Cargo.toml --all -- --check
+      - name: Test custody building blocks
+        run: cargo test --manifest-path contrib/build-a-vault/Cargo.toml --workspace --locked
+      - name: Build the current CLI
+        run: cargo build --locked -p sapio-cli
+      - name: Build all WASM blocks and execute custody recipes
+        run: >-
+          python3 contrib/build-a-vault/build.py
+          --cli "$GITHUB_WORKSPACE/target/debug/sapio-cli"
+          --workspace "$RUNNER_TEMP/build-a-vault-modules"
+          --output "$RUNNER_TEMP/build-a-vault"
+          --target-dir "$GITHUB_WORKSPACE/target"
+      - name: Compare native and WASM custody programs
+        run: >-
+          cargo run --manifest-path contrib/build-a-vault/Cargo.toml
+          --locked -p build-a-vault-emulation --bin check-native --
+          "$RUNNER_TEMP/build-a-vault"
+      - name: Check out the reviewed Studio patch engine
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: sapio-lang/sapio-studio
+          ref: 31c0026db414a2a519ccb19c807daf73b1e78392
+          path: contrib/build-a-vault/target/studio
+      - name: Install Studio's Node toolchain
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: contrib/build-a-vault/target/studio/package-lock.json
+      - name: Build Studio's bridge and schema worker
+        working-directory: contrib/build-a-vault/target/studio
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: |
+          npm ci
+          npm run build:desktop
+      - name: Execute every custody recipe through Studio
+        working-directory: contrib/build-a-vault/target/studio
+        run: >-
+          node --import tsx "$GITHUB_WORKSPACE/contrib/build-a-vault/studio-check.ts"
+          --studio "$PWD"
+          --cli "$GITHUB_WORKSPACE/target/debug/sapio-cli"
+          --workspace "$RUNNER_TEMP/build-a-vault-modules"
+          --artifacts "$RUNNER_TEMP/build-a-vault"
+      - name: Upload generated modules, Studio patches and contract artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-a-vault
+          path: ${{ runner.temp }}/build-a-vault
+          retention-days: 14
