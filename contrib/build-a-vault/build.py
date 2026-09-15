@@ -72,10 +72,19 @@ class Recipe:
         })
 
     def patch(self):
+        builder = self.nodes[-1]
         return {
-            "version": 2, "nodes": self.nodes, "connections": self.connections,
-            "outputs": [{"name": "contract", "node": self.nodes[-1]["id"], "path": ""}],
-            "output": "contract", "context": copy.deepcopy(CONTEXT),
+            "version": 2,
+            "nodes": self.nodes + [{
+                "kind": "output", "id": "contract-output", "name": "contract",
+                "position": {"x": builder["position"]["x"] + 420, "y": builder["position"]["y"]},
+            }],
+            "connections": self.connections + [{
+                "id": builder["id"] + "-contract-output", "kind": "value",
+                "source": builder["id"], "sourcePath": "",
+                "target": "contract-output", "targetPath": "",
+            }],
+            "context": copy.deepcopy(CONTEXT),
         }
 
 
@@ -156,7 +165,7 @@ def write_pointer(arguments, pointer, value):
     return arguments
 
 
-def execute_patch(patch, invoke, context, parameters=None, all_outputs=False):
+def execute_patch(patch, invoke, context, parameters=None, selected_output=None):
     """Evaluate these generated, dependency-ordered graphs using the real CLI."""
     values = {}
     parameters = parameters or {}
@@ -165,6 +174,12 @@ def execute_patch(patch, invoke, context, parameters=None, all_outputs=False):
             value = copy.deepcopy(node["value"])
         elif node["kind"] == "parameter":
             value = copy.deepcopy(parameters[node["name"]] if node["name"] in parameters else node["default"])
+        elif node["kind"] == "output":
+            incoming = [wire for wire in patch["connections"] if wire["target"] == node["id"]]
+            assert len(incoming) == 1 and incoming[0]["targetPath"] == "", "Output needs one whole-value connection"
+            assert not any(wire["source"] == node["id"] for wire in patch["connections"]), "Output cannot have outgoing connections"
+            wire = incoming[0]
+            value = read_pointer(values[wire["source"]], wire["sourcePath"])
         else:
             arguments = copy.deepcopy(node.get("arguments", {}))
             for wire in patch["connections"]:
@@ -172,16 +187,19 @@ def execute_patch(patch, invoke, context, parameters=None, all_outputs=False):
                     source = read_pointer(values[wire["source"]], wire["sourcePath"])
                     arguments = write_pointer(arguments, wire["targetPath"], source)
             value = (
-                execute_patch(node["patch"], invoke, context, arguments, all_outputs=True)
+                execute_patch(node["patch"], invoke, context, arguments)
                 if node["kind"] == "subpatch"
                 else invoke(node["moduleKey"], arguments, context)
             )
         values[node["id"]] = value
     outputs = {
-        output["name"]: read_pointer(values[output["node"]], output["path"])
-        for output in patch["outputs"]
+        node["name"]: values[node["id"]]
+        for node in patch["nodes"] if node["kind"] == "output"
     }
-    return outputs if all_outputs else outputs[patch["output"]]
+    if selected_output is None:
+        return outputs
+    assert any(node["kind"] == "output" and node["id"] == selected_output for node in patch["nodes"]), "Selected result must be an Output terminal"
+    return values[selected_output]
 
 
 def reusable_recovery(fixed_patch, keys, schemas):
@@ -200,14 +218,18 @@ def reusable_recovery(fixed_patch, keys, schemas):
         ] + [{
             "kind": "module", "id": "recovery", "moduleKey": keys["recovery"],
             "arguments": {}, "position": {"x": 420, "y": 100},
+        }, {
+            "kind": "output", "id": "recovery-output", "name": "recovery",
+            "position": {"x": 840, "y": 100},
         }],
         "connections": [
             {"id": name + "-recovery", "kind": "value", "source": name,
              "sourcePath": "", "target": "recovery", "targetPath": "/" + name}
             for name in ["authorization", "destination"]
-        ],
-        "outputs": [{"name": "recovery", "node": "recovery", "path": ""}],
-        "output": "recovery",
+        ] + [{
+            "id": "recovery-output", "kind": "value", "source": "recovery",
+            "sourcePath": "", "target": "recovery-output", "targetPath": "",
+        }],
     }
     example = copy.deepcopy(fixed_patch)
     for index, node in enumerate(example["nodes"]):
@@ -284,7 +306,7 @@ def main():
     fixed_patch = fixed_artifact = None
     for recipe in recipes(keys, schemas, identity, constructor):
         patch = recipe.patch()
-        artifact = execute_patch(patch, invoke, patch["context"])
+        artifact = execute_patch(patch, invoke, patch["context"], selected_output="contract-output")
         if recipe.name == "fixed-vault":
             fixed_patch, fixed_artifact = patch, artifact
         explanation = json.loads(run([cli, "contract", "explain", "--json"], artifact))
@@ -293,16 +315,17 @@ def main():
         save(output / f"{recipe.name}.explanation.json", explanation)
         manifest["recipes"].append({
             "name": recipe.name, "patch": f"{recipe.name}.patch.json",
-            "artifact": f"{recipe.name}.artifact.json",
+            "artifact": f"{recipe.name}.artifact.json", "output": "contract-output",
         })
         print(f"Compiled {recipe.name}: {len(patch['nodes'])} typed nodes", flush=True)
     definition, reusable = reusable_recovery(fixed_patch, keys, schemas)
-    assert execute_patch(reusable, invoke, reusable["context"]) == fixed_artifact, "Reusable recovery changed the fixed vault artifact"
+    assert execute_patch(reusable, invoke, reusable["context"], selected_output="contract-output") == fixed_artifact, "Reusable recovery changed the fixed vault artifact"
     save(output / "recovery-policy.patch.json", definition)
     save(output / "reusable-recovery.patch.json", reusable)
     manifest["reusable"].append({
         "name": "reusable-recovery", "definition": "recovery-policy.patch.json",
         "patch": "reusable-recovery.patch.json", "artifact": "fixed-vault.artifact.json",
+        "output": "contract-output",
     })
     save(output / "manifest.json", manifest)
     print(f"Open patches from {output} in Studio; set workspace to {workspace}.")

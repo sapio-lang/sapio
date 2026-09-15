@@ -31,6 +31,7 @@ interface RecipeRecord {
   name: string;
   patch: string;
   artifact: string;
+  output: string;
 }
 
 interface Manifest {
@@ -186,10 +187,15 @@ async function main(): Promise<void> {
         await readFile(path.resolve(artifacts, recipe.patch), "utf8"),
       );
       assert.equal(patch.version, 2);
-      assert.equal(
-        patch.output,
-        "contract",
-        `${recipe.name}: designate the contract output explicitly.`,
+      assert(!("outputs" in patch) && !("output" in patch));
+      assert(
+        patch.nodes.some(
+          (node: { id: string; kind: string; name?: string }) =>
+            node.id === recipe.output &&
+            node.kind === "output" &&
+            node.name === "contract",
+        ),
+        `${recipe.name}: connect the contract to a visible Output terminal.`,
       );
       assert(
         patch.nodes.some((node: { kind: string }) => node.kind === "variable"),
@@ -198,7 +204,7 @@ async function main(): Promise<void> {
       const result: { output: unknown; executed: string[] } = await runPatch(
         patch,
         modules,
-        null,
+        recipe.output,
         patch.context,
         runtime,
       );
