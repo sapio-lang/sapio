@@ -73,6 +73,18 @@ fn payment(destination: Compiled, amount: u64, external: u64, fees: u64, path: &
     .unwrap()
 }
 
+fn move_to_suggested(child: &mut Compiled) {
+    // Moving catalog entries does not remove spending conditions from Script.
+    // Retain that condition as an explicit independent alternative.
+    for hash in child.ctv_to_tx.keys() {
+        child
+            .alternative_policies
+            .push(sapio_base::Emulatable(sapio_base::Ctv(*hash)).into());
+    }
+    child.committed_policy_guards.clear();
+    child.suggested_txs = std::mem::take(&mut child.ctv_to_tx);
+}
+
 struct Alternatives;
 
 impl Alternatives {
@@ -154,7 +166,7 @@ fn child_output_covers_its_contract_contribution_without_replacing_auxiliary_inp
             Amount::from_sat(1_100)
         );
         if suggested {
-            child.suggested_txs = std::mem::take(&mut child.ctv_to_tx);
+            move_to_suggested(&mut child);
         }
         let parent = payment(child, 400, 0, 0, "parent");
         let decoded: Compiled =
@@ -326,7 +338,7 @@ fn object_minimum_cannot_understate_committed_or_suggested_requirements() {
         let mut child = payment(address(), 1_000, 700, 100, "child");
         let hash = *child.ctv_to_tx.keys().next().unwrap();
         if suggested {
-            child.suggested_txs = std::mem::take(&mut child.ctv_to_tx);
+            move_to_suggested(&mut child);
         }
         child.required_input_amount = Amount::from_sat(399);
         let child: Compiled = serde_json::from_slice(&serde_json::to_vec(&child).unwrap()).unwrap();
@@ -374,7 +386,7 @@ fn serialized_underfunded_children_fail_before_any_funding_or_signing_effect() {
         template.required_input_amount = Amount::from_sat(1_100);
         child.required_input_amount = Amount::from_sat(1_100);
         if suggested {
-            child.suggested_txs = std::mem::take(&mut child.ctv_to_tx);
+            move_to_suggested(child);
         }
         child.validate().unwrap();
         let parent: Compiled =

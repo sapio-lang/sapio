@@ -32,6 +32,8 @@ pub enum ArtifactErrorKind {
     InvalidFundingConstraints(String),
     /// A retained program policy does not match its descriptor or resource limits.
     InvalidProgramPolicy(String),
+    /// Descriptor spending capabilities differ from the declared policies.
+    InvalidSpendingPolicy(String),
     /// Every committed template must record the injected covenant policy.
     MissingCovenant,
     /// Public lowering inputs cannot be used to resolve covenant predicates.
@@ -83,6 +85,7 @@ impl fmt::Display for ArtifactErrorKind {
                 write!(f, "invalid funding constraints: {reason}")
             }
             Self::InvalidProgramPolicy(reason) => write!(f, "invalid program policy: {reason}"),
+            Self::InvalidSpendingPolicy(reason) => write!(f, "invalid spending policy: {reason}"),
             Self::MissingCovenant => write!(f, "committed template has no covenant policy"),
             Self::InvalidCovenantLowering(reason) => {
                 write!(f, "invalid covenant lowering: {reason}")
@@ -157,8 +160,11 @@ impl Object {
     /// Validate the entire graph before binding or requesting funding.
     ///
     /// Checks structural consistency and transaction commitments, including
-    /// suggested transactions. This does not prove policy satisfaction, chain
-    /// enforcement, funding availability, or the advertised fee rate.
+    /// suggested transactions, and binds declared contract spending policies to
+    /// their complete Taproot branches. The artifact is not authenticated:
+    /// funders must review alternative policies and trust the declared oracle
+    /// roots. This does not prove policy satisfaction, chain enforcement,
+    /// funding availability, or the advertised fee rate.
     pub fn validate(&self) -> Result<(), ArtifactError> {
         let mut pending = vec![self];
         while let Some(object) = pending.pop() {
@@ -275,6 +281,8 @@ impl Object {
                     return Err(error(ArtifactErrorKind::MissingCovenant));
                 }
             }
+            crate::contract::compiler::validate_spending_policies(object)
+                .map_err(|reason| error(None, ArtifactErrorKind::InvalidSpendingPolicy(reason)))?;
         }
         Ok(())
     }

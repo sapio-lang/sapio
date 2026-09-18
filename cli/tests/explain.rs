@@ -166,6 +166,65 @@ fn explains_file_or_stdin_without_loading_configuration() {
 }
 
 #[test]
+fn explains_independent_key_authority_in_human_and_json_output() {
+    let fixture = Fixture::new();
+    let mut object = artifact();
+    let key = Keypair::from_secret_key(
+        &Secp256k1::new(),
+        &SecretKey::from_slice(&[19; 32]).unwrap(),
+    )
+    .x_only_public_key()
+    .0;
+    let mut input = bitcoin::psbt::Input::default();
+    object
+        .descriptor
+        .as_ref()
+        .unwrap()
+        .update_psbt_input(&mut input)
+        .unwrap();
+    let tree = sapio::contract::object::RawTaproot::from_scripts(
+        key,
+        input
+            .tap_scripts
+            .into_values()
+            .map(|(script, _)| script)
+            .collect(),
+    )
+    .unwrap();
+    object.address = Address::p2tr_tweaked(tree.spend_info().output_key(), Network::Regtest).into();
+    object.descriptor = Some(tree.into());
+    object
+        .alternative_policies
+        .push(sapio_base::Clause::Key(key).into());
+    let path = fixture.0.join("alternative.json");
+    std::fs::write(&path, serde_json::to_vec(&object).unwrap()).unwrap();
+    let output = fixture.command().arg("--file").arg(&path).output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(text.contains(&format!(
+        "Alternative spending policy (review before funding): pk({key})"
+    )));
+    assert!(text.contains("not the producer's identity or your authorization"));
+    let output = fixture
+        .command()
+        .arg("--file")
+        .arg(&path)
+        .arg("--json")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let report: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        report["artifact"]["nodes"][0]["alternative_policies"],
+        serde_json::to_value(&object.alternative_policies).unwrap()
+    );
+}
+
+#[test]
 fn funded_explanation_reports_actual_fees_and_rejects_the_fee_cap() {
     let fixture = Fixture::new();
     let artifact = artifact();

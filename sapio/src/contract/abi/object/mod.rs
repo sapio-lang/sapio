@@ -136,11 +136,33 @@ impl Default for CovenantRequirements {
     }
 }
 
+/// One original authorization branch for a committed transaction. Keeping the
+/// action/template boundary reproduces Script compilation before deduplication.
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(deny_unknown_fields)]
+pub struct CommittedPolicy {
+    /// Complete action guard, before covenant lowering.
+    pub action_guard: ScriptPolicy,
+    /// Additional template guards, before covenant injection and lowering.
+    pub template_guards: Vec<ScriptPolicy>,
+}
+
 /// Object holds a contract's complete context required post-compilation
 /// Public fields and deserialization can produce inconsistent objects. Call
 /// [`Object::validate`] before using an artifact; binding performs this check.
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 pub struct Object {
+    /// Original complete guard alternatives for each committed template, before
+    /// catalog deduplication merges guards. Each branch also requires the
+    /// template's covenant. Retained to reproduce its exact descriptor script.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub committed_policy_guards: BTreeMap<sha256::Hash, BTreeSet<CommittedPolicy>>,
+    /// Complete finish and suggested-action policies, independently of the
+    /// committed templates. These alternatives can authorize other spends.
+    /// Validation binds them to the descriptor, but cannot authenticate their
+    /// origin or decide whether their keys/policies are acceptable to a funder.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub alternative_policies: Vec<ScriptPolicy>,
     /// Complete program-bearing source branches and their validated signing locations.
     pub program_policies: Vec<ProgramPolicy>,
     /// Reproducible covenant lowering and the predicates it resolved.
@@ -202,6 +224,8 @@ impl Object {
         required_input_amount: bitcoin::Amount,
     ) -> Object {
         Object {
+            committed_policy_guards: BTreeMap::new(),
+            alternative_policies: Vec::new(),
             program_policies: Vec::new(),
             covenant_requirements: CovenantRequirements::default(),
             ctv_to_tx: BTreeMap::new(),
@@ -234,6 +258,8 @@ impl Object {
         &'a [u8]: From<&'a I>,
     {
         Ok(Object {
+            committed_policy_guards: BTreeMap::new(),
+            alternative_policies: Vec::new(),
             program_policies: Vec::new(),
             covenant_requirements: CovenantRequirements::default(),
             ctv_to_tx: BTreeMap::new(),
@@ -257,6 +283,8 @@ impl Object {
         T: MiniscriptKey + ToPublicKey,
     {
         Object {
+            committed_policy_guards: BTreeMap::new(),
+            alternative_policies: Vec::new(),
             program_policies: Vec::new(),
             covenant_requirements: CovenantRequirements::default(),
             ctv_to_tx: BTreeMap::new(),
