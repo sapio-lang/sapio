@@ -51,7 +51,14 @@ pub(crate) fn review(psbt: &Psbt, approved: bool) -> Result<(), Box<dyn Error>> 
     if witness_only != 0 {
         writeln!(stderr, "  {witness_only} input(s) use PSBT-supplied witness UTXOs: amounts and scripts are unverified against previous transactions.")?;
     }
-    writeln!(stderr, "  Supplied full previous transactions were checked against their outpoints; chain inclusion and unspent status were not checked.")?;
+    let full_previous = prevouts.len() - witness_only;
+    if full_previous != 0 {
+        writeln!(stderr, "  {full_previous} input(s) have supplied full previous transactions checked against their outpoints.")?;
+    }
+    writeln!(
+        stderr,
+        "  Chain inclusion and unspent status were not checked."
+    )?;
     if !approved {
         return Err(invalid(
             "review the outputs and fee above, then rerun with --yes to authorize signing",

@@ -32,6 +32,12 @@ and impossible amounts. Witness-only UTXO amounts and scripts remain supplied by
 the PSBT and are labeled unverified in the review. These checks do not establish
 chain inclusion or whether an output remains unspent.
 
+The `--yes` approval step applies to the local private-key command `signer sign`.
+`emulator sign` remains a noninteractive covenant-oracle request: `sign_checked`
+checks that the response preserves the transaction and its metadata, but does
+not approve its outputs or fees. Callers must review those before requesting
+emulator signatures; this command does not provide the local signer's fee review.
+
 ## Explain a contract
 
 Inspect a compiled artifact without a wallet, signer connection, or CLI configuration:
