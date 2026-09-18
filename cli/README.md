@@ -94,6 +94,14 @@ Run `sapio-cli configure wizard --write` to create a configuration. The wizard
 requires an explicit covenant mode. Only one network may be active at a time,
 but each network can have a defined configuration.
 
+The wizard and `sapio-cli signer new` exclusively create their output files;
+they refuse to overwrite existing files or follow symlinks. On Unix, these files
+have mode `0600`, including when the process has a permissive umask. To replace
+an existing configuration, move it aside first or edit it while retaining private
+permissions. Existing key and emulator seed files remain readable, but loading a
+file with group or other permission bits prints a warning to stderr. Restrict old
+secret files to mode `0600` as well.
+
 The command line may be used to specify a different configuration.
 
 Every network configuration and Studio request context must include `covenant`.

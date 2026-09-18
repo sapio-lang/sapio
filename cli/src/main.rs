@@ -68,7 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
      (about: "Print out the currently loaded configuration")
     )
      (@subcommand wizard =>
-      (@arg write: -w --write "Write the default config file to the standard location.")
+      (@arg write: -w --write "Create a private config file at the standard location; refuses to overwrite an existing file.")
      (about: "Interactive wizard to create a configuration")
      )
     )
@@ -215,7 +215,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     tokio::fs::create_dir_all(path).await?;
                     let mut pb = path.to_path_buf();
                     pb.push("config.json");
-                    tokio::fs::write(&pb, &serde_json::to_string_pretty(&config)?).await?;
+                    write_new_secret(&pb, serde_json::to_string_pretty(&config)?.as_bytes())
+                        .await?;
                 } else {
                     println!(
                     "Please write this to the config file location (see sapio-cli configure files)"
@@ -263,7 +264,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let input = args.value_of_os("input").unwrap();
                 let output = args.value_of_os("out");
 
-                let buf = tokio::fs::read(input).await?;
+                let buf = read_secret(input).await?;
                 let xpriv = sapio_psbt::SigningKey::read_key_from_buf(&buf[..])?;
                 let psbt = if args.is_present("psbt") {
                     decode_psbt_file(args, "psbt")?
@@ -285,12 +286,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let out = args.value_of_os("out").unwrap();
                 let xpriv = sapio_psbt::SigningKey::new_key(network)?;
                 let pubkey = xpriv.pubkey(&Secp256k1::new());
-                tokio::fs::write(out, &xpriv.0[0].encode()).await?;
+                write_new_secret(out, &xpriv.0[0].encode()).await?;
                 println!("{}", pubkey[0]);
             }
             Some(("show", args)) => {
                 let input = args.value_of_os("input").unwrap();
-                let buf = tokio::fs::read(input).await?;
+                let buf = read_secret(input).await?;
                 let xpriv = sapio_psbt::SigningKey::read_key_from_buf(&buf[..])?;
                 let pubkey = xpriv.pubkey(&Secp256k1::new());
                 println!("{}", pubkey[0]);
@@ -318,7 +319,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Some(("server", args)) => {
                 let config = config(custom_config).await?;
                 let filename = args.value_of("seed").unwrap();
-                let contents = tokio::fs::read(filename).await?;
+                let contents = read_secret(filename).await?;
 
                 let root = Xpriv::new_master(config.network, &contents)?;
                 let pk_root = Xpub::from_priv(&Secp256k1::new(), &root);

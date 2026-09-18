@@ -7,8 +7,48 @@
 use bitcoin::hashes::Hash;
 use bitcoin::psbt::Psbt;
 use std::error::Error;
-use std::path::PathBuf;
-use tokio::io::AsyncReadExt;
+use std::path::{Path, PathBuf};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+/// Exclusively create a secret file, with owner-only permissions on Unix.
+///
+/// Existing files (including symlinks) are never followed or overwritten. Set
+/// permissions through the open handle, so a pathname replacement cannot cause
+/// us to change the permissions of another file.
+pub async fn write_new_secret(path: impl AsRef<Path>, bytes: &[u8]) -> std::io::Result<()> {
+    let mut options = tokio::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+    let mut file = options.open(path).await?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))
+            .await?;
+    }
+    file.write_all(bytes).await?;
+    file.sync_all().await
+}
+
+/// Read secret bytes and warn if the opened file is accessible to other Unix users.
+pub async fn read_secret(path: impl AsRef<Path>) -> std::io::Result<Vec<u8>> {
+    let path = path.as_ref();
+    let mut file = tokio::fs::File::open(path).await?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if file.metadata().await?.permissions().mode() & 0o077 != 0 {
+            eprintln!(
+                "Warning: secret file {} is accessible to other users; restrict its permissions to 0600.",
+                path.display()
+            );
+        }
+    }
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes).await?;
+    Ok(bytes)
+}
 /// Checks that a file exists during argument parsing
 ///
 /// **Race Conditions** if file is deleted after this call
@@ -87,6 +127,72 @@ mod tests {
     use super::*;
     use bitcoin::{absolute, transaction, Transaction, TxIn};
     use sapio_base::CTVHash;
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn secret_writes_are_private_exclusive_and_do_not_follow_symlinks() {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+
+        let directory = std::env::temp_dir().join(format!(
+            "sapio-secret-test-{}-{}",
+            std::process::id(),
+            rand::random::<u64>()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let path = directory.join("config.json");
+        let secret = br#"{"rpc_password":"private"}"#;
+        write_new_secret(&path, secret).await.unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), secret);
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert_eq!(
+            write_new_secret(&path, b"replacement")
+                .await
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::AlreadyExists
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), secret);
+
+        let link = directory.join("link");
+        symlink(&path, &link).unwrap();
+        assert_eq!(
+            write_new_secret(&link, b"replacement")
+                .await
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::AlreadyExists
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), secret);
+        let missing = directory.join("missing");
+        let dangling = directory.join("dangling");
+        symlink(&missing, &dangling).unwrap();
+        assert_eq!(
+            write_new_secret(&dangling, b"secret")
+                .await
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::AlreadyExists
+        );
+        assert!(!missing.exists());
+
+        let concurrent = directory.join("concurrent");
+        let (first, second) = tokio::join!(
+            write_new_secret(&concurrent, b"first"),
+            write_new_secret(&concurrent, b"second")
+        );
+        assert_ne!(first.is_ok(), second.is_ok());
+        let (winner, loser) = if first.is_ok() {
+            (b"first".as_slice(), second)
+        } else {
+            (b"second".as_slice(), first)
+        };
+        assert_eq!(loser.unwrap_err().kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read(&concurrent).unwrap(), winner);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
 
     fn psbt() -> Psbt {
         Psbt::from_unsigned_tx(Transaction {
