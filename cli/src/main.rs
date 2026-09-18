@@ -42,6 +42,7 @@ use util::*;
 pub mod config;
 mod contracts;
 mod explain;
+mod signing;
 mod util;
 
 async fn config(custom_config: Option<&str>) -> Result<Config, Box<dyn Error>> {
@@ -76,10 +77,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
      (@setting SubcommandRequiredElseHelp)
      (about: "Make Requests to Emulator Servers")
      (@subcommand sign =>
-      (about: "Sign a PSBT")
+      (about: "Review a PSBT's outputs and fee; sign with --yes")
       (@arg input: -k --key +takes_value +required #{1,2} {check_file} "The file to read the key from")
       (@arg psbt: -p --psbt +takes_value  #{1,2} {check_file} "The file containing the PSBT to Sign")
       (@arg out: -o --output +takes_value  #{1,2} {check_file_not} "The file to save the resulting PSBT")
+      (@arg yes: -y --yes "Approve the displayed outputs and absolute fee and sign the PSBT")
      )
      (@subcommand new =>
       (about: "Get a new xpriv")
@@ -270,6 +272,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 } else {
                     get_psbt_from(None).await?
                 };
+                signing::review(&psbt, args.is_present("yes"))?;
                 let hash_ty = bitcoin::sighash::TapSighashType::All;
                 let bytes = xpriv.sign(psbt, hash_ty)?;
 
@@ -301,7 +304,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Some(("sign", args)) => {
                 let emulator = configured_emulator(custom_config).await?;
                 let psbt = decode_psbt_file(args, "psbt")?;
-                let psbt = emulator.sign(psbt)?;
+                let psbt = emulator_connect::sign_checked(emulator.as_ref(), psbt)?;
                 let bytes = psbt.serialize();
                 std::fs::write(args.value_of_os("out").unwrap(), &base64::encode(bytes))?;
             }
