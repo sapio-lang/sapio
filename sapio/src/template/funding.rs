@@ -20,7 +20,8 @@ pub struct FundingReport {
     pub missing_inputs: Vec<usize>,
     /// Actual fee, known only when all input amounts are present.
     pub actual_fee_sats: Option<u64>,
-    /// Explicit local fee cap, if declared by a transaction plan.
+    /// Effective local fee cap, including the reserved-fee default for legacy
+    /// templates. Present for every successful funding check.
     pub maximum_fee_sats: Option<u64>,
     /// Minimum local fee rate in satoshis per 1,000 weight units.
     pub minimum_feerate_sat_kwu: Option<u64>,
@@ -135,8 +136,35 @@ impl fmt::Display for FundingError {
 impl std::error::Error for FundingError {}
 
 impl Template {
+    /// Effective local fee cap. Without an explicit declaration, additional
+    /// funding must not increase the fee beyond the amount reserved at build
+    /// time. If both cap formats are present, enforce the stricter one.
+    pub fn effective_maximum_fee(&self) -> Result<Amount, FundingError> {
+        let reserved = self
+            .max
+            .checked_sub(self.checked_output_total()?)
+            .ok_or_else(|| FundingError::InvalidConstraints("outputs exceed the budget".into()))?;
+        let maximum = self
+            .maximum_fee
+            .into_iter()
+            .chain(
+                self.funding_constraints
+                    .as_ref()
+                    .map(|rules| rules.maximum_fee),
+            )
+            .min()
+            .unwrap_or(reserved);
+        if maximum < reserved {
+            return Err(FundingError::InvalidConstraints(
+                "fee cap is smaller than reserved fees".into(),
+            ));
+        }
+        Ok(maximum)
+    }
+
     /// Check the internal consistency of retained local funding constraints.
     pub fn validate_funding_constraints(&self) -> Result<(), FundingError> {
+        let maximum_fee = self.effective_maximum_fee()?;
         let Some(constraints) = &self.funding_constraints else {
             return Ok(());
         };
@@ -193,10 +221,10 @@ impl Template {
                 .map(bitcoin::Weight::from_wu)
                 .ok_or(FundingError::Overflow)?;
             let required = rate.fee_wu(weight).ok_or(FundingError::Overflow)?;
-            if required > constraints.maximum_fee {
+            if required > maximum_fee {
                 return Err(FundingError::InvalidConstraints(format!(
                     "fee cap {} sat is below the {} sat required by the unsigned transaction at the minimum fee rate",
-                    constraints.maximum_fee.to_sat(), required.to_sat(),
+                    maximum_fee.to_sat(), required.to_sat(),
                 )));
             }
         }
@@ -246,17 +274,12 @@ impl Template {
                 missing.push(index);
             }
         }
-        let maximum = self
-            .funding_constraints
-            .as_ref()
-            .map(|constraints| constraints.maximum_fee);
-        if let Some(maximum) = maximum {
-            if known.checked_sub(outputs).is_some_and(|fee| fee > maximum) {
-                return Err(FundingError::ExcessiveFee {
-                    actual: known - outputs,
-                    maximum,
-                });
-            }
+        let maximum = self.effective_maximum_fee()?;
+        if known.checked_sub(outputs).is_some_and(|fee| fee > maximum) {
+            return Err(FundingError::ExcessiveFee {
+                actual: known - outputs,
+                maximum,
+            });
         }
         let actual = if missing.is_empty() {
             if known < self.max {
@@ -279,7 +302,7 @@ impl Template {
             reserved_fee_sats: reserved.to_sat(),
             missing_inputs: missing,
             actual_fee_sats: actual,
-            maximum_fee_sats: maximum.map(Amount::to_sat),
+            maximum_fee_sats: Some(maximum.to_sat()),
             minimum_feerate_sat_kwu: rate.map(|rate| rate.to_sat_per_kwu()),
             observed_weight_wu: None,
             fee_rate_pending: rate.is_some(),

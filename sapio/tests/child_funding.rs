@@ -371,6 +371,7 @@ fn serialized_underfunded_children_fail_before_any_funding_or_signing_effect() {
         // child's requirement preserves its transaction but makes this parent
         // output insufficient. All cached transaction hashes still agree.
         template.max = Amount::from_sat(1_100);
+        template.maximum_fee = Some(Amount::from_sat(100));
         template.required_input_amount = Amount::from_sat(1_100);
         child.required_input_amount = Amount::from_sat(1_100);
         if suggested {
