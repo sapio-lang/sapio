@@ -201,12 +201,12 @@ fn human(explanation: &Explanation) -> Result<String, Box<dyn Error>> {
                 )?;
             }
             writeln!(text, "    Reserved fee: {} sat", template.reserved_fee_sats)?;
+            writeln!(
+                text,
+                "    Local fee cap: {} sat (checked against actual funding)",
+                template.maximum_fee_sats
+            )?;
             if let Some(funding) = &template.funding_constraints {
-                writeln!(
-                    text,
-                    "    Local fee cap: {} sat (checked against actual funding)",
-                    funding.maximum_fee.to_sat()
-                )?;
                 if let Some(rate) = funding.minimum_feerate {
                     writeln!(
                         text,
@@ -214,11 +214,6 @@ fn human(explanation: &Explanation) -> Result<String, Box<dyn Error>> {
                         rate.to_sat_per_kwu()
                     )?;
                 }
-            } else {
-                writeln!(
-                    text,
-                    "    No local fee cap declared; excess input value becomes transaction fees"
-                )?;
             }
             for guard in &template.guards {
                 writeln!(text, "    Authorization source: {}", policy_summary(guard))?;
