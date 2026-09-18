@@ -181,6 +181,10 @@ pub(crate) fn validate_spending_policies(object: &Compiled) -> Result<(), String
     Ok(())
 }
 
+// Recognize explicit policy triviality, not every consensus-satisfiable path.
+// Even zero-valued timelocks can impose transaction prerequisites. Exact
+// source/descriptor replay above is the authority boundary; this conservative
+// helper is an additional check, not a complete Script satisfaction analysis.
 fn unconditional(policy: &policy::semantic::Policy<XOnlyPublicKey>) -> bool {
     use policy::semantic::Policy;
     match policy {
