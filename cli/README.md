@@ -5,6 +5,33 @@ the Sapio Project.
 
 You can use the Sapio CLI to build contracts and run other programs.
 
+## Review and sign a PSBT
+
+`signer sign` now requires explicit approval with `--yes` (or `-y`). Without
+approval, it displays the transaction's output amounts and scriptPubKeys, input
+total, and absolute fee on stderr, then exits unsuccessfully without signing:
+
+```sh
+sapio-cli signer sign --key key.bin --psbt unsigned.psbt
+```
+
+After reviewing those values, authorize signing:
+
+```sh
+sapio-cli signer sign --key key.bin --psbt unsigned.psbt --yes --output signed.psbt
+```
+
+The review also appears on stderr when `--yes` is supplied. PSBT files use base64;
+omit `--psbt` to read from stdin, or omit `--output` to emit only the signed base64
+PSBT on stdout. Existing signing scripts must add `--yes` after their own approval
+checks.
+
+Before signing, the CLI checks supplied full previous transactions against their
+outpoints and rejects conflicting witness/non-witness UTXOs, duplicate inputs,
+and impossible amounts. Witness-only UTXO amounts and scripts remain supplied by
+the PSBT and are labeled unverified in the review. These checks do not establish
+chain inclusion or whether an output remains unspent.
+
 ## Explain a contract
 
 Inspect a compiled artifact without a wallet, signer connection, or CLI configuration:
