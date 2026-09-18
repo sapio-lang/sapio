@@ -67,10 +67,10 @@ impl SigningKey {
         secp: &Secp256k1<C>,
         hash_ty: bitcoin::TapSighashType,
     ) -> Result<(), PSBTSigningError> {
-        validate_psbt(psbt)?;
+        let utxos = previous_outputs(psbt)?;
         let l = psbt.inputs.len();
         for idx in 0..l {
-            self.sign_validated_psbt_input_mut(psbt, secp, idx, hash_ty)?;
+            self.sign_validated_psbt_input_mut(psbt, secp, idx, hash_ty, &utxos)?;
         }
         Ok(())
     }
@@ -93,8 +93,8 @@ impl SigningKey {
         idx: usize,
         hash_ty: bitcoin::TapSighashType,
     ) -> Result<(), PSBTSigningError> {
-        validate_psbt(psbt)?;
-        self.sign_validated_psbt_input_mut(psbt, secp, idx, hash_ty)
+        let utxos = previous_outputs(psbt)?;
+        self.sign_validated_psbt_input_mut(psbt, secp, idx, hash_ty, &utxos)
     }
 
     fn sign_validated_psbt_input_mut<C: Signing + Verification>(
@@ -103,21 +103,9 @@ impl SigningKey {
         secp: &Secp256k1<C>,
         idx: usize,
         hash_ty: bitcoin::TapSighashType,
+        utxos: &[TxOut],
     ) -> Result<(), PSBTSigningError> {
         let tx = &psbt.unsigned_tx;
-        let utxos: Vec<TxOut> = psbt
-            .inputs
-            .iter()
-            .enumerate()
-            .map(|(i, o)| {
-                if let Some(ref utxo) = o.witness_utxo {
-                    Ok(utxo.clone())
-                } else {
-                    Err(i)
-                }
-            })
-            .collect::<Result<Vec<TxOut>, usize>>()
-            .map_err(PSBTSigningError::NoUTXOAtIndex)?;
         let mut sighash = bitcoin::sighash::SighashCache::new(tx);
         let input = &mut psbt
             .inputs
@@ -133,7 +121,7 @@ impl SigningKey {
         {
             return Err(PSBTSigningError::AnnexRequiresTaproot(idx));
         }
-        let prevouts = &Prevouts::All(&utxos);
+        let prevouts = &Prevouts::All(utxos);
         let fingerprints_map = self.compute_fingerprint_map(secp);
         self.sign_taproot_top_key(
             secp,
@@ -143,6 +131,7 @@ impl SigningKey {
             prevouts,
             hash_ty,
             &fingerprints_map,
+            &utxos[idx],
         )?;
         self.sign_all_tapleaf_branches(
             secp,
@@ -199,6 +188,7 @@ impl SigningKey {
         prevouts: &Prevouts<TxOut>,
         hash_ty: bitcoin::TapSighashType,
         fingerprints_map: &Vec<(Fingerprint, &Xpriv)>,
+        prevout: &TxOut,
     ) -> Result<(), PSBTSigningError> {
         // first attempt to use derivations from the key source map
         let Some(key) = input.tap_internal_key else {
@@ -207,22 +197,41 @@ impl SigningKey {
         let Some(untweaked) = self.find_internal_keypair(input, key, fingerprints_map, secp) else {
             return Ok(());
         };
-        let tweaked = untweaked
-            .tap_tweak(secp, input.tap_merkle_root)
-            .to_keypair();
-        input.tap_key_sig = Some(get_sig(
-            sighash,
-            input_index,
-            prevouts,
-            hash_ty,
-            secp,
-            &tweaked,
-            &None,
-            annex::get(input).map_err(|error| PSBTValidationError::InvalidAnnex {
-                index: input_index,
-                error,
-            })?,
-        )?);
+        let tweaked = untweaked.tap_tweak(secp, input.tap_merkle_root);
+        if prevout.script_pubkey != bitcoin::ScriptBuf::new_p2tr_tweaked(tweaked.public_parts().0) {
+            return Err(PSBTSigningError::TaprootKeyMismatch(input_index));
+        }
+        let annex = annex::get(input).map_err(|error| PSBTValidationError::InvalidAnnex {
+            index: input_index,
+            error,
+        })?;
+        // A valid existing signature may use different Schnorr randomness. Verify
+        // and preserve it rather than comparing it to our deterministic signature.
+        if let Some(existing) = input.tap_key_sig {
+            if existing.sighash_type != hash_ty {
+                return Err(PSBTSigningError::ConflictingTaprootKeySignature(
+                    input_index,
+                ));
+            }
+            let message = signature_message(sighash, input_index, prevouts, hash_ty, &None, annex)?;
+            secp.verify_schnorr(
+                &existing.signature,
+                &message,
+                &tweaked.to_keypair().x_only_public_key().0,
+            )
+            .map_err(|_| PSBTSigningError::ConflictingTaprootKeySignature(input_index))?;
+        } else {
+            input.tap_key_sig = Some(get_sig(
+                sighash,
+                input_index,
+                prevouts,
+                hash_ty,
+                secp,
+                &tweaked.to_keypair(),
+                &None,
+                annex,
+            )?);
+        }
         Ok(())
     }
 
@@ -305,6 +314,8 @@ pub enum PSBTSigningError {
     NoUTXOAtIndex(usize),
     NoInputAtIndex(usize),
     AnnexRequiresTaproot(usize),
+    TaprootKeyMismatch(usize),
+    ConflictingTaprootKeySignature(usize),
     Sighash(bitcoin::sighash::TaprootError),
 }
 
@@ -317,6 +328,14 @@ impl Display for PSBTSigningError {
             Self::AnnexRequiresTaproot(index) => write!(
                 f,
                 "annex requires a Taproot previous output at input {index}"
+            ),
+            Self::TaprootKeyMismatch(index) => write!(
+                f,
+                "Taproot internal key and merkle root do not match previous output at input {index}"
+            ),
+            Self::ConflictingTaprootKeySignature(index) => write!(
+                f,
+                "existing Taproot key signature conflicts with signing request at input {index}"
             ),
             Self::Sighash(error) => write!(f, "cannot compute signature hash: {error}"),
         }
@@ -342,6 +361,8 @@ impl From<PSBTValidationError> for PSBTSigningError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PSBTValidationError {
     NoInputs,
+    MissingPreviousOutput(usize),
+    Funding(sapio_base::psbt::FundingError),
     InputMapCount {
         transaction: usize,
         maps: usize,
@@ -362,6 +383,10 @@ impl Display for PSBTValidationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NoInputs => write!(f, "PSBT unsigned transaction has no inputs"),
+            Self::MissingPreviousOutput(index) => {
+                write!(f, "missing previous output at input {index}")
+            }
+            Self::Funding(error) => Display::fmt(error, f),
             Self::InputMapCount { transaction, maps } => write!(
                 f,
                 "PSBT has {maps} input maps for {transaction} transaction inputs"
@@ -419,6 +444,25 @@ pub fn validate_psbt(psbt: &Psbt) -> Result<(), PSBTValidationError> {
     Ok(())
 }
 
+/// Resolve previous outputs, checking transaction IDs, output indexes and conflicts.
+///
+/// A full previous transaction is authenticated against the input's outpoint.
+/// A witness-only UTXO remains PSBT-supplied metadata: this does not establish
+/// its existence or unspent status on chain.
+pub fn previous_outputs(psbt: &Psbt) -> Result<Vec<TxOut>, PSBTValidationError> {
+    validate_psbt(psbt)?;
+    sapio_base::psbt::previous_outputs(psbt)
+        .map_err(PSBTValidationError::Funding)?
+        .into_iter()
+        .enumerate()
+        .map(|(index, output)| {
+            output
+                .cloned()
+                .ok_or(PSBTValidationError::MissingPreviousOutput(index))
+        })
+        .collect()
+}
+
 const DEFAULT_CODESEP: u32 = 0xffff_ffff;
 fn get_sig<C: Signing>(
     sighash: &mut bitcoin::sighash::SighashCache<&bitcoin::Transaction>,
@@ -430,6 +474,22 @@ fn get_sig<C: Signing>(
     path: &Option<(TapLeafHash, u32)>,
     annex: Option<&[u8]>,
 ) -> Result<bitcoin::taproot::Signature, PSBTSigningError> {
+    let msg = signature_message(sighash, input_index, prevouts, hash_ty, path, annex)?;
+    let sig = secp.sign_schnorr_no_aux_rand(&msg, kp);
+    Ok(bitcoin::taproot::Signature {
+        signature: sig,
+        sighash_type: hash_ty,
+    })
+}
+
+fn signature_message(
+    sighash: &mut bitcoin::sighash::SighashCache<&bitcoin::Transaction>,
+    input_index: usize,
+    prevouts: &Prevouts<TxOut>,
+    hash_ty: bitcoin::TapSighashType,
+    path: &Option<(TapLeafHash, u32)>,
+    annex: Option<&[u8]>,
+) -> Result<bitcoin::secp256k1::Message, PSBTSigningError> {
     let annex = annex
         .map(|bytes| {
             annex::validate(bytes).map_err(|error| PSBTValidationError::InvalidAnnex {
@@ -444,11 +504,6 @@ fn get_sig<C: Signing>(
     let sighash: TapSighash = sighash
         .taproot_signature_hash(input_index, prevouts, annex, *path, hash_ty)
         .map_err(PSBTSigningError::Sighash)?;
-    let msg = bitcoin::secp256k1::Message::from_digest_slice(&sighash[..])
-        .expect("Taproot signature hashes are 32 bytes");
-    let sig = secp.sign_schnorr_no_aux_rand(&msg, kp);
-    Ok(bitcoin::taproot::Signature {
-        signature: sig,
-        sighash_type: hash_ty,
-    })
+    Ok(bitcoin::secp256k1::Message::from_digest_slice(&sighash[..])
+        .expect("Taproot signature hashes are 32 bytes"))
 }

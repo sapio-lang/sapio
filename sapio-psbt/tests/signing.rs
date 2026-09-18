@@ -1,6 +1,7 @@
 use bitcoin::bip32::{DerivationPath, Xpriv};
 use bitcoin::blockdata::opcodes::all::OP_CHECKSIG;
 use bitcoin::blockdata::script::Builder;
+use bitcoin::key::TapTweak;
 use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{Message, Secp256k1};
 use bitcoin::sighash::{Prevouts, SighashCache, SingleMissingOutputError, TaprootError};
@@ -238,4 +239,143 @@ fn finalizer_distinguishes_missing_signatures_from_complete_psbts() {
             ..
         }
     ));
+}
+
+#[test]
+fn rejects_taproot_metadata_that_does_not_match_the_previous_output() {
+    let secp = Secp256k1::new();
+    for wrong_script in [false, true] {
+        let (keys, mut psbt, _) = two_input_psbt();
+        keys.sign_psbt_mut(&mut psbt, &secp, TapSighashType::All)
+            .unwrap();
+        if wrong_script {
+            psbt.inputs[0].witness_utxo.as_mut().unwrap().script_pubkey = ScriptBuf::new();
+        } else {
+            psbt.inputs[0].tap_merkle_root = None;
+        }
+        let original = psbt.clone();
+        assert!(matches!(
+            keys.sign_psbt_input_mut(&mut psbt, &secp, 0, TapSighashType::All),
+            Err(PSBTSigningError::TaprootKeyMismatch(0))
+        ));
+        assert_eq!(
+            psbt, original,
+            "must preserve an existing signature on rejection"
+        );
+    }
+}
+
+#[test]
+fn preserves_valid_existing_key_signatures_with_different_randomness() {
+    let secp = Secp256k1::new();
+    let (keys, mut psbt, prevouts) = two_input_psbt();
+    let digest = SighashCache::new(&psbt.unsigned_tx)
+        .taproot_key_spend_signature_hash(0, &Prevouts::All(&prevouts), TapSighashType::All)
+        .unwrap();
+    let key = keys.0[0]
+        .to_keypair(&secp)
+        .tap_tweak(&secp, psbt.inputs[0].tap_merkle_root)
+        .to_keypair();
+    let existing = bitcoin::taproot::Signature {
+        signature: secp.sign_schnorr_with_aux_rand(
+            &Message::from_digest_slice(&digest[..]).unwrap(),
+            &key,
+            &[7; 32],
+        ),
+        sighash_type: TapSighashType::All,
+    };
+    psbt.inputs[0].tap_key_sig = Some(existing);
+    keys.sign_psbt_mut(&mut psbt, &secp, TapSighashType::All)
+        .unwrap();
+    assert_eq!(psbt.inputs[0].tap_key_sig, Some(existing));
+}
+
+#[test]
+fn rejects_conflicting_key_signatures_without_overwriting_them() {
+    let secp = Secp256k1::new();
+    for different_sighash in [false, true] {
+        let (keys, mut psbt, _) = two_input_psbt();
+        let original_type = if different_sighash {
+            TapSighashType::None
+        } else {
+            TapSighashType::All
+        };
+        keys.sign_psbt_mut(&mut psbt, &secp, original_type).unwrap();
+        if !different_sighash {
+            psbt.unsigned_tx.output[0].value = bitcoin::Amount::from_sat(18_000);
+        }
+        let original = psbt.clone();
+        assert!(matches!(
+            keys.sign_psbt_input_mut(&mut psbt, &secp, 0, TapSighashType::All),
+            Err(PSBTSigningError::ConflictingTaprootKeySignature(0))
+        ));
+        assert_eq!(psbt, original);
+    }
+}
+
+fn add_previous_transaction(psbt: &mut Psbt, prevouts: Vec<TxOut>) {
+    let previous = Transaction {
+        version: bitcoin::transaction::Version::TWO,
+        lock_time: bitcoin::absolute::LockTime::ZERO,
+        input: vec![TxIn::default()],
+        output: prevouts,
+    };
+    for (index, input) in psbt.inputs.iter_mut().enumerate() {
+        input.non_witness_utxo = Some(previous.clone());
+        psbt.unsigned_tx.input[index].previous_output =
+            OutPoint::new(previous.compute_txid(), index as u32);
+    }
+}
+
+#[test]
+fn signs_using_authenticated_previous_transactions_without_witness_utxos() {
+    let (keys, mut psbt, prevouts) = two_input_psbt();
+    add_previous_transaction(&mut psbt, prevouts);
+    for input in &mut psbt.inputs {
+        input.witness_utxo = None;
+    }
+    keys.sign_psbt_mut(&mut psbt, &Secp256k1::new(), TapSighashType::All)
+        .unwrap();
+    assert!(psbt.inputs.iter().all(|input| input.tap_key_sig.is_some()));
+}
+
+#[test]
+fn rejects_bad_funding_before_adding_any_signatures() {
+    use sapio_base::psbt::FundingError;
+    for case in 0..5 {
+        let (keys, mut psbt, prevouts) = two_input_psbt();
+        add_previous_transaction(&mut psbt, prevouts);
+        let expected = match case {
+            0 => {
+                psbt.inputs[1].witness_utxo.as_mut().unwrap().value =
+                    bitcoin::Amount::from_sat(9_999);
+                PSBTValidationError::Funding(FundingError::ConflictingOutputs(1))
+            }
+            1 => {
+                psbt.inputs[1].non_witness_utxo.as_mut().unwrap().output[0].value =
+                    bitcoin::Amount::ZERO;
+                PSBTValidationError::Funding(FundingError::PreviousTransaction(1))
+            }
+            2 => {
+                psbt.unsigned_tx.input[1].previous_output.vout = 2;
+                PSBTValidationError::Funding(FundingError::PreviousTransaction(1))
+            }
+            3 => {
+                psbt.unsigned_tx.input[1].previous_output =
+                    psbt.unsigned_tx.input[0].previous_output;
+                PSBTValidationError::Funding(FundingError::DuplicateInput(1))
+            }
+            _ => {
+                psbt.inputs[1].witness_utxo = None;
+                psbt.inputs[1].non_witness_utxo = None;
+                PSBTValidationError::MissingPreviousOutput(1)
+            }
+        };
+        let original = psbt.clone();
+        assert!(matches!(
+            keys.sign_psbt_mut(&mut psbt, &Secp256k1::new(), TapSighashType::All),
+            Err(PSBTSigningError::InvalidPSBT(actual)) if actual == expected
+        ));
+        assert_eq!(psbt, original);
+    }
 }
