@@ -49,6 +49,7 @@ struct Recipe {
     name: String,
     patch: PathBuf,
     artifact: PathBuf,
+    output: String,
 }
 
 #[derive(Deserialize)]
@@ -56,8 +57,6 @@ struct Patch {
     version: u32,
     nodes: Vec<Node>,
     connections: Vec<Connection>,
-    outputs: Vec<Output>,
-    output: String,
     context: ContextualArguments,
 }
 
@@ -74,21 +73,18 @@ enum Node {
         id: String,
         value: Value,
     },
+    Output {
+        id: String,
+        name: String,
+    },
 }
 
 impl Node {
     fn id(&self) -> &str {
         match self {
-            Self::Module { id, .. } | Self::Variable { id, .. } => id,
+            Self::Module { id, .. } | Self::Variable { id, .. } | Self::Output { id, .. } => id,
         }
     }
-}
-
-#[derive(Deserialize)]
-struct Output {
-    name: String,
-    node: String,
-    path: String,
 }
 
 #[derive(Deserialize)]
@@ -237,6 +233,30 @@ fn main() -> CheckResult<()> {
                 }
                 continue;
             }
+            if let Node::Output { id, name } = node {
+                if name.trim().is_empty() {
+                    return Err("an Output terminal needs a name".into());
+                }
+                if patch.connections.iter().any(|wire| wire.source == *id) {
+                    return Err("an Output terminal cannot have outgoing connections".into());
+                }
+                let mut incoming = patch.connections.iter().filter(|wire| wire.target == *id);
+                let connection = incoming
+                    .next()
+                    .ok_or("an Output terminal is disconnected")?;
+                if incoming.next().is_some() || !connection.target_path.is_empty() {
+                    return Err("an Output terminal needs one whole-value connection".into());
+                }
+                let value = values
+                    .get(connection.source.as_str())
+                    .and_then(|value| value.pointer(&connection.source_path))
+                    .ok_or("Output source has no evaluated value")?
+                    .clone();
+                if values.insert(id, value).is_some() {
+                    return Err("recipe contains duplicate node identifiers".into());
+                }
+                continue;
+            }
             let Node::Module {
                 id,
                 module_key,
@@ -266,14 +286,15 @@ fn main() -> CheckResult<()> {
             exercised.insert(*name);
             module_calls += 1;
         }
-        let terminal = patch
-            .outputs
+        if !patch
+            .nodes
             .iter()
-            .find(|output| output.name == patch.output)
-            .ok_or("recipe has no selected named output")?;
+            .any(|node| matches!(node, Node::Output { id, .. } if *id == recipe.output))
+        {
+            return Err("recipe must select an Output terminal".into());
+        }
         let actual = values
-            .get(terminal.node.as_str())
-            .and_then(|value| value.pointer(&terminal.path))
+            .get(recipe.output.as_str())
             .ok_or("selected output has no evaluated value")?;
         let compiled: Compiled = serde_json::from_value(actual.clone())?;
         compiled.validate()?;

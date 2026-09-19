@@ -42,7 +42,7 @@ compiles every recipe. It writes:
 | --- | --- |
 | `modules/*.wasm` | Ten public constructors, composers and contract builders |
 | `schemas/*.json` | Their exact typed input and result interfaces |
-| `*.patch.json` | Editable v2 graphs, including Variables and named outputs |
+| `*.patch.json` | Editable v2 graphs with Variables and visibly wired Output terminals |
 | `*.artifact.json` | Compiled custody programs |
 | `*.explanation.json` | CLI inspection of those programs |
 | `recovery-policy.patch.json` | Reusable recovery definition with two named inputs |
@@ -81,6 +81,7 @@ rule**, which fits FixedVault's **Release** input.
 | Composer | Calls a WASM module to assemble a typed value | Release, Recovery, Quorum |
 | Contract builder | Compiles custody rules into an inspectable contract | FixedVault, DelayedWallet, OpVault |
 | Reusable patch | Supplies named values to a saved graph and returns its named outputs | Recovery policy |
+| Output | Names a graph result; receives one value and has no outgoing wires | Contract, Recovery |
 
 A wire carries either a **value** or a **callable module implementation**.
 These custody recipes use value wires. Callable outlets use a square socket
@@ -145,7 +146,8 @@ patches use Regtest, 100,000 satoshis and Native lowering. Apply changes with
 ## First patch: a fixed vault
 
 Open `fixed-vault.patch.json`. The named Variables on the left supply Release
-and Recovery; their assembled rules feed FixedVault:
+and Recovery; their assembled rules feed FixedVault, whose result is wired to
+the **contract** Output terminal:
 
 ```mermaid
 flowchart LR
@@ -157,6 +159,7 @@ flowchart LR
     hot -->|Authorization| vault[FixedVault]
     release -->|Release rule| vault
     recovery -->|Recovery rule| vault
+    vault -->|Compiled contract| result[Output: contract]
 ```
 
 1. Select **Waiting period**. Its type is **Block delay** and its **Blocks**
@@ -166,16 +169,21 @@ flowchart LR
    connected value.
 3. Select FixedVault. Its trigger, release and recovery inputs are connected;
    its fee is a local value of 500 satoshis.
-4. The patch already designates FixedVault as **Patch output**. Click
-   **Compile contract** to build that output and all its dependencies. You do
-   not need to keep the terminal node selected. When building a patch whose
-   output is an ordinary value, the action is **Build output**.
-5. Use **Review output**, then **Inspect as contract**, to inspect the compiled
-   transactions, amounts, guards, policies and funding constraints.
+4. Follow FixedVault's result wire to the **contract** Output terminal. Click
+   its **Build output** button to build that result and all its dependencies.
+   **Build patch** in the toolbar also builds this single connected terminal.
+5. A contract output opens **Inspect** automatically. Review the transactions,
+   amounts, guards, policies and funding constraints. Ordinary JSON outputs
+   remain available through **Review output**.
 
-A new patch needs an explicit result: select its terminal builder and choose
-**Use as output**. Moving or renaming nodes changes the presentation; changing
-a value, connection, definition or compilation context invalidates the result.
+A new patch starts with an unconnected **Result** Output. Connect the value
+you want to build, or use **Add Output** to expose another result.
+The wire is part of the saved graph, and the terminal's name becomes an output
+field when the graph is used as a reusable patch. Each Output accepts one
+value; it cannot supply downstream nodes. Several terminals can expose
+different results. Moving nodes changes the layout. Editing a value,
+connection, definition, exposed input/output name or compilation context
+invalidates the result.
 
 With the original 144-block delay, the supplied program has these movements:
 
@@ -233,7 +241,7 @@ contract as you edit; valid socket types alone do not establish a fuel bound.
 
 ### Delayed wallet
 
-Open `delayed-wallet.patch.json` and compile its designated output. Hot spending
+Open `delayed-wallet.patch.json` and compile its **contract** Output. Hot spending
 requires its authorization and a 1,008-block delay; recovery requires a separate
 2-of-3 authorization without that delay.
 
@@ -246,7 +254,7 @@ key.
 
 ### Dynamic OP_VAULT withdrawal
 
-Open `op-vault.patch.json` and compile its designated output. **Emulation root**
+Open `op-vault.patch.json` and compile its **contract** Output. **Emulation root**
 is a public Variable, and Hot authorization requires two of three keys. The
 vault commits its trigger and recovery authorizations, fixed recovery
 destination, 144-block delay and emulator root.
@@ -295,7 +303,8 @@ reusable patch. Its outer inputs are **Authorization** and **Destination**;
 its named output is **Recovery**.
 
 Select Recovery policy and use **Edit definition** to inspect its two named
-patch inputs and the Recovery composer. **Import reusable patch** can add the
+patch inputs, the Recovery composer and the connected **recovery** Output.
+**Import reusable patch** can add the
 standalone `recovery-policy.patch.json` definition to another graph. Connect an
 Authorization and Destination to its exposed inputs, then connect its Recovery
 output to a vault. The definition travels inside the saved outer patch, so
@@ -307,7 +316,7 @@ To author the same abstraction yourself:
    Recovery composer.
 2. Select each Variable and **Expose as parameter**. Give the inputs the names
    `authorization` and `destination`.
-3. Select Recovery, choose **Use as output**, and name that output `recovery`.
+3. Name the initial Output `recovery` and wire Recovery's result into it.
 4. Save the patch. **Import reusable patch** in the consuming graph exposes
    those names as typed sockets.
 
@@ -352,9 +361,36 @@ policies into native opcodes.
 
 ## Taking a reviewed artifact into Spend
 
-The kit stops at public compilation artifacts. It does not include a complete
-funding/signing runner. Studio's **Spend** tab becomes useful once an external
-wallet or integration supplies a funded PSBT and the required adapter data.
+Studio carries a compiled graph through binding and into **Spend**. Binding
+links transaction templates to funding and produces PSBTs; it does not create
+real coins or sign transactions. The kit's public identities and synthetic
+funding are suitable for previewing that workflow. Real spending still needs
+funding, signer keys and, for OP_VAULT, the required emulation service and
+adapter data.
+
+1. Build the **contract** Output or use **Open artifact**. Inspect starts with
+   an **Unbound template graph**. Follow **Next transactions** and their output
+   allocations to inspect the pending contract and its release/recovery paths.
+2. Choose **Bind graph**. Binding uses the optional runtime configuration from
+   Studio settings; it must describe the intended network and covenant mode.
+   **Synthetic preview funding** produces a **Mock-bound preview**. **Explicit
+   outpoint** or **Funding PSBT** produces a graph **Bound to supplied funding**;
+   that label does not establish confirmation or current spendability.
+3. The bound graph stays visible with linked outpoints and transactions. Select
+   a transaction and choose **Review spend**. Studio carries that transaction's
+   PSBT and the contract occurrence it spends into **Spend**, including when
+   that occurrence is a nested pending contract. It checks available spending
+   paths automatically and displays funding requirements separately from
+   missing authorizations.
+4. Use **Export bound graph** to save the linked graph, or **Export PSBT** on a
+   selected transaction to continue with an external wallet. **Back to graph**
+   returns to the selected transaction. No step signs or broadcasts implicitly.
+
+For a fixed vault, try the pending transaction, follow its **pending** output,
+then choose its **release** transaction and **Review spend**. The selected
+spending policy commits that release template, whose **Input requirements**
+in Inspect show a sequence of 144 blocks. Synthetic funding lets you inspect
+the path and funding checks; it cannot establish that the delay has matured.
 
 For an OP_VAULT trigger or recovery, the selected template stores public
 evidence at `metadata_map_s2s.op_vault_witness` in the artifact JSON. Trigger
@@ -372,33 +408,30 @@ Declaring availability grants no authorization. Sapio does not infer trust or
 automatically load evidence from optional artifact metadata. Reconstruct the
 evidence when changing the proposal, selected input or output arrangement.
 
-With that integration in place, the Studio sequence is:
+With that integration in place, continue in Spend:
 
-1. Open or compile the artifact and validate it through **Inspect as contract**.
-   Use the artifact for the coin being spent: the pending contract has different
-   spending paths from the source vault. Selecting a graph node alone does not
-   replace the artifact used by Spend. **Occurrence location** gives the JSON
-   pointer to that nested `receiving_contract`; an integration can export that
-   complete object as its own artifact and open it with **Open artifact**.
-2. In **Spend** → **Prepare new**, supply **Funded PSBT**, **Input index** and
-   **Spending path**. For these OP_VAULT branches select **Taproot script path**
-   and the exact **Tapleaf hash**. Include the selected prevout and all sponsor
-   prevouts; the script/control-block proof must match the funded output.
-3. Expand **Spending assets and Program evidence**. Supply **Assets JSON**
+1. Review **Funded PSBT** and **Input index**, or supply a wallet-prepared PSBT.
+   OP_VAULT needs an external fee sponsor, including that sponsor's prevout;
+   its public proposal does not provide sponsor funding. Use **Check available
+   paths** after changing the PSBT and choose the intended script path. The
+   script/control-block proof must match the funded output. When importing an
+   artifact and PSBT manually, use the complete artifact for the coin being
+   spent; a pending contract has different paths from the source vault.
+2. Expand **Spending assets and Program evidence**. Supply **Assets JSON**
    describing the native keys and exact program capabilities, and **Evidence
    JSON** containing the selected program's public evidence array.
-4. Click **Prepare intent**, then **Save intent** and **Save current PSBT**.
+3. Click **Prepare intent**, then **Save intent** and **Save current PSBT**.
    The intent fixes the selected path for subsequent responses.
-5. Click **Load Program requests**, review **Program and signer requirements**,
+4. Click **Load Program requests**, review **Program and signer requirements**,
    then **Export request** for the intended emulation service. Import its
    **Signed response PSBT** with the correct **Request index** and click
    **Apply response**. **Sign & apply locally** is available when you explicitly
    provide a suitable local emulation key; this kit does not write key files.
-6. Collect the ordinary trigger/recovery signatures too. **Sign native
+5. Collect the ordinary trigger/recovery signatures too. **Sign native
    requirements locally** → **Choose key & sign** accepts an explicitly chosen
    local key file. A quorum requires the relevant distinct signers. The fee
    sponsor's own signatures remain part of the external wallet workflow.
-7. Use **Validate & check status**, then **Finalize PSBT** or **Finalize
+6. Use **Validate & check status**, then **Finalize PSBT** or **Finalize
    transaction** when all required authorizations and funding checks pass.
    Exporting a finalized transaction does not broadcast it.
 
@@ -434,8 +467,9 @@ cargo run --manifest-path contrib/build-a-vault/Cargo.toml \
 
 The native runner reconstructs the CLI/plugin compilation path from each
 module hash and uses the saved context, literal Variables and value connections.
-It also checks the constructor samples that supplied the original literals. It compares the
-complete compiled JSON, including derived keys, script commitments and public
+It follows the Output terminal's wire and checks the constructor samples that
+supplied the original literals. It compares the complete compiled JSON,
+including derived keys, script commitments and public
 metadata. This checks that host-accelerated WASM operations retain native Rust
 semantics.
 
@@ -453,7 +487,7 @@ node --import tsx /path/to/sapio/contrib/build-a-vault/studio-check.ts \
 
 The check loads all ten exact module hashes, validates the constructor samples,
 executes all five typed recipes and the reusable recovery example, and compares
-each output with its generated artifact. It verifies that Variables bypass WASM
+each connected Output with its generated artifact. It verifies that Variables bypass WASM
 and asks the CLI to inspect each result. This checks composition
 and serialization; it is not a funded-chain demonstration.
 
