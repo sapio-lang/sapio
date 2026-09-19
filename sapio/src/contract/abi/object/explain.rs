@@ -39,6 +39,9 @@ pub struct ObjectExplanation {
     pub covenants: CovenantRequirements,
     /// Exact program sources and their allowed signing locations.
     pub program_policies: Vec<ProgramPolicy>,
+    /// Independently spending finish/suggested policies. A funder must review
+    /// these alternatives as well as the committed transaction templates.
+    pub alternative_policies: Vec<ScriptPolicy>,
     /// Advertised action request paths and schemas; availability grants no authority.
     pub actions: Vec<ActionExplanation>,
     /// Committed and suggested transaction templates created from this output.
@@ -206,6 +209,7 @@ impl Object {
                 required_input_sats: object.required_input_amount.to_sat(),
                 covenants: object.covenant_requirements.clone(),
                 program_policies: object.program_policies.clone(),
+                alternative_policies: object.alternative_policies.clone(),
                 actions: object
                     .continue_apis
                     .iter()

@@ -101,6 +101,10 @@ fn human(explanation: &Explanation) -> Result<String, Box<dyn Error>> {
         "Validated artifact: {} output occurrences",
         explanation.artifact.nodes.len()
     )?;
+    writeln!(
+        text,
+        "Validation checks policy consistency, not the producer's identity or your authorization."
+    )?;
     if explanation.artifact.native_ctv_in_graph {
         writeln!(
             text,
@@ -140,6 +144,13 @@ fn human(explanation: &Explanation) -> Result<String, Box<dyn Error>> {
                 "  Program source: {} at {:?}",
                 policy_summary(&program.policy),
                 program.paths
+            )?;
+        }
+        for policy in &node.alternative_policies {
+            writeln!(
+                text,
+                "  Alternative spending policy (review before funding): {}",
+                policy_summary(policy)
             )?;
         }
         for action in &node.actions {

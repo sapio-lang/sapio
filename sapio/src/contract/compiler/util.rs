@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, BinaryHeap};
 
 /// A reproducible internal point with no known discrete logarithm. Retain its
 /// original derivation so script-only outputs do not change unnecessarily.
-fn unspendable_internal_key() -> XOnlyPublicKey {
+pub(super) fn unspendable_internal_key() -> XOnlyPublicKey {
     XOnlyPublicKey::from_slice(&Sha256::hash(&[1u8; 32]).to_byte_array())
         .expect("fixed hash is a valid x-only point")
 }

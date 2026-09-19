@@ -744,6 +744,20 @@ pub(super) fn validate_sources<'a>(
     Ok(())
 }
 
+/// Bound retained source before replay. Records include conjunctive operands
+/// and duplicate catalog summaries, so their expansion counts cannot be added
+/// as if each record were an independent spending alternative. Replay applies
+/// the normal cumulative branch and encoded-script budgets after composition.
+pub(super) fn validate_record_sources<'a>(
+    policies: impl IntoIterator<Item = &'a ScriptPolicy>,
+) -> Result<(), CompilationError> {
+    let mut preflight = Preflight::default();
+    for policy in policies {
+        preflight.policy(policy, 0)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

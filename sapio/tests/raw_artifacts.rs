@@ -53,7 +53,7 @@ fn artifact(key_only: bool) -> Compiled {
         vec![]
     } else {
         // A repeated script at unequal depths must retain both control blocks.
-        vec![(1, ctv.clone()), (2, alternate), (2, ctv)]
+        vec![(1, ctv.clone()), (2, alternate), (2, ctv.clone())]
     };
     let raw = RawTaproot::new(key, leaves).unwrap();
     let mut object = Compiled::from_address(
@@ -61,11 +61,28 @@ fn artifact(key_only: bool) -> Compiled {
         template.required_input_amount,
     );
     object.descriptor = Some(raw.into());
-    object
-        .covenant_requirements
-        .predicates
-        .insert(Ctv(template.hash()));
-    object.ctv_to_tx.insert(template.hash(), template);
+    object.alternative_policies.push(Clause::Key(key).into());
+    if key_only {
+        // A key-only output cannot claim a native CTV commitment.
+        object.suggested_txs.insert(template.hash(), template);
+    } else {
+        object
+            .alternative_policies
+            .push(ScriptFragment::new(ctv).unwrap().into());
+        object.committed_policy_guards.insert(
+            template.hash(),
+            [sapio::contract::object::CommittedPolicy {
+                action_guard: Clause::Trivial.into(),
+                template_guards: vec![],
+            }]
+            .into(),
+        );
+        object
+            .covenant_requirements
+            .predicates
+            .insert(Ctv(template.hash()));
+        object.ctv_to_tx.insert(template.hash(), template);
+    }
     object
 }
 
@@ -163,7 +180,12 @@ fn serialized_raw_artifacts_bind_all_control_blocks_and_authenticated_funding() 
         assert_eq!(psbt.unsigned_tx.input[0].previous_output, outpoint);
         assert_eq!(
             psbt.unsigned_tx.get_ctv_hash(0),
-            *object.ctv_to_tx.keys().next().unwrap()
+            *object
+                .ctv_to_tx
+                .keys()
+                .chain(object.suggested_txs.keys())
+                .next()
+                .unwrap()
         );
         for (control, (script, version)) in &input.tap_scripts {
             assert_eq!(*version, LeafVersion::TapScript);

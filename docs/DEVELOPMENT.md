@@ -425,6 +425,12 @@ whole graph before requesting signatures or updating the transaction index;
 the CLI also validates before requesting a funding transaction. Errors identify
 the contract path and, when applicable, its template hash.
 
+Validation also binds committed-template and independent alternative policies
+to the descriptor's complete spending paths, including internal-key authority.
+It does not authenticate the artifact producer or approve its declared keys.
+Review alternatives before funding, and recompile older contract artifacts that
+lack retained branch records; see [the policy checks](BINDING.md#covenant-policy-checks).
+
 Binding currently supports unsigned templates whose contract input is index
 zero. Template map keys and cached hashes must match the transaction, and output
 amounts/scripts must match the receiving-contract metadata. Optional input
