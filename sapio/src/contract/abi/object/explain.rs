@@ -71,6 +71,8 @@ pub struct TemplateExplanation {
     pub contract_input_sats: u64,
     /// Fee explicitly reserved by the constructor.
     pub reserved_fee_sats: u64,
+    /// Effective local fee cap, including the reserved-fee legacy default.
+    pub maximum_fee_sats: u64,
     /// Local spending constraints, separate from Script/evaluator enforcement.
     pub funding_constraints: Option<FundingConstraints>,
     /// Transaction version.
@@ -191,6 +193,10 @@ impl Object {
                     minimum_funding_sats: template.max.to_sat(),
                     contract_input_sats: template.required_input_amount.to_sat(),
                     reserved_fee_sats: (template.max - template.total_amount()).to_sat(),
+                    maximum_fee_sats: template
+                        .effective_maximum_fee()
+                        .expect("validated template fee cap")
+                        .to_sat(),
                     funding_constraints: template.funding_constraints.clone(),
                     version: template.tx.version.0,
                     lock_time: template.tx.lock_time.to_consensus_u32(),

@@ -49,6 +49,18 @@ Builder methods consume the previous builder and return the updated one.
 explicitly reserved fees determine the template's minimum funding requirement;
 an unused budget is not a fee reservation.
 
+Builder templates retain a fee cap equal to their reserved fees, including zero
+when `add_fees` is omitted. Binding and funded-PSBT checks reject even one satoshi
+above that cap, before requesting signatures. Return unused funds as change or
+reserve them explicitly; supplying a larger UTXO cannot silently donate the
+difference. Existing serialized templates without a cap use the same rule, based
+on their recorded funding requirement and output total. Contracts that previously
+relied on implicit fees must reserve those fees and be recompiled.
+
+For bounded additional funding, use [a transaction plan](ch03-01-plans.md) with
+`Surplus::Fees { maximum }`. This cap is a local spending rule, not a condition
+enforced by CTV or Bitcoin Script.
+
 `add_output` passes the output's amount to the receiving contract. When ordinal
 ranges are known, outputs receive consecutive prefixes in transaction input
 order. Debiting the builder without creating an output would shift those

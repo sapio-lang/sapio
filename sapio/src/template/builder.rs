@@ -30,6 +30,11 @@ pub struct AddingFees;
 /// Builder can be used to interactively put together a transaction template before
 /// finalizing into a Template.
 ///
+/// The resulting template caps fees at the amount explicitly reserved by
+/// [`BuilderState::add_fees`], including zero when none are reserved. Remaining
+/// budget is not a fee donation: return it in an output, or reserve it as fees.
+/// Use [`super::TemplatePlan`] to allow additional funding within a larger cap.
+///
 /// Funds are debited only by adding outputs or fees; callers cannot discard an
 /// ordinal prefix without recording where those sats go:
 ///
@@ -420,6 +425,7 @@ impl<T> From<BuilderState<T>> for Template {
         let required_input_amount = max.checked_sub(t.external_funding).unwrap_or(Amount::ZERO);
         Template {
             funding_constraints: None,
+            maximum_fee: Some(t.fees),
             guards: t.guards,
             outputs: t.outputs,
             inputs: t.inputs,

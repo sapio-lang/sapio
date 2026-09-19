@@ -90,6 +90,89 @@ fn named_contributions_and_fee_cap_survive_serialization() {
 }
 
 #[test]
+fn builder_and_legacy_templates_cap_fees_without_naming_auxiliary_contributions() {
+    let recipient = template(None).outputs[0].contract.clone();
+    for fee in [0, 100] {
+        let context = Context::new(
+            Network::Regtest,
+            Amount::from_sat(700),
+            LoweringPlan::Native,
+            "builder_funding".try_into().unwrap(),
+            Arc::new(Default::default()),
+            None,
+        );
+        let built: Template = context
+            .template()
+            .add_sequence()
+            .add_sequence()
+            .add_amount(Amount::from_sat(300))
+            .unwrap()
+            .add_output(Amount::from_sat(1000 - fee), &recipient, None)
+            .unwrap()
+            .add_fees(Amount::from_sat(fee))
+            .unwrap()
+            .into();
+        assert_eq!(built.maximum_fee, Some(Amount::from_sat(fee)));
+        for legacy in [false, true] {
+            let mut json = serde_json::to_value(&built).unwrap();
+            if legacy {
+                json.as_object_mut().unwrap().remove("maximum_fee");
+            }
+            let template: Template = serde_json::from_value(json).unwrap();
+            // Builder promises only aggregate auxiliary contributions. Both
+            // distributions remain valid; no arbitrary sponsor is selected.
+            for amounts in [[700, 100, 200], [700, 250, 50]] {
+                let report = template
+                    .check_funding_amounts(&amounts.map(|v| Some(Amount::from_sat(v))))
+                    .unwrap();
+                assert_eq!(report.actual_fee_sats, Some(fee));
+                assert_eq!(report.maximum_fee_sats, Some(fee));
+            }
+            for (last, excessive) in [(199, false), (201, true)] {
+                let result = template
+                    .check_funding_amounts(&[700, 100, last].map(|v| Some(Amount::from_sat(v))));
+                assert!(matches!(
+                    (&result, excessive),
+                    (Err(FundingError::ExcessiveFee { .. }), true)
+                        | (Err(FundingError::InsufficientFunding { .. }), false)
+                ));
+                let mut tx = template.tx.clone();
+                for (i, input) in tx.input.iter_mut().enumerate() {
+                    input.previous_output =
+                        OutPoint::new(bitcoin::Txid::from_byte_array([i as u8 + 1; 32]), 0);
+                }
+                let mut psbt = Psbt::from_unsigned_tx(tx).unwrap();
+                for (input, value) in psbt.inputs.iter_mut().zip([700, 100, last]) {
+                    input.witness_utxo = Some(TxOut {
+                        value: Amount::from_sat(value),
+                        script_pubkey: recipient.address.clone().into(),
+                    });
+                }
+                assert!(template.check_funded_psbt(&psbt).is_err());
+            }
+            assert!(matches!(
+                template.check_funding_amounts(&[Some(Amount::from_sat(1001)), None, None]),
+                Err(FundingError::ExcessiveFee { .. })
+            ));
+        }
+    }
+}
+
+#[test]
+fn explicit_builder_cap_cannot_weaken_a_plans_cap_or_understate_reserved_fees() {
+    let mut template = template(None);
+    template.maximum_fee = Some(Amount::from_sat(300));
+    assert_eq!(template.effective_maximum_fee().unwrap().to_sat(), 250);
+    template.maximum_fee = Some(Amount::from_sat(200));
+    assert_eq!(template.effective_maximum_fee().unwrap().to_sat(), 200);
+    template.maximum_fee = Some(Amount::from_sat(99));
+    assert!(matches!(
+        template.validate_funding_constraints(),
+        Err(FundingError::InvalidConstraints(_))
+    ));
+}
+
+#[test]
 fn partial_funding_stays_unknown_but_cannot_hide_already_excessive_fees() {
     let template = template(None);
     let mut psbt = funded(&template, [700, 300]);
