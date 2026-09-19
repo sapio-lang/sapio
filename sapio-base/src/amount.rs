@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 /// An amount whose JSON representation identifies its denomination.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Serialize, Deserialize, JsonSchema)]
+#[schemars(extend("x-sapio-type" = "bitcoin.coin-amount"))]
 pub enum CoinAmount {
     /// An exact integer number of satoshis.
     Sats(u64),

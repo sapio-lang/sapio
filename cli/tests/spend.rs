@@ -3,8 +3,7 @@ use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::Secp256k1;
 use bitcoin::{Amount, Network, ScriptBuf, Transaction, TxIn, TxOut, XOnlyPublicKey};
 use emulator_connect::program::{
-    ProgramCapability, ProgramEvidence, ProgramOracle, ProgramSigningRequest, ProgramSpendPath,
-    SpendAssets,
+    ProgramCapability, ProgramEvidence, ProgramSigningRequest, ProgramSpendPath, SpendAssets,
 };
 use sapio::contract::{Compilable, CompilationError, Context};
 use sapio_base::fragments::{template_hash, templatehash_wasm_instance};
@@ -229,16 +228,41 @@ impl Fixture {
                 list[index]["request"],
                 serde_json::to_value(&request).unwrap()
             );
-            let response = ProgramOracle::new(*root, vec![])
-                .unwrap()
-                .sign(request)
-                .unwrap();
+            let request_file = format!("request{index}.json");
+            let key_file = format!("oracle{index}.key");
             std::fs::write(
-                self.directory.join(format!("response{index}.psbt")),
-                base64::encode(response.serialize()),
+                self.directory.join(&request_file),
+                serde_json::to_vec(&request).unwrap(),
             )
             .unwrap();
+            std::fs::write(self.directory.join(&key_file), root.encode()).unwrap();
+            let result = self
+                .program_command(&request_file, &key_file, &format!("response{index}.psbt"))
+                .output()
+                .unwrap();
+            assert!(
+                result.status.success(),
+                "{}",
+                String::from_utf8_lossy(&result.stderr)
+            );
         }
+    }
+
+    fn program_command(&self, request: &str, key: &str, output: &str) -> Command {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_sapio-cli"));
+        command.current_dir(&self.directory).args([
+            "--config",
+            "invalid-config.json",
+            "signer",
+            "program",
+            "--request",
+            request,
+            "--key",
+            key,
+            "--output",
+            output,
+        ]);
+        command
     }
 }
 
@@ -246,6 +270,53 @@ impl Drop for Fixture {
     fn drop(&mut self) {
         std::fs::remove_dir_all(&self.directory).unwrap();
     }
+}
+
+#[test]
+fn wrong_root_responses_and_false_predicates_cannot_complete_a_spend() {
+    let fixture = Fixture::new();
+    fixture.prepare();
+    fixture.responses();
+    let original = std::fs::read(fixture.directory.join("request0.json")).unwrap();
+    let wrong_root = fixture
+        .program_command("request0.json", "native.key", "wrong-root.psbt")
+        .output()
+        .unwrap();
+    assert!(wrong_root.status.success());
+    // A script-path request does not name its expected oracle root. The
+    // prepared intent authenticates that root when collecting the response.
+    let wrong_slot = fixture
+        .command("apply")
+        .args([
+            "--response",
+            "0=wrong-root.psbt",
+            "--output",
+            "wrong-root-applied.psbt",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(wrong_slot.status.code(), Some(1));
+    assert!(wrong_slot.stdout.is_empty());
+    assert!(!fixture.directory.join("wrong-root-applied.psbt").exists());
+
+    let mut request: ProgramSigningRequest = serde_json::from_slice(&original).unwrap();
+    request.psbt.0.unsigned_tx.output[0].value = Amount::from_sat(901);
+    std::fs::write(
+        fixture.directory.join("false-predicate.json"),
+        serde_json::to_vec(&request).unwrap(),
+    )
+    .unwrap();
+    let rejected = fixture
+        .program_command("false-predicate.json", "oracle0.key", "rejected.psbt")
+        .output()
+        .unwrap();
+    assert_eq!(rejected.status.code(), Some(1));
+    assert!(rejected.stdout.is_empty());
+    assert!(!fixture.directory.join("rejected.psbt").exists());
+    assert_eq!(
+        std::fs::read(fixture.directory.join("request0.json")).unwrap(),
+        original
+    );
 }
 
 #[test]

@@ -4,6 +4,13 @@
 
 _A practical guide to engineering bitcoin smart contracts using the Sapio Language._
 
+Begin with [Installing Sapio](ch01-01-installation.md) and
+[Build and spend your first contract](ch01-03-hello-world.md). These chapters use
+the maintained generated starter. Other chapters retain conceptual material and
+historical sketches; they are not all independently compiled tutorials. Current
+API and release boundaries are documented in the repository's
+[quickstart](https://github.com/sapio-lang/sapio/blob/master/docs/QUICKSTART.md).
+
 [Build Status]: https://github.com/sapio-lang/sapio/workflows/Continuous%20integration/badge.svg
 [actions]: https://github.com/sapio-lang/sapio/actions?query=branch%3Amaster
 [crates]: https://img.shields.io/crates/dv/sapio

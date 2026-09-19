@@ -79,6 +79,7 @@ fn run(
         input_index: 0,
         internal_key: root().to_keypair(&Secp256k1::new()).x_only_public_key().0,
         annex: None,
+        selected_tapleaf: None,
     };
     evaluate(WasmVersion::V1, module, program, params, &view, witness)
 }
@@ -111,6 +112,159 @@ fn request(instance: ProgramInstance) -> ProgramSigningRequest {
         witness: vec![9],
         path: ProgramSpendPath::KeyPath,
         psbt: PSBT(psbt),
+    }
+}
+
+fn context_module(version: WasmVersion, body: &str) -> Vec<u8> {
+    let version = match version {
+        WasmVersion::V1 => 1,
+        WasmVersion::V2 => 2,
+    };
+    wat::parse_str(format!(
+        r#"(module
+        (import "sapio_context_v2" "tapleaf_hash" (func $leaf (param i32) (result i32)))
+        (memory (export "memory") 1)
+        (global $heap (mut i32) (i32.const 4096))
+        (func (export "sapio_alloc_v{version}") (param $length i32) (result i32)
+            global.get $heap global.get $heap local.get $length i32.add global.set $heap)
+        (func (export "sapio_evaluate_v{version}")
+            (param $program i32) (param $program_len i32)
+            (param $parameters i32) (param $parameters_len i32)
+            (param $view i32) (param $view_len i32)
+            (param $witness i32) (param $witness_len i32)
+            (result i32) {body}))"#
+    ))
+    .unwrap()
+}
+
+fn script_path_request(instance: ProgramInstance) -> ProgramSigningRequest {
+    use bitcoin::blockdata::opcodes::all::OP_CHECKSIG;
+    use bitcoin::script::Builder;
+    use bitcoin::taproot::{LeafVersion, TapLeafHash, TaprootBuilder};
+
+    let mut request = request(instance);
+    let secp = Secp256k1::new();
+    let key = request
+        .instance
+        .derive_public_key(&Xpub::from_priv(&secp, &root()))
+        .unwrap();
+    let script = Builder::new()
+        .push_x_only_key(&key)
+        .push_opcode(OP_CHECKSIG)
+        .into_script();
+    let leaf = (script, LeafVersion::TapScript);
+    let hash = TapLeafHash::from_script(&leaf.0, leaf.1);
+    let spend = TaprootBuilder::new()
+        .add_leaf(0, leaf.0.clone())
+        .unwrap()
+        .finalize(&secp, key)
+        .unwrap();
+    let input = &mut request.psbt.0.inputs[0];
+    input.witness_utxo.as_mut().unwrap().script_pubkey =
+        ScriptBuf::new_p2tr_tweaked(spend.output_key());
+    input.tap_merkle_root = spend.merkle_root();
+    input
+        .tap_scripts
+        .insert(spend.control_block(&leaf).unwrap(), leaf);
+    request.path = ProgramSpendPath::ScriptPath(hash);
+    request.witness = hash.to_byte_array().to_vec();
+    request
+}
+
+#[test]
+fn context_import_returns_the_authenticated_selected_leaf() {
+    let bytes = context_module(
+        WasmVersion::V2,
+        "i32.const 0 call $leaf i32.const 1 i32.eq
+         local.get $witness_len i32.const 32 i32.eq i32.and
+         i32.const 0 i64.load local.get $witness i64.load i64.eq i32.and
+         i32.const 8 i64.load local.get $witness i64.load offset=8 i64.eq i32.and
+         i32.const 16 i64.load local.get $witness i64.load offset=16 i64.eq i32.and
+         i32.const 24 i64.load local.get $witness i64.load offset=24 i64.eq i32.and",
+    );
+    let oracle = ProgramOracle::new(root(), vec![]).unwrap();
+    let request = script_path_request(ProgramInstance::wasm_v2(bytes, vec![]).unwrap());
+    let response = oracle.sign(request.clone()).unwrap();
+    crate::program::validate_program_response(&request, &response, &oracle.public_root()).unwrap();
+
+    let mut wrong_expected_leaf = request.clone();
+    wrong_expected_leaf.witness[0] ^= 1;
+    assert!(matches!(
+        oracle.sign(wrong_expected_leaf),
+        Err(ProgramError::Rejected)
+    ));
+
+    let mut absent_leaf = request;
+    absent_leaf.path = ProgramSpendPath::ScriptPath(bitcoin::taproot::TapLeafHash::all_zeros());
+    assert!(matches!(
+        oracle.sign(absent_leaf),
+        Err(ProgramError::MissingScriptPath)
+    ));
+}
+
+#[test]
+fn context_import_key_path_has_no_leaf_and_leaves_memory_untouched() {
+    let bytes = context_module(
+        WasmVersion::V2,
+        "i32.const 0 i32.const 90 i32.const 32 memory.fill
+         i32.const 0 call $leaf i32.eqz
+         i32.const 0 i64.load i64.const 6510615555426900570 i64.eq i32.and
+         i32.const 8 i64.load i64.const 6510615555426900570 i64.eq i32.and
+         i32.const 16 i64.load i64.const 6510615555426900570 i64.eq i32.and
+         i32.const 24 i64.load i64.const 6510615555426900570 i64.eq i32.and
+         i32.const -1 call $leaf i32.eqz i32.and",
+    );
+    let instance = ProgramInstance::wasm_v2(bytes, vec![]).unwrap();
+    let oracle = ProgramOracle::new(root(), vec![]).unwrap();
+    for mut request in [request(instance.clone()), script_path_request(instance)] {
+        request.path = ProgramSpendPath::KeyPath;
+        let response = oracle.sign(request.clone()).unwrap();
+        crate::program::validate_program_response(&request, &response, &oracle.public_root())
+            .unwrap();
+    }
+}
+
+#[test]
+fn context_import_checks_the_script_path_output_buffer_bounds() {
+    let oracle = ProgramOracle::new(root(), vec![]).unwrap();
+    for (pointer, fits) in [(65_504, true), (65_505, false)] {
+        let bytes = context_module(WasmVersion::V2, &format!("i32.const {pointer} call $leaf"));
+        let request = script_path_request(ProgramInstance::wasm_v2(bytes, vec![]).unwrap());
+        let result = oracle.sign(request);
+        if fits {
+            assert!(result.is_ok());
+        } else {
+            assert!(matches!(
+                result,
+                Err(ProgramError::Evaluation(error)) if error.0.contains("outside guest memory")
+            ));
+        }
+    }
+}
+
+#[test]
+fn context_import_is_v2_only_with_one_exact_function_signature() {
+    let v1 = context_module(WasmVersion::V1, "i32.const 0 call $leaf");
+    assert!(check_compilation_budget(WasmVersion::V1, &v1).is_err());
+    let oracle = ProgramOracle::new(root(), vec![]).unwrap();
+    assert!(matches!(
+        oracle.sign(request(ProgramInstance::wasm(v1, vec![]).unwrap())),
+        Err(ProgramError::Evaluation(error)) if error.0.contains("unsupported WASM evaluator host import")
+    ));
+    let v2 = context_module(WasmVersion::V2, "i32.const 0 call $leaf");
+    assert!(check_compilation_budget(WasmVersion::V2, &v2).is_ok());
+    for signature in [
+        "(func (param i64) (result i32))",
+        "(func (param i32 i32) (result i32))",
+        "(func (param i32) (result i64))",
+        "(func (param i32))",
+        "(memory 1)",
+    ] {
+        let module = wat::parse_str(format!(
+            r#"(module (import "sapio_context_v2" "tapleaf_hash" {signature}))"#
+        ))
+        .unwrap();
+        assert!(check_compilation_budget(WasmVersion::V2, &module).is_err());
     }
 }
 
@@ -399,6 +553,7 @@ fn signed_view_encoding_has_fixed_field_order_widths_and_little_endian_amounts()
         input_index: 0,
         internal_key: root().to_keypair(&Secp256k1::new()).x_only_public_key().0,
         annex: None,
+        selected_tapleaf: None,
     };
     let expected = Vec::<u8>::from_hex(concat!(
         "feffffff040302010000000001000000",
@@ -422,6 +577,7 @@ fn signed_view_limit_is_checked_before_copying_large_scripts() {
         input_index: 0,
         internal_key: root().to_keypair(&Secp256k1::new()).x_only_public_key().0,
         annex: None,
+        selected_tapleaf: None,
     };
     assert_eq!(
         encode_view(WasmVersion::V1, &view).unwrap().len(),
@@ -434,6 +590,7 @@ fn signed_view_limit_is_checked_before_copying_large_scripts() {
         input_index: 0,
         internal_key: root().to_keypair(&Secp256k1::new()).x_only_public_key().0,
         annex: None,
+        selected_tapleaf: None,
     };
     assert!(encode_view(WasmVersion::V1, &view).is_err());
 }
@@ -576,6 +733,7 @@ fn v2_view_appends_exact_internal_key_and_annex_without_changing_v1() {
         input_index: 0,
         internal_key: key,
         annex: None,
+        selected_tapleaf: None,
     };
     let v1 = encode_view(WasmVersion::V1, &view).unwrap();
     let mut expected = v1.clone();
@@ -598,6 +756,9 @@ fn v2_view_appends_exact_internal_key_and_annex_without_changing_v1() {
     expected[v1.len()..v1.len() + 32].copy_from_slice(&other.serialize());
     assert_eq!(encode_view(WasmVersion::V2, &view).unwrap(), expected);
     assert_eq!(encode_view(WasmVersion::V1, &view).unwrap(), v1);
+    view.selected_tapleaf = Some(bitcoin::taproot::TapLeafHash::from_byte_array([42; 32]));
+    assert_eq!(encode_view(WasmVersion::V2, &view).unwrap(), expected);
+    assert_eq!(encode_view(WasmVersion::V1, &view).unwrap(), v1);
 }
 
 #[test]
@@ -615,6 +776,7 @@ fn v2_view_limit_accounts_for_the_entire_context_suffix_before_copying() {
             input_index: 0,
             internal_key: root().to_keypair(&Secp256k1::new()).x_only_public_key().0,
             annex,
+            selected_tapleaf: None,
         };
         assert_eq!(
             encode_view(WasmVersion::V2, &view).unwrap().len(),
@@ -628,6 +790,7 @@ fn v2_view_limit_accounts_for_the_entire_context_suffix_before_copying() {
             input_index: 0,
             internal_key: root().to_keypair(&Secp256k1::new()).x_only_public_key().0,
             annex,
+            selected_tapleaf: None,
         };
         assert!(encode_view(WasmVersion::V2, &view).is_err());
         assert!(encode_view(WasmVersion::V1, &view).is_ok());

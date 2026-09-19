@@ -1,21 +1,22 @@
-# Sapio Command Line Interface (CLI)
+# Sapio Command Line Interface
 
-The Sapio CLI (or `sapio-cli`) is rapidly changing, but it is self
-documenting using `cargo run sapio-cli help`.
+The maintained starter walkthrough uses the CLI to inspect an artifact, prepare
+one branch, export an explicit program request, import its verified response and
+complete the retained witness. See the generated project README and the
+[current CLI guide](https://github.com/sapio-lang/sapio/blob/master/cli/README.md).
 
-`sapio-cli` aids users in:
+From the Sapio repository root, inspect the available commands with:
 
-1. compiling sapio contracts into templates
-1. binding compiled templates to specific utxos from your bitcoin wallet
-1. inspecting contract plugins
-1. running emulator servers
+```sh
+cargo run --locked -p sapio-cli -- --help
+cargo run --locked -p sapio-cli -- contract spend --help
+```
 
-`sapio-cli` has a config file (location dependent on platform, under
-`org.judica.sapio-cli` e.g. `/home/<usr>/.config/sapio-cli/config.json`). The
-config file can be overriden with the `-c` flag. This file allows users to set parameters
-for compilation around:
+Artifact inspection and selected-spend commands use local files without loading
+wallet or network configuration. `signer program` uses an explicitly supplied
+key, request and evaluator. It does not discover oracles or register code from
+artifact metadata.
 
-1. to use regtest/mainnet/signet/etc
-1. bitcoind to connect to & auth
-1. CTV emulator servers to use
-1. key-value mapping of nicknames to [WASM](./ch06-01-wasm.md) plugin hashes.
+Other commands support compiler plugins, binding and emulator services. Those
+workflows have their own configuration and enforcement assumptions; follow the
+current CLI guide rather than older Studio or container setup instructions.

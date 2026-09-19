@@ -1,5 +1,11 @@
 # WASM
 
+This reference chapter retains illustrative historical snippets. For maintained
+compiler guests and runnable commands, use the repository's
+[development guide](https://github.com/sapio-lang/sapio/blob/master/docs/DEVELOPMENT.md)
+and [example catalog](https://github.com/sapio-lang/sapio/blob/master/docs/EXAMPLES.md).
+The starter's included WASM payment evaluator is distinct from a compiler plugin.
+
 WASM is "WebAssembly", or a standard for producing bytecode objects that can
 be run on any platform. As the name suggests, it was originally designed for
 use in web browsers as a compiler target for any language to produce code to

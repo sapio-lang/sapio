@@ -1,0 +1,22 @@
+[package]
+name = "sapio-wasm-treepay-batching"
+version = "0.1.0"
+license = "MPL-2.0"
+edition = "2021"
+publish = false
+description = "TreePay implementation of the batching module interface"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/plugin.rs"
+
+[dependencies]
+batching-trait = { path = "../batching-trait" }
+sapio = { path = "../../sapio" }
+sapio-treepay-contract = { path = "../treepay-contract" }
+sapio-wasm-plugin = { path = "../../plugins", features = ["client"] }
+schemars = { version = "=1.2.2", features = ["bitcoin032", "miniscript13"] }
+serde = "1.0"
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

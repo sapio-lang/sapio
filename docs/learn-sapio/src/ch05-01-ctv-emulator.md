@@ -1,5 +1,10 @@
 # BIP-119 Emulation
 
+This chapter describes the older CTV-specific signer model. The maintained
+starter uses the separate, general WASM-evaluated program protocol; see
+[program emulation](https://github.com/sapio-lang/sapio/blob/master/docs/PROGRAM_EMULATION.md)
+for current program identities, signing requests and execution limits.
+
 Changes to Bitcoin take a long time. The star player in making Sapio work is
 BIP-119, and that might take a while to get merged. To get around this, Sapio
 provides some tools to enable similar functionality today by emulating

@@ -1,0 +1,21 @@
+[package]
+name = "build-a-vault-emulation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+build-a-vault-blocks.workspace = true
+bitcoin.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sapio.workspace = true
+sapio-base.workspace = true
+sapio-wasm-plugin.workspace = true
+
+[dev-dependencies]
+ctv_emulators = { path = "../../../ctv_emulators" }
+sapio-psbt = { path = "../../../sapio-psbt" }

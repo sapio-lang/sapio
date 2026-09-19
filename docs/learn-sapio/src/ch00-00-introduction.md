@@ -1,11 +1,13 @@
 # Introduction
 
-Welcome to _Designing Bitcoin Contracts with Sapio_, the official manual and
-best starting place to learn how to make Smart Contracts for Bitcoin. Sapio
-is an in-development tool that empowers Bitcoin Developers to craft smart
-contracts in an intuitive, safe, and composable way. Sapio challenges the
-notion that you can't make complex smart contracts for Bitcoin, and opens the
-floodgates for a myriad of new ideas to be defined easily.
+Sapio is a Rust framework for describing Bitcoin contracts as transaction graphs.
+It separates constructing transactions, defining their spending policies and
+supplying the signatures or program evidence needed to complete a selected spend.
+
+The first lesson uses the maintained generated starter and its tested contract
+source. Later chapters include historical examples and conceptual sketches;
+use the current repository guides when an older sketch differs from the public
+API. Rendering this book does not compile every code block.
 
 ## Who is Sapio For?
 
@@ -16,11 +18,11 @@ equivalent. The programming model is _very_ different. But it does help
 anyone trying to solve a transactional protocol for Bitcoin solve it
 elegantly.
 
-Sapio is currently alpha quality software. You should think very carefully
-before using Sapio with any real money. There will be kinks to untwist,
-wrinkles to iron out, and bugs to squash. Hopefully you, dear reader, will
-even be able to help with that! Sapio is not -- at present -- for the faint
-of heart.
+The developer preview uses synthetic funding and public demonstration keys.
+Native covenant research and oracle-based emulation have distinct enforcement
+assumptions. Completing the lesson does not establish production readiness;
+the [release-readiness record](https://github.com/sapio-lang/sapio/blob/master/docs/RELAUNCH.md)
+lists the remaining gates.
 
 ## What will I learn if I read this book?
 

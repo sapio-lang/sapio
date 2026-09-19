@@ -6,4 +6,7 @@ See the [workspace guide](../README.md) for Cargo build and test commands,
 funding assumptions, and the complete executable catalog. This module has a
 [representative input](../../contrib/vectors/examples/treepay.json).
 
+For a `BatchingModule` handle, select the [batching adapter](../treepay-batching/).
+It exposes the exact batching API while sharing this contract implementation.
+
 Coverage: Tree shape, payment totals, fees, invalid radix and overflow.

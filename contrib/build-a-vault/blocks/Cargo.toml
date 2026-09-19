@@ -1,0 +1,19 @@
+[package]
+name = "build-a-vault-blocks"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+bitcoin.workspace = true
+schemars.workspace = true
+serde.workspace = true
+sapio.workspace = true
+sapio-base.workspace = true
+sapio-wasm-plugin.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+sapio-psbt = { path = "../../../sapio-psbt" }

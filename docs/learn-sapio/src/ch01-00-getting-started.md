@@ -1,9 +1,8 @@
 # Getting Started
 
-Let's start buil... not so fast there.
-
-Before we get into it, we need to cover some basics:
+Start with one generated Rust project and carry a payment through inspection,
+explicit signing and finalization:
 
 - Setting up an environment
 - Learning Rust
-- Hello World contract
+- Build and spend your first contract

@@ -1,9 +1,45 @@
 # Sapio Command Line Interface (CLI)
 
-The Sapio CLI is a utility tool for using different software components in
-the Sapio Project.
+The Sapio CLI creates projects, compiles and inspects contracts, and completes
+explicitly selected spends. Run `sapio-cli --help` or a subcommand's `--help`
+for its typed arguments. Commands return a nonzero exit status on failure.
 
-You can use the Sapio CLI to build contracts and run other programs.
+## Create your first project
+
+```sh
+sapio-cli new my-contract --name my-contract
+cd my-contract
+cargo test --locked
+```
+
+The project includes its pinned dependencies, lockfile, toolchain, evaluator,
+contract source and tests. Its README carries the exported demo files through
+the complete signing workflow. See the [quickstart](../docs/QUICKSTART.md) to
+build the CLI from a source checkout. The starter uses synthetic funding and
+public demonstration keys; it performs no wallet activity or broadcasting.
+
+## Compile and inspect compiler plugins
+
+Local module commands do not read runtime `--config`. Supply one source using
+`--file` or `--key`. An optional `--workspace DIR` stores cached sources under
+`DIR/modules`; `--plugin-map FILE` supplies a JSON object mapping module aliases
+to their hashes. Use `configure files --json` to inspect default paths.
+
+```sh
+sapio-cli contract api --file contract.wasm
+sapio-cli contract create --file contract.wasm --args args.json --output artifact.json
+sapio-cli contract explain --file artifact.json
+```
+
+`args.json` is the module's `CreateArgs` input, including `arguments` and public
+`context.network`, `context.amount` and `context.lowering`. Use the module's API
+schema for its exact arguments. Omit `--args`, or use `--args -`, to read stdin.
+Creation returns the raw contract artifact, which can feed `explain` directly;
+it does not wrap it in a Studio response. `api`, `info`, `logo`, `list` and
+`load` likewise return their payloads directly.
+
+Outputs go to stdout unless `--output` names a new file. Existing output files
+are never overwritten. Use files for the distinct inputs of multi-input commands.
 
 ## Complete a selected spend
 
@@ -31,6 +67,22 @@ files must be new; every resumed command accepts the latest `--psbt` separately
 from the unchanged intent. See [spend completion](../docs/SPEND_COMPLETION.md)
 for script paths, multiple signers and restarting between operations.
 
+An exported `ProgramSigningRequest` can be evaluated and signed locally using
+an explicitly selected oracle key and exact interpreter:
+
+```sh
+sapio-cli signer program --key oracle.key --request request.json \
+  --evaluator pay_at_least.wasm --output response.psbt
+```
+
+The key file uses Sapio's binary Xpriv encoding. Registered evaluators require
+the exact supplied file matching the request's committed evaluator ID and ABI.
+Inline WASM requests carry their program and must omit `--evaluator`. Evaluation
+runs locally; no signer endpoint is selected automatically. The
+[starter walkthrough](templates/starter/README.md)
+provides matching keys, interpreter, evidence and requests for a synthetic
+payment, including a rejected underpayment.
+
 ## Explain a contract
 
 Inspect a compiled artifact without a wallet, signer connection, or CLI configuration:
@@ -40,11 +92,11 @@ sapio-cli contract explain --file artifact.json
 sapio-cli contract explain --file artifact.json --json
 ```
 
-The input is the compiled object itself. To inspect a successful `contract create`
-response directly, extract its artifact and send it through stdin:
+The input is the compiled object itself. Local `contract create` output can
+be inspected directly through stdin:
 
 ```sh
-jq '.result.Ok.Call.result' create-response.json | sapio-cli contract explain
+sapio-cli contract create --file contract.wasm --args args.json | sapio-cli contract explain
 ```
 
 The report validates the complete graph and shows ordered output allocations,
@@ -77,11 +129,28 @@ check. Invalid funding or a violated fee cap fails before any signing. Planning
 does not produce signatures, execute evaluators, prove chain maturity, or broadcast
 transactions.
 
-Sapio CLI reads/writes local project directories for "org.judica.sapio-cli"
-based on your local system preferences. See
-https://docs.rs/directories/3.0.1/directories/ for more information.
+## Bind with an explicit funding source
 
-# Config
+Binding uses runtime configuration and requires exactly one funding choice:
+`--mock`, `--outpoint TXID:VOUT`, `--funding-psbt FILE` or `--wallet-fund`.
+Omitting the choice never silently invokes a wallet.
+
+```sh
+sapio-cli --config config.json contract bind --artifact artifact.json \
+  --mock --output bound.json
+```
+
+`--mock` produces synthetic funding. `--outpoint` fetches the specified output
+from the configured node. `--funding-psbt` accepts a funding transaction supplied
+by the caller. `--wallet-fund` explicitly asks the configured wallet to fund the
+contract. The configured covenant mode must match the compiled assumptions.
+
+For a standalone PSBT, `sapio-cli psbt finalize --psbt signed.psbt` returns the
+decoded finalized PSBT/transaction as JSON. Omit `--psbt`, or use `--psbt -`, to
+read stdin. Use `contract spend finalize` when completing a saved intent so its
+selected witness and retained funding rules are checked as well.
+
+## Runtime configuration
 
 A Sapio Config file (on linux at `~/.config/sapio-cli/config.json`) is a valid JSON file that looks like:
 
@@ -108,9 +177,6 @@ A Sapio Config file (on linux at `~/.config/sapio-cli/config.json`) is a valid J
       ],
       "threshold": 1,
       "request_timeout_secs": 30
-    },
-    "plugin_map": {
-      "example": "95db1a828dd1c9ab18d431eda9f99af46b9913e818277278a60708012f1d41b3"
     }
   }
 }
@@ -122,7 +188,7 @@ but each network can have a defined configuration.
 
 The command line may be used to specify a different configuration.
 
-Every network configuration and Studio request context must include `covenant`.
+Every network configuration and Studio `Bind` command must include `covenant`.
 This selects runtime binding and signing assumptions. The `signer_emulation`
 mode relies on the configured signers' security and availability. Replace the
 example public key and address with your own signer's values. Multiple peers support a
@@ -149,11 +215,11 @@ signer policies. It additionally records the operator's explicit native CTV
 assumption, permitting those mixed scripts at the funding boundary. It does not
 replace signer checks with native CTV or relax the recorded-policy comparison.
 
-This configuration migration is mandatory. Replace `emulator_nodes` in network
-configurations and `emulator` in Studio contexts with the tagged `covenant` field.
-Remove `enabled`; missing, null and legacy-only settings fail instead of choosing
-native CTV implicitly. A signer configuration or connection error never switches
-modes.
+Network configurations use the tagged `covenant` field. In the Studio protocol,
+runtime covenant selection belongs to the `Bind` command, not its shared
+`context`; module inspection and compilation need no runtime policy. Missing or
+invalid binding policy fails instead of choosing native CTV implicitly. A signer
+configuration or connection error never switches modes.
 
 Compilation uses the mandatory `context.lowering` in the create arguments,
 independently of these runtime settings:
@@ -202,7 +268,17 @@ address, public key and limits. Port `0` requests an automatically assigned port
 Starting a server does not resolve the configured remote emulator peers. The
 old `--sync` debug mode has been removed.
 
-The plugin_map parameter is used to map human readable names to keys for a
-plugin (you can see a plugin's key with the `cli contract load` command).
-This enables contracts plugins to be dynamically linked to one another per a
-user's preferences.
+Use `sapio-cli emulator get-key --psbt funded.psbt` to inspect the configured
+CTV signing condition. The CTV service and `signer program` implement different
+protocols; select the command matching the request you prepared.
+
+## Studio protocol
+
+`sapio-cli studio server --stdin` retains the JSON request/response envelopes
+for Studio clients. `sapio-cli studio schemas` describes the current protocol.
+The shared context contains module location, cache path, network and optional
+module aliases. Runtime covenant settings belong only to `Bind`.
+
+The old ignored `--base64_psbt`, debug switches and Studio `--interface` option
+are not part of the current CLI. PSBT file arguments carry base64; the supported
+Studio transport is stdin/stdout. Invalid flags fail during argument parsing.

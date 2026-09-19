@@ -19,6 +19,68 @@ pub struct Context<'a> {
 }
 
 impl<'a> Context<'a> {
+    /// The index whose predicate is being evaluated.
+    pub fn input_index(&self) -> u32 {
+        self.input_index
+    }
+
+    /// Number of authenticated previous outputs.
+    pub fn input_count(&self) -> u32 {
+        self.input_count
+    }
+
+    /// Borrow an input's amount and script from the signed projection.
+    pub fn input(&self, index: u32) -> Option<(u64, &'a [u8])> {
+        let mut reader = Reader::new(self.inputs);
+        for current in 0..self.input_count {
+            reader.take(40).ok()?;
+            let amount = reader.u64().ok()?;
+            let length = reader.u32().ok()?;
+            let script = reader.take(length as usize).ok()?;
+            if current == index {
+                return Some((amount, script));
+            }
+        }
+        None
+    }
+
+    /// Borrow an output's amount and script from the signed projection.
+    pub fn output(&self, index: u32) -> Option<(u64, &'a [u8])> {
+        let mut reader = Reader::new(self.outputs);
+        for current in 0..self.output_count {
+            let amount = reader.u64().ok()?;
+            let length = reader.u32().ok()?;
+            let script = reader.take(length as usize).ok()?;
+            if current == index {
+                return Some((amount, script));
+            }
+        }
+        None
+    }
+
+    /// Require one selected P2TR input and only native witness-v0 sponsors.
+    ///
+    /// This profile excludes other Taproot covenant inputs whose independent
+    /// claims would require transaction-wide deferred amount accounting.
+    pub fn single_vault_input(&self) -> Result<u64, Failure> {
+        let mut reader = Reader::new(self.inputs);
+        let mut principal = None;
+        for current in 0..self.input_count {
+            reader.take(40)?;
+            let amount = reader.u64()?;
+            let length = reader.u32()?;
+            let script = reader.take(length as usize)?;
+            if current == self.input_index {
+                principal = Some(amount);
+            } else if !((script.len() == 22 && script[..2] == [0, 20])
+                || (script.len() == 34 && script[..2] == [0, 32]))
+            {
+                return Err(Failure::InvalidEncoding);
+            }
+        }
+        principal.ok_or(Failure::InvalidEncoding)
+    }
+
     /// Decode the complete v1 projection followed by internal-key/annex data.
     pub fn parse_v2(bytes: &'a [u8]) -> Result<Self, Failure> {
         if bytes.len() > MAX_VIEW_BYTES {
@@ -180,6 +242,14 @@ impl<'a> Reader<'a> {
                 .map_err(|_| Failure::InvalidEncoding)?,
         ))
     }
+
+    fn u64(&mut self) -> Result<u64, Failure> {
+        Ok(u64::from_le_bytes(
+            self.take(8)?
+                .try_into()
+                .map_err(|_| Failure::InvalidEncoding)?,
+        ))
+    }
 }
 
 struct Writer<'a> {
@@ -295,5 +365,32 @@ mod tests {
             position: 0,
         };
         assert_eq!(writer.compact_size(65_536), Err(Failure::ScratchTooSmall));
+    }
+
+    #[test]
+    fn vault_profile_accepts_only_witness_v0_fee_sponsors() {
+        let original = encoded_view();
+        assert_eq!(
+            Context::parse_v2(&original).unwrap().single_vault_input(),
+            Err(Failure::InvalidEncoding),
+        );
+        // The first input is a fee sponsor; the second is the selected vault.
+        for (version, length, valid) in [(0, 20, true), (0, 32, true), (1, 32, false)] {
+            let mut encoded = original.clone();
+            let mut sponsor = std::vec![version, length];
+            sponsor.extend_from_slice(&[7; 32][..usize::from(length)]);
+            encoded.splice(
+                64..71,
+                [&(sponsor.len() as u32).to_le_bytes()[..], &sponsor].concat(),
+            );
+            let amount_start = 16 + 52 + sponsor.len() + 40;
+            encoded[amount_start..amount_start + 8].copy_from_slice(&100_000_u64.to_le_bytes());
+            let context = Context::parse_v2(&encoded).unwrap();
+            assert_eq!(context.input_index(), 1);
+            assert_eq!(context.input_count(), 2);
+            assert_eq!(context.input(1).unwrap().0, 100_000);
+            assert_eq!(context.output(0).unwrap(), (500, &[0x6a][..]));
+            assert_eq!(context.single_vault_input().ok(), valid.then_some(100_000));
+        }
     }
 }

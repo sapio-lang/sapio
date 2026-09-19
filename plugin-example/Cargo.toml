@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
 members = ["treepay"
+          , "treepay-contract"
+          , "treepay-batching"
           , "trampolinepay"
           , "batching-trait"
           , "vault"
@@ -32,5 +34,5 @@ bitcoin_hashes = { git = "https://github.com/sapio-lang/rust-bitcoin", rev = "6e
 miniscript = { git = "https://github.com/sapio-lang/rust-miniscript", rev = "8d2aa4a60979a55f6ecd6222d48f94a482f4a2f6" }
 
 # Shared schema trait with opt-in Bitcoin and Miniscript implementations.
-schemars = { git = "https://github.com/sapio-lang/sapio-jsonschema", rev = "ba2b06d0181a92ce5b4fddd86977f480cb9d086a" }
-schemars_derive = { git = "https://github.com/sapio-lang/sapio-jsonschema", rev = "ba2b06d0181a92ce5b4fddd86977f480cb9d086a" }
+schemars = { git = "https://github.com/sapio-lang/sapio-jsonschema", rev = "1ab5dcacb79fa9f068b1f3d8759bcd489564c989" }
+schemars_derive = { git = "https://github.com/sapio-lang/sapio-jsonschema", rev = "1ab5dcacb79fa9f068b1f3d8759bcd489564c989" }

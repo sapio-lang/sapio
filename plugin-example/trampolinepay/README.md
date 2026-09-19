@@ -6,4 +6,8 @@ See the [workspace guide](../README.md) for Cargo build and test commands,
 funding assumptions, and the complete executable catalog. This module has a
 [representative input](../../contrib/vectors/examples/trampolinepay.json).
 
-Coverage: Catalog calls the actual treepay guest.
+Use the [TreePay batching adapter](../treepay-batching/), whose exported API
+exactly matches the batching interface. The general TreePay module has a wider
+constructor enum and is not interchangeable with this typed handle.
+
+Coverage: Catalog calls the adapter with native and signer-emulated lowering.

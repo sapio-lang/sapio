@@ -1,5 +1,5 @@
 [workspace]
-members = ["ctv", "pay-at-least", "fragments", "templatehash", "template-authorization"]
+members = ["ctv", "pay-at-least", "fragments", "templatehash", "template-authorization", "op-vault"]
 resolver = "2"
 
 [profile.release]
