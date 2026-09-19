@@ -1,7 +1,7 @@
 # Contract examples
 
-This inventory covers every contract family in `sapio-contrib`, all 20 WASM
-modules and both shared interfaces in `plugin-example`, and the two native
+This inventory covers every contract family in `sapio-contrib`, all 21 WASM
+modules and three shared libraries in `plugin-example`, and the two native
 executables. The examples demonstrate contract construction and have behavioral
 regressions for their supported paths. They remain research examples: compiling
 an artifact does not establish a deployed protocol, a complete wallet, or an
@@ -88,7 +88,7 @@ an attestation service.
 | [PowSwap](../sapio-contrib/src/contracts/derivatives/powswap.rs) | Two equal-collateral settlements with positive payments and a cooperative two-key exit. Repeated constraints of one timelock kind use their maximum. | Settlement values, compiled locktimes/sequences, distinct keys, and invalid constraints. Combined locks support relative-height plus absolute-time or relative-time plus absolute-height; incompatible combinations fail. |
 | [Signature-attested outcomes](../sapio-contrib/src/contracts/derivatives/signature_attested.rs) | `SignatureAttested` and `OutcomeOracle` use ordinary transaction signatures for selected outcomes, replacing the misleading private DLC sketch. Integer weights conserve all satoshis; equal payout transactions retain every oracle alternative. | Linear/geometric/logistic endpoints, logistic midpoint, rounding, quorum/key guards, duplicate keys, malformed weights, and equal-payout outcomes. Convenience curves quantize shares to one billionth. This is not an adaptor-signature DLC implementation. |
 
-## WASM modules and shared interfaces
+## WASM modules and shared libraries
 
 The [catalog](../contrib/vectors/examples/catalog.json) contains an input fixture
 for every WASM module. The [driver](../contrib/check_examples.py) compares that
@@ -103,7 +103,8 @@ native mocks.
 | WASM module | Supported behavior and focused checks |
 | --- | --- |
 | [treepay](../plugin-example/treepay) | Payment batching with checked amount/fee totals and terminating grouping. Native regressions exercise empty payments, invalid radix, fanout and overflow; the catalog checks the two output amounts. |
-| [trampolinepay](../plugin-example/trampolinepay) | Delegates batching to the `treepay` module through the shared interface. The catalog resolves the real child module and checks its returned payout. |
+| [treepay-batching](../plugin-example/treepay-batching) | Exposes the exact batching interface using the shared TreePay implementation. Native tests compare its complete artifact to the general constructor and reject invalid payment/fee inputs; the catalog checks direct and delegated calls under native and signer lowering. |
+| [trampolinepay](../plugin-example/trampolinepay) | Delegates batching to `treepay-batching` through the exact shared interface. The catalog resolves the real child module and checks its returned payout. |
 | [vault](../plugin-example/vault) | Exposes the library vault constructors. The catalog compiles both root transitions; library tests cover progression, branch values and invalid parameters. |
 | [staker](../plugin-example/staker) | Exposes the staked-signer contract. The catalog checks the two root transitions; library tests exercise the keys, burn path and closing delay. |
 | [coin_pool](../plugin-example/coin_pool) | Exposes the library pool and its update interface. The catalog compiles its exit; library tests cover refund alignment, odd splits and external funding. |
@@ -123,12 +124,13 @@ native mocks.
 | [custom-policy](../plugin-example/custom-policy) | Implements `PolicyCompiler` with an arithmetic signature predicate outside Miniscript. The catalog validates the raw Taproot artifact and its committed payout; native tests check the payment and reject underfunding. |
 | [program-policy](../plugin-example/program-policy) | Composes a supplied `EmulatedProgram` with a native CSV delay. The catalog checks exact program identity, oracle root and script-path requirements after guest compilation, schema validation and host deserialization. Evaluator registration and signing are separate. |
 
-The two remaining workspace members are interfaces, not WASM entry points:
+The three remaining workspace members are shared libraries without WASM entry points:
 
-| Interface | Purpose and assumptions |
+| Library | Purpose and assumptions |
 | --- | --- |
-| [batching-trait](../plugin-example/batching-trait) | Versioned payment-batching request and typed module handle used by `treepay` and `trampolinepay`. Payment amounts remain BTC JSON fields; fee rate is satoshis per byte. |
+| [batching-trait](../plugin-example/batching-trait) | Versioned payment-batching request and typed module handle used by `treepay-batching` and `trampolinepay`. Payment amounts remain BTC JSON fields; fee rate is satoshis per byte. |
 | [nft-trait](../plugin-example/nft-trait) | Versioned mint/sale requests and typed handles. Royalty fractions must be finite and within zero to one; metadata version and edition bounds are validated. Royalties are quantized to millionths, then rounded down to satoshis. Native tests cover these bounds and exact payout arithmetic. |
+| [treepay-contract](../plugin-example/treepay-contract) | Shared contract, checked constructors and native tests for both TreePay entry points. |
 
 The ordinal examples require the caller to supply accurate ordered input ranges;
 there is no ordinal indexer here. The planner checks nonempty, nonoverlapping

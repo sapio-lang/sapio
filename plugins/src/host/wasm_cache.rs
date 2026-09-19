@@ -34,11 +34,11 @@ fn check_source(bytes: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
-fn source_path(path: &Path, key: Hash) -> PathBuf {
+pub(super) fn source_path(path: &Path, key: Hash) -> PathBuf {
     path.join("sources").join(format!("{key}.wasm"))
 }
 
-fn read_source(path: &Path, key: Hash) -> io::Result<Vec<u8>> {
+pub(super) fn read_source(path: &Path, key: Hash) -> io::Result<Vec<u8>> {
     // Reject non-files before opening, so directories and ordinary named pipes
     // cannot act as source entries. Hash verification still authenticates bytes.
     if !fs::symlink_metadata(path)?.file_type().is_file() {

@@ -19,8 +19,14 @@ pub(crate) fn invalid(message: impl ToString) -> CompilationError {
 /// Public oracle identity. Its private root never belongs in a Studio patch.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(title = "Emulation root", extend("x-sapio-type" = "sapio.oracle-root"))]
 pub struct OracleRoot {
     /// BIP32 public root used to derive every evaluator signing key.
+    #[schemars(schema_with = "sapio_base::schema::xpub")]
+    #[schemars(
+        title = "Extended public key",
+        description = "BIP32 public root used to derive every evaluator signing key."
+    )]
     pub xpub: Xpub,
 }
 
@@ -29,6 +35,11 @@ pub struct OracleRoot {
 #[serde(deny_unknown_fields)]
 pub struct EmulationOracle {
     /// Public extended key, obtained from the intended signing service.
+    #[schemars(schema_with = "sapio_base::schema::xpub")]
+    #[schemars(
+        title = "Extended public key",
+        description = "Public extended key, obtained from the intended signing service."
+    )]
     pub xpub: Xpub,
 }
 
@@ -55,10 +66,20 @@ impl OracleRoot {
 /// A proposed withdrawal; changing it does not change the funding address.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(title = "Withdrawal proposal", extend("x-sapio-type" = "sapio.withdrawal-proposal"))]
 pub struct WithdrawalProposal {
     /// Destination selected at trigger time, committed by the pending CTV leaf.
+    #[schemars(
+        title = "Destination",
+        description = "Destination selected at trigger time, committed by the pending CTV leaf."
+    )]
     pub destination: AddressTarget,
     /// Principal moved into the waiting period; the remainder is revaulted.
+    #[schemars(schema_with = "sapio_base::schema::satoshis")]
+    #[schemars(
+        title = "Withdrawal amount",
+        description = "Principal moved into the waiting period; the remainder is revaulted."
+    )]
     pub withdrawal_sats: u64,
 }
 
@@ -73,14 +94,34 @@ pub struct WithdrawalProposal {
 #[serde(deny_unknown_fields)]
 pub struct OpVault {
     /// Signatures that may choose a withdrawal template and trigger it.
+    #[schemars(
+        title = "Trigger authorization",
+        description = "Signatures that may choose a withdrawal template and trigger it."
+    )]
     pub trigger: KeySet,
     /// Authorized fixed recovery before or after triggering.
+    #[schemars(
+        title = "Recovery",
+        description = "Authorized fixed recovery before or after triggering."
+    )]
     pub recovery: RecoveryRule,
     /// Waiting period beginning when the pending output confirms.
+    #[schemars(
+        title = "Delay",
+        description = "Waiting period beginning when the pending output confirms."
+    )]
     pub delay: RelativeDelay,
     /// Public root for OP_VAULT, recovery and final CTV emulation.
+    #[schemars(
+        title = "Emulation root",
+        description = "Public root for OP_VAULT, recovery and final CTV emulation."
+    )]
     pub oracle: OracleRoot,
     /// Preview transaction, separate from the fixed funding policy.
+    #[schemars(
+        title = "Withdrawal proposal",
+        description = "Preview transaction, separate from the fixed funding policy."
+    )]
     pub proposal: WithdrawalProposal,
 }
 

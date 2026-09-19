@@ -11,11 +11,24 @@
       ]
     }
   },
+  "treepay-batching": {
+    "wasm": "sapio_wasm_treepay_batching.wasm",
+    "input": "treepay-batching.json",
+    "dependencies": [],
+    "expect": {
+      "ctv_count": 1,
+      "root_output_values": [
+        1000,
+        2000
+      ],
+      "root_required_input_amount": 3215
+    }
+  },
   "trampolinepay": {
     "wasm": "trampolinepay.wasm",
     "input": "trampolinepay.json",
     "dependencies": [
-      "treepay"
+      "treepay-batching"
     ],
     "expect": {
       "ctv_count": 1,

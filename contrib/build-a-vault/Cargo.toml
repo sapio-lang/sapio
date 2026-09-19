@@ -24,8 +24,8 @@ sapio-wasm-plugin = { path = "../../plugins", features = ["client"] }
 bitcoin = { git = "https://github.com/sapio-lang/rust-bitcoin", rev = "6ef940bb2d98ba5dece053fdabd1d9ad65ff5864" }
 bitcoin_hashes = { git = "https://github.com/sapio-lang/rust-bitcoin", rev = "6ef940bb2d98ba5dece053fdabd1d9ad65ff5864" }
 miniscript = { git = "https://github.com/sapio-lang/rust-miniscript", rev = "8d2aa4a60979a55f6ecd6222d48f94a482f4a2f6" }
-schemars = { git = "https://github.com/sapio-lang/sapio-jsonschema", rev = "ba2b06d0181a92ce5b4fddd86977f480cb9d086a" }
-schemars_derive = { git = "https://github.com/sapio-lang/sapio-jsonschema", rev = "ba2b06d0181a92ce5b4fddd86977f480cb9d086a" }
+schemars = { git = "https://github.com/sapio-lang/sapio-jsonschema", rev = "1ab5dcacb79fa9f068b1f3d8759bcd489564c989" }
+schemars_derive = { git = "https://github.com/sapio-lang/sapio-jsonschema", rev = "1ab5dcacb79fa9f068b1f3d8759bcd489564c989" }
 
 [profile.release]
 opt-level = "z"

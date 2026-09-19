@@ -144,11 +144,11 @@ jobs:
           cargo run --manifest-path contrib/build-a-vault/Cargo.toml
           --locked -p build-a-vault-emulation --bin check-native --
           "$RUNNER_TEMP/build-a-vault"
-      - name: Check out the reviewed Studio patch engine
+      - name: Check out the typed Studio patch engine
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: sapio-lang/sapio-studio
-          ref: 31c0026db414a2a519ccb19c807daf73b1e78392
+          ref: 337dc9bb80a18f7b4331bce8fa1da9f87e3ab457
           path: contrib/build-a-vault/target/studio
       - name: Install Studio's Node toolchain
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0

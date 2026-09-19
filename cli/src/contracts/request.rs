@@ -175,8 +175,6 @@ impl Request {
         Response { result: v }
     }
     pub async fn handle_inner(self) -> ResultT<CommandReturn> {
-        // create the future to get the sph,
-        // but do not await it since not all calls will use it.
         let Request { context, command } = self;
         let Common {
             path,
@@ -185,22 +183,14 @@ impl Request {
             plugin_map,
             ..
         } = context;
-        let default_sph = || -> Result<_, &'static str> {
-            Ok(WasmPluginHandle::<Value>::new_async(
-                &path,
-                module_locator.ok_or("Expected to have exactly one of key or file")?,
-                net,
-                plugin_map.clone(),
-            ))
-        };
         match command {
             Command::List(_list) => {
-                let mut plugins =
-                    WasmPluginHandle::<Value>::load_all_keys(&path, context.net, plugin_map)?;
+                let plugins =
+                    sapio_wasm_plugin::host::metadata::list(&path, context.net, plugin_map)?;
                 let m = plugins
-                    .iter_mut()
-                    .map(|p| p.get_name().map(|name| (p.id().to_string(), name)))
-                    .collect::<Result<BTreeMap<_, _>, _>>()?;
+                    .into_iter()
+                    .map(|p| (p.key, p.name))
+                    .collect::<BTreeMap<_, _>>();
                 Ok(CommandReturn::List(ListReturn { items: m }))
             }
             Command::Call(call) => {
@@ -209,7 +199,13 @@ impl Request {
                 if create_args.context.network != net {
                     return Err("module network does not match context.network".into());
                 }
-                let mut sph = default_sph()?.await?;
+                let mut sph = WasmPluginHandle::<Value>::new_async(
+                    &path,
+                    module_locator.ok_or("Expected to have exactly one of key or file")?,
+                    net,
+                    plugin_map,
+                )
+                .await?;
                 let v = sph.call(&PathFragment::Root.into(), &create_args)?;
                 Ok(CommandReturn::Call(CallReturn { result: v }))
             }
@@ -218,22 +214,38 @@ impl Request {
                 Ok(CommandReturn::Bind(bind.call(net, emulator).await?))
             }
             Command::Api(_api) => {
-                let mut sph = default_sph()?.await?;
-                Ok(CommandReturn::Api(ApiReturn {
-                    api: sph.get_api()?,
-                }))
+                let metadata = sapio_wasm_plugin::host::metadata::get_async(
+                    &path,
+                    module_locator.ok_or("Expected to have exactly one of key or file")?,
+                    net,
+                    plugin_map,
+                )
+                .await?;
+                Ok(CommandReturn::Api(ApiReturn { api: metadata.api }))
             }
             Command::Logo(_logo) => {
-                let mut sph = default_sph()?.await?;
+                let metadata = sapio_wasm_plugin::host::metadata::get_async(
+                    &path,
+                    module_locator.ok_or("Expected to have exactly one of key or file")?,
+                    net,
+                    plugin_map,
+                )
+                .await?;
                 Ok(CommandReturn::Logo(LogoReturn {
-                    logo: sph.get_logo()?,
+                    logo: metadata.logo,
                 }))
             }
             Command::Info(_info) => {
-                let mut sph = default_sph()?.await?;
-                let api = sph.get_api()?;
+                let metadata = sapio_wasm_plugin::host::metadata::get_async(
+                    &path,
+                    module_locator.ok_or("Expected to have exactly one of key or file")?,
+                    net,
+                    plugin_map,
+                )
+                .await?;
+                let api = metadata.api;
                 Ok(CommandReturn::Info(InfoReturn {
-                    name: sph.get_name()?,
+                    name: metadata.name,
                     description: api
                         .input()
                         .as_value()
@@ -244,10 +256,14 @@ impl Request {
                 }))
             }
             Command::Load(_load) => {
-                let sph = default_sph()?.await?;
-                Ok(CommandReturn::Load(LoadReturn {
-                    key: sph.id().to_string(),
-                }))
+                let metadata = sapio_wasm_plugin::host::metadata::get_async(
+                    &path,
+                    module_locator.ok_or("Expected to have exactly one of key or file")?,
+                    net,
+                    plugin_map,
+                )
+                .await?;
+                Ok(CommandReturn::Load(LoadReturn { key: metadata.key }))
             }
         }
     }

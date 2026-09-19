@@ -21,16 +21,22 @@ use serde::Serialize;
 /// Same Inner type as the wrapped module
 #[derive(JsonSchema, Deserialize, Serialize, Clone)]
 pub struct GetClause {
-    // TODO: Taproot Fix Encoding
+    /// Alice's x-only public key.
+    #[schemars(title = "Alice", schema_with = "sapio_base::schema::x_only_public_key")]
     alice: bitcoin::XOnlyPublicKey,
-    // TODO: Taproot Fix Encoding
+    /// Bob's x-only public key.
+    #[schemars(title = "Bob", schema_with = "sapio_base::schema::x_only_public_key")]
     bob: bitcoin::XOnlyPublicKey,
 }
 
 /// Wrapper to find the ClauseModule remotely
 #[derive(JsonSchema, Deserialize)]
 pub struct Wrapper {
+    /// Public keys supplied to the selected authorization implementation.
+    #[schemars(title = "Parties")]
     g: GetClause,
+    /// The caller supplies Parties as this module's arguments.
+    #[schemars(title = "Authorization implementation")]
     v: ClauseModule<GetClause>,
 }
 

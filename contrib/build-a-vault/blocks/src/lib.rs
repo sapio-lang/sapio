@@ -27,12 +27,22 @@ pub(crate) fn invalid(message: &str) -> CompilationError {
 /// A threshold over distinct public keys, shared by every authorization port.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(title = "Authorization", extend("x-sapio-type" = "sapio.authorization"))]
 pub struct KeySet {
     /// Number of distinct signatures required.
     #[schemars(range(min = 1, max = 16))]
+    #[schemars(
+        title = "Threshold",
+        description = "Number of distinct signatures required."
+    )]
     pub threshold: u8,
     /// One through sixteen x-only public keys, in policy order.
     #[schemars(length(min = 1, max = 16))]
+    #[schemars(schema_with = "sapio_base::schema::public_keys")]
+    #[schemars(
+        title = "Public keys",
+        description = "One through sixteen x-only public keys, in policy order."
+    )]
     pub keys: Vec<XOnlyPublicKey>,
 }
 
@@ -128,9 +138,15 @@ impl KeySet {
 /// A positive relative block delay; it starts when the encumbered coin confirms.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(title = "Block delay", extend("x-sapio-type" = "sapio.block-delay"))]
 pub struct RelativeDelay {
     /// Confirmation age in blocks, from one through 65535.
     #[schemars(range(min = 1, max = 65535))]
+    #[schemars(schema_with = "sapio_base::schema::relative_blocks")]
+    #[schemars(
+        title = "Blocks",
+        description = "Confirmation age in blocks, from one through 65535."
+    )]
     pub blocks: u16,
 }
 
@@ -153,8 +169,14 @@ impl RelativeDelay {
 /// A fixed payment destination, checked against each consumer's compilation network.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(title = "Destination", extend("x-sapio-type" = "sapio.address-target"))]
 pub struct AddressTarget {
     /// The address that receives this route's output.
+    #[schemars(schema_with = "sapio_base::schema::address")]
+    #[schemars(
+        title = "Address",
+        description = "The address that receives this route's output."
+    )]
     pub address: Address<NetworkUnchecked>,
 }
 
@@ -168,10 +190,19 @@ impl AddressTarget {
 /// A fixed recovery destination and the authorization needed to send funds there.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(title = "Recovery rule", extend("x-sapio-type" = "sapio.recovery-rule"))]
 pub struct RecoveryRule {
     /// Signatures needed for the recovery transaction.
+    #[schemars(
+        title = "Authorization",
+        description = "Signatures needed for the recovery transaction."
+    )]
     pub authorization: KeySet,
     /// Destination fixed by the compiled contract.
+    #[schemars(
+        title = "Destination",
+        description = "Destination fixed by the compiled contract."
+    )]
     pub destination: AddressTarget,
 }
 
@@ -187,12 +218,25 @@ impl RecoveryRule {
 /// A delayed, authorized release to one fixed destination.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(title = "Release rule", extend("x-sapio-type" = "sapio.release-rule"))]
 pub struct ReleaseRule {
     /// Signatures needed after the waiting period.
+    #[schemars(
+        title = "Authorization",
+        description = "Signatures needed after the waiting period."
+    )]
     pub authorization: KeySet,
     /// Minimum age of the pending withdrawal output.
+    #[schemars(
+        title = "Delay",
+        description = "Minimum age of the pending withdrawal output."
+    )]
     pub delay: RelativeDelay,
     /// Destination fixed when the vault is compiled.
+    #[schemars(
+        title = "Destination",
+        description = "Destination fixed when the vault is compiled."
+    )]
     pub destination: AddressTarget,
 }
 
@@ -209,8 +253,14 @@ impl ReleaseRule {
 /// Select one public key for an authorization socket.
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(title = "Single-key authorization")]
 pub struct Signer {
     /// The signer public key; private keys never belong in patch arguments.
+    #[schemars(schema_with = "sapio_base::schema::x_only_public_key")]
+    #[schemars(
+        title = "Public key",
+        description = "The signer public key; private keys never belong in patch arguments."
+    )]
     pub key: XOnlyPublicKey,
 }
 
@@ -230,9 +280,15 @@ impl Callable for Signer {
 pub struct Quorum {
     /// Number of signatures required.
     #[schemars(range(min = 1, max = 16))]
+    #[schemars(title = "Threshold", description = "Number of signatures required.")]
     pub threshold: u8,
     /// Distinct public keys; order is retained in the public terms.
     #[schemars(length(min = 1, max = 16))]
+    #[schemars(schema_with = "sapio_base::schema::public_keys")]
+    #[schemars(
+        title = "Public keys",
+        description = "Distinct public keys; order is retained in the public terms."
+    )]
     pub keys: Vec<XOnlyPublicKey>,
 }
 
@@ -254,6 +310,11 @@ impl Callable for Quorum {
 pub struct BlockDelay {
     /// Number of blocks the encumbered output must age before use.
     #[schemars(range(min = 1, max = 65535))]
+    #[schemars(schema_with = "sapio_base::schema::relative_blocks")]
+    #[schemars(
+        title = "Blocks",
+        description = "Number of blocks the encumbered output must age before use."
+    )]
     pub blocks: u16,
 }
 
@@ -273,6 +334,11 @@ impl Callable for BlockDelay {
 #[serde(deny_unknown_fields)]
 pub struct Destination {
     /// A Bitcoin address whose network must match the explicit context.
+    #[schemars(schema_with = "sapio_base::schema::address")]
+    #[schemars(
+        title = "Address",
+        description = "A Bitcoin address whose network must match the explicit context."
+    )]
     pub address: Address<NetworkUnchecked>,
 }
 
@@ -292,8 +358,10 @@ impl Callable for Destination {
 #[serde(deny_unknown_fields)]
 pub struct Recovery {
     /// Required recovery signatures.
+    #[schemars(title = "Authorization", description = "Required recovery signatures.")]
     pub authorization: KeySet,
     /// Recovery destination.
+    #[schemars(title = "Destination", description = "Recovery destination.")]
     pub destination: AddressTarget,
 }
 
@@ -314,10 +382,13 @@ impl Callable for Recovery {
 #[serde(deny_unknown_fields)]
 pub struct Release {
     /// Required release signatures.
+    #[schemars(title = "Authorization", description = "Required release signatures.")]
     pub authorization: KeySet,
     /// Pending-output confirmation delay.
+    #[schemars(title = "Delay", description = "Pending-output confirmation delay.")]
     pub delay: RelativeDelay,
     /// Fixed release destination.
+    #[schemars(title = "Destination", description = "Fixed release destination.")]
     pub destination: AddressTarget,
 }
 
@@ -339,12 +410,29 @@ impl Callable for Release {
 #[serde(deny_unknown_fields)]
 pub struct FixedVault {
     /// Signatures needed to move funds into the pending withdrawal output.
+    #[schemars(
+        title = "Trigger authorization",
+        description = "Signatures needed to move funds into the pending withdrawal output."
+    )]
     pub trigger: KeySet,
     /// Authorized, delayed payment from the pending output.
+    #[schemars(
+        title = "Release",
+        description = "Authorized, delayed payment from the pending output."
+    )]
     pub release: ReleaseRule,
     /// Authorized fixed recovery available before and after triggering.
+    #[schemars(
+        title = "Recovery",
+        description = "Authorized fixed recovery available before and after triggering."
+    )]
     pub recovery: RecoveryRule,
     /// Satoshis reserved in each transaction: trigger, release or recovery.
+    #[schemars(schema_with = "sapio_base::schema::satoshis")]
+    #[schemars(
+        title = "Fee per transaction",
+        description = "Satoshis reserved in each transaction: trigger, release or recovery."
+    )]
     pub fee_sats: u64,
 }
 
@@ -363,10 +451,22 @@ impl Callable for FixedVault {
 #[serde(deny_unknown_fields)]
 pub struct DelayedWallet {
     /// Signatures that can spend anywhere after the delay.
+    #[schemars(
+        title = "Hot authorization",
+        description = "Signatures that can spend anywhere after the delay."
+    )]
     pub hot: KeySet,
     /// Minimum age of the wallet output for its hot-key path.
+    #[schemars(
+        title = "Delay",
+        description = "Minimum age of the wallet output for its hot-key path."
+    )]
     pub delay: RelativeDelay,
     /// Signatures that can immediately spend anywhere.
+    #[schemars(
+        title = "Recovery",
+        description = "Signatures that can immediately spend anywhere."
+    )]
     pub recovery: KeySet,
 }
 
