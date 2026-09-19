@@ -1,0 +1,18 @@
+[package]
+name = "sapio-treepay-contract"
+version = "0.1.0"
+license = "MPL-2.0"
+edition = "2021"
+publish = false
+description = "Shared TreePay contract and checked constructors"
+
+[dependencies]
+batching-trait = { path = "../batching-trait" }
+bitcoin = { version = "=0.32.102", features = ["serde"] }
+sapio = { path = "../../sapio" }
+sapio-base = { path = "../../sapio-base" }
+schemars = { version = "=1.2.2", features = ["bitcoin032", "miniscript13"] }
+serde = "1.0"
+
+[dev-dependencies]
+serde_json = "1.0"

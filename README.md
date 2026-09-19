@@ -54,6 +54,10 @@ The [contract example catalog](docs/EXAMPLES.md) inventories every library famil
 all 20 WASM modules and runnable native examples, with regression coverage
 and the assumptions each construction still requires.
 
+[Build a vault in Studio](contrib/build-a-vault/README.md) connects ten typed
+custody blocks into five runnable visual patches: fixed vaults, quorum custody,
+a delayed wallet, and dynamic OP_VAULT emulation with optional revaulting.
+
 ## Repository map
 
 | Component | Purpose |
@@ -67,6 +71,7 @@ and the assumptions each construction still requires.
 | [ctv_emulators](ctv_emulators/) | Covenant emulation, WASM evaluation and selected-spend completion |
 | [sapio-contrib](sapio-contrib/) | Contract library and research examples |
 | [plugin-example](plugin-example/) | Separately built WASM example workspace |
+| [build-a-vault](contrib/build-a-vault/) | Composable custody modules and Studio tutorial |
 | [integration_tests](integration_tests/) | Compilation, signing and finalization checks |
 
 Read Jeremy Rubin's [A Calculus of Covenants](https://rubin.io/bitcoin/2022/04/12/calc-cov/)

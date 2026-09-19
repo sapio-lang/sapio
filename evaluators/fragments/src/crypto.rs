@@ -3,6 +3,27 @@ use crate::{Failure, MAX_VIEW_BYTES};
 #[link(wasm_import_module = "sapio_crypto_v1")]
 extern "C" {
     fn sha256(pointer: u32, length: u32, output: u32) -> i32;
+    fn bip32_derive(root: u32, path: u32, count: u32, output: u32) -> i32;
+}
+
+pub fn derive_key(root: &[u8; 78], path: &[u32; 10]) -> Result<[u8; 32], Failure> {
+    let mut encoded = [0; 40];
+    for (child, bytes) in path.iter().zip(encoded.chunks_exact_mut(4)) {
+        bytes.copy_from_slice(&child.to_le_bytes());
+    }
+    let mut key = [0; 33];
+    let status = unsafe {
+        bip32_derive(
+            root.as_ptr() as u32,
+            encoded.as_ptr() as u32,
+            10,
+            key.as_mut_ptr() as u32,
+        )
+    };
+    if status != 0 || !matches!(key[0], 2 | 3) {
+        return Err(Failure::Crypto);
+    }
+    key[1..].try_into().map_err(|_| Failure::Crypto)
 }
 
 #[link(wasm_import_module = "sapio_crypto_v2")]

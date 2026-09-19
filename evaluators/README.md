@@ -20,6 +20,7 @@ the corresponding program's keys.
 | `pay_at_least.wasm` | v1 | Registered interpreter for a fixed minimum payment |
 | `templatehash.wasm` | v2 | Exact BIP446 TemplateHash, including the selected annex |
 | `template_authorization.wasm` | v2 | TemplateHash plus CSFS under a pinned, physical internal, or proven related key |
+| `op_vault.wasm` | v2 | Dynamic vault leaf update and fixed recovery, under the [single-vault BIP345 profile](op-vault/README.md) |
 
 The v1 programs and `common.rs` retain their original ABI and bytes. V2 programs
 use `v2.rs` for invocation plumbing and the [fragment SDK](fragments/README.md)
@@ -33,4 +34,6 @@ cargo test --locked --manifest-path evaluators/Cargo.toml -p sapio-covenant-frag
 ```
 
 Actual cryptographic and predicate checks execute the compiled modules through
-the program oracle's tests in the parent workspace.
+the program oracle's tests in the parent workspace. The complete OP_VAULT
+custody routes run through the oracle in
+`contrib/build-a-vault/emulation/tests/custody.rs`.

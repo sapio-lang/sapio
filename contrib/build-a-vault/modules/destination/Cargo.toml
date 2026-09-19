@@ -1,0 +1,17 @@
+[package]
+name = "build-a-vault-destination"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+build-a-vault-blocks.workspace = true
+sapio.workspace = true
+sapio-wasm-plugin.workspace = true
+schemars.workspace = true
+serde.workspace = true

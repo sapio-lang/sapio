@@ -21,6 +21,7 @@ use std::sync::Arc;
 pub mod client;
 #[cfg(feature = "host")]
 pub mod host;
+pub mod interface;
 pub mod plugin_handle;
 
 /// A bundle of input/output types

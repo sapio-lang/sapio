@@ -19,6 +19,16 @@ extern "C" {
         json: i32,
         json_len: i32,
     ) -> i32;
+    /// Call a module whose live API matches the supplied typed signature.
+    pub fn sapio_v1_wasm_plugin_create_contract_typed(
+        path: i32,
+        path_len: i32,
+        key: i32,
+        json: i32,
+        json_len: i32,
+        api: i32,
+        api_len: i32,
+    ) -> i32;
     /// Get contract API by "trampolining" through the host to use another
     /// plugin identified by key.
     pub fn sapio_v1_wasm_plugin_get_api(key: i32) -> i32;

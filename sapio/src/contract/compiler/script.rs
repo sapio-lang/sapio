@@ -9,13 +9,14 @@
 use crate::contract::object::CovenantRequirements;
 use crate::contract::CompilationError;
 use bitcoin::blockdata::opcodes;
-use bitcoin::{Script, ScriptBuf};
+use bitcoin::{Script, ScriptBuf, XOnlyPublicKey};
 use sapio_base::covenant::LoweringPlan;
 use sapio_base::miniscript::ord::Inscription;
-use sapio_base::miniscript::Tap;
+use sapio_base::miniscript::{Miniscript, Tap, Terminal};
 use sapio_base::policy::{ScriptFragment, ScriptPolicy};
 use sapio_base::{Clause, EmulatedProgram};
 use std::borrow::Cow;
+use std::sync::Arc;
 
 const MAX_DEPTH: usize = 128;
 const MAX_NODES: usize = 65_536;
@@ -430,6 +431,35 @@ fn encoded_size(
         .ok_or_else(|| limit("encoded script bytes", MAX_SCRIPT_BYTES))
 }
 
+/// Lower the common signature-and-relative-lock conjunction without policy
+/// search. Source preflight still validates the entire policy before this
+/// function is called. The explicit AST is the optimizer's canonical result.
+fn compile_native(clause: &Clause) -> Result<Miniscript<XOnlyPublicKey, Tap>, CompilationError> {
+    let pair = match clause {
+        Clause::And(children) if children.len() == 2 => {
+            match (children[0].as_ref(), children[1].as_ref()) {
+                (Clause::Key(key), Clause::Older(delay))
+                | (Clause::Older(delay), Clause::Key(key)) => Some((*key, *delay)),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
+    if let Some((key, delay)) = pair.filter(|(_, delay)| delay.to_consensus_u32() & 0xffff != 0) {
+        let key = Miniscript::from_ast(Terminal::PkK(key))?;
+        let signature = Miniscript::from_ast(Terminal::Check(Arc::new(key)))?;
+        let verified = Miniscript::from_ast(Terminal::Verify(Arc::new(signature)))?;
+        let age = Miniscript::from_ast(Terminal::Older(delay))?;
+        let compiled = Miniscript::from_ast(Terminal::AndV(Arc::new(verified), Arc::new(age)))?;
+        compiled
+            .sanity_check()
+            .map_err(sapio_base::miniscript::Error::from)?;
+        Ok(compiled)
+    } else {
+        Ok(clause.compile::<Tap>()?)
+    }
+}
+
 fn compile_run(
     clauses: &[Cow<'_, Clause>],
     encoded_bytes: usize,
@@ -441,7 +471,7 @@ fn compile_run(
     // neighbor cannot establish that proof. A custom backend can instead emit
     // the complete predicate, including its timelock or hashlock, as raw script.
     let clause = super::conjoin_guards(clauses.iter().map(|clause| clause.as_ref()));
-    let compiled = clause.compile::<Tap>()?;
+    let compiled = compile_native(&clause)?;
     // Check the encoded size before materializing the native script as well.
     encoded_size(encoded_bytes, compiled.script_size(), separator)?;
     Ok(compiled.encode())
@@ -562,7 +592,7 @@ pub(super) fn lower_program_branches(
                     })
                     .collect::<Result<Vec<_>, CompilationError>>()?;
                 let clause = super::conjoin_guards(clauses.iter().map(|clause| clause.as_ref()));
-                let compiled = clause.compile::<Tap>()?;
+                let compiled = compile_native(&clause)?;
                 encoded_bytes = encoded_size(encoded_bytes, compiled.script_size(), false)?;
                 // A false conjunction may have erased its signature operands.
                 // Reuse the derived clauses rather than deriving keys again.
@@ -1088,6 +1118,42 @@ mod tests {
                     .encode()
             ]
         );
+    }
+
+    #[test]
+    fn signature_relative_lock_fast_path_matches_optimizer_bytes_and_weight() {
+        use sapio_base::miniscript::RelLockTime;
+        let key =
+            Keypair::from_secret_key(&Secp256k1::new(), &SecretKey::from_slice(&[3; 32]).unwrap())
+                .x_only_public_key()
+                .0;
+        for value in [1, 16, 17, 127, 128, 32767, 32768, 65535] {
+            for delay in [
+                RelLockTime::from_height(value),
+                RelLockTime::from_512_second_intervals(value),
+            ] {
+                for reversed in [false, true] {
+                    let mut children =
+                        vec![Arc::new(Clause::Key(key)), Arc::new(Clause::Older(delay))];
+                    if reversed {
+                        children.reverse();
+                    }
+                    let clause = Clause::And(children);
+                    let expected = clause.compile::<Tap>().unwrap();
+                    let actual = compile_native(&clause).unwrap();
+                    assert_eq!(actual, expected);
+                    assert_eq!(actual.encode(), expected.encode());
+                    assert_eq!(
+                        actual.max_satisfaction_witness_elements().unwrap(),
+                        expected.max_satisfaction_witness_elements().unwrap()
+                    );
+                    assert_eq!(
+                        actual.max_satisfaction_size().unwrap(),
+                        expected.max_satisfaction_size().unwrap()
+                    );
+                }
+            }
+        }
     }
 
     #[test]

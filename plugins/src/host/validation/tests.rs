@@ -365,6 +365,105 @@ fn actual_arguments_and_context_are_checked_before_guest_create() {
 }
 
 #[test]
+fn checked_calls_reject_same_shape_different_types_before_execution() {
+    let cache = FixtureCache::new();
+    let actual = api(
+        quantity_schema(),
+        json!({"type":"integer", "x-sapio-type":"bitcoin.satoshis"}),
+    );
+    let mut plugin = cache.load::<Value>(&module(&actual, &json!({"Ok":7}), "", "i32.const 8"));
+    for side in ["arguments", "returns"] {
+        let mut expected = actual.clone();
+        expected[side]["x-sapio-type"] = "bitcoin.relative-blocks".into();
+        assert_schema_error(
+            plugin
+                .call_checked(
+                    &path(),
+                    &request(json!({"quantity":1})),
+                    Some(&serde_json::to_vec(&expected).unwrap()),
+                )
+                .unwrap_err(),
+            "Typed module",
+        );
+        assert_eq!(calls(&mut plugin), 0);
+    }
+    assert_eq!(
+        plugin
+            .call_checked(
+                &path(),
+                &request(json!({"quantity":1})),
+                Some(&serde_json::to_vec(&actual).unwrap())
+            )
+            .unwrap(),
+        json!(7)
+    );
+    assert_eq!(calls(&mut plugin), 1);
+}
+
+#[cfg(feature = "client")]
+#[test]
+fn recursive_callable_metadata_compiles_as_a_host_schema() {
+    #[derive(Clone, serde::Serialize, schemars::JsonSchema)]
+    struct Arguments {
+        next: Option<crate::client::SapioHostAPI<Arguments, u64>>,
+    }
+    let api = crate::API::<crate::CreateArgs<Arguments>, u64>::new();
+    CallSchema::from_json(&serde_json::to_vec(&api).unwrap()).unwrap();
+}
+
+#[test]
+fn nested_typed_import_checks_the_live_child_signature() {
+    let cache = FixtureCache::new();
+    let actual = api(
+        quantity_schema(),
+        json!({"type":"integer", "x-sapio-type":"bitcoin.satoshis"}),
+    );
+    let key = cache
+        .load::<Value>(&module(&actual, &json!({"Ok":7}), "", "i32.const 8"))
+        .id();
+    let key = escaped(&hex::decode(key.to_string()).unwrap());
+    let path = serde_json::to_vec(&path()).unwrap();
+    let arguments = serde_json::to_vec(&request(json!({"quantity":1}))).unwrap();
+    for matches in [true, false] {
+        let mut expected = actual.clone();
+        if !matches {
+            expected["returns"]["x-sapio-type"] = "bitcoin.relative-blocks".into();
+        }
+        let expected = serde_json::to_vec(&expected).unwrap();
+        let extra = format!(
+            r#"
+            (data (i32.const 64) "{key}")
+            (data (i32.const 8192) "{}")
+            (data (i32.const 12288) "{}")
+            (data (i32.const 20000) "{}")"#,
+            escaped(&path),
+            escaped(&arguments),
+            escaped(&expected)
+        );
+        let call = format!("i32.const 8192 i32.const {} i32.const 64 i32.const 12288 i32.const {} i32.const 20000 i32.const {} call $nested_create", path.len(), arguments.len(), expected.len());
+        let source = module(&api(json!({}), json!({})), &json!({"Ok":0}), &extra, &call)
+            .replace(
+                "sapio_v1_wasm_plugin_create_contract\"",
+                "sapio_v1_wasm_plugin_create_contract_typed\"",
+            )
+            .replace(
+                "(param i32 i32 i32 i32 i32) (result i32)",
+                "(param i32 i32 i32 i32 i32 i32 i32) (result i32)",
+            );
+        let mut parent = cache.load::<Value>(&source);
+        let result: Result<Value, String> =
+            serde_json::from_str(&parent.get_name().unwrap()).unwrap();
+        if matches {
+            assert_eq!(result.unwrap(), json!(7));
+        } else {
+            assert!(result
+                .unwrap_err()
+                .contains("Typed module returns signature"));
+        }
+    }
+}
+
+#[test]
 fn permissive_module_schemas_cannot_accept_invalid_lowering_plans() {
     use sapio_base::covenant::{CovenantError, LoweringPlan};
 
