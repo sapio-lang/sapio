@@ -1,9 +1,10 @@
-# Sapio modernization plan
+# Sapio modernization record
 
-This is a recovery and development plan for the checkout based on `1933801`.
-It covers a maintained toolkit, a covenant research platform, and a better
-language experience. Those should share a compiler and artifact format. Building
-three independent products would multiply the maintenance problem.
+This records the recovery work begun from checkout `1933801` and the original
+development plan. It covers a maintained toolkit, a covenant research platform,
+and a better language experience sharing one compiler and artifact format.
+The [relaunch-readiness record](RELAUNCH.md) is the current list of release gates;
+the [quickstart](QUICKSTART.md) is the maintained developer entry point.
 
 ## What “respectable” means
 
@@ -13,17 +14,9 @@ reading compiler internals, and reproduce the result from a released version.
 A maintainer should be able to review a small change, run a relevant test, and
 explain what would make the resulting contract unsafe.
 
-A supported release needs all of these gates:
-
-- Reproducible stable Rust builds, tested native and WASM paths, maintained CI.
-- Correct transaction commitments, amounts, signing indices and fee accounting.
-- Explicit enforcement assumptions attached to artifacts and checked by tooling.
-- A documented, bounded module interface with real compatibility checks.
-- One working tutorial each for authoring, inspecting, and signing a contract.
-- A versioned artifact schema, documented supported APIs, and release ownership.
-- Security review of consensus-facing calculations, signers, and module hosting.
-
-A prettier README or a dependency bump alone does not meet those gates.
+The implementation record below tracks progress toward those goals. Release
+scope, distribution, compatibility and security evidence remain separate
+decisions, recorded in [RELAUNCH.md](RELAUNCH.md#remaining-gates).
 
 ## Baseline findings
 
@@ -62,7 +55,10 @@ with upstream crates would remove semantics, not complete a migration.
 | Transaction plans | [Named inputs/outputs, exact/remainder allocation, explicit fee caps, joined locks and ordinal placement](TRANSACTION_PLANS.md); compile each child once and retain local funding rules through artifact validation, binding and request preparation |
 | Typed actions | Ordinary Rust methods under `#[contract]`, independent request schemas, typed request handles and separate default proposals; one canonical action representation and no shared argument pack |
 | Spend preparation | [Whole-branch native witness planning and exact program evidence adapters](SPEND_PLANNING.md), explicit missing assets/maturity, complete descriptor weight bounds and selected-branch unsigned requests |
+| Spend completion | [Portable selected witness intents](SPEND_COMPLETION.md), scoped native signing, independently verified response merging and exact finalization with retained fee constraints; the CLI resumes from artifact, intent and PSBT files |
 | Artifact inspection | [Configuration-free `contract explain`](../cli/README.md#explain-a-contract) reports graph allocations, enforcement sources, action schemas and optional PSBT funding/satisfaction requirements |
+| Developer CLI | Stable Clap 4 typed commands; local module compilation writes raw artifacts without wallet configuration, while explicit local Program signing accepts a request, evaluator and key file |
+| Maintained starter | [Generated standalone project](QUICKSTART.md) with complete Git pins, patches, lockfile, toolchain and evaluator; pure contract source, separate synthetic runner and tests, and an external-project CI check executing the generated README |
 | Language core | [Action semantics](LANGUAGE_SEMANTICS.md): strict macro options and trait interfaces, context-free cached clauses with per-attachment metadata, stable condition slots, original action authorization before transaction deduplication, conflicting binding payload errors and inscription-aware guard composition |
 | Policy lowering | Validate source before simplification, reject fixed templates incompatible with known native CLTV/CSV/CTV requirements, and canonicalize bare-key selection and identical leaf scripts |
 | Custom policy languages | [PolicyCompiler API](POLICY_BACKENDS.md), checked ordered raw fragments, bounded expansion, reconstructed Taproot spending proofs, a real WASM guest and explicit external-finalization diagnostics; carries forward PR #269 |
@@ -170,11 +166,18 @@ uses the shared metered SHA256 host API, and compiler guests delegate public
 BIP32 derivation to native host code. Automatic generic artifact dispatch,
 BitVM disputes and penalty bonds remain future work.
 
-## Ordered work after this recovery pass
+## Original recovery sequence
+
+This sequence preserves the reasoning behind the recovery work. Several items,
+including the Bitcoin migration, typed actions, artifact inspection and complete
+starter workflow, are now implemented above. Current release blockers are tracked
+in [RELAUNCH.md](RELAUNCH.md).
 
 ### 1. Finish correctness and hosting boundaries
 
-This is the next release blocker, before a broad dependency migration.
+The recovery prioritized transaction correctness and host boundaries before
+broad dependency changes. Remaining deployment requirements are separate from
+the checks already implemented.
 
 - Extend [the binding checks](BINDING.md) with explicit chain/wallet funding
   policy. Transaction identities, known amounts, scripts, graph paths and
@@ -229,8 +232,9 @@ the time of each migration. Keep one reviewed lockfile change per coherent group
 Do not mix a Bitcoin data-model migration, runtime replacement and language
 rewrite in one change.
 
-1. Move Clap to a maintained stable release. Preserve intentional command
-   behavior with CLI tests, replace panic paths, fix exit codes and version
+1. Move Clap to a maintained stable release (now implemented with Clap 4).
+   Preserve intentional command behavior with CLI tests, replace panic paths,
+   fix exit codes and version
    reporting, and separate human diagnostics from JSON output.
 2. Keep the host's JSON Schema validator and Draft 7 declarations aligned when
    upgrading Schemars. Preserve malformed, recursive and nested-call coverage;
@@ -238,8 +242,9 @@ rewrite in one change.
 3. Evaluate further WASM runtime upgrades after implementing the resource contract.
    Benchmark compile time and memory, test cache invalidation across runtime
    versions, and run real Rust modules as well as small adversarial fixtures.
-4. Port the CTV extension onto maintained Rust Bitcoin/Miniscript APIs, or maintain
-   a small explicitly owned extension if upstream extension points are inadequate.
+4. Port the CTV extension onto maintained Rust Bitcoin/Miniscript APIs
+   ([implemented migration](BITCOIN_032.md)), maintaining a small explicitly owned
+   extension where upstream extension points are inadequate.
    Inventory policy ASTs, encoding/decoding, satisfaction, interpretation and PSBT
    finalization before porting. Preserve the golden transaction corpus.
 5. Upgrade procedural macro parsing and remove dead dependencies and feature
@@ -250,6 +255,11 @@ owner and rationale, reproducible native/WASM builds, and unchanged intended
 transaction behavior or a documented deliberate change.
 
 ### 3. Give developers a coherent toolkit
+
+The [maintained starter](QUICKSTART.md) now supplies the source-to-spend path,
+and native CI executes its actual README commands outside the workspace. The
+broader toolkit goals below explain the original scope; they do not require
+renaming current commands to match this early sketch.
 
 The full [example catalog](EXAMPLES.md) now has executable regression coverage.
 Choose a smaller supported release set with explicit chain enforcement and end-to-end
@@ -322,5 +332,6 @@ knowledge from the original author.
 
 The recovery commits are a foundation. They do not deliver a new standalone
 language, formal correctness proofs, a hardened multi-tenant service, an audited
-wallet, or a production deployment. Finish and review the release blockers above
-before presenting Sapio as suitable for protecting funds.
+wallet, or a production deployment. Finish and review the
+[remaining release gates](RELAUNCH.md#remaining-gates) before presenting Sapio as
+suitable for protecting funds.

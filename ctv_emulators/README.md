@@ -24,9 +24,10 @@ this program API supports native witness inputs and uses a different program
 key from the older CTV-specific service below.
 
 See the [program-emulation guide](../docs/PROGRAM_EMULATION.md) for the protocol,
-trust assumptions and a runnable payment continuation. This is a separate Rust
-API and wire protocol; the CLI and CTV service described below retain their
-existing template-hash signing rule.
+trust assumptions and a runnable payment action. The CLI's `signer program`
+command evaluates one exported request locally with an explicit key and
+interpreter file. The `emulator` command family and CTV service described below
+retain their distinct template-hash signing rule.
 
 ## Connection lifecycle
 

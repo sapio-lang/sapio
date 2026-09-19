@@ -439,6 +439,10 @@ fn templatehash_wasm_runs_every_official_bip446_case() {
             input_index: vector.input_index,
             internal_key: control.internal_key,
             annex,
+            selected_tapleaf: Some(TapLeafHash::from_script(
+                bitcoin::Script::from_bytes(script),
+                control.leaf_version,
+            )),
         };
         let result = wasm::evaluate(
             WasmVersion::V2,

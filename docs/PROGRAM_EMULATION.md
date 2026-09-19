@@ -26,8 +26,8 @@ and parameter bytes together with the evaluator's semantic identity.
 `EmulatedProgram` derives the corresponding key from the public root and
 implements `PolicyCompiler`.
 
-The contract declares a cached `#[guard(policy)]` returning that complete
-`EmulatedProgram`. Its continuation may propose a larger payment or reorder the
+The contract declares a context-free `#[policy]` returning that complete
+`EmulatedProgram`. Its typed suggested action may propose a larger payment or reorder the
 outputs. Those effects generate candidate transactions without changing the
 guard or funded address. Changing the minimum, recipient, evaluator semantics,
 program bytes, or oracle root produces different authorization.

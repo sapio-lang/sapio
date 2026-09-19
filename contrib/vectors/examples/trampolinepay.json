@@ -2,7 +2,7 @@
   "arguments": {
     "handle": {
       "which_plugin": {
-        "HashKey": "MODULE_treepay"
+        "HashKey": "MODULE_treepay-batching"
       }
     },
     "data": {

@@ -38,6 +38,8 @@ pub use crate::msgs::PSBT;
 
 mod artifacts;
 pub use artifacts::{prepare_program_request, ArtifactProgramError};
+pub mod completion;
+pub use completion::{SpendCompletionError, SpendIntent};
 pub mod spend_plan;
 pub use spend_plan::{
     plan_spends, prepare_spend, PreparedSpend, ProgramCapability, ProgramEvidence,
@@ -139,6 +141,7 @@ pub struct SignedTransactionView<'a> {
     input_index: u32,
     internal_key: XOnlyPublicKey,
     annex: Option<&'a [u8]>,
+    selected_tapleaf: Option<TapLeafHash>,
 }
 
 impl SignedTransactionView<'_> {
@@ -168,6 +171,14 @@ impl SignedTransactionView<'_> {
     /// The exact annex committed by this input's signature, including `0x50`.
     pub fn annex(&self) -> Option<&[u8]> {
         self.annex
+    }
+
+    /// The selected tapscript leaf authenticated against the spent output.
+    ///
+    /// This hash is also committed by the signature being authorized. Key-path
+    /// signatures have no selected leaf, even when the output has a script tree.
+    pub fn tapleaf_hash(&self) -> Option<TapLeafHash> {
+        self.selected_tapleaf
     }
 
     /// Every input's signed fields, in transaction order.
@@ -408,6 +419,7 @@ impl ProgramOracle {
             input_index: request.input_index,
             internal_key: prepared.internal_key,
             annex: prepared.annex,
+            selected_tapleaf: prepared.selected_tapleaf,
         };
         if !wasm::evaluate(
             version,
@@ -463,6 +475,7 @@ struct Prepared<'a> {
     message: Message,
     internal_key: XOnlyPublicKey,
     annex: Option<&'a [u8]>,
+    selected_tapleaf: Option<TapLeafHash>,
 }
 
 impl Prepared<'_> {
@@ -611,6 +624,7 @@ fn prepare<'a>(
         message,
         internal_key,
         annex,
+        selected_tapleaf: path.map(|(leaf, _)| leaf),
     })
 }
 

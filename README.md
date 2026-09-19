@@ -4,39 +4,49 @@ Sapio is a Rust framework for describing Bitcoin contracts as graphs of
 transactions. Contracts compile into spending conditions, transaction templates,
 and metadata; the tooling can bind those templates to UTXOs and produce PSBTs.
 
-This checkout is undergoing modernization. The compiler, signing code and WASM
-boundary have regression fixes, and builds use a pinned stable Rust toolchain.
-The [modernization plan](docs/MODERNIZATION.md) records what is implemented and
-what still blocks a supported release.
+The developer preview includes typed contract actions, transaction plans,
+artifact inspection and selected-spend completion. Builds use a pinned stable
+Rust toolchain. The [release-readiness record](docs/RELAUNCH.md) distinguishes
+the maintained developer path from the remaining deployment and release gates.
 
 ## Start here
 
-Install [Rust with rustup](https://www.rust-lang.org/tools/install) and a native C
-compiler. From the repository root:
+Follow the [quickstart](docs/QUICKSTART.md) to generate a complete Rust project
+and carry one payment from source through a verified synthetic spend. Install
+Rust with rustup and a native C compiler, then from the repository root:
 
 ```sh
-cargo run --locked -p sapio --example payment
-cargo test --locked --workspace --all-features
+cargo build --locked -p sapio-cli
+export PATH="$PWD/target/debug:$PATH"
+sapio-cli new ../my-contract --name my-contract
+cd ../my-contract
+cargo test --locked
 ```
 
-Rustup selects the version in `rust-toolchain.toml`. The
-[payment example](sapio/examples/payment.rs) compiles a 1,000-satoshi payment with
-500 satoshis reserved for fees and prints the contract as JSON. It needs no node
-or signer and does not fund or broadcast a transaction. The integration tests
-start their own emulator on a local ephemeral port.
+Continue with the generated README for artifact inspection, explicit local
+WASM evaluation/signing, response import and finalization. Contract logic stays
+separate from the runner and tests. The project includes its dependency pins,
+lockfile, toolchain and evaluator; no manually cloned dependency repositories
+or WASM compiler are needed. Funding is synthetic and keys are public demo
+material. Nothing is broadcast.
+
+The [walkthrough check](docs/QUICKSTART.md#check-the-published-walkthrough)
+executes the generated README outside the repository workspace and is included
+in native CI.
 
 Native CTV compilation is a **research target**. A generated address does not
 establish that the target chain enforces CTV. Signer emulation has separate trust
 and availability assumptions. See the [enforcement model](docs/MODERNIZATION.md#enforcement-and-release-boundaries)
 before using either with funds.
 
-For WASM modules and development checks, follow the
-[development guide](docs/DEVELOPMENT.md). The historical
+For WASM compiler modules and repository checks, follow the
+[development guide](docs/DEVELOPMENT.md). The
 [Designing Bitcoin Contracts with Sapio](docs/learn-sapio/src/SUMMARY.md) book
-contains broader examples; its older installation instructions are being revised.
+starts with the maintained tutorial and retains broader historical material.
 
 Start with [transaction plans and typed actions](docs/TRANSACTION_PLANS.md),
-then [spend planning](docs/SPEND_PLANNING.md) and the
+then [spend planning](docs/SPEND_PLANNING.md),
+[selected spend completion](docs/SPEND_COMPLETION.md), and the
 [artifact explainer](cli/README.md#explain-a-contract). These APIs distinguish construction,
 spending predicates and the evidence required to satisfy one branch.
 
@@ -44,19 +54,24 @@ The [contract example catalog](docs/EXAMPLES.md) inventories every library famil
 all 20 WASM modules and runnable native examples, with regression coverage
 and the assumptions each construction still requires.
 
+[Build a vault in Studio](contrib/build-a-vault/README.md) connects ten typed
+custody blocks into five runnable visual patches: fixed vaults, quorum custody,
+a delayed wallet, and dynamic OP_VAULT emulation with optional revaulting.
+
 ## Repository map
 
 | Component | Purpose |
 | --- | --- |
 | [sapio](sapio/) | Contract traits, compiler, transaction templates and linking |
 | [sapio-base](sapio-base/) | Bitcoin types, CTV hashing, amounts and shared formats |
-| [sapio-psbt](sapio-psbt/) | Taproot PSBT signing |
+| [sapio-psbt](sapio-psbt/) | PSBT validation, scoped signing and witness finalization |
 | [sapio_macros](sapio_macros/) | Rust contract authoring macros |
 | [cli](cli/) | Contract, PSBT and emulator commands |
 | [plugins](plugins/) | WASM client ABI and host runtime |
-| [ctv_emulators](ctv_emulators/) | Signer-based CTV emulation |
+| [ctv_emulators](ctv_emulators/) | Covenant emulation, WASM evaluation and selected-spend completion |
 | [sapio-contrib](sapio-contrib/) | Contract library and research examples |
 | [plugin-example](plugin-example/) | Separately built WASM example workspace |
+| [build-a-vault](contrib/build-a-vault/) | Composable custody modules and Studio tutorial |
 | [integration_tests](integration_tests/) | Compilation, signing and finalization checks |
 
 Read Jeremy Rubin's [A Calculus of Covenants](https://rubin.io/bitcoin/2022/04/12/calc-cov/)

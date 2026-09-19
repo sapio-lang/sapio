@@ -12,14 +12,15 @@ use core::convert::TryFrom;
 use sapio::contract::CompilationError;
 use sapio_base::effects::EffectPath;
 use sapio_base::Clause;
+use schemars::generate::Contract;
 use std::marker::PhantomData;
 
 /// A resolved module key with typed call arguments and results.
 ///
-/// Construction resolves the locator; it does not prove interface compatibility.
-/// The host validates each actual input and successful output against the
-/// module's advertised schemas, and the caller deserializes the result as `R`.
-#[derive(Serialize, Deserialize, JsonSchema, Clone, PartialEq, Eq)]
+/// Construction resolves the locator. Each typed call supplies its expected
+/// argument/result schemas for comparison with the running module's API before
+/// execution. Actual values are also validated against the advertised schemas.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
 #[serde(try_from = "SapioHostAPIResolver")]
 #[serde(bound(serialize = "", deserialize = ""))]
 pub struct SapioHostAPI<T: Serialize + JsonSchema + Clone, R: for<'a> Deserialize<'a> + JsonSchema>
@@ -31,6 +32,33 @@ pub struct SapioHostAPI<T: Serialize + JsonSchema + Clone, R: for<'a> Deserializ
     pub key: [u8; 32],
     #[serde(default, skip)]
     _pd: PhantomData<(T, R)>,
+}
+
+impl<T, R> JsonSchema for SapioHostAPI<T, R>
+where
+    T: Serialize + JsonSchema + Clone,
+    R: for<'a> Deserialize<'a> + JsonSchema,
+{
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        format!("Module_{}_to_{}", T::schema_name(), R::schema_name()).into()
+    }
+
+    fn schema_id() -> std::borrow::Cow<'static, str> {
+        format!("SapioHostAPI<{},{}>", T::schema_id(), R::schema_id()).into()
+    }
+
+    fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        let mut schema = SapioHostAPIResolver::json_schema(generator);
+        schema.insert(
+            "x-sapio-module".into(),
+            serde_json::json!({
+                "arguments": generator
+                    .subschema_for_with_contract::<CreateArgs<T>>(Contract::Deserialize),
+                "returns": generator.subschema_for_with_contract::<R>(Contract::Serialize),
+            }),
+        );
+        schema
+    }
 }
 
 /// Convenience Label for [`SapioHostAPI<T, Compiled>`]
@@ -49,7 +77,7 @@ where
         path: &EffectPath,
         c: &Self::Input,
     ) -> Result<Self::Output, CompilationError> {
-        call_path(path, &self.key, c.clone())
+        super::util::call_path_typed(path, &self.key, c.clone())
     }
     fn get_api(&mut self) -> Result<API<Self::Input, Self::Output>, CompilationError> {
         get_api(&self.key)
@@ -114,5 +142,92 @@ where
             key,
             _pd: Default::default(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Clone, Serialize, JsonSchema)]
+    struct Arguments {
+        #[schemars(schema_with = "sapio_base::schema::satoshis")]
+        amount: u64,
+    }
+
+    #[derive(JsonSchema)]
+    #[serde(transparent)]
+    #[allow(dead_code)]
+    struct RegistrationWrapper(Arguments);
+
+    #[test]
+    fn typed_module_schema_exports_both_generic_signatures() {
+        let schema = schemars::generate::SchemaSettings::draft07()
+            .into_generator()
+            .into_root_schema_for::<SapioHostAPI<Arguments, u64>>();
+        let marker = &schema.as_value()["x-sapio-module"];
+        let actual = API::<CreateArgs<RegistrationWrapper>, u64>::new();
+        assert!(crate::interface::schema_nodes_match(
+            &marker["arguments"],
+            schema.as_value(),
+            actual.input().as_value(),
+            actual.input().as_value(),
+        ));
+        assert!(crate::interface::schema_nodes_match(
+            &marker["returns"],
+            schema.as_value(),
+            actual.output().as_value(),
+            actual.output().as_value(),
+        ));
+        let wrong = API::<(), String>::new();
+        assert!(!crate::interface::schema_nodes_match(
+            &marker["returns"],
+            schema.as_value(),
+            wrong.output().as_value(),
+            wrong.output().as_value(),
+        ));
+        assert!(schema.as_value()["properties"]["which_plugin"].is_object());
+    }
+
+    #[derive(Clone, Serialize, Deserialize, JsonSchema)]
+    struct RecursiveArguments {
+        #[serde(rename(serialize = "sent", deserialize = "accepted"))]
+        value: u64,
+        child: Option<SapioHostAPI<RecursiveArguments, RecursiveResult>>,
+    }
+
+    #[derive(Clone, Serialize, Deserialize, JsonSchema)]
+    struct RecursiveResult {
+        #[serde(rename(serialize = "produced", deserialize = "received"))]
+        value: u64,
+        next: Option<SapioHostAPI<RecursiveArguments, RecursiveResult>>,
+    }
+
+    #[test]
+    fn recursive_callable_signatures_share_graphs_and_keep_each_direction() {
+        let api = API::<CreateArgs<RecursiveArguments>, RecursiveResult>::new();
+        for root in [api.input().as_value(), api.output().as_value()] {
+            let definitions = root["definitions"].as_object().unwrap();
+            let marker = definitions
+                .values()
+                .find_map(|value| value.get("x-sapio-module"))
+                .expect("recursive handle definition");
+            for (side, actual) in [
+                ("arguments", api.input().as_value()),
+                ("returns", api.output().as_value()),
+            ] {
+                assert!(crate::interface::schema_nodes_match(
+                    &marker[side],
+                    root,
+                    actual,
+                    actual,
+                ));
+            }
+        }
+        assert!(api.output().as_value()["properties"]["produced"].is_object());
+        assert!(
+            api.input().as_value()["definitions"]["RecursiveArguments"]["properties"]["accepted"]
+                .is_object()
+        );
     }
 }

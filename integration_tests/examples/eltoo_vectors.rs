@@ -4,16 +4,18 @@ use bitcoin::consensus::encode::serialize_hex;
 use bitcoin::secp256k1::{schnorr::Signature, Secp256k1};
 use bitcoin::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::{Address, Network, OutPoint, Transaction, Witness};
+use emulator_connect::program::completion::SpendIntent;
 use emulator_connect::program::{
     prepare_program_request, ProgramOracle, ProgramSigningRequest, ProgramSpendPath,
 };
+use sapio::contract::Compiled;
 use sapio::template::Template;
 use sapio_contrib::contracts::eltoo::{Channel, State};
 use sapio_integration_tests::eltoo_example::fixture;
 use sapio_integration_tests::eltoo_example::recovery::recover_update;
 use sapio_integration_tests::eltoo_example::runner::{
-    attach_inputs, authorize_update, compile, finalize_candidate, input, settlement_request,
-    settlement_template, sign_sponsor, update_leaf, update_request, update_requirement,
+    attach_inputs, authorize_update, compile, complete_candidate, finalize_recovered_candidate,
+    input, prepare_settlement, prepare_update, sign_sponsor, update_leaf, update_requirement,
     update_template, update_transaction, Coin, Error, Sponsor,
 };
 
@@ -29,12 +31,19 @@ struct Funding {
 
 fn finish(
     oracle: &ProgramOracle,
+    (compiled, intent): (Compiled, SpendIntent),
+) -> Result<Transaction, Error> {
+    complete_candidate(&compiled, &intent, oracle, &fixture::sponsor_key())
+}
+
+fn finish_recovered(
+    oracle: &ProgramOracle,
     request: ProgramSigningRequest,
     template: &Template,
 ) -> Result<Transaction, Error> {
     let mut signed = oracle.sign(request)?;
     sign_sponsor(&mut signed, &fixture::sponsor_key())?;
-    finalize_candidate(template, signed)
+    finalize_recovered_candidate(template, signed)
 }
 
 fn output_zero(transaction: &Transaction) -> Coin {
@@ -143,16 +152,15 @@ fn main() -> Result<(), Error> {
     let certificate_3 = authorize_update(&terms, latest, &fixture::joint_key())?;
     let update_1 = finish(
         &oracle,
-        update_request(
+        prepare_update(
             &funding,
             first,
             funding_coin.clone(),
             sponsors[0].clone(),
             &certificate_1,
         )?,
-        &update_template(&terms, first)?,
     )?;
-    let direct = update_request(
+    let direct = prepare_update(
         &funding,
         latest,
         funding_coin.clone(),
@@ -161,22 +169,20 @@ fn main() -> Result<(), Error> {
     )?;
     let recovered = recover_update(&terms, &update_1)?;
     let rebound = recovered.request(&terms, latest, sponsors[1].clone(), &certificate_3)?;
-    assert_eq!(direct.witness, rebound.witness);
-    let update_3_direct = finish(&oracle, direct, &update_template(&terms, latest)?)?;
-    let update_3_rebound = finish(&oracle, rebound, &update_template(&terms, latest)?)?;
+    assert_eq!(direct.1.requests()[0].witness, rebound.witness);
+    let update_3_direct = finish(&oracle, direct)?;
+    let update_3_rebound = finish_recovered(&oracle, rebound, &update_template(&terms, latest)?)?;
     let settlement_1 = finish(
         &oracle,
-        settlement_request(&first_channel, output_zero(&update_1), sponsors[2].clone())?,
-        &settlement_template(&terms, first)?,
+        prepare_settlement(&first_channel, output_zero(&update_1), sponsors[2].clone())?,
     )?;
     let settlement_3 = finish(
         &oracle,
-        settlement_request(
+        prepare_settlement(
             &latest_channel,
             output_zero(&update_3_rebound),
             sponsors[2].clone(),
         )?,
-        &settlement_template(&terms, latest)?,
     )?;
     let equal = non_advancing_update(
         &oracle,

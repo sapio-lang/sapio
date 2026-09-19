@@ -19,9 +19,11 @@ use serde::Deserialize;
 /// Get a Clause for two parties to sign together
 #[derive(JsonSchema, Deserialize)]
 pub struct GetClause {
-    // TODO: Taproot Fix Encoding
+    /// Alice's x-only public key.
+    #[schemars(title = "Alice", schema_with = "sapio_base::schema::x_only_public_key")]
     alice: bitcoin::XOnlyPublicKey,
-    // TODO: Taproot Fix Encoding
+    /// Bob's x-only public key.
+    #[schemars(title = "Bob", schema_with = "sapio_base::schema::x_only_public_key")]
     bob: bitcoin::XOnlyPublicKey,
 }
 

@@ -7,7 +7,7 @@
 - [Getting Started](./ch01-00-getting-started.md)
     - [Installing Sapio](./ch01-01-installation.md)
     - [Learning Rust](./ch01-02-learn-rust.md)
-    - [Hello World](./ch01-03-hello-world.md)
+    - [Build and spend your first contract](./ch01-03-hello-world.md)
 
 
 - [BIP-119 CTV Fundamentals](./ch02-00-bip-119.md)

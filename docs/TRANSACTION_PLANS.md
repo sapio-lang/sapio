@@ -163,5 +163,9 @@ still be pending. Requests for other branches are never produced implicitly.
 
 Neither a codec string nor SIMP metadata grants authority. The caller configures
 evidence adapters and signers explicitly. Preparation performs no network access,
-oracle invocation or signing. Evaluating and signing a program request, merging
-its response, and normal Bitcoin signature finalization remain explicit steps.
+oracle invocation or signing. `SpendIntent::from_prepared` retains the exact
+selection and original request baselines. The caller explicitly configures
+signers; the shared completion API merges responses in any order, signs only
+selected native slots, and verifies the exact witness and final funding rules.
+The [spend completion guide](SPEND_COMPLETION.md) covers persistence and the
+local CLI workflow.

@@ -1,0 +1,33 @@
+[package]
+name = "@@PACKAGE_NAME@@"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.98.1"
+license = "MPL-2.0"
+publish = false
+
+# This starter is independent even when created inside another workspace.
+[workspace]
+resolver = "2"
+
+[dependencies]
+bitcoin = { version = "=0.32.102", features = ["serde", "rand", "base64"] }
+base64 = "0.13.1"
+clap = { version = "=4.6.6", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+schemars = { version = "=1.2.2", features = ["bitcoin032", "miniscript13"] }
+
+# The tested spend-completion API. Update these together with Cargo.lock.
+sapio = { git = "https://github.com/sapio-lang/sapio", rev = "88cb0daf23762d942bb5c2532b3d27f770066c43" }
+sapio-base = { git = "https://github.com/sapio-lang/sapio", rev = "88cb0daf23762d942bb5c2532b3d27f770066c43" }
+sapio-psbt = { git = "https://github.com/sapio-lang/sapio", rev = "88cb0daf23762d942bb5c2532b3d27f770066c43" }
+ctv_emulators = { git = "https://github.com/sapio-lang/sapio", rev = "88cb0daf23762d942bb5c2532b3d27f770066c43" }
+
+# Cargo uses patches only from the consumer's workspace root.
+[patch.crates-io]
+bitcoin = { git = "https://github.com/sapio-lang/rust-bitcoin", rev = "6ef940bb2d98ba5dece053fdabd1d9ad65ff5864" }
+bitcoin_hashes = { git = "https://github.com/sapio-lang/rust-bitcoin", rev = "6ef940bb2d98ba5dece053fdabd1d9ad65ff5864" }
+miniscript = { git = "https://github.com/sapio-lang/rust-miniscript", rev = "8d2aa4a60979a55f6ecd6222d48f94a482f4a2f6" }
+schemars = { git = "https://github.com/sapio-lang/sapio-jsonschema", rev = "1ab5dcacb79fa9f068b1f3d8759bcd489564c989" }
+schemars_derive = { git = "https://github.com/sapio-lang/sapio-jsonschema", rev = "1ab5dcacb79fa9f068b1f3d8759bcd489564c989" }

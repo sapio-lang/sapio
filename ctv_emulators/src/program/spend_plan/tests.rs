@@ -104,6 +104,22 @@ fn native_hashed_key_descriptors_keep_the_original_public_key() {
     let report = plan_spends(&object, None, &assets).unwrap();
     assert_eq!(leaf(&report).status, BranchStatus::Planned);
     assert_eq!(signatures(leaf(&report)), [key(2)].into());
+    let prepared = prepare_native(&object, funded(&object), &assets);
+    let SpendPath::ScriptPath(hash) = prepared.plan.path else {
+        unreachable!()
+    };
+    assert_eq!(
+        prepared.recipe.witness[1],
+        StackElement::Literal(key(2).serialize().to_vec())
+    );
+    let mut psbt = prepared.psbt;
+    sign_leaf(&mut psbt, hash, 2);
+    sapio_psbt::selected::finalize_selected(
+        &mut psbt,
+        &Secp256k1::verification_only(),
+        &[(0, prepared.recipe)].into(),
+    )
+    .unwrap();
 }
 
 #[test]
@@ -302,9 +318,41 @@ fn two_programs_and_native_guards_share_one_complete_plan_and_explicit_requests(
         .collect();
     let prepared = prepare_spend(&object, path, psbt.clone(), 0, &assets, &evidence).unwrap();
     assert_eq!(prepared.program_requests.len(), 2);
+    assert_eq!(prepared.input_index, 0);
+    let SpendPath::ScriptPath(selected_leaf) = path else {
+        unreachable!()
+    };
+    assert_eq!(
+        prepared.native_signatures,
+        vec![SignatureSlot::Schnorr {
+            key: key(2),
+            leaf: Some(selected_leaf)
+        }]
+    );
+    let (resumed, native) =
+        validate_spend_selection(&object, path, &prepared.psbt, 0, &prepared.recipe).unwrap();
+    assert_eq!(native, prepared.native_signatures);
+    assert_eq!(resumed.status, BranchStatus::MissingAssets);
+    assert_eq!(
+        resumed
+            .requirements
+            .iter()
+            .filter(|item| matches!(
+                item,
+                SpendRequirement::Program {
+                    signature: Availability::Missing,
+                    evidence: Availability::Missing,
+                    signer_available: false,
+                    ..
+                }
+            ))
+            .count(),
+        2
+    );
     assert_eq!(prepared.plan.status, BranchStatus::MissingAssets); // native key remains pending
     assert_eq!(signatures(&prepared.plan), [key(2)].into());
     for request in &prepared.program_requests {
+        assert_eq!(request.psbt.0, prepared.psbt);
         assert_eq!(request.psbt.0.unsigned_tx, psbt.unsigned_tx);
         assert!(!request.psbt.0.inputs[0].tap_scripts.is_empty());
         assert!(request.psbt.0.inputs[0].tap_script_sigs.is_empty());
@@ -333,6 +381,281 @@ fn two_programs_and_native_guards_share_one_complete_plan_and_explicit_requests(
         prepare_spend(&object, path, psbt, 0, &assets, &evidence),
         Err(SpendPlanError::IncompatibleTransaction)
     ));
+}
+
+fn prepare_native(object: &Object, psbt: Psbt, assets: &SpendAssets) -> PreparedSpend {
+    let report = plan_spends(object, Some((&psbt, 0)), assets).unwrap();
+    let path = if report
+        .branches
+        .iter()
+        .any(|plan| matches!(plan.path, SpendPath::ScriptPath(_)))
+    {
+        leaf(&report).path
+    } else {
+        report.branches[0].path
+    };
+    prepare_spend(object, path, psbt, 0, assets, &[] as &[ProgramEvidence]).unwrap()
+}
+
+fn sign_leaf(psbt: &mut Psbt, leaf: TapLeafHash, seed: u8) {
+    let prevout = psbt.inputs[0].witness_utxo.clone().unwrap();
+    let hash = SighashCache::new(&psbt.unsigned_tx)
+        .taproot_script_spend_signature_hash(
+            0,
+            &Prevouts::All(&[prevout]),
+            leaf,
+            TapSighashType::Default,
+        )
+        .unwrap();
+    psbt.inputs[0].tap_script_sigs.insert(
+        (key(seed), leaf),
+        bitcoin::taproot::Signature {
+            signature: Secp256k1::new().sign_schnorr_no_aux_rand(
+                &Message::from_digest(hash.to_byte_array()),
+                &keypair(seed),
+            ),
+            sighash_type: TapSighashType::Default,
+        },
+    );
+}
+
+#[test]
+fn selected_inner_alternative_survives_restart_and_additional_signatures() {
+    let object = native(&format!(
+        "tr({},or_i(pk({}),pk({})))",
+        key(1),
+        key(2),
+        key(3)
+    ));
+    let assets = SpendAssets {
+        schnorr_keys: [key(2)].into(),
+        ..Default::default()
+    };
+    let prepared = prepare_native(&object, funded(&object), &assets);
+    let recipe: SatisfactionRecipe =
+        serde_json::from_slice(&serde_json::to_vec(&prepared.recipe).unwrap()).unwrap();
+    let path = prepared.plan.path;
+    let SpendPath::ScriptPath(hash) = path else {
+        unreachable!()
+    };
+    let mut psbt = prepared.psbt;
+    let (missing, native) = validate_spend_selection(&object, path, &psbt, 0, &recipe).unwrap();
+    assert_eq!(missing.status, BranchStatus::MissingAssets);
+    assert_eq!(
+        native,
+        vec![SignatureSlot::Schnorr {
+            key: key(2),
+            leaf: Some(hash)
+        }]
+    );
+    sign_leaf(&mut psbt, hash, 3);
+    let (still_missing, _) = validate_spend_selection(&object, path, &psbt, 0, &recipe).unwrap();
+    assert_eq!(still_missing.status, BranchStatus::MissingAssets);
+    assert_eq!(signatures(&still_missing), [key(2)].into());
+    sign_leaf(&mut psbt, hash, 2);
+    let (selected, _) = validate_spend_selection(&object, path, &psbt, 0, &recipe).unwrap();
+    assert_eq!(selected.status, BranchStatus::Planned);
+    assert_eq!(
+        selected.satisfaction_weight_upper_bound,
+        prepared.plan.satisfaction_weight_upper_bound
+    );
+    sapio_psbt::selected::finalize_selected(
+        &mut psbt,
+        &Secp256k1::verification_only(),
+        &[(0, recipe)].into(),
+    )
+    .unwrap();
+    let witness = psbt.inputs[0]
+        .final_script_witness
+        .as_ref()
+        .unwrap()
+        .to_vec();
+    assert_eq!(witness[1], vec![1]); // the selected left OR branch, though the right is now available
+    assert_eq!(witness[0].len(), 64);
+}
+
+#[test]
+fn equal_key_nested_choices_and_threshold_selection_are_canonical() {
+    for expression in [
+        format!("or_i(pk({}),or_i(pk({}),pk({})))", key(2), key(2), key(3)),
+        format!("thresh(2,pk({}),s:pk({}),s:pk({}))", key(2), key(3), key(4)),
+    ] {
+        // The typed descriptor parser excludes repeated public keys, whereas
+        // checked raw Taproot leaves can still contain these native scripts.
+        let script = Miniscript::<XOnlyPublicKey, Tap>::from_str_insane(&expression)
+            .unwrap()
+            .encode();
+        let raw = RawTaproot::from_scripts(key(1), vec![script]).unwrap();
+        let mut object = Compiled::from_script(
+            raw.script_pubkey(),
+            Amount::from_sat(1_000),
+            Network::Regtest,
+        )
+        .unwrap();
+        object.descriptor = Some(SupportedDescriptors::Taproot(raw));
+        let assets = SpendAssets {
+            schnorr_keys: [key(2), key(4)].into(),
+            ..Default::default()
+        };
+        let prepared = prepare_native(&object, funded(&object), &assets);
+        let path = prepared.plan.path;
+        let SpendPath::ScriptPath(hash) = path else {
+            unreachable!()
+        };
+        let mut psbt = prepared.psbt;
+        for seed in [2, 3, 4] {
+            sign_leaf(&mut psbt, hash, seed);
+        }
+        let (selected, native) =
+            validate_spend_selection(&object, path, &psbt, 0, &prepared.recipe).unwrap();
+        assert_eq!(native, prepared.native_signatures, "{expression}");
+        assert_eq!(
+            signatures(&selected),
+            signatures(&prepared.plan),
+            "{expression}"
+        );
+        sapio_psbt::selected::finalize_selected(
+            &mut psbt,
+            &Secp256k1::verification_only(),
+            &[(0, prepared.recipe)].into(),
+        )
+        .unwrap();
+    }
+}
+
+#[test]
+fn imported_recipe_bytes_and_slots_are_rederived_from_the_artifact() {
+    let object = native(&format!(
+        "tr({},or_i(pk({}),pk({})))",
+        key(1),
+        key(2),
+        key(3)
+    ));
+    let prepared = prepare_native(
+        &object,
+        funded(&object),
+        &SpendAssets {
+            schnorr_keys: [key(2)].into(),
+            ..Default::default()
+        },
+    );
+    let path = prepared.plan.path;
+    let mut wrong_selector = prepared.recipe.clone();
+    wrong_selector.witness[1] = StackElement::Literal(vec![]);
+    let mut wrong_proof = prepared.recipe.clone();
+    let StackElement::Literal(proof) = wrong_proof.witness.last_mut().unwrap() else {
+        unreachable!()
+    };
+    proof[0] ^= 1;
+    let mut literal_signature = prepared.recipe.clone();
+    literal_signature.witness[0] = StackElement::Literal(vec![0; 64]);
+    let mut extra_item = prepared.recipe.clone();
+    extra_item.script_sig.push(StackElement::Literal(vec![]));
+    for wrong in [wrong_selector, wrong_proof, literal_signature, extra_item] {
+        assert!(validate_spend_selection(&object, path, &prepared.psbt, 0, &wrong).is_err());
+    }
+}
+
+#[test]
+fn resumed_selection_rechecks_native_locks_preimages_and_annex() {
+    let preimage = [7; 32];
+    let hash = sha256::Hash::hash(&preimage);
+    let object = native(&format!(
+        "tr({},and_v(v:pk({}),and_v(v:sha256({hash}),and_v(v:after(100),older(6)))))",
+        key(1),
+        key(2)
+    ));
+    let mut psbt = funded(&object);
+    psbt.unsigned_tx.lock_time = absolute::LockTime::from_consensus(100);
+    psbt.unsigned_tx.input[0].sequence = Sequence::from_height(6);
+    sapio_psbt::annex::set(&mut psbt.inputs[0], Some(vec![0x50, 1])).unwrap();
+    let assets = SpendAssets {
+        schnorr_keys: [key(2)].into(),
+        preimages: [HashRequirement::Sha256(hash)].into(),
+        ..Default::default()
+    };
+    let prepared = prepare_native(&object, psbt, &assets);
+    let path = prepared.plan.path;
+    let mut psbt = prepared.psbt;
+    let (missing, _) = validate_spend_selection(&object, path, &psbt, 0, &prepared.recipe).unwrap();
+    assert!(missing.requirements.contains(&SpendRequirement::Preimage {
+        hash: HashRequirement::Sha256(hash),
+        availability: Availability::Missing
+    }));
+    psbt.inputs[0]
+        .sha256_preimages
+        .insert(hash, preimage.to_vec());
+    let (supplied, _) =
+        validate_spend_selection(&object, path, &psbt, 0, &prepared.recipe).unwrap();
+    assert!(supplied.requirements.contains(&SpendRequirement::Preimage {
+        hash: HashRequirement::Sha256(hash),
+        availability: Availability::PresentVerified
+    }));
+    let mut wrong_lock = psbt.clone();
+    wrong_lock.unsigned_tx.input[0].sequence = Sequence::ZERO;
+    assert!(matches!(
+        validate_spend_selection(&object, path, &wrong_lock, 0, &prepared.recipe),
+        Err(SpendPlanError::IncompatibleTransaction)
+    ));
+    sapio_psbt::annex::set(&mut psbt.inputs[0], Some(vec![0x50, 2])).unwrap();
+    assert!(matches!(
+        validate_spend_selection(&object, path, &psbt, 0, &prepared.recipe),
+        Err(SpendPlanError::InvalidSelection)
+    ));
+}
+
+#[test]
+fn descriptor_recipes_package_witness_scripts_and_nested_redeem_programs() {
+    let public = PublicKey::new(keypair(2).public_key());
+    let script = Miniscript::<PublicKey, miniscript::Segwitv0>::from_str(&format!("pk({public})"))
+        .unwrap()
+        .encode();
+    for (expression, witness_script, script_sig) in [
+        (format!("wsh(pk({public}))"), Some(script.clone()), None),
+        (
+            format!("sh(wsh(pk({public})))"),
+            Some(script.clone()),
+            Some(script.to_p2wsh()),
+        ),
+        (
+            format!("sh(wpkh({public}))"),
+            None,
+            Some(ScriptBuf::new_p2wpkh(&public.wpubkey_hash().unwrap())),
+        ),
+        (format!("sh(pk({public}))"), None, Some(script.clone())),
+    ] {
+        let descriptor = Descriptor::<PublicKey>::from_str(&expression).unwrap();
+        let object = Compiled::from_descriptor(descriptor, Amount::from_sat(1_000));
+        let prepared = prepare_native(
+            &object,
+            funded(&object),
+            &SpendAssets {
+                ecdsa_keys: [public].into(),
+                ..Default::default()
+            },
+        );
+        let (_, native) = validate_spend_selection(
+            &object,
+            SpendPath::Descriptor,
+            &prepared.psbt,
+            0,
+            &prepared.recipe,
+        )
+        .unwrap();
+        assert_eq!(native, vec![SignatureSlot::Ecdsa(public)]);
+        if let Some(script) = witness_script {
+            assert_eq!(
+                prepared.recipe.witness.last(),
+                Some(&StackElement::Literal(script.into_bytes()))
+            );
+        }
+        if let Some(script) = script_sig {
+            assert_eq!(
+                prepared.recipe.script_sig.last(),
+                Some(&StackElement::Literal(script.into_bytes()))
+            );
+        }
+    }
 }
 
 #[test]
@@ -586,7 +909,7 @@ fn native_ctv_checks_funded_fields_before_preparing() {
             hash,
             transaction: PlanCheck::Met,
         }));
-    prepare_spend(
+    let prepared = prepare_spend(
         &object,
         path,
         psbt.clone(),
@@ -595,7 +918,12 @@ fn native_ctv_checks_funded_fields_before_preparing() {
         &[] as &[ProgramEvidence],
     )
     .unwrap();
+    validate_spend_selection(&object, path, &prepared.psbt, 0, &prepared.recipe).unwrap();
     psbt.unsigned_tx.output[0].value = Amount::from_sat(899);
+    assert!(matches!(
+        validate_spend_selection(&object, path, &psbt, 0, &prepared.recipe),
+        Err(SpendPlanError::IncompatibleTransaction)
+    ));
     let report = plan_spends(&object, Some((&psbt, 0)), &assets).unwrap();
     assert_eq!(leaf(&report).status, BranchStatus::IncompatibleTransaction);
     assert!(leaf(&report)
@@ -702,6 +1030,81 @@ fn native_ctv_search_budget_is_shared_across_all_leaves() {
         assert_eq!(plan.satisfaction_weight_upper_bound, None);
     }
     assert_eq!(report, plan_spends(&object, None, &assets).unwrap());
+}
+
+#[test]
+fn selected_path_validation_is_not_starved_by_unrelated_leaves() {
+    fn alternatives(branches: &[String]) -> String {
+        if branches.len() == 1 {
+            return branches[0].clone();
+        }
+        let (left, right) = branches.split_at(branches.len() / 2);
+        format!("or_i({},{})", alternatives(left), alternatives(right))
+    }
+    let ctv = funded(&native(&format!("tr({})", key(1))))
+        .unsigned_tx
+        .get_ctv_hash(0);
+    let target = Miniscript::<XOnlyPublicKey, Tap>::from_str(&format!(
+        "and_v(txtmpl({ctv}),pk({}))",
+        key(2)
+    ))
+    .unwrap()
+    .encode();
+    let target_hash = TapLeafHash::from_script(&target, LeafVersion::TapScript);
+    let keys: Vec<_> = (2..10).map(key).collect();
+    let mut scripts: Vec<_> = (0u16..u16::MAX)
+        .map(|leaf| {
+            let branches: Vec<_> = keys
+                .iter()
+                .enumerate()
+                .map(|(index, key)| {
+                    let hash = sha256::Hash::hash(&[leaf as u8, (leaf >> 8) as u8, index as u8]);
+                    format!("and_v(txtmpl({hash}),pk({key}))")
+                })
+                .collect();
+            Miniscript::<XOnlyPublicKey, Tap>::from_str(&alternatives(&branches))
+                .unwrap()
+                .encode()
+        })
+        .filter(|script| TapLeafHash::from_script(script, LeafVersion::TapScript) < target_hash)
+        .take(160)
+        .collect();
+    assert_eq!(scripts.len(), 160);
+    scripts.push(target);
+    let raw = RawTaproot::from_scripts(key(1), scripts).unwrap();
+    let mut object = Compiled::from_script(
+        raw.script_pubkey(),
+        Amount::from_sat(1_000),
+        Network::Regtest,
+    )
+    .unwrap();
+    object.descriptor = Some(SupportedDescriptors::Taproot(raw));
+    let psbt = funded(&object);
+    let assets = SpendAssets {
+        schnorr_keys: [key(2)].into(),
+        ..Default::default()
+    };
+    let report = plan_spends(&object, Some((&psbt, 0)), &assets).unwrap();
+    let path = SpendPath::ScriptPath(target_hash);
+    let target = report
+        .branches
+        .iter()
+        .find(|plan| plan.path == path)
+        .unwrap();
+    assert_eq!(target.status, BranchStatus::Unsupported);
+    assert_eq!(target.policy, WORK_LIMIT);
+    let prepared =
+        prepare_spend(&object, path, psbt, 0, &assets, &[] as &[ProgramEvidence]).unwrap();
+    let (selected, native) =
+        validate_spend_selection(&object, path, &prepared.psbt, 0, &prepared.recipe).unwrap();
+    assert_eq!(selected.status, BranchStatus::MissingAssets);
+    assert_eq!(
+        native,
+        vec![SignatureSlot::Schnorr {
+            key: key(2),
+            leaf: Some(target_hash)
+        }]
+    );
 }
 
 #[test]

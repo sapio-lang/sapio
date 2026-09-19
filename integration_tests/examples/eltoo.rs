@@ -2,25 +2,34 @@
 
 use bitcoin::consensus::encode::serialize_hex;
 use bitcoin::{OutPoint, Transaction};
+use emulator_connect::program::completion::SpendIntent;
 use emulator_connect::program::{ProgramOracle, ProgramSigningRequest};
+use sapio::contract::Compiled;
 use sapio::template::Template;
 use sapio_contrib::contracts::eltoo::State;
 use sapio_integration_tests::eltoo_example::fixture;
 use sapio_integration_tests::eltoo_example::recovery::recover_update;
 use sapio_integration_tests::eltoo_example::runner::{
-    authorize_update, compile, finalize_candidate, settlement_request, settlement_template,
-    sign_sponsor, update_request, update_template, Coin, Error,
+    authorize_update, compile, complete_candidate, finalize_recovered_candidate,
+    prepare_settlement, prepare_update, sign_sponsor, update_template, Coin, Error,
 };
 use serde_json::json;
 
 fn finish(
+    oracle: &ProgramOracle,
+    (compiled, intent): (Compiled, SpendIntent),
+) -> Result<Transaction, Error> {
+    complete_candidate(&compiled, &intent, oracle, &fixture::sponsor_key())
+}
+
+fn finish_recovered(
     oracle: &ProgramOracle,
     request: ProgramSigningRequest,
     template: &Template,
 ) -> Result<Transaction, Error> {
     let mut psbt = oracle.sign(request)?;
     sign_sponsor(&mut psbt, &fixture::sponsor_key())?;
-    finalize_candidate(template, psbt)
+    finalize_recovered_candidate(template, psbt)
 }
 
 fn output_zero(transaction: &Transaction) -> Coin {
@@ -50,16 +59,15 @@ fn main() -> Result<(), Error> {
     let latest_authorization = authorize_update(&terms, latest, &joint)?;
     let update_1 = finish(
         &oracle,
-        update_request(
+        prepare_update(
             &funding,
             first,
             funding_coin.clone(),
             fixture::sponsor(2_000, 2),
             &first_authorization,
         )?,
-        &update_template(&terms, first)?,
     )?;
-    let direct = update_request(
+    let direct = prepare_update(
         &funding,
         latest,
         funding_coin,
@@ -73,17 +81,16 @@ fn main() -> Result<(), Error> {
         fixture::sponsor(3_000, 4),
         &latest_authorization,
     )?;
-    assert_eq!(direct.witness, rebound.witness);
-    let update_3_direct = finish(&oracle, direct, &update_template(&terms, latest)?)?;
-    let update_3_rebound = finish(&oracle, rebound, &update_template(&terms, latest)?)?;
+    assert_eq!(direct.1.requests()[0].witness, rebound.witness);
+    let update_3_direct = finish(&oracle, direct)?;
+    let update_3_rebound = finish_recovered(&oracle, rebound, &update_template(&terms, latest)?)?;
     let settlement = finish(
         &oracle,
-        settlement_request(
+        prepare_settlement(
             &latest_channel,
             output_zero(&update_3_rebound),
             fixture::sponsor(2_000, 5),
         )?,
-        &settlement_template(&terms, latest)?,
     )?;
     println!(
         "{}",

@@ -1,11 +1,12 @@
 //! Disposable fixtures and signing for the public template authorization contract.
 
-use crate::program_example::{prepare_example_request, recipient, FUNDING_SATS};
+use crate::program_example::{prepare_example_spend, recipient, FUNDING_SATS};
 use bitcoin::bip32::Xpub;
 use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::{Keypair, Message, Secp256k1, SecretKey};
 use bitcoin::{Amount, Network, XOnlyPublicKey};
-use emulator_connect::program::{ProgramSigningRequest, ProgramSpendPath};
+use emulator_connect::program::completion::SpendIntent;
+use emulator_connect::program::ProgramSpendPath;
 use sapio::contract::abi::object::ProgramRequirement;
 use sapio::contract::*;
 use sapio_base::effects::EffectPath;
@@ -87,13 +88,13 @@ pub fn authorization_requirement(
 }
 
 /// Authorize a proposed transaction using only its artifact and an explicit mode.
-pub fn signing_request(
+pub fn prepare_fragment(
     compiled: &Compiled,
     authorization: Authorization,
     mut psbt: Psbt,
     untweaked_authorizer: &Keypair,
     annex: Option<Vec<u8>>,
-) -> Result<ProgramSigningRequest, Box<dyn Error>> {
+) -> Result<SpendIntent, Box<dyn Error>> {
     let requirement = authorization_requirement(compiled, authorization)?;
     let input = psbt.inputs.first_mut().ok_or("candidate has no input")?;
     sapio_psbt::annex::set(input, annex)?;
@@ -128,20 +129,11 @@ pub fn signing_request(
             proof.witness(&signature)
         }
     };
-    let mut request = prepare_example_request(
+    prepare_example_spend(
         compiled,
         requirement,
         psbt,
         "template-authorization/v1",
         witness,
-    )?;
-    if matches!(authorization, Authorization::KnownTweak) {
-        // The opening authenticates the output key without revealing an
-        // internal key or a control block from a different spending path.
-        let input = &mut request.psbt.0.inputs[0];
-        input.tap_scripts.clear();
-        input.tap_key_origins.clear();
-        input.tap_internal_key = None;
-    }
-    Ok(request)
+    )
 }

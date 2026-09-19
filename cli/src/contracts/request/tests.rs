@@ -10,50 +10,61 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[test]
-fn studio_context_requires_an_explicit_covenant_mode() {
-    let original = serde_json::json!({
-        "path": ".",
-        "covenant": {"mode": "native_ctv_research"},
-        "module_locator": null,
-        "net": Network::Regtest,
-        "plugin_map": null
-    });
-    let context: Common = serde_json::from_value(original.clone()).unwrap();
-    assert!(matches!(
-        context.covenant,
-        CovenantConfig::NativeCtvResearch {}
-    ));
-    for legacy in [
+fn studio_binding_requires_an_explicit_covenant_mode() {
+    let bind = request(contract(), &[]);
+    let original = serde_json::to_value(bind).unwrap();
+    assert!(serde_json::from_value::<Bind>(original.clone()).is_ok());
+    for value in [
         None,
-        Some(serde_json::Value::Null),
-        Some(serde_json::json!({
-            "enabled": false, "emulators": [], "threshold": 1
-        })),
+        Some(Value::Null),
+        Some(serde_json::json!({"enabled": false})),
     ] {
-        let mut value = original.clone();
-        value.as_object_mut().unwrap().remove("covenant");
-        if let Some(legacy) = legacy {
-            value["emulator"] = legacy;
+        let mut candidate = original.clone();
+        candidate.as_object_mut().unwrap().remove("covenant");
+        if let Some(value) = value {
+            candidate["covenant"] = value;
         }
-        assert!(serde_json::from_value::<Common>(value).is_err());
+        assert!(serde_json::from_value::<Bind>(candidate).is_err());
     }
-    let mut null = original;
-    null["covenant"] = serde_json::Value::Null;
-    assert!(serde_json::from_value::<Common>(null).is_err());
+    let context = serde_json::json!({
+        "path": ".", "module_locator": null, "net": Network::Regtest, "plugin_map": null,
+    });
+    assert!(serde_json::from_value::<Common>(context).is_ok());
 }
 
 #[tokio::test]
-async fn listing_modules_does_not_resolve_or_validate_unused_signer_connections() {
-    let CovenantConfig::SignerEmulation(mut config) = signer_config() else {
-        unreachable!()
-    };
-    config.threshold = 0;
-    config.emulators[0].1 = "address-without-a-port".into();
+async fn studio_binding_rejects_unknown_and_conflicting_funding_inputs() {
+    let mut value = serde_json::to_value(request(contract(), &[])).unwrap();
+    value["use_base64"] = Value::Bool(true);
+    assert!(serde_json::from_value::<Bind>(value).is_err());
+
+    for (mock, outpoint, supplied_psbt) in [
+        (true, Some(create_mock_output()), false),
+        (true, None, true),
+        (false, Some(create_mock_output()), true),
+    ] {
+        let mut bind = request(contract(), &[]);
+        bind.use_mock = mock;
+        bind.outpoint = outpoint;
+        bind.use_txn = supplied_psbt.then(|| "not a PSBT".into());
+        bind.client_url = "not an RPC URL".into();
+        let error = bind
+            .call(Network::Regtest, Arc::new(CTVAvailable))
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "binding funding sources are mutually exclusive"
+        );
+    }
+}
+
+#[tokio::test]
+async fn listing_modules_needs_no_runtime_covenant_configuration() {
     let response = Request {
         context: Common {
             path: std::env::temp_dir()
                 .join(format!("sapio-empty-module-list-{}", rand::random::<u64>())),
-            covenant: CovenantConfig::SignerEmulation(config),
             module_locator: None,
             net: Network::Regtest,
             plugin_map: None,
@@ -199,8 +210,9 @@ async fn mixed_signer_and_native_policy_requires_both_explicit_assumptions() {
     let mut ordinary = request(compiled.clone(), &[]);
     ordinary.use_txn = None;
     ordinary.client_url = "not a URL".into();
+    ordinary.covenant = signer_config();
     let error = ordinary
-        .call(Network::Regtest, signer.clone(), &signer_config())
+        .call(Network::Regtest, signer.clone())
         .await
         .unwrap_err();
     assert!(error
@@ -215,11 +227,7 @@ async fn mixed_signer_and_native_policy_requires_both_explicit_assumptions() {
     native.use_txn = None;
     native.client_url = "not a URL".into();
     let error = native
-        .call(
-            Network::Regtest,
-            Arc::new(CTVAvailable),
-            &CovenantConfig::NativeCtvResearch {},
-        )
+        .call(Network::Regtest, Arc::new(CTVAvailable))
         .await
         .unwrap_err();
     assert!(matches!(
@@ -268,8 +276,9 @@ async fn mixed_signer_and_native_policy_requires_both_explicit_assumptions() {
     let mut bind = request(compiled, &[]);
     bind.use_txn = None;
     bind.client_url = format!("http://{address}");
+    bind.covenant = research;
     let error = bind
-        .call(Network::Regtest, signer.clone(), &research)
+        .call(Network::Regtest, signer.clone())
         .await
         .unwrap_err();
     assert!(
@@ -310,10 +319,8 @@ async fn backend_mismatches_fail_before_wallet_funding_or_signing() {
         bind.use_txn = None;
         // Any attempt to construct the RPC client or fund through it is an error.
         bind.client_url = "not a URL".into();
-        let error = bind
-            .call(Network::Regtest, emulator, &covenant)
-            .await
-            .unwrap_err();
+        bind.covenant = covenant;
+        let error = bind.call(Network::Regtest, emulator).await.unwrap_err();
         assert!(
             matches!(
                 error.downcast_ref::<ObjectError>(),
@@ -348,8 +355,9 @@ async fn raw_native_checks_require_the_research_mode_before_funding() {
     let mut bind = request(compiled.clone(), &[]);
     bind.use_txn = None;
     bind.client_url = "not a URL".into();
+    bind.covenant = signer_config();
     let error = bind
-        .call(Network::Regtest, signer.clone(), &signer_config())
+        .call(Network::Regtest, signer.clone())
         .await
         .unwrap_err();
     let error = error.downcast_ref::<RequestError>().unwrap();
@@ -358,11 +366,7 @@ async fn raw_native_checks_require_the_research_mode_before_funding() {
 
     let psbt = funding_psbt(&compiled);
     request(compiled, &psbt.serialize())
-        .call(
-            Network::Regtest,
-            Arc::new(CTVAvailable),
-            &CovenantConfig::NativeCtvResearch {},
-        )
+        .call(Network::Regtest, Arc::new(CTVAvailable))
         .await
         .unwrap();
 }
@@ -412,7 +416,7 @@ fn request(compiled: Compiled, psbt: &[u8]) -> Bind {
     Bind {
         client_url: "http://127.0.0.1:1".into(),
         client_auth: rpc::Auth::None,
-        use_base64: true,
+        covenant: CovenantConfig::NativeCtvResearch {},
         use_mock: false,
         outpoint: None,
         use_txn: Some(base64::encode(psbt)),
@@ -457,11 +461,7 @@ async fn supplied_funding_keeps_partial_signatures_and_all_psbt_maps() {
     };
     psbt.inputs[0].partial_sigs.insert(key, sig);
     let bound = request(compiled.clone(), &psbt.serialize())
-        .call(
-            Network::Regtest,
-            Arc::new(CTVAvailable),
-            &CovenantConfig::NativeCtvResearch {},
-        )
+        .call(Network::Regtest, Arc::new(CTVAvailable))
         .await
         .unwrap();
     assert_preserved_funding(&bound, &compiled, &psbt);
@@ -477,11 +477,7 @@ async fn finalized_legacy_funding_keeps_its_psbt_and_binds_the_extracted_txid() 
         psbt.clone().extract_tx().unwrap().compute_txid()
     );
     let bound = request(compiled.clone(), &psbt.serialize())
-        .call(
-            Network::Regtest,
-            Arc::new(CTVAvailable),
-            &CovenantConfig::NativeCtvResearch {},
-        )
+        .call(Network::Regtest, Arc::new(CTVAvailable))
         .await
         .unwrap();
     assert_preserved_funding(&bound, &compiled, &psbt);
@@ -494,11 +490,7 @@ async fn zero_input_funding_psbt_returns_a_validation_error() {
     psbt.unsigned_tx.input.clear();
     psbt.inputs.clear();
     let error = request(compiled, &psbt.serialize())
-        .call(
-            Network::Regtest,
-            Arc::new(CTVAvailable),
-            &CovenantConfig::NativeCtvResearch {},
-        )
+        .call(Network::Regtest, Arc::new(CTVAvailable))
         .await
         .unwrap_err();
     assert!(matches!(
@@ -513,11 +505,7 @@ async fn supplied_funding_rejects_trailing_psbt_bytes() {
     let mut bytes = funding_psbt(&compiled).serialize();
     bytes.push(0);
     assert!(request(compiled, &bytes)
-        .call(
-            Network::Regtest,
-            Arc::new(CTVAvailable),
-            &CovenantConfig::NativeCtvResearch {}
-        )
+        .call(Network::Regtest, Arc::new(CTVAvailable),)
         .await
         .is_err());
 }
@@ -601,12 +589,10 @@ async fn mock_funding_still_includes_a_funding_psbt() {
     let mut bind = request(compiled.clone(), &funding_psbt(&compiled).serialize());
     bind.use_txn = None;
     bind.use_mock = true;
+    bind.client_url = "not a URL".into();
+    bind.client_auth = rpc::Auth::CookieFile("/missing/unused-cookie".into());
     let bound = bind
-        .call(
-            Network::Regtest,
-            Arc::new(CTVAvailable),
-            &CovenantConfig::NativeCtvResearch {},
-        )
+        .call(Network::Regtest, Arc::new(CTVAvailable))
         .await
         .unwrap();
     let funding = bound
@@ -640,11 +626,7 @@ async fn funding_entry_cannot_overwrite_a_contract_named_funding() {
         compiled.root_path = SArc(Arc::new(root.try_into().unwrap()));
         let psbt = funding_psbt(&compiled);
         let bound = request(compiled.clone(), &psbt.serialize())
-            .call(
-                Network::Regtest,
-                Arc::new(CTVAvailable),
-                &CovenantConfig::NativeCtvResearch {},
-            )
+            .call(Network::Regtest, Arc::new(CTVAvailable))
             .await
             .unwrap();
         assert_eq!(bound.program.len(), 2);
@@ -679,11 +661,7 @@ async fn supplied_funding_must_pass_checked_extraction_before_binding() {
             psbt.unsigned_tx.output[0].value = bitcoin::Amount::from_sat(2_001);
         }
         let error = request(compiled.clone(), &psbt.serialize())
-            .call(
-                Network::Regtest,
-                Arc::new(CTVAvailable),
-                &CovenantConfig::NativeCtvResearch {},
-            )
+            .call(Network::Regtest, Arc::new(CTVAvailable))
             .await
             .unwrap_err();
         assert!(error.is::<bitcoin::psbt::ExtractTxError>(), "{error}");

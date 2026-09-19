@@ -1,543 +1,375 @@
 // Copyright Judica, Inc 2021
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
-//  License, v. 2.0. If a copy of the MPL was not distributed with this
-//  file, You can obtain one at https://mozilla.org/MPL/2.0/.
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 #![deny(missing_docs)]
 
-//! command line interface for manipulating sapio contracts and other related tasks
+//! Compile, inspect and spend Sapio contracts from explicit files and inputs.
 
-use crate::contracts::server::Server;
-use crate::contracts::Api;
-use crate::contracts::Bind;
-use crate::contracts::Call;
-use crate::contracts::Command;
-use crate::contracts::Common;
-use crate::contracts::Info;
-use crate::contracts::List;
-use crate::contracts::Load;
-use crate::contracts::Logo;
-use crate::contracts::Request;
-use crate::contracts::Response;
-use bitcoin::bip32::Xpriv;
-use bitcoin::bip32::Xpub;
+use args::{Cli, Command};
+use bitcoin::bip32::{Xpriv, Xpub};
 use bitcoin::secp256k1::Secp256k1;
-use bitcoin::Network;
-use clap::clap_app;
-use clap::ArgMatches;
-use config::*;
+use clap::Parser;
+use config::{Config, ConfigVerifier};
+use contracts::{server::Server, Common, Request, Response};
 use emulator_connect::servers::hd::HDOracleEmulator;
 use emulator_connect::CTVEmulator;
-use sapio::contract::Compiled;
 use sapio_wasm_plugin::host::plugin_handle::ModuleLocator;
+use sapio_wasm_plugin::CreateArgs;
 use schemars::generate::SchemaSettings;
-use serde_json::Deserializer;
-use std::error::Error;
-use std::str::FromStr;
+use serde_json::{Deserializer, Value};
+use std::path::{Path, PathBuf};
+use std::process::ExitCode;
 use std::sync::Arc;
-use tokio::io::AsyncReadExt;
 use tokio::sync::oneshot;
-use util::*;
+use util::{
+    read_input, read_json, read_psbt, write_json, write_new, write_output, write_psbt, Result,
+};
+
+mod args;
 pub mod config;
 mod contracts;
 mod explain;
+mod program_sign;
+mod project;
+mod spend;
 mod util;
 
-async fn config(custom_config: Option<&str>) -> Result<Config, Box<dyn Error>> {
+async fn config(custom_config: Option<&Path>) -> Result<Config> {
     Config::setup(custom_config, "org", "judica", "sapio-cli").await
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let app = clap_app!("sapio-cli" =>
-    (@setting SubcommandRequiredElseHelp)
-    (version: env!("CARGO_PKG_VERSION"))
-    (author: "Jeremy Rubin <j@rubin.io>")
-    (about: "Sapio CLI for Bitcoin Smart Contracts")
-    (@arg config: -c --config +takes_value #{1,1} {check_file} "Sets a custom config file")
-    (@arg debug: -d ... "Sets the level of debugging information")
-    (@subcommand configure =>
-     (@setting SubcommandRequiredElseHelp)
-     (about: "Helper to check current configuration settings")
-     (@subcommand files =>
-      (about: "Show where the configure files live.")
-      (@arg json: -j --json "Print or return JSON formatted dirs")
-     )
-     (@subcommand show =>
-     (about: "Print out the currently loaded configuration")
-    )
-     (@subcommand wizard =>
-      (@arg write: -w --write "Write the default config file to the standard location.")
-     (about: "Interactive wizard to create a configuration")
-     )
-    )
-    (@subcommand signer =>
-     (@setting SubcommandRequiredElseHelp)
-     (about: "Make Requests to Emulator Servers")
-     (@subcommand sign =>
-      (about: "Sign a PSBT")
-      (@arg input: -k --key +takes_value +required #{1,2} {check_file} "The file to read the key from")
-      (@arg psbt: -p --psbt +takes_value  #{1,2} {check_file} "The file containing the PSBT to Sign")
-      (@arg out: -o --output +takes_value  #{1,2} {check_file_not} "The file to save the resulting PSBT")
-     )
-     (@subcommand new =>
-      (about: "Get a new xpriv")
-      (@arg network: -n --network +takes_value +required #{1,2}  "One of: signet, testnet, testnet4, regtest, bitcoin")
-      (@arg out: -o --output +takes_value +required #{1,2} {check_file_not} "The file to save the resulting key")
-     )
-     (@subcommand show =>
-      (about: "Show xpub for file")
-      (@arg input: -i --input +takes_value +required #{1,2} {check_file} "The file to read the key from")
-     )
-    )
-    (@subcommand studio =>
-     (@setting SubcommandRequiredElseHelp)
-     (about: "commands for sapio studio integration")
-     (@subcommand server =>
-      (about: "run a studio server")
-      (@group from +required =>
-        (@arg stdin: --stdin  "Run in Synchronous mode")
-        (@arg interface: --interface +takes_value "The Interface to Bind")
-      )
-     )
-     (@subcommand schemas =>
-      (about: "print input and output schemas")
-     )
-    )
-    (@subcommand emulator =>
-     (@setting SubcommandRequiredElseHelp)
-     (about: "Make Requests to Emulator Servers")
-     (@subcommand sign =>
-      (about: "Sign a PSBT")
-      (@arg psbt: -p --psbt +takes_value +required #{1,2} {check_file} "The file containing the PSBT to Sign")
-      (@arg out: -o --output +takes_value +required #{1,2} {check_file_not} "The file to save the resulting PSBT")
-     )
-     (@subcommand get_key =>
-      (about: "Get Signing Condition")
-      (@arg psbt: -p --psbt +takes_value +required #{1,2} {check_file} "The file containing the PSBT to Get a Key For")
-     )
-     (@subcommand show =>
-      (about: "Show a psbt")
-      (@arg psbt: -p --psbt +takes_value +required #{1,2} {check_file} "The file containing the PSBT to Get a Key For")
-     )
-     (@subcommand server =>
-      (about: "run an emulation server")
-      (@arg request_timeout_secs: --("request-timeout-secs") +takes_value "Whole-request I/O deadline in seconds (default: 30)")
-      (@arg max_connections: --("max-connections") +takes_value "Maximum admitted connections (default: 64)")
-      (@arg seed: +takes_value +required {check_file} "The file containing the Seed")
-      (@arg interface: +required +takes_value "The Interface to Bind")
-     )
-     )
-     (@subcommand psbt =>
-      (@setting SubcommandRequiredElseHelp)
-      (about: "Perform operations on PSBTs")
-      (@subcommand finalize =>
-       (about: "finalize and extract this psbt to transaction hex")
-       (@arg psbt: --psbt +takes_value "psbt as base64, otherwise read from stdin")
-      )
-     )
-     (@subcommand contract =>
-      (@setting SubcommandRequiredElseHelp)
-      (about: "Create or Manage a Contract")
-      (@subcommand explain =>
-       (about: "Validate and explain a compiled artifact without wallet or network configuration")
-       (@arg file: -f --file +takes_value "Compiled artifact JSON file; omit or use - for stdin")
-       (@arg psbt: --psbt +takes_value "Optional file containing a base64 PSBT")
-       (@arg assets: --assets +takes_value "Optional JSON capability inventory; no private keys or evidence bytes")
-       (@arg input: --input +takes_value "PSBT input index to inspect; defaults to zero")
-       (@arg json: -j --json "Print the complete portable explanation as JSON")
-      )
-      (@subcommand bind =>
-       (about: "Bind Contract to a specific UTXO")
-       (@arg base64_psbt: --base64_psbt "Output as a base64 PSBT")
-       (@group from  =>
-            (@arg outpoint: --outpoint +takes_value "Use this specific outpoint")
-            (@arg txn: --txn +takes_value "Use this specific transaction ")
-            (@arg mock: --mock "Create a fake output for this txn.")
-       )
-       (@arg json: "JSON to Bind")
-      )
-      (@subcommand create =>
-       (about: "create a contract to a specific UTXO")
-       (@arg workspace: -w --workspace +takes_value "Where to search for the cache / copy the contract file")
-       (@group from +required =>
-        (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
-        (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
-       )
-       (@arg json: "JSON of args")
-      )
-      (@subcommand load =>
-       (about: "Load a wasm contract module, returns the hex sha3 hash key")
-       (@arg workspace: -w --workspace +takes_value "Where to copy the contract file")
-       (@arg file: -f --file +required +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
-      )
-      (@subcommand api =>
-       (about: "Machine Readable API for a plugin, pipe into jq for pretty formatting.")
-       (@arg workspace: -w --workspace +takes_value "Where to search for the cache / copy the contract file")
-       (@group from +required =>
-        (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
-        (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
-       )
-      )
-      (@subcommand logo =>
-       (about: "base64 encoded png image")
-       (@arg workspace: -w --workspace +takes_value "Where to search for the cache / copy the contract file")
-       (@group from +required =>
-        (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
-        (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
-       )
-      )
-      (@subcommand info =>
-       (about: "View human readable basic information for a plugin")
-       (@arg workspace: -w --workspace +takes_value "Where to search for the cache / copy the contract file")
-       (@group from +required =>
-        (@arg file: -f --file +takes_value {check_file} "Which Contract to Create, given a WASM Plugin file")
-        (@arg key:  -k --key +takes_value "Which Contract to Create, given a WASM Hash")
-       )
-      )
-      (@subcommand list =>
-       (about: "list available contracts")
-       (@arg workspace: -w --workspace +takes_value "Where to search for.")
-      )
-      )
-      );
-    let matches = app.get_matches();
-    let custom_config = matches.value_of("config");
-    match matches.subcommand() {
-        Some(("configure", config_matches)) => match config_matches.subcommand() {
-            Some(("wizard", args)) => {
-                let config = ConfigVerifier::wizard().await?;
-                if args.is_present("write") {
-                    let proj = directories::ProjectDirs::from("org", "judica", "sapio-cli")
-                        .expect("Failed to find config directory");
-                    let path = proj.config_dir();
-                    tokio::fs::create_dir_all(path).await?;
-                    let mut pb = path.to_path_buf();
-                    pb.push("config.json");
-                    tokio::fs::write(&pb, &serde_json::to_string_pretty(&config)?).await?;
-                } else {
-                    println!(
-                    "Please write this to the config file location (see sapio-cli configure files)"
-                );
-                }
-                return Ok(());
+async fn main() -> ExitCode {
+    match run(Cli::parse()).await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("error: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+async fn run(cli: Cli) -> Result<()> {
+    let custom_config = cli.config.as_deref();
+    match cli.command {
+        Command::New(args) => project::run(args),
+        Command::Configure { command } => configure(command, custom_config).await,
+        Command::Signer { command } => match command {
+            args::Signer::Program(args) => program_sign::run(args),
+            args::Signer::Sign { key, psbt, output } => {
+                let key = sapio_psbt::SigningKey::read_key_from_buf(&read_input(Some(&key))?)?;
+                let signed = key.sign(
+                    read_psbt(psbt.as_deref())?,
+                    bitcoin::sighash::TapSighashType::All,
+                )?;
+                write_output(output.output.as_deref(), base64::encode(signed).as_bytes())
             }
-            Some(("files", args)) => {
-                let proj = directories::ProjectDirs::from("org", "judica", "sapio-cli")
-                    .expect("Failed to find config directory");
-                let path = proj.config_dir();
-                let mut config_json = path.to_path_buf();
-                config_json.push("config.json");
-                let mut modules = path.to_path_buf();
-                modules.push("modules");
-                if args.is_present("json") {
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&serde_json::json!({
-                            "directory": path,
-                            "config": config_json,
-                            "modules": modules,
-                        }))?
-                    );
-                } else {
-                    println!("Config Dir: {}", path.display());
-                    println!("Config File: {}", config_json.display());
-                    println!("Modules Directory: {}", modules.display());
-                }
-                return Ok(());
+            args::Signer::New { network, output } => {
+                let key = sapio_psbt::SigningKey::new_key(network)?;
+                let public = key.pubkey(&Secp256k1::new());
+                write_new(&output, &key.0[0].encode())?;
+                write_output(None, public[0].to_string().as_bytes())
             }
-            Some(("show", _)) => {
-                let config = config(custom_config).await?;
-                println!(
-                    "{}",
-                    serde_json::to_value(ConfigVerifier::from(config))
-                        .and_then(|v| serde_json::to_string_pretty(&v))?
-                );
-                return Ok(());
+            args::Signer::Show { input } => {
+                let key = sapio_psbt::SigningKey::read_key_from_buf(&read_input(Some(&input))?)?;
+                write_output(
+                    None,
+                    key.pubkey(&Secp256k1::new())[0].to_string().as_bytes(),
+                )
             }
-            _ => unreachable!(),
         },
-        Some(("signer", sign_matches)) => match sign_matches.subcommand() {
-            Some(("sign", args)) => {
-                let input = args.value_of_os("input").unwrap();
-                let output = args.value_of_os("out");
-
-                let buf = tokio::fs::read(input).await?;
-                let xpriv = sapio_psbt::SigningKey::read_key_from_buf(&buf[..])?;
-                let psbt = if args.is_present("psbt") {
-                    decode_psbt_file(args, "psbt")?
-                } else {
-                    get_psbt_from(None).await?
-                };
-                let hash_ty = bitcoin::sighash::TapSighashType::All;
-                let bytes = xpriv.sign(psbt, hash_ty)?;
-
-                if let Some(file_out) = output {
-                    std::fs::write(file_out, &base64::encode(bytes))?;
-                } else {
-                    println!("{}", base64::encode(bytes));
-                }
-            }
-            Some(("new", args)) => {
-                let network = args.value_of("network").unwrap();
-                let network = Network::from_str(network)?;
-                let out = args.value_of_os("out").unwrap();
-                let xpriv = sapio_psbt::SigningKey::new_key(network)?;
-                let pubkey = xpriv.pubkey(&Secp256k1::new());
-                tokio::fs::write(out, &xpriv.0[0].encode()).await?;
-                println!("{}", pubkey[0]);
-            }
-            Some(("show", args)) => {
-                let input = args.value_of_os("input").unwrap();
-                let buf = tokio::fs::read(input).await?;
-                let xpriv = sapio_psbt::SigningKey::read_key_from_buf(&buf[..])?;
-                let pubkey = xpriv.pubkey(&Secp256k1::new());
-                println!("{}", pubkey[0]);
-            }
-            _ => unreachable!(),
-        },
-        Some(("emulator", sign_matches)) => match sign_matches.subcommand() {
-            Some(("sign", args)) => {
+        Command::Emulator { command } => match command {
+            args::Emulator::Sign { psbt, output } => {
                 let emulator = configured_emulator(custom_config).await?;
-                let psbt = decode_psbt_file(args, "psbt")?;
-                let psbt = emulator.sign(psbt)?;
-                let bytes = psbt.serialize();
-                std::fs::write(args.value_of_os("out").unwrap(), &base64::encode(bytes))?;
+                write_psbt(
+                    output.output.as_deref(),
+                    &emulator.sign(read_psbt(psbt.as_deref())?)?,
+                )
             }
-            Some(("get_key", args)) => {
+            args::Emulator::GetKey { psbt } => {
                 let emulator = configured_emulator(custom_config).await?;
-                let psbt = decode_psbt_file(args, "psbt")?;
-                let h = emulator.get_signer_for(util::ctv_hash(&psbt)?)?;
-                println!("{}", h);
+                let key = emulator.get_signer_for(util::ctv_hash(&read_psbt(psbt.as_deref())?)?)?;
+                write_output(None, key.to_string().as_bytes())
             }
-            Some(("show", args)) => {
-                let psbt = decode_psbt_file(args, "psbt")?;
-                println!("{:?}", psbt);
-            }
-            Some(("server", args)) => {
+            args::Emulator::Show { psbt } => write_json(None, &read_psbt(psbt.as_deref())?),
+            args::Emulator::Server {
+                seed,
+                interface,
+                request_timeout_secs,
+                max_connections,
+            } => {
                 let config = config(custom_config).await?;
-                let filename = args.value_of("seed").unwrap();
-                let contents = tokio::fs::read(filename).await?;
-
-                let root = Xpriv::new_master(config.network, &contents)?;
-                let pk_root = Xpub::from_priv(&Secp256k1::new(), &root);
-                let timeout_secs = args
-                    .value_of("request_timeout_secs")
-                    .map(str::parse::<u64>)
-                    .transpose()?
-                    .unwrap_or(emulator_connect::DEFAULT_REQUEST_TIMEOUT.as_secs());
-                let max_connections = args
-                    .value_of("max_connections")
-                    .map(str::parse::<usize>)
-                    .transpose()?
-                    .unwrap_or(64);
+                let root = Xpriv::new_master(config.network, &read_input(Some(&seed))?)?;
+                let public = Xpub::from_priv(&Secp256k1::new(), &root);
                 let oracle = HDOracleEmulator::new(root).with_limits(
-                    std::time::Duration::from_secs(timeout_secs),
+                    std::time::Duration::from_secs(request_timeout_secs),
                     max_connections,
                 )?;
-                let listener =
-                    tokio::net::TcpListener::bind(args.value_of("interface").unwrap()).await?;
-                let status = serde_json::json!({
-                    "interface": listener.local_addr()?,
-                    "pk": pk_root,
-                    "request_timeout_secs": timeout_secs,
-                    "max_connections": max_connections,
-                });
-                println!("{}", serde_json::to_string(&status)?);
+                let listener = tokio::net::TcpListener::bind(interface).await?;
+                // A single JSON line is the readiness message consumed by clients.
+                write_output(
+                    None,
+                    &serde_json::to_vec(&serde_json::json!({
+                        "interface": listener.local_addr()?,
+                        "pk": public,
+                        "request_timeout_secs": request_timeout_secs,
+                        "max_connections": max_connections,
+                    }))?,
+                )?;
                 oracle.serve(listener).await?;
+                Ok(())
             }
-            _ => unreachable!(),
         },
-        Some(("psbt", matches)) => match matches.subcommand() {
-            Some(("finalize", args)) => {
-                let psbt_str = args.value_of("psbt");
+        Command::Psbt { command } => match command {
+            args::Psbt::Finalize { psbt, output } => write_json(
+                output.output.as_deref(),
+                &sapio_psbt::external_api::finalize_psbt_format_api(read_psbt(psbt.as_deref())?)?,
+            ),
+        },
+        Command::Studio { command } => match command {
+            args::Studio::Server { stdin: _ } => run_server_stdin().await,
+            args::Studio::Schemas => write_json(
+                None,
+                &SchemaSettings::draft07()
+                    .into_generator()
+                    .into_root_schema_for::<(Request, Response)>(),
+            ),
+        },
+        Command::Contract { command } => contract(command, custom_config).await,
+    }
+}
 
-                let psbt = get_psbt_from(psbt_str).await?;
-                let js = sapio_psbt::external_api::finalize_psbt_format_api(psbt)?;
-                println!("{}", serde_json::to_string_pretty(&js)?);
+async fn configure(command: args::Configure, custom_config: Option<&Path>) -> Result<()> {
+    match command {
+        args::Configure::Files { json } => {
+            let project = util::project_dirs()?;
+            let path = config_path(custom_config)?;
+            let modules = util::module_path(None)?;
+            if json {
+                write_json(
+                    None,
+                    &serde_json::json!({
+                        "directory": project.config_dir(), "config": path, "modules": modules,
+                    }),
+                )
+            } else {
+                write_output(
+                    None,
+                    format!(
+                        "Config file: {}\nModules directory: {}",
+                        path.display(),
+                        modules.display()
+                    )
+                    .as_bytes(),
+                )
             }
-            _ => unreachable!(),
-        },
-        Some(("studio", matches)) => match matches.subcommand() {
-            Some(("server", args)) => {
-                let from_stdin = args.is_present("stdin");
-                if from_stdin {
-                    run_server_stdin().await?;
-                } else {
-                    args.value_of("interface");
+        }
+        args::Configure::Show => write_json(None, &config::redacted(config(custom_config).await?)?),
+        args::Configure::Wizard { write } => {
+            let settings = ConfigVerifier::wizard().await?;
+            if write {
+                let path = config_path(custom_config)?;
+                if let Some(parent) = path
+                    .parent()
+                    .filter(|parent| !parent.as_os_str().is_empty())
+                {
+                    std::fs::create_dir_all(parent)?;
                 }
+                write_new(&path, &serde_json::to_vec_pretty(&settings)?)?;
+                eprintln!("Created configuration '{}'.", path.display());
+                Ok(())
+            } else {
+                write_json(None, &settings)
             }
-            Some(("schemas", _args)) => {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(
-                        &SchemaSettings::draft07()
-                            .into_generator()
-                            .into_root_schema_for::<(Request, Response)>()
-                    )?,
+        }
+    }
+}
+
+fn config_path(custom: Option<&Path>) -> Result<PathBuf> {
+    match custom {
+        Some(path) => Ok(path.into()),
+        None => Ok(util::project_dirs()?.config_dir().join("config.json")),
+    }
+}
+
+fn module_context(
+    options: args::ModuleOptions,
+    source: Option<args::ModuleSource>,
+) -> Result<Common> {
+    let module_locator = match source {
+        Some(args::ModuleSource {
+            file: Some(file), ..
+        }) => Some(ModuleLocator::FileName(
+            file.into_os_string()
+                .into_string()
+                .map_err(|_| "WASM module path must be valid UTF-8")?,
+        )),
+        Some(args::ModuleSource { key: Some(key), .. }) => Some(ModuleLocator::Key(key)),
+        _ => None,
+    };
+    let plugin_map = options
+        .plugin_map
+        .as_deref()
+        .map(|path| {
+            read_json::<std::collections::BTreeMap<String, config::WasmerCacheHash>>(Some(path))
+        })
+        .transpose()?;
+    Ok(Common {
+        path: util::module_path(options.workspace)?,
+        module_locator,
+        net: options.network.unwrap_or(bitcoin::Network::Regtest),
+        plugin_map: plugin_map.map(|entries| {
+            entries
+                .into_iter()
+                .map(|(alias, hash)| (alias.into_bytes(), hash.into()))
+                .collect()
+        }),
+    })
+}
+
+async fn contract(command: args::Contract, custom_config: Option<&Path>) -> Result<()> {
+    let (request, output) = match command {
+        args::Contract::Explain(args) => return explain::run(args),
+        args::Contract::Spend { command } => return spend::run(command),
+        args::Contract::Create { mut module, args } => {
+            let parameters: CreateArgs<Value> = read_json(args.as_deref())?;
+            if module
+                .options
+                .network
+                .is_some_and(|network| network != parameters.context.network)
+            {
+                return Err(
+                    "--network does not match the required context.network in create arguments"
+                        .into(),
                 );
             }
-            _ => unreachable!(),
-        },
-        Some(("contract", matches)) => {
-            if let Some(("explain", args)) = matches.subcommand() {
-                return explain::run(args);
-            }
-            let config = config(custom_config).await?;
-            let module_path = |args: &clap::ArgMatches| {
-                let mut p = args
-                    .value_of("workspace")
-                    .map(Into::into)
-                    .unwrap_or_else(|| util::get_data_dir("org", "judica", "sapio-cli"));
-                p.push("modules");
-                p
-            };
-            let network = config.network;
-            let covenant = config.active.covenant;
-            let plugin_map = config.active.plugin_map.map(|x| {
-                x.into_iter()
-                    .map(|(x, y)| (x.into_bytes(), y.into()))
-                    .collect()
-            });
-            let context = |args: &clap::ArgMatches| -> Result<Common, &'static str> {
-                let module_locator = args
-                    .value_of("file")
-                    .map(String::from)
-                    .map(ModuleLocator::FileName)
-                    .xor(
-                        args.value_of("key")
-                            .map(ToString::to_string)
-                            .map(ModuleLocator::Key),
-                    );
-                Ok(Common {
-                    path: module_path(args),
-                    covenant,
-                    module_locator,
-                    net: network,
-                    plugin_map,
-                })
-            };
-            let (server, send_server, shutdown_server) = Server::new();
-
-            let msg = match matches.subcommand() {
-                Some(("bind", args)) => {
-                    let client_url = config.active.api_node.url.clone();
-                    let client_auth = config.active.api_node.auth.clone();
-                    Request {
-                        context: context(args)?,
-                        command: bind_command(args, client_url, client_auth).await?,
-                    }
-                }
-                Some(("list", args)) => Request {
-                    context: context(args)?,
-                    command: Command::List(List),
+            module.options.network = Some(parameters.context.network);
+            (
+                Request {
+                    context: module_context(module.options, Some(module.source))?,
+                    command: contracts::Command::Call(contracts::Call {
+                        params: serde_json::to_value(parameters)?,
+                    }),
                 },
-                Some(("create", args)) => {
-                    let json = args.value_of("json").map(|x| x.to_string());
-                    let params = if let Some(params) = json {
-                        serde_json::from_str(&params)?
-                    } else {
-                        let mut s = String::new();
-                        tokio::io::stdin().read_to_string(&mut s).await?;
-                        serde_json::from_str(&s)?
-                    };
-                    Request {
-                        context: context(args)?,
-                        command: Command::Call(Call { params }),
-                    }
-                }
-                Some(("api", args)) => Request {
-                    context: context(args)?,
-                    command: Command::Api(Api),
-                },
-                Some(("logo", args)) => Request {
-                    context: context(args)?,
-                    command: Command::Logo(Logo),
-                },
-                Some(("info", args)) => Request {
-                    context: context(args)?,
-                    command: Command::Info(Info),
-                },
-                Some(("load", args)) => Request {
-                    context: context(args)?,
-                    command: Command::Load(Load),
-                },
-                _ => unreachable!(),
-            };
-            server.run();
-            let (tx, rx) = oneshot::channel();
-            send_server.send((msg, tx)).map_err(|_e| "Failed to Send")?;
-            println!("{}", serde_json::to_string_pretty(&rx.await?)?);
-            shutdown_server.send(())?;
+                module.output,
+            )
         }
-        _ => unreachable!(),
+        args::Contract::Load {
+            options,
+            file,
+            output,
+        } => (
+            Request {
+                context: module_context(
+                    options,
+                    Some(args::ModuleSource {
+                        file: Some(file),
+                        key: None,
+                    }),
+                )?,
+                command: contracts::Command::Load(contracts::Load),
+            },
+            output,
+        ),
+        args::Contract::Api(module) => (
+            Request {
+                context: module_context(module.options, Some(module.source))?,
+                command: contracts::Command::Api(contracts::Api),
+            },
+            module.output,
+        ),
+        args::Contract::Info(module) => (
+            Request {
+                context: module_context(module.options, Some(module.source))?,
+                command: contracts::Command::Info(contracts::Info),
+            },
+            module.output,
+        ),
+        args::Contract::Logo(module) => (
+            Request {
+                context: module_context(module.options, Some(module.source))?,
+                command: contracts::Command::Logo(contracts::Logo),
+            },
+            module.output,
+        ),
+        args::Contract::List { options, output } => (
+            Request {
+                context: module_context(options, None)?,
+                command: contracts::Command::List(contracts::List),
+            },
+            output,
+        ),
+        args::Contract::Bind {
+            artifact,
+            funding,
+            output,
+        } => {
+            let compiled = read_json(artifact.as_deref())?;
+            let config = config(custom_config).await?;
+            let funding_psbt = funding
+                .funding_psbt
+                .as_deref()
+                .map(|path| read_psbt(Some(path)))
+                .transpose()?;
+            (
+                Request {
+                    context: Common {
+                        path: PathBuf::new(),
+                        module_locator: None,
+                        net: config.network,
+                        plugin_map: None,
+                    },
+                    command: contracts::Command::Bind(contracts::Bind {
+                        covenant: config.active.covenant,
+                        client_url: config.active.api_node.url,
+                        client_auth: config.active.api_node.auth,
+                        use_mock: funding.mock,
+                        outpoint: funding.outpoint,
+                        use_txn: funding_psbt.map(|psbt| base64::encode(psbt.serialize())),
+                        compiled,
+                        ordinals_info: None,
+                    }),
+                },
+                output,
+            )
+        }
     };
-
-    Ok(())
+    // Direct CLI calls propagate operation failures. Only Studio uses Response's envelope.
+    let payload = request.handle_inner().await?.into_payload()?;
+    write_json(output.output.as_deref(), &payload)
 }
 
-async fn configured_emulator(
-    custom_config: Option<&str>,
-) -> Result<Arc<dyn CTVEmulator>, Box<dyn Error>> {
-    let config = config(custom_config).await?;
-    config.active.covenant.get_emulator().await
+async fn configured_emulator(custom_config: Option<&Path>) -> Result<Arc<dyn CTVEmulator>> {
+    config(custom_config)
+        .await?
+        .active
+        .covenant
+        .get_emulator()
+        .await
 }
 
-async fn run_server_stdin() -> Result<(), Box<dyn Error>> {
+async fn run_server_stdin() -> Result<()> {
     let (server, send_server, shutdown_server) = Server::new();
     server.run();
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let stream = tokio::task::spawn_blocking(move || {
-        let stream = Deserializer::from_reader(std::io::stdin()).into_iter::<Request>();
-        for json in stream {
-            // if a bad json is read, break.
+        for json in Deserializer::from_reader(std::io::stdin()).into_iter::<Request>() {
             if tx.send(json).is_err() {
                 break;
             }
         }
     });
     while let Some(json) = rx.recv().await {
-        let (b_tx, b_rx) = oneshot::channel();
+        let (tx, rx) = oneshot::channel();
         send_server
-            .send((json?, b_tx))
-            .map_err(|_e| "Failed to Send")?;
-
-        println!("{}", serde_json::to_string_pretty(&b_rx.await?)?);
+            .send((json?, tx))
+            .map_err(|_| "failed to send Studio request")?;
+        write_json(None, &rx.await?)?;
     }
     shutdown_server.send(())?;
     stream.await?;
     Ok(())
-}
-
-async fn bind_command(
-    args: &ArgMatches,
-    client_url: String,
-    client_auth: bitcoincore_rpc::Auth,
-) -> Result<Command, Box<dyn Error>> {
-    let use_mock = args.is_present("mock");
-    let ordinals_info = None;
-    let use_base64 = args.is_present("base64_psbt");
-    let outpoint: Option<bitcoin::OutPoint> = args
-        .value_of("outpoint")
-        .map(serde_json::from_str)
-        .transpose()?;
-    let use_txn = args.value_of("txn").map(String::from);
-    let compiled: Compiled = if let Some(json) = args.value_of("json") {
-        serde_json::from_str(json)?
-    } else {
-        let mut s = String::new();
-        tokio::io::stdin().read_to_string(&mut s).await?;
-        serde_json::from_str(&s)?
-    };
-    Ok(Command::Bind(Bind {
-        client_url,
-        client_auth,
-        use_base64,
-        use_mock,
-        outpoint,
-        use_txn,
-        compiled,
-        ordinals_info,
-    }))
 }

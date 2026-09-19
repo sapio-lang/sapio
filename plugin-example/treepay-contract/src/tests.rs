@@ -75,3 +75,46 @@ fn uneven_tree_preserves_every_payment_and_transaction_fee() {
     assert_eq!(inspect(&compiled), (11, 500));
     assert!(tree.compile(context(11499)).is_err());
 }
+
+#[test]
+fn batching_interface_preserves_the_general_constructor_artifact() {
+    let data = BatchingTraitVersion0_1_1 {
+        payments: tree(11, 4).participants,
+        feerate_per_byte: Amount::from_sat(1),
+    };
+    let general = TreePay::try_from(Versions::BatchingTraitVersion0_1_1(data.clone()))
+        .unwrap()
+        .compile(context(11860))
+        .unwrap();
+    let batching = TreePay::try_from(batching_trait::Versions::BatchingTraitVersion0_1_1(data))
+        .unwrap()
+        .compile(context(11860))
+        .unwrap();
+    batching.validate().unwrap();
+    assert_eq!(
+        serde_json::to_value(batching).unwrap(),
+        serde_json::to_value(general).unwrap()
+    );
+}
+
+#[test]
+fn batching_interface_rejects_invalid_payments_before_compilation() {
+    let valid = tree(1, 4).participants;
+    let mut zero = valid.clone();
+    zero[0].amount = Amount::ZERO;
+    for (payments, feerate_per_byte) in [
+        (vec![], Amount::ONE_SAT),
+        (zero, Amount::ONE_SAT),
+        (valid, Amount::from_sat(u64::MAX)),
+    ] {
+        assert!(
+            TreePay::try_from(batching_trait::Versions::BatchingTraitVersion0_1_1(
+                BatchingTraitVersion0_1_1 {
+                    payments,
+                    feerate_per_byte,
+                }
+            ))
+            .is_err()
+        );
+    }
+}

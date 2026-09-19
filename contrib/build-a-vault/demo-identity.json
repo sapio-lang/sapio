@@ -1,0 +1,14 @@
+{
+  "addresses": [
+    "bcrt1p3p79luvy0a5qywng29scnudf2kqqgenuzc6506w5t55vdhkfg0lqaund2q",
+    "bcrt1pxmjzkd5v0ty8d35rzqfhkyyx9wgllmntzw4uhe7lpz7xwft98q6ssgucd8"
+  ],
+  "keys": [
+    "9822622cf330b98e52e7357135bc93e1e5606a57a9819408734598fe5677b134",
+    "785c6ee41ef2d6da2cb01c7db2a718621f4304c12b57c53548b2130e68e4205e",
+    "53dee90bdff9eed793c398f679c13325a5e1ae7b5db2b6d0a2f8cb05c9ad2d49",
+    "7b8916c0e191ac85f36ba0fbca126351afbb52307058c6f8d5faee734c9d427c",
+    "ba18b426c4fbc1fbd969d782979b02488890ddcac38993cff277aa821d7e7ac4"
+  ],
+  "oracle_xpub": "tpubD6NzVbkrYhZ4X92z8x8vQMAWpC2FGPTqagpCsFqu8tRZP8GPY5w7iDRFiUiAwF4h5vHdcgGszun56gqPf3zm4ykVaGaMSdxggdkTxETEMMw"
+}

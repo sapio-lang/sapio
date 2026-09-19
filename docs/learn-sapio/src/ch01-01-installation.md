@@ -1,104 +1,30 @@
 # Installing Sapio
 
-## Sapio Pod QuickStart:
+Use Rust with rustup, Git and a native C compiler. The maintained developer
+preview starts from one source checkout and generates an independent project:
 
-[**DOWNLOAD THE POD**](https://hub.docker.com/repository/docker/sapiolang/sapio)
-
-Today, Sapio can come to you in an easy to set up Docker compatible container
-(unofficial™). With the Sapio pod you get:
-
-1. A CTV Compatible Bitcoin Node running regtest
-2. Rust
-3. A pre-built cached Sapio Directory for you to use as a workspace
-4. sapio-cli pre-built
-5. Sapio Studio built and running over X11 connected to your regtest node
-6. neovim for editing
-
-See [the repo](https://github.com/jeremyrubin/sapio-pod) for setup instructions,
-especially with x11 through containerization.
-
-This  is the simplest way to get a working Sapio playground, but you may prefer
-to have it set up locally (x11 can be glitchy). The Sapio Pod is currently
-targetted at someone wanting a pain free development environment for tutorials,
-but future releases may target more specific needs such as deployments in
-infrastructure.
-
-The book will *assume* this is your setup, and instructions will be tailored
-appropriately.
-
-## Local QuickStart:
-
-Sapio should work on all platforms, but is recommended for use with Linux (Ubuntu preferred).
-Follow this quickstart guide to get going.
-
-1.  Get [rust](https://rustup.rs/) if you don't have it already.
-2.  Add the wasm target and nightly toolchain by running the below command in your terminal:
-```bash
-rustup target add wasm32-unknown-unknown
-```
-> Tip: On macOS you may need to do the following:
-
-> ```bash
-> brew install llvm
-> cargo install wasm-pack
-> rustup toolchain install nightly
-> rustup default nightly
-> ```
-> and then load the following before compiling to use the newer llvm/clang.
-> ```bash
-> export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
-> # for older homebrew installs
-> # export PATH="/usr/local/opt/llvm/bin:$PATH"
-> export CC=/opt/homebrew/opt/llvm/bin/clang
-> export AR=/opt/homebrew/opt/llvm/bin/llvm-ar
-> ```
-
-3.  Clone this repo: 
-```
-git clone --depth 1 git@github.com:sapio-lang/sapio.git && cd sapio
-```
-We recommend a shallow clone unless you want the full history.
-
-4.  Build a plugin
-```
-cd plugin-example/ && cargo build --release --target wasm32-unknown-unknown && cd ..
+```sh
+git clone https://github.com/sapio-lang/sapio.git
+cd sapio
+cargo build --locked -p sapio-cli
+export PATH="$PWD/target/debug:$PATH"
+sapio-cli new ../my-contract --name my-contract
+cd ../my-contract
+cargo test --locked
 ```
 
-If the compilation fails, you may want to check the clang version (8<=), and install libraries for cross-compilation (in case of ubuntu, `sudo apt install gcc-multilib`)
+Rustup selects the checked-in stable toolchain. The project includes its full
+dependency pins, Cargo lockfile and exact payment evaluator bytes. Cargo fetches
+the required repositories; no manually cloned dependency libraries, nightly
+toolchain, wasm-pack, container or graphical application are required.
 
-5.  Instantiate a contract from the plugin:
-```
-cargo run --bin sapio-cli -- contract create "{\"arguments\":{\"ForAddress\":{\"amount_step\":{\"Sats\":100},\"cold_storage\":\"bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj\",\"hot_storage\":\"bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj\",\"mature\":{\"RH\":10},\"n_steps\":10,\"timeout\":{\"RH\":5}}},\"context\":{\"amount\":1000,\"network\":\"Regtest\"}}" --file="plugin-example/target/wasm32-unknown-unknown/debug/sapio_wasm_vault.wasm"
-```
+If you use `CARGO_TARGET_DIR`, put its `debug` subdirectory on `PATH` instead.
+The [maintained quickstart](https://github.com/sapio-lang/sapio/blob/master/docs/QUICKSTART.md)
+and generated `README.md` continue through artifact inspection and a completed
+synthetic spend. The example has public demonstration keys and must not receive
+real funds.
 
-You can use `cargo run --release --bin sapio-cli -- help` to learn more about what a the
-CLI can do! and `cargo run --bin sapio-cli -- <subcommand> help` to learn about
-subcommands like `contract`. If you aren't modifying Sapio itself, you'll want
-to run `cargo build --release` and use a release binary as it is much faster.
-
-6. Install Sapio Studio
-
-[Sapio Studio](https://github.com/sapio-lang/sapio-studio) is an in-development
-graphical user interface for Sapio. It is the recommended way to get started with Sapio development.
-We recommend a shallow clone unless you want the full history.
-```
-git clone --depth 1 git@github.com:sapio-lang/sapio-studio.git && cd sapio-studio
-yarn install
-```
-and then in separate shells
-```
-yarn start-react
-yarn start-electron
-```
-
-
-The first time you run it you most likely *will* have some errors, you will need
-to ensure you've configured your client correctly. You can do this by opening
-the Preferences menu and configuring it appropriately. Soon there will be a better
-interface for first run setup.
-
-
-## Docs
-
-You can review the docs either by building them locally or viewing
-[online](https://docs.rs/sapio).
+Building compiler plugins as WASM is a separate workflow. It additionally needs
+LLVM Clang with the `wasm32` target; see the
+[development guide](https://github.com/sapio-lang/sapio/blob/master/docs/DEVELOPMENT.md).
+The starter does not need to rebuild its included evaluator.

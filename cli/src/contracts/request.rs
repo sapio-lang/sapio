@@ -43,7 +43,6 @@ use crate::{config::CovenantConfig, util::create_mock_output};
 #[serde(deny_unknown_fields)]
 pub struct Common {
     pub path: PathBuf,
-    pub covenant: CovenantConfig,
     pub module_locator: Option<ModuleLocator>,
     pub net: bitcoin::Network,
     pub plugin_map: Option<BTreeMap<Vec<u8>, [u8; 32]>>,
@@ -63,12 +62,13 @@ pub struct CallReturn {
     result: Value,
 }
 #[derive(Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct Bind {
+    pub covenant: CovenantConfig,
     pub client_url: String,
     #[serde(with = "crate::config::Auth")]
     #[schemars(with = "crate::config::Auth")]
     pub client_auth: rpc::Auth,
-    pub use_base64: bool,
     pub use_mock: bool,
     pub outpoint: Option<OutPoint>,
     pub use_txn: Option<String>,
@@ -124,6 +124,21 @@ pub enum CommandReturn {
     Load(LoadReturn),
 }
 
+impl CommandReturn {
+    /// The CLI writes composable payloads; Studio retains its protocol envelope.
+    pub fn into_payload(self) -> ResultT<Value> {
+        Ok(match self {
+            Self::Call(value) => value.result,
+            Self::Bind(value) => serde_json::to_value(value)?,
+            Self::Api(value) => serde_json::to_value(value.api)?,
+            Self::List(value) => serde_json::to_value(value.items)?,
+            Self::Logo(value) => value.logo.into(),
+            Self::Info(value) => serde_json::to_value(value)?,
+            Self::Load(value) => serde_json::to_value(value)?,
+        })
+    }
+}
+
 #[derive(Serialize, Deserialize, JsonSchema)]
 pub struct Request {
     pub context: Common,
@@ -140,7 +155,10 @@ pub struct RequestError(Value);
 
 impl Display for RequestError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        match &self.0 {
+            Value::String(message) => f.write_str(message),
+            value => Display::fmt(value, f),
+        }
     }
 }
 
@@ -157,66 +175,77 @@ impl Request {
         Response { result: v }
     }
     pub async fn handle_inner(self) -> ResultT<CommandReturn> {
-        // create the future to get the sph,
-        // but do not await it since not all calls will use it.
         let Request { context, command } = self;
         let Common {
             path,
-            covenant,
             module_locator,
             net,
             plugin_map,
             ..
         } = context;
-        let default_sph = || -> Result<_, &'static str> {
-            Ok(WasmPluginHandle::<Value>::new_async(
-                &path,
-                module_locator.ok_or("Expected to have exactly one of key or file")?,
-                net,
-                plugin_map.clone(),
-            ))
-        };
         match command {
             Command::List(_list) => {
-                let mut plugins =
-                    WasmPluginHandle::<Value>::load_all_keys(&path, context.net, plugin_map)?;
+                let plugins =
+                    sapio_wasm_plugin::host::metadata::list(&path, context.net, plugin_map)?;
                 let m = plugins
-                    .iter_mut()
-                    .map(|p| p.get_name().map(|name| (p.id().to_string(), name)))
-                    .collect::<Result<BTreeMap<_, _>, _>>()?;
+                    .into_iter()
+                    .map(|p| (p.key, p.name))
+                    .collect::<BTreeMap<_, _>>();
                 Ok(CommandReturn::List(ListReturn { items: m }))
             }
             Command::Call(call) => {
                 let params = call.params;
-                let mut sph = default_sph()?.await?;
-
                 let create_args: CreateArgs<serde_json::Value> = serde_json::from_value(params)?;
+                if create_args.context.network != net {
+                    return Err("module network does not match context.network".into());
+                }
+                let mut sph = WasmPluginHandle::<Value>::new_async(
+                    &path,
+                    module_locator.ok_or("Expected to have exactly one of key or file")?,
+                    net,
+                    plugin_map,
+                )
+                .await?;
                 let v = sph.call(&PathFragment::Root.into(), &create_args)?;
                 Ok(CommandReturn::Call(CallReturn { result: v }))
             }
             Command::Bind(bind) => {
-                let emulator = covenant.get_emulator().await?;
-                Ok(CommandReturn::Bind(
-                    bind.call(net, emulator, &covenant).await?,
-                ))
+                let emulator = bind.covenant.get_emulator().await?;
+                Ok(CommandReturn::Bind(bind.call(net, emulator).await?))
             }
             Command::Api(_api) => {
-                let mut sph = default_sph()?.await?;
-                Ok(CommandReturn::Api(ApiReturn {
-                    api: sph.get_api()?,
-                }))
+                let metadata = sapio_wasm_plugin::host::metadata::get_async(
+                    &path,
+                    module_locator.ok_or("Expected to have exactly one of key or file")?,
+                    net,
+                    plugin_map,
+                )
+                .await?;
+                Ok(CommandReturn::Api(ApiReturn { api: metadata.api }))
             }
             Command::Logo(_logo) => {
-                let mut sph = default_sph()?.await?;
+                let metadata = sapio_wasm_plugin::host::metadata::get_async(
+                    &path,
+                    module_locator.ok_or("Expected to have exactly one of key or file")?,
+                    net,
+                    plugin_map,
+                )
+                .await?;
                 Ok(CommandReturn::Logo(LogoReturn {
-                    logo: sph.get_logo()?,
+                    logo: metadata.logo,
                 }))
             }
             Command::Info(_info) => {
-                let mut sph = default_sph()?.await?;
-                let api = sph.get_api()?;
+                let metadata = sapio_wasm_plugin::host::metadata::get_async(
+                    &path,
+                    module_locator.ok_or("Expected to have exactly one of key or file")?,
+                    net,
+                    plugin_map,
+                )
+                .await?;
+                let api = metadata.api;
                 Ok(CommandReturn::Info(InfoReturn {
-                    name: sph.get_name()?,
+                    name: metadata.name,
                     description: api
                         .input()
                         .as_value()
@@ -227,10 +256,14 @@ impl Request {
                 }))
             }
             Command::Load(_load) => {
-                let sph = default_sph()?.await?;
-                Ok(CommandReturn::Load(LoadReturn {
-                    key: sph.id().to_string(),
-                }))
+                let metadata = sapio_wasm_plugin::host::metadata::get_async(
+                    &path,
+                    module_locator.ok_or("Expected to have exactly one of key or file")?,
+                    net,
+                    plugin_map,
+                )
+                .await?;
+                Ok(CommandReturn::Load(LoadReturn { key: metadata.key }))
             }
         }
     }
@@ -241,18 +274,22 @@ impl Bind {
         self,
         net: bitcoin::Network,
         emulator: Arc<dyn CTVEmulator>,
-        covenant: &CovenantConfig,
     ) -> Result<BindReturn, Box<dyn Error>> {
         let Bind {
+            covenant,
             client_url,
             client_auth,
-            use_base64: _,
             use_mock,
             use_txn,
             compiled,
             outpoint,
             ordinals_info,
         } = self;
+        if u8::from(use_mock) + u8::from(outpoint.is_some()) + u8::from(use_txn.is_some()) > 1 {
+            return Err(Box::new(RequestError(
+                "binding funding sources are mutually exclusive".into(),
+            )));
+        }
         compiled.validate_for_emulator(emulator.as_ref())?;
         if !covenant.allows_native_ctv() && compiled.requires_native_ctv() {
             return Err(Box::new(RequestError(
@@ -268,7 +305,6 @@ impl Bind {
         if let Some(psbt) = &use_txn {
             sapio_psbt::validate_psbt(psbt)?;
         }
-        let client = rpc::Client::new(&client_url, client_auth)?;
         let (tx, vout, funding_psbt) = if use_mock {
             let ctx = Context::new(
                 net,
@@ -290,6 +326,7 @@ impl Bind {
             };
             (tx, 0, psbt)
         } else if let Some(outpoint) = outpoint {
+            let client = rpc::Client::new(&client_url, client_auth)?;
             let res = tokio::task::spawn_blocking(move || {
                 client.get_raw_transaction(&outpoint.txid, None)
             })
@@ -305,6 +342,7 @@ impl Bind {
                 let psbt = if let Some(psbt) = use_txn {
                     psbt
                 } else {
+                    let client = rpc::Client::new(&client_url, client_auth)?;
                     let res = tokio::task::spawn_blocking(move || {
                         client.wallet_create_funded_psbt(&[], &spends, None, None, None)
                     })

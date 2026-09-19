@@ -106,6 +106,7 @@ async fn invalid_limits_fail_without_announcing_readiness() {
         .unwrap();
         assert!(!output.status.success());
         assert!(output.stdout.is_empty());
-        assert!(String::from_utf8_lossy(&output.stderr).contains("InvalidInput"));
+        assert_eq!(output.status.code(), Some(2));
+        assert!(String::from_utf8_lossy(&output.stderr).contains(flag));
     }
 }

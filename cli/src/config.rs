@@ -9,7 +9,6 @@
 use bitcoin::bip32::Xpub;
 use bitcoincore_rpc as rpc;
 
-use directories::BaseDirs;
 use emulator_connect::connections::federated::FederatedEmulatorConnection;
 use emulator_connect::connections::hd::HDOracleEmulatorConnection;
 use emulator_connect::{CTVAvailable, CTVEmulator};
@@ -17,7 +16,7 @@ use schemars::JsonSchema;
 use serde::*;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -218,35 +217,30 @@ pub struct Config {
 }
 
 impl Config {
-    /// reads the user's config file and returns it,
-    /// or a different one if the user specified a different file manually.
-    ///
-    /// if no config is found for the user, creates a file.
-    ///
-    /// **Race Conditions** This is clearly not safe if multiple edits are
-    /// happening on config.json. It is assumed that the user will ensure
-    /// writes to config.json are safe.
+    /// Read the explicitly selected runtime configuration without creating files.
     pub async fn setup(
-        custom_config: Option<&str>,
+        custom_config: Option<&Path>,
         typ: &str,
         org: &str,
         proj: &str,
     ) -> Result<Config, Box<dyn std::error::Error>> {
-        if let Some(p) = custom_config {
-            Ok(serde_json::from_slice(&tokio::fs::read(p).await?[..])?)
-        } else {
-            let proj = directories::ProjectDirs::from(typ, org, proj)
-                .expect("Failed to find config directory");
-            let path = proj.config_dir();
-            tokio::fs::create_dir_all(path).await?;
-            let mut pb = path.to_path_buf();
-            pb.push("config.json");
-            if let Ok(txt) = tokio::fs::read(&pb).await {
-                Ok(serde_json::from_slice(&txt[..])?)
-            } else {
-                Err("Please Run the configure wizard command to make a config file")?
-            }
-        }
+        let path = match custom_config {
+            Some(path) => path.to_path_buf(),
+            None => directories::ProjectDirs::from(typ, org, proj)
+                .ok_or("cannot determine the runtime configuration directory")?
+                .config_dir()
+                .join("config.json"),
+        };
+        let bytes = tokio::fs::read(&path).await.map_err(|error| {
+            format!("cannot read runtime configuration '{}': {error}; use --config FILE or configure wizard --write", path.display())
+        })?;
+        serde_json::from_slice(&bytes).map_err(|error| {
+            format!(
+                "invalid runtime configuration '{}': {error}",
+                path.display()
+            )
+            .into()
+        })
     }
 }
 
@@ -344,125 +338,10 @@ impl ConfigVerifier {
         .ok_or(ConfigError::NoActiveConfig)
     }
 
-    /// a setup wizard to generate a new config file
+    /// Interactively create a cookie-authenticated runtime configuration.
+    /// Prompts go to stderr; EOF aborts without writing a partial configuration.
     pub async fn wizard() -> Result<Self, Box<dyn std::error::Error>> {
-        use tokio::io::AsyncBufReadExt;
-
-        let stdin = tokio::io::stdin();
-        let reader = BufReader::new(stdin);
-        let mut b = BaseDirs::new()
-            .expect("Could Not Determine a Base Directory")
-            .home_dir()
-            .to_path_buf();
-        b.push(".bitcoin");
-        b.push("regtest");
-        b.push(".cookie");
-        let network;
-        let mut lines = reader.lines();
-        loop {
-            println!("Which Network? (main, reg, sig, test, test4): ");
-            if let Some(line) = lines.next_line().await? {
-                network = match line.trim() {
-                    "main" => bitcoin::Network::Bitcoin,
-                    "reg" => bitcoin::Network::Regtest,
-                    "sig" => bitcoin::Network::Signet,
-                    "test" => bitcoin::Network::Testnet,
-                    "test4" => bitcoin::Network::Testnet4,
-                    _ => {
-                        println!("Not a valid option {:?}", line);
-                        continue;
-                    }
-                };
-                break;
-            }
-        }
-        let mut url: String;
-        loop {
-            println!("API Node URL (e.g., http://127.0.0.1:18443): ");
-            if let Some(line) = lines.next_line().await? {
-                url = line.trim().into();
-                if url.is_empty() {
-                    println!("Must enter a username");
-                } else {
-                    break;
-                }
-            }
-        }
-        let using_cookie;
-        loop {
-            println!("Auth Type (for cookie file, \"cookie\", for username/password \"basic\"): ");
-            if let Some(line) = lines.next_line().await? {
-                using_cookie = match line.trim() {
-                    "cookie" => true,
-                    "basic" => false,
-                    l => {
-                        println!("Invalid option {}, type cookie or basic:", l);
-                        continue;
-                    }
-                };
-                break;
-            }
-        }
-        let auth = if using_cookie {
-            let mut cookie: String;
-            loop {
-                println!("Cookie file location (e.g., {}): ", b.display());
-                if let Some(line) = lines.next_line().await? {
-                    cookie = line.trim().into();
-                    if cookie.is_empty() {
-                        println!("Must give a cookie file location.");
-                        continue;
-                    }
-                    break;
-                }
-            }
-            rpc::Auth::CookieFile(cookie.into())
-        } else {
-            let mut username: String;
-            loop {
-                println!("Username: ");
-                if let Some(line) = lines.next_line().await? {
-                    username = line.trim().into();
-                    if username.is_empty() {
-                        println!("Must enter a username");
-                    } else {
-                        break;
-                    }
-                }
-            }
-            let mut password: String;
-            loop {
-                println!("Password: ");
-                if let Some(line) = lines.next_line().await? {
-                    password = line.trim().into();
-                    if password.is_empty() {
-                        println!("Must enter a username");
-                    } else {
-                        break;
-                    }
-                }
-            }
-            rpc::Auth::UserPass(username, password)
-        };
-
-        let covenant = covenant_wizard(&mut lines).await?;
-        println!("Configuration Complete!");
-        println!("To configure plugin maps, edit the configuration manually.");
-        println!("Your Configuration:");
-
-        let active = NetworkConfig {
-            active: true,
-            api_node: Node { url, auth },
-            covenant,
-            plugin_map: None,
-        };
-        let cv: ConfigVerifier = Config { network, active }.into();
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&serde_json::to_value(cv.clone())?)?
-        );
-
-        Ok(cv)
+        wizard_from(BufReader::new(tokio::io::stdin())).await
     }
 }
 
@@ -477,7 +356,10 @@ pub enum ConfigError {
 use std::fmt;
 impl fmt::Display for ConfigError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        f.write_str(match self {
+            Self::TooManyActiveNetworks => "only one network configuration may be active",
+            Self::NoActiveConfig => "one network configuration must be active",
+        })
     }
 }
 
@@ -487,24 +369,24 @@ async fn covenant_wizard<R: tokio::io::AsyncBufRead + Unpin>(
     lines: &mut tokio::io::Lines<R>,
 ) -> Result<CovenantConfig, Box<dyn std::error::Error>> {
     let native_ctv_research = loop {
-        println!("Covenant mode (native_ctv_research / signer_emulation / signer_emulation_with_native_ctv_research):");
-        println!(
+        eprintln!("Covenant mode (native_ctv_research / signer_emulation / signer_emulation_with_native_ctv_research):");
+        eprintln!(
             "native_ctv_research assumes your chain enforces CTV; Sapio does not detect this."
         );
-        println!("signer_emulation relies on the configured signers' security and availability.");
-        println!("signer_emulation_with_native_ctv_research combines both assumptions for mixed scripts.");
+        eprintln!("signer_emulation relies on the configured signers' security and availability.");
+        eprintln!("signer_emulation_with_native_ctv_research combines both assumptions for mixed scripts.");
         let line = lines.next_line().await?.ok_or("Missing covenant mode")?;
         match line.trim() {
             "native_ctv_research" => return Ok(CovenantConfig::NativeCtvResearch {}),
             "signer_emulation" => break false,
             "signer_emulation_with_native_ctv_research" => break true,
-            _ => println!("Choose one of the three explicit covenant modes."),
+            _ => eprintln!("Choose one of the three explicit covenant modes."),
         }
     };
 
     let mut emulators = Vec::new();
     loop {
-        println!("Signer extended public key (blank to finish after adding a signer):");
+        eprintln!("Signer extended public key (blank to finish after adding a signer):");
         let line = lines
             .next_line()
             .await?
@@ -516,12 +398,12 @@ async fn covenant_wizard<R: tokio::io::AsyncBufRead + Unpin>(
         let key = match Xpub::from_str(key) {
             Ok(key) => key,
             Err(error) => {
-                println!("Invalid extended public key: {error}");
+                eprintln!("Invalid extended public key: {error}");
                 continue;
             }
         };
         let address = loop {
-            println!("Signer address (host:port):");
+            eprintln!("Signer address (host:port):");
             let line = lines.next_line().await?.ok_or("Missing signer address")?;
             if !line.trim().is_empty() {
                 break line.trim().to_owned();
@@ -530,13 +412,13 @@ async fn covenant_wizard<R: tokio::io::AsyncBufRead + Unpin>(
         emulators.push((key, address));
     }
     let threshold = loop {
-        println!("Required signer threshold (1..={}):", emulators.len());
+        eprintln!("Required signer threshold (1..={}):", emulators.len());
         let line = lines.next_line().await?.ok_or("Missing signer threshold")?;
         match line.trim().parse::<u8>() {
             Ok(threshold) if threshold > 0 && usize::from(threshold) <= emulators.len() => {
                 break threshold;
             }
-            _ => println!("Threshold must be positive and no greater than the signer count."),
+            _ => eprintln!("Threshold must be positive and no greater than the signer count."),
         }
     };
     let config = EmulatorConfig {
@@ -549,4 +431,70 @@ async fn covenant_wizard<R: tokio::io::AsyncBufRead + Unpin>(
     } else {
         CovenantConfig::SignerEmulation(config)
     })
+}
+
+/// Render configuration without exposing basic-auth passwords.
+pub(crate) fn redacted(mut config: Config) -> Result<serde_json::Value, serde_json::Error> {
+    if let rpc::Auth::UserPass(_, password) = &mut config.active.api_node.auth {
+        *password = "<redacted>".into();
+    }
+    serde_json::to_value(ConfigVerifier::from(config))
+}
+
+async fn prompt<R: tokio::io::AsyncBufRead + Unpin>(
+    lines: &mut tokio::io::Lines<R>,
+    message: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    eprintln!("{message}");
+    lines
+        .next_line()
+        .await?
+        .ok_or_else(|| format!("input ended while reading {message}").into())
+}
+
+async fn wizard_from<R: tokio::io::AsyncBufRead + Unpin>(
+    reader: R,
+) -> Result<ConfigVerifier, Box<dyn std::error::Error>> {
+    use tokio::io::AsyncBufReadExt;
+    let mut lines = reader.lines();
+    let network = loop {
+        let line = prompt(
+            &mut lines,
+            "Network (bitcoin, regtest, signet, testnet, testnet4):",
+        )
+        .await?;
+        match bitcoin::Network::from_str(line.trim()) {
+            Ok(network) => break network,
+            Err(_) => eprintln!("Choose one of the listed networks."),
+        }
+    };
+    let url = loop {
+        let line = prompt(
+            &mut lines,
+            "Bitcoin RPC URL (for example http://127.0.0.1:18443):",
+        )
+        .await?;
+        if !line.trim().is_empty() {
+            break line.trim().to_owned();
+        }
+        eprintln!("Enter the Bitcoin RPC URL.");
+    };
+    let cookie = loop {
+        let line = prompt(&mut lines, "Bitcoin RPC cookie file path:").await?;
+        if !line.trim().is_empty() {
+            break PathBuf::from(line.trim());
+        }
+        eprintln!("Enter the cookie file path.");
+    };
+    let covenant = covenant_wizard(&mut lines).await?;
+    let active = NetworkConfig {
+        active: true,
+        api_node: Node {
+            url,
+            auth: rpc::Auth::CookieFile(cookie),
+        },
+        covenant,
+        plugin_map: None,
+    };
+    Ok(Config { network, active }.into())
 }

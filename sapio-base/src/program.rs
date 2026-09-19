@@ -245,16 +245,47 @@ impl ProgramInstance {
     /// program length, program bytes, a four-byte little-endian parameter
     /// length, and parameter bytes. JSON formatting is never hashed.
     pub fn id(&self) -> ProgramId {
+        #[cfg(target_arch = "wasm32")]
+        {
+            // The exact module can be large and its identity is needed more
+            // than once during compilation. Charge the existing native hash
+            // operation instead of repeatedly executing SHA256 in the guest.
+            const _: () = assert!(
+                MAX_PROGRAM_BYTES + MAX_PARAMETER_BYTES + 104
+                    <= sapio_wasm::MAX_SHA256_BYTES as usize
+            );
+            let bytes = self.identity_preimage();
+            let digest = sapio_wasm::crypto::sha256(&bytes)
+                .expect("bounded program identity satisfies the SHA256 host ABI");
+            ProgramId(sha256::Hash::from_byte_array(digest))
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let tag = sha256::Hash::hash(COMMITMENT_TAG);
+            let mut engine = sha256::Hash::engine();
+            engine.input(&tag[..]);
+            engine.input(&tag[..]);
+            engine.input(&self.evaluator.0[..]);
+            engine.input(&(self.program.len() as u32).to_le_bytes());
+            engine.input(&self.program);
+            engine.input(&(self.parameters.len() as u32).to_le_bytes());
+            engine.input(&self.parameters);
+            ProgramId(sha256::Hash::from_engine(engine))
+        }
+    }
+
+    #[cfg(any(target_arch = "wasm32", test))]
+    fn identity_preimage(&self) -> Vec<u8> {
         let tag = sha256::Hash::hash(COMMITMENT_TAG);
-        let mut engine = sha256::Hash::engine();
-        engine.input(&tag[..]);
-        engine.input(&tag[..]);
-        engine.input(&self.evaluator.0[..]);
-        engine.input(&(self.program.len() as u32).to_le_bytes());
-        engine.input(&self.program);
-        engine.input(&(self.parameters.len() as u32).to_le_bytes());
-        engine.input(&self.parameters);
-        ProgramId(sha256::Hash::from_engine(engine))
+        let mut bytes = Vec::with_capacity(104 + self.program.len() + self.parameters.len());
+        bytes.extend_from_slice(&tag[..]);
+        bytes.extend_from_slice(&tag[..]);
+        bytes.extend_from_slice(&self.evaluator.0[..]);
+        bytes.extend_from_slice(&(self.program.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(&self.program);
+        bytes.extend_from_slice(&(self.parameters.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(&self.parameters);
+        bytes
     }
 
     /// Derive this instance's signature key using only the public root.
@@ -348,13 +379,22 @@ pub fn program_derivation_path(id: ProgramId) -> Vec<ChildNumber> {
 pub struct EmulatedProgram {
     instance: ProgramInstance,
     root: Xpub,
+    // Public derivation succeeds during construction. Retain that immutable
+    // result so policy inspection does not repeat ten BIP32 curve operations.
+    #[serde(skip)]
+    #[schemars(skip)]
+    signing_key: XOnlyPublicKey,
 }
 
 impl EmulatedProgram {
     /// Check that this public root can derive the exact instance key.
     pub fn new(instance: ProgramInstance, root: Xpub) -> Result<Self, ProgramError> {
-        instance.derive_public_key(&root)?;
-        Ok(Self { instance, root })
+        let signing_key = instance.derive_public_key(&root)?;
+        Ok(Self {
+            instance,
+            root,
+            signing_key,
+        })
     }
 
     /// Borrow the complete program instance.
@@ -367,9 +407,9 @@ impl EmulatedProgram {
         &self.root
     }
 
-    /// Derive the exact key used by this policy without a signer runtime.
+    /// Return the exact public key validated when this policy was constructed.
     pub fn derive_public_key(&self) -> Result<XOnlyPublicKey, ProgramError> {
-        self.instance.derive_public_key(&self.root)
+        Ok(self.signing_key)
     }
 }
 
@@ -449,5 +489,58 @@ impl std::error::Error for ProgramError {
             Self::Derivation(error) => Some(error),
             _ => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod identity_backend_tests {
+    use super::*;
+
+    #[test]
+    fn guest_hash_preimage_matches_streaming_identity_at_accepted_bounds() {
+        for (program_length, parameter_length) in
+            [(0, 0), (3, 64), (MAX_PROGRAM_BYTES, MAX_PARAMETER_BYTES)]
+        {
+            let instance = ProgramInstance::new(
+                EvaluatorId::wasm_v2(),
+                vec![1; program_length],
+                vec![2; parameter_length],
+            )
+            .unwrap();
+            let preimage = instance.identity_preimage();
+            assert_eq!(preimage.len(), 104 + program_length + parameter_length);
+            assert_eq!(ProgramId(sha256::Hash::hash(&preimage)), instance.id(),);
+        }
+    }
+
+    #[test]
+    fn validated_signing_key_is_private_and_reconstructed_on_deserialization() {
+        use bitcoin::bip32::Xpriv;
+        use bitcoin::secp256k1::Secp256k1;
+        use bitcoin::Network;
+        use serde_json::json;
+
+        let instance = ProgramInstance::wasm_v2(vec![1, 2, 3], vec![4, 5]).unwrap();
+        let root = Xpub::from_priv(
+            &Secp256k1::new(),
+            &Xpriv::new_master(Network::Regtest, &[42; 32]).unwrap(),
+        );
+        let expected_key = instance.derive_public_key(&root).unwrap();
+        let policy = EmulatedProgram::new(instance.clone(), root).unwrap();
+        let encoded = serde_json::to_value(&policy).unwrap();
+        assert_eq!(encoded, json!({ "instance": instance, "root": root }));
+        let restored: EmulatedProgram = serde_json::from_value(encoded.clone()).unwrap();
+        for value in [policy.clone(), restored] {
+            assert_eq!(value, policy);
+            assert_eq!(value.derive_public_key().unwrap(), expected_key);
+        }
+        let schema = schemars::schema_for!(EmulatedProgram);
+        let properties = schema.as_value()["properties"].as_object().unwrap();
+        assert_eq!(properties.len(), 2);
+        assert!(properties.contains_key("instance"));
+        assert!(properties.contains_key("root"));
+        let mut supplied_key = encoded;
+        supplied_key["signing_key"] = json!(expected_key);
+        assert!(serde_json::from_value::<EmulatedProgram>(supplied_key).is_err());
     }
 }

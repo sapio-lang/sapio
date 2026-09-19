@@ -74,12 +74,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
         candidate.inputs[0].non_witness_utxo = None;
         candidate.unsigned_tx.input[0].previous_output = outpoint;
-        let mut signed = oracle.sign(signing_request(&compiled, candidate, index as u32)?)?;
-        signed
-            .finalize_mut(&Secp256k1::new())
-            .map_err(|errors| format!("program spend failed finalization: {errors:?}"))?;
-        sapio_integration_tests::program_example::check_finalized_candidate(&compiled, &signed)?;
-        let transaction = signed.extract_tx()?;
+        let intent = prepare_payment(&compiled, candidate, index as u32)?;
+        let transaction = complete_example_spend(&compiled, &intent, &oracle)?;
         let label = format!("pay_{amount}_at_{index}");
         cases.push(case(label.clone(), true, transaction.clone()));
         let mut amount_changed = transaction.clone();

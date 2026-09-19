@@ -22,6 +22,7 @@ use std::fmt::Display;
 pub mod annex;
 pub mod external_api;
 pub mod finalize;
+pub mod selected;
 
 pub struct SigningKey(pub Vec<Xpriv>);
 
