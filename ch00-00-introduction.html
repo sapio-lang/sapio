@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-fbfad89f.js";
+            window.path_to_searchindex_js = "searchindex-96012884.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-6630874e.js"></script>
+        <script src="toc-ac2f5c44.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -180,12 +180,13 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
-<p>Welcome to <em>Designing Bitcoin Contracts with Sapio</em>, the official manual and
-best starting place to learn how to make Smart Contracts for Bitcoin. Sapio
-is an in-development tool that empowers Bitcoin Developers to craft smart
-contracts in an intuitive, safe, and composable way. Sapio challenges the
-notion that you can’t make complex smart contracts for Bitcoin, and opens the
-floodgates for a myriad of new ideas to be defined easily.</p>
+<p>Sapio is a Rust framework for describing Bitcoin contracts as transaction graphs.
+It separates constructing transactions, defining their spending policies and
+supplying the signatures or program evidence needed to complete a selected spend.</p>
+<p>The first lesson uses the maintained generated starter and its tested contract
+source. Later chapters include historical examples and conceptual sketches;
+use the current repository guides when an older sketch differs from the public
+API. Rendering this book does not compile every code block.</p>
 <h2 id="who-is-sapio-for"><a class="header" href="#who-is-sapio-for">Who is Sapio For?</a></h2>
 <p>Sapio is for anyone who wants to build with Bitcoin. That spans students
 demonstrating research concepts, corporations working on custody solutions,
@@ -193,11 +194,11 @@ and developers improving open source solutions. Sapio is not a Solidity
 equivalent. The programming model is <em>very</em> different. But it does help
 anyone trying to solve a transactional protocol for Bitcoin solve it
 elegantly.</p>
-<p>Sapio is currently alpha quality software. You should think very carefully
-before using Sapio with any real money. There will be kinks to untwist,
-wrinkles to iron out, and bugs to squash. Hopefully you, dear reader, will
-even be able to help with that! Sapio is not – at present – for the faint
-of heart.</p>
+<p>The developer preview uses synthetic funding and public demonstration keys.
+Native covenant research and oracle-based emulation have distinct enforcement
+assumptions. Completing the lesson does not establish production readiness;
+the <a href="https://github.com/sapio-lang/sapio/blob/master/docs/RELAUNCH.md">release-readiness record</a>
+lists the remaining gates.</p>
 <h2 id="what-will-i-learn-if-i-read-this-book"><a class="header" href="#what-will-i-learn-if-i-read-this-book">What will I learn if I read this book?</a></h2>
 <p>This book is intended to teach you how to think about programming Sapio
 contracts. The book contains some exercises (that are heavily encouraged)

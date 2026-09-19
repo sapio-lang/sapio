@@ -38,10 +38,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-fbfad89f.js";
+            window.path_to_searchindex_js = "searchindex-96012884.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-6630874e.js"></script>
+        <script src="toc-ac2f5c44.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -185,16 +185,23 @@
 <h2 id="designing-bitcoin-contracts-with-sapio"><a class="header" href="#designing-bitcoin-contracts-with-sapio">Designing Bitcoin Contracts with Sapio</a></h2>
 <p><a href="https://github.com/sapio-lang/sapio/actions?query=branch%3Amaster"><img src="https://github.com/sapio-lang/sapio/workflows/Continuous%20integration/badge.svg" alt="Build Status"></a> <a href="https://crates.io/crates/sapio"><img src="https://img.shields.io/crates/dv/sapio" alt="crates"></a> <a href="https://docs.rs/sapio"><img src="https://img.shields.io/docsrs/sapio/latest" alt="docs"></a> <a href="https://github.com/sapio-lang/sapio/fork"><img src="https://img.shields.io/github/forks/sapio-lang/sapio?label=Fork%20Me&amp;style=social" alt="forkme"></a></p>
 <p><em>A practical guide to engineering bitcoin smart contracts using the Sapio Language.</em></p>
+<p>Begin with <a href="#installing-sapio">Installing Sapio</a> and
+<a href="#build-and-spend-your-first-contract">Build and spend your first contract</a>. These chapters use
+the maintained generated starter. Other chapters retain conceptual material and
+historical sketches; they are not all independently compiled tutorials. Current
+API and release boundaries are documented in the repository’s
+<a href="https://github.com/sapio-lang/sapio/blob/master/docs/QUICKSTART.md">quickstart</a>.</p>
 <p>This book is a work in progress! Please <a href="https://github.com/sapio-lang/sapio">submit a PR</a> with
 improvements or suggestions.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="introduction"><a class="header" href="#introduction">Introduction</a></h1>
-<p>Welcome to <em>Designing Bitcoin Contracts with Sapio</em>, the official manual and
-best starting place to learn how to make Smart Contracts for Bitcoin. Sapio
-is an in-development tool that empowers Bitcoin Developers to craft smart
-contracts in an intuitive, safe, and composable way. Sapio challenges the
-notion that you can’t make complex smart contracts for Bitcoin, and opens the
-floodgates for a myriad of new ideas to be defined easily.</p>
+<p>Sapio is a Rust framework for describing Bitcoin contracts as transaction graphs.
+It separates constructing transactions, defining their spending policies and
+supplying the signatures or program evidence needed to complete a selected spend.</p>
+<p>The first lesson uses the maintained generated starter and its tested contract
+source. Later chapters include historical examples and conceptual sketches;
+use the current repository guides when an older sketch differs from the public
+API. Rendering this book does not compile every code block.</p>
 <h2 id="who-is-sapio-for"><a class="header" href="#who-is-sapio-for">Who is Sapio For?</a></h2>
 <p>Sapio is for anyone who wants to build with Bitcoin. That spans students
 demonstrating research concepts, corporations working on custody solutions,
@@ -202,11 +209,11 @@ and developers improving open source solutions. Sapio is not a Solidity
 equivalent. The programming model is <em>very</em> different. But it does help
 anyone trying to solve a transactional protocol for Bitcoin solve it
 elegantly.</p>
-<p>Sapio is currently alpha quality software. You should think very carefully
-before using Sapio with any real money. There will be kinks to untwist,
-wrinkles to iron out, and bugs to squash. Hopefully you, dear reader, will
-even be able to help with that! Sapio is not – at present – for the faint
-of heart.</p>
+<p>The developer preview uses synthetic funding and public demonstration keys.
+Native covenant research and oracle-based emulation have distinct enforcement
+assumptions. Completing the lesson does not establish production readiness;
+the <a href="https://github.com/sapio-lang/sapio/blob/master/docs/RELAUNCH.md">release-readiness record</a>
+lists the remaining gates.</p>
 <h2 id="what-will-i-learn-if-i-read-this-book"><a class="header" href="#what-will-i-learn-if-i-read-this-book">What will I learn if I read this book?</a></h2>
 <p>This book is intended to teach you how to think about programming Sapio
 contracts. The book contains some exercises (that are heavily encouraged)
@@ -218,103 +225,38 @@ will progress over time. You will also have sufficient understanding to
 contribute back meaningfully to the open source project.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="getting-started"><a class="header" href="#getting-started">Getting Started</a></h1>
-<p>Let’s start buil… not so fast there.</p>
-<p>Before we get into it, we need to cover some basics:</p>
+<p>Start with one generated Rust project and carry a payment through inspection,
+explicit signing and finalization:</p>
 <ul>
 <li>Setting up an environment</li>
 <li>Learning Rust</li>
-<li>Hello World contract</li>
+<li>Build and spend your first contract</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="installing-sapio"><a class="header" href="#installing-sapio">Installing Sapio</a></h1>
-<h2 id="sapio-pod-quickstart"><a class="header" href="#sapio-pod-quickstart">Sapio Pod QuickStart:</a></h2>
-<p><a href="https://hub.docker.com/repository/docker/sapiolang/sapio"><strong>DOWNLOAD THE POD</strong></a></p>
-<p>Today, Sapio can come to you in an easy to set up Docker compatible container
-(unofficial™). With the Sapio pod you get:</p>
-<ol>
-<li>A CTV Compatible Bitcoin Node running regtest</li>
-<li>Rust</li>
-<li>A pre-built cached Sapio Directory for you to use as a workspace</li>
-<li>sapio-cli pre-built</li>
-<li>Sapio Studio built and running over X11 connected to your regtest node</li>
-<li>neovim for editing</li>
-</ol>
-<p>See <a href="https://github.com/jeremyrubin/sapio-pod">the repo</a> for setup instructions,
-especially with x11 through containerization.</p>
-<p>This  is the simplest way to get a working Sapio playground, but you may prefer
-to have it set up locally (x11 can be glitchy). The Sapio Pod is currently
-targetted at someone wanting a pain free development environment for tutorials,
-but future releases may target more specific needs such as deployments in
-infrastructure.</p>
-<p>The book will <em>assume</em> this is your setup, and instructions will be tailored
-appropriately.</p>
-<h2 id="local-quickstart"><a class="header" href="#local-quickstart">Local QuickStart:</a></h2>
-<p>Sapio should work on all platforms, but is recommended for use with Linux (Ubuntu preferred).
-Follow this quickstart guide to get going.</p>
-<ol>
-<li>Get <a href="https://rustup.rs/">rust</a> if you don’t have it already.</li>
-<li>Add the wasm target and nightly toolchain by running the below command in your terminal:</li>
-</ol>
-<pre><code class="language-bash">rustup target add wasm32-unknown-unknown
+<p>Use Rust with rustup, Git and a native C compiler. The maintained developer
+preview starts from one source checkout and generates an independent project:</p>
+<pre><code class="language-sh">git clone https://github.com/sapio-lang/sapio.git
+cd sapio
+cargo build --locked -p sapio-cli
+export PATH="$PWD/target/debug:$PATH"
+sapio-cli new ../my-contract --name my-contract
+cd ../my-contract
+cargo test --locked
 </code></pre>
-<blockquote>
-<p>Tip: On macOS you may need to do the following:</p>
-</blockquote>
-<blockquote>
-<pre><code class="language-bash">brew install llvm
-cargo install wasm-pack
-rustup toolchain install nightly
-rustup default nightly
-</code></pre>
-<p>and then load the following before compiling to use the newer llvm/clang.</p>
-<pre><code class="language-bash">export PATH="/opt/homebrew/opt/llvm/bin:$PATH"
-# for older homebrew installs
-# export PATH="/usr/local/opt/llvm/bin:$PATH"
-export CC=/opt/homebrew/opt/llvm/bin/clang
-export AR=/opt/homebrew/opt/llvm/bin/llvm-ar
-</code></pre>
-</blockquote>
-<ol start="3">
-<li>Clone this repo:</li>
-</ol>
-<pre><code>git clone --depth 1 git@github.com:sapio-lang/sapio.git &amp;&amp; cd sapio
-</code></pre>
-<p>We recommend a shallow clone unless you want the full history.</p>
-<ol start="4">
-<li>Build a plugin</li>
-</ol>
-<pre><code>cd plugin-example/ &amp;&amp; cargo build --release --target wasm32-unknown-unknown &amp;&amp; cd ..
-</code></pre>
-<p>If the compilation fails, you may want to check the clang version (8&lt;=), and install libraries for cross-compilation (in case of ubuntu, <code>sudo apt install gcc-multilib</code>)</p>
-<ol start="5">
-<li>Instantiate a contract from the plugin:</li>
-</ol>
-<pre><code>cargo run --bin sapio-cli -- contract create "{\"arguments\":{\"ForAddress\":{\"amount_step\":{\"Sats\":100},\"cold_storage\":\"bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj\",\"hot_storage\":\"bcrt1qumrrqgt7e3a7damzm8x97m6sjs20u8hjw2hcjj\",\"mature\":{\"RH\":10},\"n_steps\":10,\"timeout\":{\"RH\":5}}},\"context\":{\"amount\":1000,\"network\":\"Regtest\"}}" --file="plugin-example/target/wasm32-unknown-unknown/debug/sapio_wasm_vault.wasm"
-</code></pre>
-<p>You can use <code>cargo run --release --bin sapio-cli -- help</code> to learn more about what a the
-CLI can do! and <code>cargo run --bin sapio-cli -- &lt;subcommand&gt; help</code> to learn about
-subcommands like <code>contract</code>. If you aren’t modifying Sapio itself, you’ll want
-to run <code>cargo build --release</code> and use a release binary as it is much faster.</p>
-<ol start="6">
-<li>Install Sapio Studio</li>
-</ol>
-<p><a href="https://github.com/sapio-lang/sapio-studio">Sapio Studio</a> is an in-development
-graphical user interface for Sapio. It is the recommended way to get started with Sapio development.
-We recommend a shallow clone unless you want the full history.</p>
-<pre><code>git clone --depth 1 git@github.com:sapio-lang/sapio-studio.git &amp;&amp; cd sapio-studio
-yarn install
-</code></pre>
-<p>and then in separate shells</p>
-<pre><code>yarn start-react
-yarn start-electron
-</code></pre>
-<p>The first time you run it you most likely <em>will</em> have some errors, you will need
-to ensure you’ve configured your client correctly. You can do this by opening
-the Preferences menu and configuring it appropriately. Soon there will be a better
-interface for first run setup.</p>
-<h2 id="docs"><a class="header" href="#docs">Docs</a></h2>
-<p>You can review the docs either by building them locally or viewing
-<a href="https://docs.rs/sapio">online</a>.</p>
+<p>Rustup selects the checked-in stable toolchain. The project includes its full
+dependency pins, Cargo lockfile and exact payment evaluator bytes. Cargo fetches
+the required repositories; no manually cloned dependency libraries, nightly
+toolchain, wasm-pack, container or graphical application are required.</p>
+<p>If you use <code>CARGO_TARGET_DIR</code>, put its <code>debug</code> subdirectory on <code>PATH</code> instead.
+The <a href="https://github.com/sapio-lang/sapio/blob/master/docs/QUICKSTART.md">maintained quickstart</a>
+and generated <code>README.md</code> continue through artifact inspection and a completed
+synthetic spend. The example has public demonstration keys and must not receive
+real funds.</p>
+<p>Building compiler plugins as WASM is a separate workflow. It additionally needs
+LLVM Clang with the <code>wasm32</code> target; see the
+<a href="https://github.com/sapio-lang/sapio/blob/master/docs/DEVELOPMENT.md">development guide</a>.
+The starter does not need to rebuild its included evaluator.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="learning-rust"><a class="header" href="#learning-rust">Learning Rust</a></h1>
 <p>A full rust tutorial is out of scope for this guide.</p>
@@ -324,110 +266,100 @@ Language</a>.</p>
 helps. Typical Sapio programs are relatively simple as we are not typically
 concerned with concurrency or memory efficiency.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="hello-world"><a class="header" href="#hello-world">Hello World</a></h1>
-<p>Let’s get going with your very first hello world contract!</p>
-<p>Unfortunately, until Sapio becomes a little more popular the embedded rust
-playground won’t work, so you’ll want to copy it locally.</p>
-<p>We’re going to start with a contract that allows two parties, Alice and Bob,
-to either agree on an outcome or to default to a pre-fixed outcome after a
-relative timeout.</p>
-<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>//! Hello World Contract
+<h1 id="build-and-spend-your-first-contract"><a class="header" href="#build-and-spend-your-first-contract">Build and spend your first contract</a></h1>
+<p>The starter’s payment contract fixes a recipient, minimum amount, evaluator and
+public oracle root. A typed action proposes payments under that fixed policy.
+Its contract definition is separate from synthetic funding, private demonstration
+keys, file handling and tests.</p>
+<p>This source is included directly from the generated project’s contract module:</p>
+<pre><code class="language-rust ignore">//! A payment predicate and the transactions its typed action proposes.
 
-#![deny(missing_docs)]
-#[cfg(target_arch = "wasm32")]
-use sapio_wasm_plugin::{optional_logo, REGISTER};
-
-use sapio::contract::*;
-use sapio::*;
-use sapio_base::amount::CoinAmount;
-use sapio_base::timelocks::RelTime;
-use sapio_base::Clause;
+use bitcoin::{Address, Amount};
+use sapio::contract::{CompilationError, Compiled, Context};
+use sapio::template::{OutputAmount, Template};
+use sapio_base::program::{EmulatedProgram, EvaluatorId, ProgramError, ProgramInstance};
 use schemars::JsonSchema;
-use serde::Deserialize;
-use std::convert::{TryFrom, TryInto};
+use serde::{Deserialize, Serialize};
 
-/// Trustless Escrow Contract
-#[derive(JsonSchema, Deserialize)]
-pub struct TrustlessEscrow {
-    alice: bitcoin::XOnlyPublicKey,
-    bob: bitcoin::XOnlyPublicKey,
-    alice_escrow_address: bitcoin::Address&lt;bitcoin::address::NetworkUnchecked&gt;,
-    alice_escrow_amount: CoinAmount,
-    bob_escrow_address: bitcoin::Address&lt;bitcoin::address::NetworkUnchecked&gt;,
-    bob_escrow_amount: CoinAmount,
+/// A candidate may pay more than the minimum fixed by the contract.
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+pub struct PaymentRequest {
+    pub amount_sats: u64,
 }
 
-impl TrustlessEscrow {
-    #[guard]
-    fn cooperate(self, _ctx: Context) {
-        Clause::And(vec![
-            Clause::Key(self.alice).into(),
-            Clause::Key(self.bob).into(),
-        ])
+/// The oracle must enforce the committed recipient and minimum honestly.
+pub struct Payment {
+    recipient: Address,
+    change: Address,
+    authorization: EmulatedProgram,
+}
+
+#[sapio::contract]
+impl Payment {
+    pub fn new(
+        recipient: Address,
+        change: Address,
+        minimum: Amount,
+        evaluator: EvaluatorId,
+        oracle: bitcoin::bip32::Xpub,
+    ) -&gt; Result&lt;Self, ProgramError&gt; {
+        let script = recipient.script_pubkey();
+        // The distributed pay-at-least/v1 evaluator defines this exact codec.
+        let mut parameters = minimum.to_sat().to_le_bytes().to_vec();
+        parameters.extend_from_slice(&amp;(script.len() as u32).to_le_bytes());
+        parameters.extend_from_slice(script.as_bytes());
+        let instance = ProgramInstance::new(evaluator, b"pay-at-least/v1".to_vec(), parameters)?;
+        Ok(Self {
+            recipient,
+            change,
+            authorization: EmulatedProgram::new(instance, oracle)?,
+        })
     }
-    #[then]
-    fn use_escrow(self, ctx: Context) {
-        let network = ctx.network;
-        ctx.template()
-            .add_output(
-                self.alice_escrow_amount.try_into()?,
-                &amp;Compiled::from_address(
-                    self.alice_escrow_address.clone().require_network(network)?,
-                    bitcoin::Amount::ZERO,
-                ),
-                None,
-            )?
-            .add_output(
-                self.bob_escrow_amount.try_into()?,
-                &amp;Compiled::from_address(
-                    self.bob_escrow_address.clone().require_network(network)?,
-                    bitcoin::Amount::ZERO,
-                ),
-                None,
-            )?
-            .set_sequence(
-                0,
-                RelTime::try_from(std::time::Duration::from_secs(10 * 24 * 60 * 60))?.into(),
-            )?
-            .into()
+
+    #[policy]
+    fn authorize(&amp;self) -&gt; EmulatedProgram {
+        self.authorization.clone()
     }
-}
 
-impl Contract for TrustlessEscrow {
-    declare! {finish, Self::cooperate}
-    declare! {actions, Self::use_escrow}
-}
-
-#[cfg(target_arch = "wasm32")]
-REGISTER![TrustlessEscrow, "logo.png"];
-<span class="boring">}</span></code></pre>
-<p>The implementation is in <code>plugin-example/helloworld/src/plugin.rs</code>. Its
-JSON addresses deserialize as <code>Address&lt;NetworkUnchecked&gt;</code> and are checked
-against <code>ctx.network</code> before becoming outputs. The fixed payout branch uses
-Sapio’s selected covenant backend; signer emulation includes trust in its
-signers.</p>
-<p>From the repository root, build this plugin with:</p>
-<pre><code class="language-sh">cargo build --manifest-path plugin-example/Cargo.toml \
-  --package sapio-wasm-helloworld --release \
-  --target wasm32-unknown-unknown --locked
-</code></pre>
-<p>Use the repository’s pinned Rust toolchain and an LLVM Clang that supports
-<code>wasm32</code> for secp256k1’s C code. On Linux, set
-<code>export CC_wasm32_unknown_unknown=clang</code>; on macOS with Homebrew LLVM installed, set
-<code>export CC_wasm32_unknown_unknown="$(brew --prefix llvm)/bin/clang"</code>.
-The default output is
-<code>plugin-example/target/wasm32-unknown-unknown/release/sapio_wasm_helloworld.wasm</code>
-(unless you override Cargo’s target directory).</p>
-<h2 id="challenges"><a class="header" href="#challenges">Challenges</a></h2>
-<p>For the challenges, you’ll want to modify the helloworld plugin file directly.
-Through this tutorial we’ll use this as a sandbox file.</p>
-<ol>
-<li>Add a new finish state that allows Alice to spend after a relative timeout.</li>
-<li>Add <code>use_escrow2</code> which enables a different pair of payouts to Alice and
-Bob as an alternative.</li>
-</ol>
+    /// Construct a proposal; only the fixed policy can authorize its spend.
+    #[action(suggested, guarded_by(Self::authorize))]
+    pub fn pay(&amp;self, ctx: Context, request: PaymentRequest) -&gt; Result&lt;Template, CompilationError&gt; {
+        let recipient = Compiled::from_address(self.recipient.clone(), Amount::ZERO);
+        let change = Compiled::from_address(self.change.clone(), Amount::ZERO);
+        let mut plan = ctx.template_plan();
+        plan.output(
+            "recipient",
+            OutputAmount::Exact(Amount::from_sat(request.amount_sats)),
+            &amp;recipient,
+        )?;
+        plan.output("change", OutputAmount::Remainder, &amp;change)?;
+        plan.reserve_fees(Amount::from_sat(500));
+        plan.require_feerate(
+            bitcoin::FeeRate::from_sat_per_vb(1).expect("valid constant fee rate"),
+        );
+        Ok(plan.finish()?)
+    }
+}</code></pre>
+<p><code>#[sapio::contract]</code> preserves ordinary Rust methods. The <code>#[policy]</code> method
+defines authorization; <code>#[action(suggested)]</code> exposes a typed <code>PaymentRequest</code>.
+<code>TemplatePlan</code> declares exact recipient funding, change and a local fee
+reservation. A proposal below the fixed minimum can be constructed, but the
+evaluator rejects its signing request. Changing a proposed amount does not
+change the contract’s address.</p>
+<p>Continue from the project created in the installation chapter with its
+generated README, also available as the
+<a href="https://github.com/sapio-lang/sapio/blob/master/cli/templates/starter/README.md">starter walkthrough</a>.
+It creates the demo directory and gives the exact <code>contract explain</code>,
+<code>contract spend</code> and explicit local
+<code>signer program</code> commands. You can stop between commands and resume with the
+immutable artifact/intent and latest partial PSBT.</p>
+<p>Bitcoin validates an ordinary Taproot signature here. The oracle enforces the
+WASM payment predicate; the chain does not execute it. Funding and keys are
+synthetic demonstration inputs, and nothing is broadcast.</p>
+<p>After completing the walkthrough, change <code>PaymentRequest</code> and its <code>pay</code> method,
+then update <code>src/tests.rs</code> to express the behavior you intend. The surrounding
+book retains historical examples and conceptual sketches; use this maintained
+starter as the reference for a complete, runnable first project.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="bip-119-ctv-fundamentals"><a class="header" href="#bip-119-ctv-fundamentals">BIP-119 CTV Fundamentals</a></h1>
 <h2 id="background"><a class="header" href="#background">Background</a></h2>
@@ -1270,7 +1202,7 @@ impl Contract for UnderFundedExpiringOption {
     declare!(actions, Self::expires, Self::strikes);
 }
 <span class="boring">}</span></code></pre>
-<h1 id="challenges-1"><a class="header" href="#challenges-1">Challenges</a></h1>
+<h1 id="challenges"><a class="header" href="#challenges">Challenges</a></h1>
 <p>There’s no right answer to the following challenges, and the resulting
 contract may not be too useful, but it should be a good exercise to learn
 more about writing Sapio contracts.</p>
@@ -1306,6 +1238,10 @@ reduced or has a different security model.</p>
 see them addressed.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="bip-119-emulation"><a class="header" href="#bip-119-emulation">BIP-119 Emulation</a></h1>
+<p>This chapter describes the older CTV-specific signer model. The maintained
+starter uses the separate, general WASM-evaluated program protocol; see
+<a href="https://github.com/sapio-lang/sapio/blob/master/docs/PROGRAM_EMULATION.md">program emulation</a>
+for current program identities, signing requests and execution limits.</p>
 <p>Changes to Bitcoin take a long time. The star player in making Sapio work is
 BIP-119, and that might take a while to get merged. To get around this, Sapio
 provides some tools to enable similar functionality today by emulating
@@ -1474,6 +1410,11 @@ in the future we may build a Sapio specific package manager as smart contracts
 have some unique differences.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="wasm"><a class="header" href="#wasm">WASM</a></h1>
+<p>This reference chapter retains illustrative historical snippets. For maintained
+compiler guests and runnable commands, use the repository’s
+<a href="https://github.com/sapio-lang/sapio/blob/master/docs/DEVELOPMENT.md">development guide</a>
+and <a href="https://github.com/sapio-lang/sapio/blob/master/docs/EXAMPLES.md">example catalog</a>.
+The starter’s included WASM payment evaluator is distinct from a compiler plugin.</p>
 <p>WASM is “WebAssembly”, or a standard for producing bytecode objects that can
 be run on any platform. As the name suggests, it was originally designed for
 use in web browsers as a compiler target for any language to produce code to
@@ -1498,7 +1439,7 @@ REGISTER![MyContract];
 <span class="boring">}</span></code></pre>
 <p>See <a href="https://github.com/sapio-lang/sapio/tree/master/plugin-example">the example</a> for more details.</p>
 <p>These compiled objects require a special environment to be interacted with.
-That environment is provided by the <a href="#sapio-command-line-interface-cli">Sapio CLI</a> as a
+That environment is provided by the <a href="#sapio-command-line-interface">Sapio CLI</a> as a
 standalone binary. It is also possible to use the interface provided by the
 <code>sapio-wasm-plugin</code> crate to load a plugin from your rust codebase
 programmatically. Lastly, one could create similar bindings for another
@@ -1632,31 +1573,37 @@ easy to do, and the packaged WASM or binary can be a utility based on it.</p>
 <h1 id="sapio-studio"><a class="header" href="#sapio-studio">Sapio Studio</a></h1>
 <p><a href="https://github.com/sapio-lang/sapio-studio">Sapio Studio</a> is an in-development graphical user
 interface for Sapio.</p>
-<p>Currently, Sapio Studio works based on managing a WASM plugin directory, so that
-users can more readily add contracts of their choosing.</p>
-<p>Contracts packaged for WASM have some additional constraints or functionality
-for aiding in the generation of a UX.</p>
+<p>Studio loads WASM modules and their argument/result schemas, connects compatible
+value ports in a visual patch, and compiles the selected terminal module. These
+wires describe how to construct public contract terms. The resulting transaction
+graph is a separate view of what the compiled contract can spend to.</p>
+<p>The <a href="https://github.com/sapio-lang/sapio/tree/master/contrib/build-a-vault">build-a-vault tutorial</a>
+provides ten small blocks and five executable patches. Start with signers,
+destinations and a block delay; combine them into recovery and release rules;
+then compile a fixed vault, a delayed wallet, or a dynamic OP_VAULT emulator.
+The tutorial covers changing wires, inspecting the compiled transaction graph,
+saving patches, and preparing the public evidence needed for signing.</p>
+<p>Intermediate module results should use small, nonrecursive public data types.
+The vault example shares the same Rust DTO between each output and compatible
+input so schema matching stays precise. Terminal modules return <code>Compiled</code>;
+private signing material stays outside the patch.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="sapio-command-line-interface-cli"><a class="header" href="#sapio-command-line-interface-cli">Sapio Command Line Interface (CLI)</a></h1>
-<p>The Sapio CLI (or <code>sapio-cli</code>) is rapidly changing, but it is self
-documenting using <code>cargo run sapio-cli help</code>.</p>
-<p><code>sapio-cli</code> aids users in:</p>
-<ol>
-<li>compiling sapio contracts into templates</li>
-<li>binding compiled templates to specific utxos from your bitcoin wallet</li>
-<li>inspecting contract plugins</li>
-<li>running emulator servers</li>
-</ol>
-<p><code>sapio-cli</code> has a config file (location dependent on platform, under
-<code>org.judica.sapio-cli</code> e.g. <code>/home/&lt;usr&gt;/.config/sapio-cli/config.json</code>). The
-config file can be overriden with the <code>-c</code> flag. This file allows users to set parameters
-for compilation around:</p>
-<ol>
-<li>to use regtest/mainnet/signet/etc</li>
-<li>bitcoind to connect to &amp; auth</li>
-<li>CTV emulator servers to use</li>
-<li>key-value mapping of nicknames to <a href="#wasm">WASM</a> plugin hashes.</li>
-</ol>
+<h1 id="sapio-command-line-interface"><a class="header" href="#sapio-command-line-interface">Sapio Command Line Interface</a></h1>
+<p>The maintained starter walkthrough uses the CLI to inspect an artifact, prepare
+one branch, export an explicit program request, import its verified response and
+complete the retained witness. See the generated project README and the
+<a href="https://github.com/sapio-lang/sapio/blob/master/cli/README.md">current CLI guide</a>.</p>
+<p>From the Sapio repository root, inspect the available commands with:</p>
+<pre><code class="language-sh">cargo run --locked -p sapio-cli -- --help
+cargo run --locked -p sapio-cli -- contract spend --help
+</code></pre>
+<p>Artifact inspection and selected-spend commands use local files without loading
+wallet or network configuration. <code>signer program</code> uses an explicitly supplied
+key, request and evaluator. It does not discover oracles or register code from
+artifact metadata.</p>
+<p>Other commands support compiler plugins, binding and emulator services. Those
+workflows have their own configuration and enforcement assumptions; follow the
+current CLI guide rather than older Studio or container setup instructions.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="advanced-rust-patterns"><a class="header" href="#advanced-rust-patterns">Advanced Rust Patterns</a></h1>
 <p>Say it with me – Sapio’s Just Rust ™. Even though there’s a lot of

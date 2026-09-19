@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-fbfad89f.js";
+            window.path_to_searchindex_js = "searchindex-96012884.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-6630874e.js"></script>
+        <script src="toc-ac2f5c44.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -179,26 +179,22 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="sapio-command-line-interface-cli"><a class="header" href="#sapio-command-line-interface-cli">Sapio Command Line Interface (CLI)</a></h1>
-<p>The Sapio CLI (or <code>sapio-cli</code>) is rapidly changing, but it is self
-documenting using <code>cargo run sapio-cli help</code>.</p>
-<p><code>sapio-cli</code> aids users in:</p>
-<ol>
-<li>compiling sapio contracts into templates</li>
-<li>binding compiled templates to specific utxos from your bitcoin wallet</li>
-<li>inspecting contract plugins</li>
-<li>running emulator servers</li>
-</ol>
-<p><code>sapio-cli</code> has a config file (location dependent on platform, under
-<code>org.judica.sapio-cli</code> e.g. <code>/home/&lt;usr&gt;/.config/sapio-cli/config.json</code>). The
-config file can be overriden with the <code>-c</code> flag. This file allows users to set parameters
-for compilation around:</p>
-<ol>
-<li>to use regtest/mainnet/signet/etc</li>
-<li>bitcoind to connect to &amp; auth</li>
-<li>CTV emulator servers to use</li>
-<li>key-value mapping of nicknames to <a href="./ch06-01-wasm.html">WASM</a> plugin hashes.</li>
-</ol>
+                        <h1 id="sapio-command-line-interface"><a class="header" href="#sapio-command-line-interface">Sapio Command Line Interface</a></h1>
+<p>The maintained starter walkthrough uses the CLI to inspect an artifact, prepare
+one branch, export an explicit program request, import its verified response and
+complete the retained witness. See the generated project README and the
+<a href="https://github.com/sapio-lang/sapio/blob/master/cli/README.md">current CLI guide</a>.</p>
+<p>From the Sapio repository root, inspect the available commands with:</p>
+<pre><code class="language-sh">cargo run --locked -p sapio-cli -- --help
+cargo run --locked -p sapio-cli -- contract spend --help
+</code></pre>
+<p>Artifact inspection and selected-spend commands use local files without loading
+wallet or network configuration. <code>signer program</code> uses an explicitly supplied
+key, request and evaluator. It does not discover oracles or register code from
+artifact metadata.</p>
+<p>Other commands support compiler plugins, binding and emulator services. Those
+workflows have their own configuration and enforcement assumptions; follow the
+current CLI guide rather than older Studio or container setup instructions.</p>
 
                     </main>
 

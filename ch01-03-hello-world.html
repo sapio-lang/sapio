@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Hello World - Designing Bitcoin Contracts with Sapio</title>
+        <title>Build and spend your first contract - Designing Bitcoin Contracts with Sapio</title>
 
 
         <!-- Custom HTML head -->
@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-fbfad89f.js";
+            window.path_to_searchindex_js = "searchindex-96012884.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-6630874e.js"></script>
+        <script src="toc-ac2f5c44.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -179,110 +179,100 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="hello-world"><a class="header" href="#hello-world">Hello World</a></h1>
-<p>Let’s get going with your very first hello world contract!</p>
-<p>Unfortunately, until Sapio becomes a little more popular the embedded rust
-playground won’t work, so you’ll want to copy it locally.</p>
-<p>We’re going to start with a contract that allows two parties, Alice and Bob,
-to either agree on an outcome or to default to a pre-fixed outcome after a
-relative timeout.</p>
-<pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>//! Hello World Contract
+                        <h1 id="build-and-spend-your-first-contract"><a class="header" href="#build-and-spend-your-first-contract">Build and spend your first contract</a></h1>
+<p>The starter’s payment contract fixes a recipient, minimum amount, evaluator and
+public oracle root. A typed action proposes payments under that fixed policy.
+Its contract definition is separate from synthetic funding, private demonstration
+keys, file handling and tests.</p>
+<p>This source is included directly from the generated project’s contract module:</p>
+<pre><code class="language-rust ignore">//! A payment predicate and the transactions its typed action proposes.
 
-#![deny(missing_docs)]
-#[cfg(target_arch = "wasm32")]
-use sapio_wasm_plugin::{optional_logo, REGISTER};
-
-use sapio::contract::*;
-use sapio::*;
-use sapio_base::amount::CoinAmount;
-use sapio_base::timelocks::RelTime;
-use sapio_base::Clause;
+use bitcoin::{Address, Amount};
+use sapio::contract::{CompilationError, Compiled, Context};
+use sapio::template::{OutputAmount, Template};
+use sapio_base::program::{EmulatedProgram, EvaluatorId, ProgramError, ProgramInstance};
 use schemars::JsonSchema;
-use serde::Deserialize;
-use std::convert::{TryFrom, TryInto};
+use serde::{Deserialize, Serialize};
 
-/// Trustless Escrow Contract
-#[derive(JsonSchema, Deserialize)]
-pub struct TrustlessEscrow {
-    alice: bitcoin::XOnlyPublicKey,
-    bob: bitcoin::XOnlyPublicKey,
-    alice_escrow_address: bitcoin::Address&lt;bitcoin::address::NetworkUnchecked&gt;,
-    alice_escrow_amount: CoinAmount,
-    bob_escrow_address: bitcoin::Address&lt;bitcoin::address::NetworkUnchecked&gt;,
-    bob_escrow_amount: CoinAmount,
+/// A candidate may pay more than the minimum fixed by the contract.
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+pub struct PaymentRequest {
+    pub amount_sats: u64,
 }
 
-impl TrustlessEscrow {
-    #[guard]
-    fn cooperate(self, _ctx: Context) {
-        Clause::And(vec![
-            Clause::Key(self.alice).into(),
-            Clause::Key(self.bob).into(),
-        ])
+/// The oracle must enforce the committed recipient and minimum honestly.
+pub struct Payment {
+    recipient: Address,
+    change: Address,
+    authorization: EmulatedProgram,
+}
+
+#[sapio::contract]
+impl Payment {
+    pub fn new(
+        recipient: Address,
+        change: Address,
+        minimum: Amount,
+        evaluator: EvaluatorId,
+        oracle: bitcoin::bip32::Xpub,
+    ) -&gt; Result&lt;Self, ProgramError&gt; {
+        let script = recipient.script_pubkey();
+        // The distributed pay-at-least/v1 evaluator defines this exact codec.
+        let mut parameters = minimum.to_sat().to_le_bytes().to_vec();
+        parameters.extend_from_slice(&amp;(script.len() as u32).to_le_bytes());
+        parameters.extend_from_slice(script.as_bytes());
+        let instance = ProgramInstance::new(evaluator, b"pay-at-least/v1".to_vec(), parameters)?;
+        Ok(Self {
+            recipient,
+            change,
+            authorization: EmulatedProgram::new(instance, oracle)?,
+        })
     }
-    #[then]
-    fn use_escrow(self, ctx: Context) {
-        let network = ctx.network;
-        ctx.template()
-            .add_output(
-                self.alice_escrow_amount.try_into()?,
-                &amp;Compiled::from_address(
-                    self.alice_escrow_address.clone().require_network(network)?,
-                    bitcoin::Amount::ZERO,
-                ),
-                None,
-            )?
-            .add_output(
-                self.bob_escrow_amount.try_into()?,
-                &amp;Compiled::from_address(
-                    self.bob_escrow_address.clone().require_network(network)?,
-                    bitcoin::Amount::ZERO,
-                ),
-                None,
-            )?
-            .set_sequence(
-                0,
-                RelTime::try_from(std::time::Duration::from_secs(10 * 24 * 60 * 60))?.into(),
-            )?
-            .into()
+
+    #[policy]
+    fn authorize(&amp;self) -&gt; EmulatedProgram {
+        self.authorization.clone()
     }
-}
 
-impl Contract for TrustlessEscrow {
-    declare! {finish, Self::cooperate}
-    declare! {actions, Self::use_escrow}
-}
-
-#[cfg(target_arch = "wasm32")]
-REGISTER![TrustlessEscrow, "logo.png"];
-<span class="boring">}</span></code></pre>
-<p>The implementation is in <code>plugin-example/helloworld/src/plugin.rs</code>. Its
-JSON addresses deserialize as <code>Address&lt;NetworkUnchecked&gt;</code> and are checked
-against <code>ctx.network</code> before becoming outputs. The fixed payout branch uses
-Sapio’s selected covenant backend; signer emulation includes trust in its
-signers.</p>
-<p>From the repository root, build this plugin with:</p>
-<pre><code class="language-sh">cargo build --manifest-path plugin-example/Cargo.toml \
-  --package sapio-wasm-helloworld --release \
-  --target wasm32-unknown-unknown --locked
-</code></pre>
-<p>Use the repository’s pinned Rust toolchain and an LLVM Clang that supports
-<code>wasm32</code> for secp256k1’s C code. On Linux, set
-<code>export CC_wasm32_unknown_unknown=clang</code>; on macOS with Homebrew LLVM installed, set
-<code>export CC_wasm32_unknown_unknown="$(brew --prefix llvm)/bin/clang"</code>.
-The default output is
-<code>plugin-example/target/wasm32-unknown-unknown/release/sapio_wasm_helloworld.wasm</code>
-(unless you override Cargo’s target directory).</p>
-<h2 id="challenges"><a class="header" href="#challenges">Challenges</a></h2>
-<p>For the challenges, you’ll want to modify the helloworld plugin file directly.
-Through this tutorial we’ll use this as a sandbox file.</p>
-<ol>
-<li>Add a new finish state that allows Alice to spend after a relative timeout.</li>
-<li>Add <code>use_escrow2</code> which enables a different pair of payouts to Alice and
-Bob as an alternative.</li>
-</ol>
+    /// Construct a proposal; only the fixed policy can authorize its spend.
+    #[action(suggested, guarded_by(Self::authorize))]
+    pub fn pay(&amp;self, ctx: Context, request: PaymentRequest) -&gt; Result&lt;Template, CompilationError&gt; {
+        let recipient = Compiled::from_address(self.recipient.clone(), Amount::ZERO);
+        let change = Compiled::from_address(self.change.clone(), Amount::ZERO);
+        let mut plan = ctx.template_plan();
+        plan.output(
+            "recipient",
+            OutputAmount::Exact(Amount::from_sat(request.amount_sats)),
+            &amp;recipient,
+        )?;
+        plan.output("change", OutputAmount::Remainder, &amp;change)?;
+        plan.reserve_fees(Amount::from_sat(500));
+        plan.require_feerate(
+            bitcoin::FeeRate::from_sat_per_vb(1).expect("valid constant fee rate"),
+        );
+        Ok(plan.finish()?)
+    }
+}</code></pre>
+<p><code>#[sapio::contract]</code> preserves ordinary Rust methods. The <code>#[policy]</code> method
+defines authorization; <code>#[action(suggested)]</code> exposes a typed <code>PaymentRequest</code>.
+<code>TemplatePlan</code> declares exact recipient funding, change and a local fee
+reservation. A proposal below the fixed minimum can be constructed, but the
+evaluator rejects its signing request. Changing a proposed amount does not
+change the contract’s address.</p>
+<p>Continue from the project created in the installation chapter with its
+generated README, also available as the
+<a href="https://github.com/sapio-lang/sapio/blob/master/cli/templates/starter/README.md">starter walkthrough</a>.
+It creates the demo directory and gives the exact <code>contract explain</code>,
+<code>contract spend</code> and explicit local
+<code>signer program</code> commands. You can stop between commands and resume with the
+immutable artifact/intent and latest partial PSBT.</p>
+<p>Bitcoin validates an ordinary Taproot signature here. The oracle enforces the
+WASM payment predicate; the chain does not execute it. Funding and keys are
+synthetic demonstration inputs, and nothing is broadcast.</p>
+<p>After completing the walkthrough, change <code>PaymentRequest</code> and its <code>pay</code> method,
+then update <code>src/tests.rs</code> to express the behavior you intend. The surrounding
+book retains historical examples and conceptual sketches; use this maintained
+starter as the reference for a complete, runnable first project.</p>
 
                     </main>
 
