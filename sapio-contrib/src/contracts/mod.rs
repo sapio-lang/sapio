@@ -16,6 +16,7 @@ use std::convert::TryInto;
 pub mod basic_examples;
 pub mod channel;
 pub mod coin_pool;
+pub mod depots;
 pub mod derivatives;
 pub mod dynamic;
 pub mod eltoo;
