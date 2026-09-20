@@ -10,7 +10,6 @@
 
 use args::{Cli, Command};
 use bitcoin::bip32::{Xpriv, Xpub};
-use bitcoin::secp256k1::Secp256k1;
 use clap::Parser;
 use config::{Config, ConfigVerifier};
 use contracts::{server::Server, Common, Request, Response};
@@ -69,7 +68,7 @@ async fn run(cli: Cli) -> Result<()> {
             }
             args::Signer::New { network, output } => {
                 let key = sapio_psbt::SigningKey::new_key(network)?;
-                let public = key.pubkey(&Secp256k1::new());
+                let public = key.pubkey(sapio::sapio_base::secp::secp());
                 write_new(&output, &key.0[0].encode())?;
                 write_output(None, public[0].to_string().as_bytes())
             }
@@ -77,7 +76,9 @@ async fn run(cli: Cli) -> Result<()> {
                 let key = sapio_psbt::SigningKey::read_key_from_buf(&read_input(Some(&input))?)?;
                 write_output(
                     None,
-                    key.pubkey(&Secp256k1::new())[0].to_string().as_bytes(),
+                    key.pubkey(sapio::sapio_base::secp::secp())[0]
+                        .to_string()
+                        .as_bytes(),
                 )
             }
         },
@@ -103,7 +104,7 @@ async fn run(cli: Cli) -> Result<()> {
             } => {
                 let config = config(custom_config).await?;
                 let root = Xpriv::new_master(config.network, &read_input(Some(&seed))?)?;
-                let public = Xpub::from_priv(&Secp256k1::new(), &root);
+                let public = Xpub::from_priv(sapio::sapio_base::secp::secp(), &root);
                 let oracle = HDOracleEmulator::new(root).with_limits(
                     std::time::Duration::from_secs(request_timeout_secs),
                     max_connections,

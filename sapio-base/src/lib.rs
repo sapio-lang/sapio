@@ -21,6 +21,7 @@ pub mod plugin_args;
 pub mod policy;
 pub mod program;
 pub mod psbt;
+pub mod secp;
 pub mod simp;
 pub use covenant::{CovenantError, Ctv, Emulatable, LoweringPlan};
 pub use program::{EmulatedProgram, EvaluatorId, ProgramId, ProgramInstance};

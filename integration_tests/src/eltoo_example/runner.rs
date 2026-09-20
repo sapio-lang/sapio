@@ -105,7 +105,7 @@ pub fn settlement_template(terms: &Terms, state: State) -> Result<Template, Erro
 /// Complete the explicitly recovered-proof route, which has no historical artifact.
 /// Ordinary artifact-backed candidates use `SpendIntent::finalize` instead.
 pub fn finalize_recovered_candidate(template: &Template, psbt: Psbt) -> Result<Transaction, Error> {
-    let finalized = sapio_psbt::finalize::finalize(psbt, &Secp256k1::new())
+    let finalized = sapio_psbt::finalize::finalize(psbt, sapio_base::secp::secp())
         .map_err(|(_, errors)| format!("eltoo finalization failed: {errors:?}"))?;
     template.check_funded_psbt(&finalized)?;
     Ok(finalized.extract_tx()?)
@@ -243,7 +243,7 @@ pub fn attach_inputs(
         return Err("eltoo requires version two, two inputs and a positive sponsor".into());
     }
     let script = Address::p2tr(
-        &Secp256k1::new(),
+        sapio_base::secp::secp(),
         sponsor.internal_key,
         None,
         Network::Regtest,
@@ -399,7 +399,7 @@ pub fn complete_candidate(
         intent.merge_response(compiled, &mut current, index, &response)?;
     }
     sign_sponsor(&mut current, sponsor)?;
-    let finalized = intent.finalize(compiled, &current, &Secp256k1::new())?;
+    let finalized = intent.finalize(compiled, &current, sapio_base::secp::secp())?;
     Ok(finalized.extract_tx()?)
 }
 
@@ -425,7 +425,7 @@ pub fn sign_sponsor(psbt: &mut Psbt, key: &Keypair) -> Result<(), Error> {
         &Prevouts::All(&prevouts),
         hash_ty,
     )?;
-    let secp = Secp256k1::new();
+    let secp = sapio_base::secp::secp();
     let key = key.tap_tweak(&secp, None).to_keypair();
     psbt.inputs[1].tap_key_sig = Some(taproot::Signature {
         signature: secp.sign_schnorr_no_aux_rand(&Message::from_digest_slice(hash.as_ref())?, &key),

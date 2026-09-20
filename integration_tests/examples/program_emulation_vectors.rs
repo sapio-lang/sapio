@@ -7,7 +7,6 @@ use bitcoin::blockdata::opcodes::all::OP_CHECKSIG;
 use bitcoin::blockdata::script::Builder;
 use bitcoin::consensus::encode::serialize_hex;
 use bitcoin::psbt::Psbt;
-use bitcoin::secp256k1::Secp256k1;
 use bitcoin::taproot::{LeafVersion, TapLeafHash, TaprootBuilder};
 use bitcoin::{Address, Network, OutPoint, ScriptBuf, Transaction, TxIn, TxOut};
 use emulator_connect::program::{ProgramOracle, ProgramSigningRequest, ProgramSpendPath, PSBT};
@@ -108,7 +107,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Independently exercise BIP341's tapscript extension as well as key-path
     // signatures. The predicate key is in a real, authenticated CHECKSIG leaf.
     let name = "program_pay_at_least_scriptpath";
-    let secp = Secp256k1::new();
+    let secp = sapio_base::secp::secp();
     let instance = instance(5_000, &destination.script_pubkey());
     let program_key = instance.derive_public_key(&oracle.public_root())?;
     let script = Builder::new()

@@ -6,7 +6,6 @@
 
 //! Checked Taproot spending data for leaves outside the Miniscript language.
 
-use bitcoin::secp256k1::Secp256k1;
 use bitcoin::taproot::{TaprootBuilder, TaprootBuilderError, TaprootSpendInfo};
 use bitcoin::{ScriptBuf, XOnlyPublicKey};
 use sapio_base::policy::{validate_tapscript, PolicyError};
@@ -148,7 +147,7 @@ impl RawTaproot {
                 .map_err(RawTaprootError::InvalidTree)?;
         }
         let spend_info = builder
-            .finalize(&Secp256k1::verification_only(), internal_key)
+            .finalize(sapio_base::secp::secp(), internal_key)
             .map_err(|_| RawTaprootError::IncompleteTree)?;
         Ok(Self {
             internal_key,
@@ -195,6 +194,7 @@ impl<'de> Deserialize<'de> for RawTaproot {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bitcoin::secp256k1::Secp256k1;
     use bitcoin::secp256k1::{Keypair, SecretKey};
     use bitcoin::taproot::LeafVersion;
     use serde_json::json;

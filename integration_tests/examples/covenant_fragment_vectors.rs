@@ -1,7 +1,6 @@
 //! Emit annex-bearing fragment spends for the isolated Core test driver.
 
 use bitcoin::consensus::encode::serialize_hex;
-use bitcoin::secp256k1::Secp256k1;
 use bitcoin::{Address, Network, OutPoint, Transaction, Witness};
 use emulator_connect::program::ProgramOracle;
 use sapio_contrib::contracts::template_authorization::Authorization;
@@ -24,7 +23,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some(path) => serde_json::from_slice(&std::fs::read(path)?)?,
         None => BTreeMap::new(),
     };
-    let secp = Secp256k1::new();
+    let secp = sapio_base::secp::secp();
     let root = example_root();
     let oracle = ProgramOracle::new(root, vec![])?;
     let participant = participant_key();

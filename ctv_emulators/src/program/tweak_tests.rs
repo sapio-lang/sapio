@@ -1,6 +1,7 @@
 use super::*;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::secp256k1::Parity;
+use bitcoin::secp256k1::Secp256k1;
 use bitcoin::taproot::TapTweakHash;
 use bitcoin::{Network, Transaction, TxIn};
 use sapio_base::fragments::{

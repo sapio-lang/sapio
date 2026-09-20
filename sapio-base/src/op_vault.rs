@@ -14,7 +14,6 @@ use bitcoin::hashes::{sha256, Hash, HashEngine};
 use bitcoin::key::TapTweak;
 use bitcoin::opcodes::all::{OP_CHECKSIGVERIFY, OP_CSV};
 use bitcoin::script::Builder;
-use bitcoin::secp256k1::Secp256k1;
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapNodeHash};
 use bitcoin::{Amount, Script, ScriptBuf, XOnlyPublicKey};
 use std::fmt;
@@ -184,8 +183,8 @@ impl Trigger {
         }
         let original_key = XOnlyPublicKey::from_slice(&source_prevout_script.as_bytes()[2..])
             .map_err(|_| VaultError::SourceProof)?;
-        let secp = Secp256k1::verification_only();
-        if !control.verify_taproot_commitment(&secp, original_key, source_script) {
+        let secp = crate::secp::secp();
+        if !control.verify_taproot_commitment(secp, original_key, source_script) {
             return Err(VaultError::SourceProof);
         }
         let replacement = self.withdrawal_script(expected)?;
@@ -193,7 +192,7 @@ impl Trigger {
         for sibling in &control.merkle_branch {
             root = TapNodeHash::from_node_hashes(root, *sibling);
         }
-        let (key, _) = control.internal_key.tap_tweak(&secp, Some(root));
+        let (key, _) = control.internal_key.tap_tweak(secp, Some(root));
         Ok(ScriptBuf::new_p2tr_tweaked(key))
     }
 }
@@ -278,6 +277,7 @@ mod tests {
     use super::*;
     use crate::{miniscript, Clause};
     use bitcoin::bip32::Xpriv;
+    use bitcoin::secp256k1::Secp256k1;
     use bitcoin::taproot::TaprootBuilder;
     use bitcoin::Network;
 

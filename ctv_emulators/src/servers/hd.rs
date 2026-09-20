@@ -192,7 +192,7 @@ impl HDOracleEmulator {
         let request = crate::wire::read_message(t).await?;
         match request {
             msgs::Request::SignPSBT(msgs::PSBT(unsigned)) => {
-                let psbt = SECP.with(|secp| self.sign(unsigned, secp))?;
+                let psbt = self.sign(unsigned, crate::secp())?;
                 crate::wire::write_message(t, &msgs::PSBT(psbt)).await
             }
         }

@@ -254,7 +254,7 @@ impl<S: State> Vault<S> {
         // Redeeming compiles to a 34-byte P2TR output. Its commitment changes
         // with the funding amount, but its serialized size does not.
         let redeem_script = bitcoin::ScriptBuf::new_p2tr(
-            &bitcoin::secp256k1::Secp256k1::verification_only(),
+            sapio_base::secp::secp(),
             self.hot_key.to_x_only_pub(),
             None,
         );

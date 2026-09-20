@@ -22,7 +22,7 @@ pub(crate) fn derive_public_key(
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        root.derive_pub(&bitcoin::secp256k1::Secp256k1::verification_only(), &path)
+        root.derive_pub(crate::secp::secp(), &path)
             .map(|child| child.to_x_only_pub())
     }
     #[cfg(target_arch = "wasm32")]

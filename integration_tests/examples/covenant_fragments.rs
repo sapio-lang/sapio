@@ -1,7 +1,6 @@
 //! Compile, authorize and finalize both fragment examples without broadcasting.
 
 use bitcoin::consensus::encode::serialize_hex;
-use bitcoin::secp256k1::Secp256k1;
 use emulator_connect::program::ProgramOracle;
 use sapio_contrib::contracts::template_authorization::Authorization;
 use sapio_integration_tests::fragment_example::{
@@ -13,7 +12,7 @@ use sapio_integration_tests::program_example::{
 use std::error::Error;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let secp = Secp256k1::new();
+    let secp = sapio_base::secp::secp();
     let root = example_root();
     let oracle = ProgramOracle::new(root, vec![])?;
     let participant = participant_key();

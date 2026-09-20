@@ -5,7 +5,6 @@
 //  file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 use bitcoin::bip32::{Xpriv, Xpub};
-use bitcoin::secp256k1::Secp256k1;
 use emulator_connect::servers::hd::HDOracleEmulator;
 use std::io::{Error, ErrorKind};
 
@@ -27,7 +26,7 @@ async fn main() -> Result<(), Error> {
         .to_str()
         .ok_or_else(|| Error::new(ErrorKind::InvalidInput, "Listen address must be UTF-8"))?;
     let root = Xpriv::new_master(bitcoin::Network::Regtest, &contents).map_err(Error::other)?;
-    let public = Xpub::from_priv(&Secp256k1::new(), &root);
+    let public = Xpub::from_priv(sapio_base::secp::secp(), &root);
     let listener = tokio::net::TcpListener::bind(address).await?;
     println!(
         "Running Oracle With Key: {} on {}",

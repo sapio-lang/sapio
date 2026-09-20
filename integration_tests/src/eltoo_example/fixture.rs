@@ -3,13 +3,13 @@
 use super::runner::{compile, Coin, Sponsor};
 use bitcoin::bip32::{Xpriv, Xpub};
 use bitcoin::hashes::{sha256, Hash};
-use bitcoin::secp256k1::{Keypair, Secp256k1, SecretKey};
+use bitcoin::secp256k1::{Keypair, SecretKey};
 use bitcoin::{Address, Amount, Network, OutPoint, TxOut};
 use sapio_contrib::contracts::eltoo::{Channel, Terms, MAX_STATE};
 
 fn key(seed: u8) -> Keypair {
     Keypair::from_secret_key(
-        &Secp256k1::new(),
+        sapio_base::secp::secp(),
         &SecretKey::from_slice(&[seed; 32]).unwrap(),
     )
 }
@@ -25,7 +25,7 @@ pub fn oracle_key() -> Xpriv {
 pub fn terms() -> Terms {
     Terms::new(
         joint_key().x_only_public_key().0,
-        Xpub::from_priv(&Secp256k1::new(), &oracle_key()),
+        Xpub::from_priv(sapio_base::secp::secp(), &oracle_key()),
         100_000,
         6,
         MAX_STATE,
@@ -58,7 +58,7 @@ pub fn sponsor(value: u64, tag: u8) -> Sponsor {
             txout: TxOut {
                 value: Amount::from_sat(value),
                 script_pubkey: Address::p2tr(
-                    &Secp256k1::new(),
+                    sapio_base::secp::secp(),
                     internal_key,
                     None,
                     Network::Regtest,

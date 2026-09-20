@@ -61,7 +61,6 @@ pub use terms::{
 
 use bitcoin::hashes::sha256::Hash as Sha256;
 use bitcoin::hashes::Hash as _;
-use bitcoin::secp256k1::Secp256k1;
 use bitcoin::{Amount, XOnlyPublicKey};
 use sapio::contract::abi::object::ObjectMetadata;
 use sapio::contract::*;
@@ -347,11 +346,11 @@ impl ClaimOutput {
         if state.user_sats > half.to_sat() {
             return Err(terms::invalid("channel state exceeds the claimed half"));
         }
-        let secp = Secp256k1::verification_only();
+        let secp = sapio_base::secp::secp();
         let network = ctx.network;
         let payout = |key: XOnlyPublicKey| {
             Compiled::from_address(
-                bitcoin::Address::p2tr(&secp, key, None, network),
+                bitcoin::Address::p2tr(secp, key, None, network),
                 Amount::ZERO,
             )
         };

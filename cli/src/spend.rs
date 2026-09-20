@@ -2,7 +2,6 @@
 
 use crate::args::Spend;
 use crate::util::{read_input, read_json, read_psbt, write_json, write_output, write_psbt, Result};
-use bitcoin::secp256k1::Secp256k1;
 use emulator_connect::program::completion::SpendIntent;
 use emulator_connect::program::{prepare_spend, ProgramEvidence, SpendAssets};
 use sapio::contract::Compiled;
@@ -104,11 +103,17 @@ pub(crate) fn run(command: Spend) -> Result<()> {
         }
         Spend::SignNative { key, .. } => {
             let key = sapio_psbt::SigningKey::read_key_from_buf(&read_input(Some(&key))?)?;
-            intent.sign_native(&artifact, &mut current, &key, &Secp256k1::new())?;
+            intent.sign_native(
+                &artifact,
+                &mut current,
+                &key,
+                sapio::sapio_base::secp::secp(),
+            )?;
             write_psbt(destination, &current)
         }
         Spend::Finalize { transaction, .. } => {
-            let finalized = intent.finalize(&artifact, &current, &Secp256k1::new())?;
+            let finalized =
+                intent.finalize(&artifact, &current, sapio::sapio_base::secp::secp())?;
             if transaction {
                 write_output(
                     destination,

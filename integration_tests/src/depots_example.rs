@@ -47,7 +47,7 @@ pub const TSD: u16 = 6;
 
 fn key(seed: u8) -> Keypair {
     Keypair::from_secret_key(
-        &Secp256k1::new(),
+        sapio_base::secp::secp(),
         &SecretKey::from_slice(&[seed; 32]).unwrap(),
     )
 }
@@ -86,7 +86,7 @@ pub fn terms() -> DepotTerms {
         operator_key().x_only_public_key().0,
         target_key().x_only_public_key().0,
         guess_key().x_only_public_key().0,
-        Xpub::from_priv(&Secp256k1::new(), &oracle_key()),
+        Xpub::from_priv(sapio_base::secp::secp(), &oracle_key()),
         Amount::from_sat(DEPOT_SATS),
         PRIME,
         AbsHeight::try_from(EXPIRY).unwrap(),
@@ -305,7 +305,7 @@ pub fn sponsor(value: u64, tag: u8) -> Sponsor {
             txout: TxOut {
                 value: Amount::from_sat(value),
                 script_pubkey: Address::p2tr(
-                    &Secp256k1::new(),
+                    sapio_base::secp::secp(),
                     internal_key,
                     None,
                     Network::Regtest,
@@ -352,7 +352,7 @@ pub fn attach_inputs(
         return Err("depots require version two, two inputs and a positive sponsor".into());
     }
     let script = Address::p2tr(
-        &Secp256k1::new(),
+        sapio_base::secp::secp(),
         sponsor.internal_key,
         None,
         Network::Regtest,
@@ -517,7 +517,7 @@ pub fn complete_candidate(
         intent.merge_response(compiled, &mut current, index, &response)?;
     }
     sign_sponsor(&mut current, &sponsor_key())?;
-    let finalized = intent.finalize(compiled, &current, &Secp256k1::new())?;
+    let finalized = intent.finalize(compiled, &current, sapio_base::secp::secp())?;
     Ok(finalized.extract_tx()?)
 }
 
@@ -558,7 +558,7 @@ pub fn sign_sponsor(psbt: &mut Psbt, key: &Keypair) -> Result<(), Error> {
         &Prevouts::All(&prevouts),
         hash_ty,
     )?;
-    let secp = Secp256k1::new();
+    let secp = sapio_base::secp::secp();
     let key = key.tap_tweak(&secp, None).to_keypair();
     psbt.inputs[1].tap_key_sig = Some(taproot::Signature {
         signature: secp.sign_schnorr_no_aux_rand(&Message::from_digest_slice(hash.as_ref())?, &key),

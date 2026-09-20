@@ -3,6 +3,7 @@ use bitcoin::blockdata::opcodes::all::{OP_CHECKSIG, OP_DROP};
 use bitcoin::blockdata::script::Builder;
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::psbt::raw;
+use bitcoin::secp256k1::Secp256k1;
 use bitcoin::taproot::TaprootBuilder;
 use bitcoin::{Network, Transaction, TxIn, Witness};
 fn evaluator() -> WasmEvaluator {
