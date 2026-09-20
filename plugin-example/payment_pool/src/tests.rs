@@ -1,5 +1,5 @@
-use bitcoin::secp256k1::Secp256k1;
 use super::*;
+use bitcoin::secp256k1::Secp256k1;
 use sapio::contract::Compilable;
 use sapio_base::covenant::LoweringPlan;
 use sapio_base::effects::EffectPath;
