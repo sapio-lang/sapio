@@ -128,6 +128,13 @@ pub struct Template {
         schema_with = "Option::<plan::FundingConstraints>::json_schema"
     )]
     pub funding_constraints: Option<plan::FundingConstraints>,
+    /// Local fee cap retained by the interactive builder. Transaction plans
+    /// instead retain their cap in `funding_constraints`; if both are present,
+    /// the stricter cap applies. Older artifacts without either cap accept only
+    /// the reserved fee (`max` minus the committed outputs).
+    #[serde(default, with = "bitcoin::amount::serde::as_sat::opt")]
+    #[schemars(with = "Option<u64>")]
+    pub maximum_fee: Option<Amount>,
     /// Additional restrictions on a builder's template. After contract
     /// compilation, these include the action guards; duplicate transactions
     /// retain their complete alternative authorizations here.
@@ -192,6 +199,7 @@ impl Template {
             required_input_amount,
             min_feerate_sats_vbyte,
             funding_constraints,
+            maximum_fee,
             metadata_map_s2s,
             inputs,
             outputs

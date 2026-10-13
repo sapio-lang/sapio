@@ -103,6 +103,67 @@ struct Vault<S: State> {
 }
 
 impl<S: State> Vault<S> {
+    /// Construct a withdrawal and return any change to a fresh secure vault.
+    fn withdrawal(&self, mut tmpl: template::Builder, output: Output) -> TxTmplIt {
+        let network = tmpl.ctx().network;
+        let Output { address, amount } = output;
+        tmpl = tmpl.add_output(
+            amount.into(),
+            &Compiled::from_address(address.require_network(network)?, Amount::ZERO),
+            Some(
+                [(
+                    "purpose",
+                    "Funds transferred out of vault to this address.".into(),
+                )]
+                .into(),
+            ),
+        )?;
+        let remaining = tmpl.ctx().funds();
+        let fee_without_change = estimated_fee(self.default_feerate, tmpl.unsigned_tx_size())?;
+        if remaining < fee_without_change {
+            return Err(CompilationError::OutOfFunds);
+        }
+        if remaining == fee_without_change {
+            return tmpl.add_fees(fee_without_change)?.into();
+        }
+
+        // A secure vault compiles to a 34-byte P2TR output. Its amount changes
+        // the commitment but not the serialized size used by this estimate.
+        let change_script = bitcoin::ScriptBuf::new_p2tr(
+            &bitcoin::secp256k1::Secp256k1::verification_only(),
+            self.hot_key.to_x_only_pub(),
+            None,
+        );
+        let fees = estimated_fee(
+            self.default_feerate,
+            tmpl.unsigned_tx_size_with_output(&change_script),
+        )?;
+        let change = remaining
+            .checked_sub(fees)
+            .filter(|amount| *amount > Amount::ZERO)
+            .ok_or(CompilationError::OutOfFunds)?;
+        tmpl = tmpl.add_output(
+            change,
+            &Vault::<Secure> {
+                backup: self.backup,
+                hot_key: self.hot_key,
+                backup_addr: self.backup_addr.clone(),
+                cpfp: self.cpfp.clone(),
+                default_feerate: self.default_feerate,
+                timeout: self.timeout,
+                pd: Default::default(),
+            },
+            Some(
+                [(
+                    "purpose",
+                    "Unspent funds returned to a secure vault.".into(),
+                )]
+                .into(),
+            ),
+        )?;
+        tmpl.add_fees(fees)?.into()
+    }
+
     /// don't compile spend_hot unless we're in redeeming mode
     #[compile_if]
     fn compile_spend_hot(self, _ctx: Context) {
@@ -124,24 +185,12 @@ impl<S: State> Vault<S> {
         web_api
     )]
     fn spend_hot(self, ctx: Context, output: Output) {
-        let network = ctx.network;
-        let Output { address, amount } = output;
-        ctx.template()
+        let tmpl = ctx
+            .template()
             .set_label("spend via hot".into())
             .set_color("red".into())
-            .set_sequence(-1, self.timeout.into())?
-            .add_output(
-                amount.into(),
-                &Compiled::from_address(address.require_network(network)?, Amount::ZERO),
-                Some(
-                    [(
-                        "purpose",
-                        "Funds transfered out of vault to this address.".into(),
-                    )]
-                    .into(),
-                ),
-            )?
-            .into()
+            .set_sequence(-1, self.timeout.into())?;
+        self.withdrawal(tmpl, output)
     }
     /// a contract has_cold if a plain backup key has been provided. some cold
     /// storages won't have a plain key path
@@ -169,23 +218,11 @@ impl<S: State> Vault<S> {
         web_api
     )]
     fn spend_cold(self, ctx: Context, output: Output) {
-        let network = ctx.network;
-        let Output { amount, address } = output;
-        ctx.template()
+        let tmpl = ctx
+            .template()
             .set_label("spend via cold direct".into())
-            .set_color("cyan".into())
-            .add_output(
-                amount.into(),
-                &Compiled::from_address(address.require_network(network)?, Amount::ZERO),
-                Some(
-                    [(
-                        "purpose",
-                        "Funds transfered out of vault to this address.".into(),
-                    )]
-                    .into(),
-                ),
-            )?
-            .into()
+            .set_color("cyan".into());
+        self.withdrawal(tmpl, output)
     }
     /// send the funds to the backup address without delay.
     #[then]

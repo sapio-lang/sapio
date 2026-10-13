@@ -736,6 +736,9 @@ impl<'a> TemplatePlan<'a> {
             .map(|input| input.metadata.clone())
             .collect();
         template.metadata_map_s2s = self.metadata;
+        // A plan supplies its own surplus policy instead of the builder's
+        // default cap at the exact reserved fee.
+        template.maximum_fee = None;
         template.funding_constraints = Some(FundingConstraints {
             inputs: self
                 .inputs

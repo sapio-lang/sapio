@@ -152,6 +152,34 @@ fn explains_file_or_stdin_without_loading_configuration() {
     assert!(text.contains("Local fee cap: 100 sat"));
     assert!(text.contains("Output 1 (second): 500 sat"));
 
+    // Builder and legacy artifacts have no named plan constraints, but still
+    // expose their effective reserved-fee cap in the human funding review.
+    for maximum in [Some(Amount::from_sat(100)), None] {
+        let mut builder_artifact = artifact.clone();
+        let template = builder_artifact.ctv_to_tx.values_mut().next().unwrap();
+        template.funding_constraints = None;
+        template.maximum_fee = maximum;
+        std::fs::write(
+            &artifact_path,
+            serde_json::to_vec(&builder_artifact).unwrap(),
+        )
+        .unwrap();
+        let output = fixture
+            .command()
+            .arg("--file")
+            .arg(&artifact_path)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let text = String::from_utf8(output.stdout).unwrap();
+        assert!(text.contains("Local fee cap: 100 sat"));
+        assert!(!text.contains("No local fee cap"));
+    }
+
     artifact.ctv_to_tx.values_mut().next().unwrap().tx.output[0].value += Amount::ONE_SAT;
     std::fs::write(&artifact_path, serde_json::to_vec(&artifact).unwrap()).unwrap();
     let rejected = fixture

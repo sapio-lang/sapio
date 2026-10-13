@@ -293,6 +293,17 @@ fn shared_transaction_catalogs_cannot_choose_different_local_rules() {
     // Authorization alternatives may differ; they do not choose funding policy.
     object.suggested_txs.values_mut().next().unwrap().guards = vec![Clause::Trivial.into()];
     object.validate().unwrap();
+    let mut conflicting_cap = object.clone();
+    conflicting_cap
+        .suggested_txs
+        .values_mut()
+        .next()
+        .unwrap()
+        .maximum_fee = Some(Amount::from_sat(100));
+    reject_artifact(
+        conflicting_cap,
+        ArtifactErrorKind::ConflictingTemplateCatalogs("maximum_fee"),
+    );
     let constraints = sapio::template::FundingConstraints {
         inputs: vec![sapio::template::InputRequirement {
             name: "contract".into(),

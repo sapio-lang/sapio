@@ -265,9 +265,9 @@ fn checks_contract_script_and_reserved_fees_before_signing() {
 }
 
 #[test]
-fn authenticates_every_known_prevout_and_accepts_excess_funding() {
+fn authenticates_every_known_prevout_at_the_reserved_fee_cap() {
     let object = payment(leaf(), false, 100, "payment");
-    let tx = funding(&object, 1_200);
+    let tx = funding(&object, 1_100);
     let out = OutPoint::new(tx.compute_txid(), 0);
     let program = object
         .bind_psbt(out, BTreeMap::new(), Index::with(tx.clone()), &CTVAvailable)
@@ -280,12 +280,35 @@ fn authenticates_every_known_prevout_and_accepts_excess_funding() {
 }
 
 #[test]
+fn builder_fee_cap_rejects_excess_before_signing_or_indexing() {
+    for fees in [0, 100] {
+        let object = payment(leaf(), false, fees, "payment");
+        let template = object.ctv_to_tx.values().next().unwrap();
+        assert_eq!(template.maximum_fee, Some(Amount::from_sat(fees)));
+        for value in [1_000 + fees - 1, 1_000 + fees + 1, 100_000_000] {
+            let tx = funding(&object, value);
+            let out = OutPoint::new(tx.compute_txid(), 0);
+            let index = Index::with(tx);
+            let signer = Signer::default();
+            assert!(matches!(
+                object.bind_psbt(out, BTreeMap::new(), index.clone(), &signer),
+                Err(ObjectError::InvalidFunding { .. })
+            ));
+            assert_eq!(signer.calls.load(Ordering::SeqCst), 0);
+            assert_eq!(index.writes.get(), 0);
+        }
+    }
+}
+
+#[test]
 fn sums_auxiliary_funding_and_rejects_duplicates_and_overflow() {
     let object = payment(leaf(), true, 100, "payment");
     let hash = *object.ctv_to_tx.keys().next().unwrap();
     for (root_value, auxiliary_value, duplicate, valid) in [
         (400, 700, false, true),
         (400, 699, false, false),
+        (400, 701, false, false),
+        (401, 700, false, false),
         (1_100, 1_100, true, false),
         (u64::MAX, 1, false, false),
     ] {

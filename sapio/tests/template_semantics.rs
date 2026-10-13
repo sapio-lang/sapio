@@ -164,7 +164,7 @@ impl Contract for RepeatedTemplates {
 #[test]
 fn duplicate_commitments_reject_conflicting_binding_payloads() {
     type Alteration = fn(&mut Template);
-    let alterations: [(Alteration, &str); 6] = [
+    let alterations: [(Alteration, &str); 7] = [
         (|t| t.max += Amount::from_sat(1), "max"),
         (
             |t| t.required_input_amount += Amount::from_sat(1),
@@ -174,6 +174,7 @@ fn duplicate_commitments_reject_conflicting_binding_payloads() {
             |t| t.min_feerate_sats_vbyte = Some(Amount::from_sat(1)),
             "min_feerate_sats_vbyte",
         ),
+        (|t| t.maximum_fee = Some(Amount::from_sat(1)), "maximum_fee"),
         (
             |t| t.metadata_map_s2s.label = Some("different label".into()),
             "metadata_map_s2s",
