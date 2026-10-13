@@ -215,7 +215,28 @@ mod tests {
             .add_output(Amount::from_sat(1000), child, None)
             .unwrap()
             .into();
-        let mut object = finish(Clause::Key(key()));
+        let mut object = if suggested {
+            finish(Clause::Key(key()))
+        } else {
+            // A committed catalog entry must be represented by the descriptor.
+            finish(
+                context()
+                    .lowering_plan()
+                    .lower_ctv(Ctv(template.hash()))
+                    .unwrap(),
+            )
+        };
+        if !suggested {
+            object.alternative_policies.clear();
+            object.committed_policy_guards.insert(
+                template.hash(),
+                [super::super::CommittedPolicy {
+                    action_guard: Clause::Trivial.into(),
+                    template_guards: vec![],
+                }]
+                .into(),
+            );
+        }
         object.required_input_amount = template.required_input_amount;
         if !suggested {
             object

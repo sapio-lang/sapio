@@ -13,7 +13,9 @@ use super::Context;
 use crate::contract::abi::continuation::ContinuationPoint;
 use crate::contract::actions::conditional_compile::CCILWrapper;
 use crate::contract::actions::ErasedAction;
-use crate::contract::object::{CovenantRequirements, ProgramPolicy, SupportedDescriptors};
+use crate::contract::object::{
+    CommittedPolicy, CovenantRequirements, ProgramPolicy, SupportedDescriptors,
+};
 use crate::contract::TxTmplIt;
 use bitcoin::key::TweakedPublicKey;
 use bitcoin::taproot::{LeafVersion, TapLeafHash};
@@ -30,6 +32,8 @@ use sapio_base::serialization_helpers::SArc;
 use sapio_base::Clause;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
+mod artifact;
+pub(crate) use artifact::validate_spending_policies;
 mod cache;
 mod feasibility;
 #[cfg(test)]
@@ -203,6 +207,8 @@ where
         let mut action_names = BTreeSet::new();
         let mut continue_apis = BTreeMap::new();
         let mut branches = vec![];
+        let mut alternative_policies = Vec::new();
+        let mut committed_policy_guards = BTreeMap::<_, BTreeSet<_>>::new();
         let mut branch_bytes = 0usize;
         let mut recorded_policy_budget = script::RecordedPolicyBudget::default();
         let mut all_guard_simps: BTreeMap<ScriptPolicy, GuardSimps> = BTreeMap::new();
@@ -287,6 +293,13 @@ where
                 }
                 required_input_amount = required_input_amount.max(template.required_input_amount);
                 if committed {
+                    committed_policy_guards
+                        .entry(template.hash())
+                        .or_default()
+                        .insert(CommittedPolicy {
+                            action_guard: guards.clone(),
+                            template_guards: template.guards.clone(),
+                        });
                     template.guards = policy_as_guards(conjoin_source(
                         std::iter::once(&guards).chain(template.guards.iter()),
                     ));
@@ -326,6 +339,7 @@ where
                 continue_apis.insert(SArc(effect_path), continuation);
             }
             if !committed {
+                alternative_policies.push(guards);
                 append_branches(
                     &mut branches,
                     &mut branch_bytes,
@@ -347,6 +361,7 @@ where
             if let Some((policy, mut simps)) =
                 guard_clauses.get(self_ref, *factory, guard_context, metadata_context)?
             {
+                alternative_policies.push(policy.clone());
                 all_guard_simps
                     .entry(policy.clone())
                     .or_default()
@@ -493,6 +508,8 @@ where
                 .metadata(metadata_ctx)?
                 .add_guard_simps(all_guard_simps)?;
             let compiled = Compiled {
+                committed_policy_guards,
+                alternative_policies,
                 covenant_requirements,
                 program_policies,
                 ctv_to_tx: comitted_txns,

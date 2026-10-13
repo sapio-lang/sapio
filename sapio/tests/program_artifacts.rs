@@ -151,6 +151,54 @@ fn changing_program_source_native_guards_or_locations_invalidates_the_artifact()
     invalid(&incomplete);
 }
 
+#[test]
+fn deleting_alternatives_cannot_downgrade_a_program_contract_to_a_plain_destination() {
+    use sapio::contract::object::RawTaproot;
+    let mut object = compile(guarded(&program(28), 6));
+    let mut input = bitcoin::psbt::Input::default();
+    object
+        .descriptor
+        .as_ref()
+        .unwrap()
+        .update_psbt_input(&mut input)
+        .unwrap();
+    let attacker = bitcoin::secp256k1::SecretKey::from_slice(&[29; 32])
+        .unwrap()
+        .keypair(&bitcoin::secp256k1::Secp256k1::new())
+        .x_only_public_key()
+        .0;
+    let tree = RawTaproot::from_scripts(
+        attacker,
+        input
+            .tap_scripts
+            .into_values()
+            .map(|(script, _)| script)
+            .collect(),
+    )
+    .unwrap();
+    object.address =
+        bitcoin::Address::p2tr_tweaked(tree.spend_info().output_key(), Network::Regtest).into();
+    object.descriptor = Some(tree.into());
+    // Program policy locations still match the honest leaf; its validator
+    // alone cannot account for the new internal key or an omitted alternative.
+    object.alternative_policies.clear();
+    let object: Compiled = serde_json::from_value(serde_json::to_value(object).unwrap()).unwrap();
+    assert!(matches!(
+        object.validate().unwrap_err().kind,
+        ArtifactErrorKind::InvalidSpendingPolicy(_)
+    ));
+}
+
+#[test]
+fn retained_program_source_requires_its_program_policy_record() {
+    let mut object = compile(guarded(&program(30), 6));
+    object.program_policies.clear();
+    assert!(matches!(
+        object.validate().unwrap_err().kind,
+        ArtifactErrorKind::InvalidSpendingPolicy(_)
+    ));
+}
+
 struct Parent(Compiled);
 impl Parent {
     #[then]

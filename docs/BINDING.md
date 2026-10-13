@@ -8,6 +8,25 @@ and then adds the resulting transactions to the transaction index.
 
 ## Covenant policy checks
 
+`Object::validate()` replays committed branches from their retained
+`committed_policy_guards`, injecting the template covenant using the recorded
+`LoweringPlan`. It also replays `alternative_policies`, the complete finish and
+suggested-action guards. Every Taproot leaf must match a declared complete
+branch, and every declared branch must remain available. Only an independently
+sufficient bare-key branch can authorize a non-NUMS internal key; a constrained
+key cannot gain key-path authority. Recognized unconditional Miniscript leaves
+are rejected. Opaque raw alternatives are checked against their exact declared
+source, not analyzed for arbitrary Script satisfaction.
+
+These checks establish consistency, not producer authenticity. A producer can
+declare an additional owner-key alternative explicitly. Review all alternative
+policies (shown by both human and JSON `contract explain`), raw scripts and
+oracle roots before funding. Recompile older contract artifacts that lack the
+retained branch records; plain address/descriptor destinations without contract
+claims remain supported. Guard grouping is retained because deduplication may
+combine several transaction authorizations into one catalog entry without
+combining their original Taproot leaves.
+
 Each object records its public `LoweringPlan` and the set of CTV predicates
 resolved from explicit wrappers. This includes finish guards and continuation
 guards, as well as automatic checks on committed templates.
