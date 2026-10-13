@@ -9,8 +9,6 @@ use miniscript::{Miniscript, Tap};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
-use bitcoin::secp256k1::Secp256k1;
-
 use bitcoin::psbt::Psbt;
 
 #[derive(Serialize, Deserialize)]
@@ -37,8 +35,7 @@ pub enum PSBTApi {
 /// its fee checks; an extraction failure returns the completed PSBT for review.
 pub fn finalize_psbt_format_api(psbt: Psbt) -> Result<PSBTApi, PSBTValidationError> {
     validate_psbt(&psbt)?;
-    let secp = Secp256k1::new();
-    let (psbt, mut errors) = match crate::finalize::finalize(psbt, &secp) {
+    let (psbt, mut errors) = match crate::finalize::finalize(psbt, sapio_base::secp::secp()) {
         Ok(psbt) => match psbt.clone().extract_tx() {
             Ok(transaction) => {
                 return Ok(PSBTApi::Finished {

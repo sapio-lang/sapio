@@ -2,6 +2,7 @@ use super::*;
 use bitcoin::blockdata::opcodes::all::OP_CHECKSIG;
 use bitcoin::blockdata::script::Builder;
 use bitcoin::secp256k1::Keypair;
+use bitcoin::secp256k1::Secp256k1;
 use bitcoin::secp256k1::{Parity, Scalar, SecretKey};
 use bitcoin::taproot::{TapTweakHash, TaprootBuilder};
 use bitcoin::{Network, Transaction, TxIn};

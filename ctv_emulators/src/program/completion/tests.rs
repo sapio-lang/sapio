@@ -5,6 +5,7 @@ use crate::program::spend_plan::{
 use crate::program::{ProgramOracle, WasmEvaluator};
 use bitcoin::bip32::{Xpriv, Xpub};
 use bitcoin::hashes::{sha256, Hash};
+use bitcoin::secp256k1::Secp256k1;
 use bitcoin::{
     absolute, Amount, FeeRate, Network, ScriptBuf, Sequence, Transaction, TxIn, TxOut,
     XOnlyPublicKey,

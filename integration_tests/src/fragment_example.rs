@@ -20,7 +20,7 @@ use std::sync::Arc;
 /// Disposable participant key used by the physical-internal-key example.
 pub fn participant_key() -> Keypair {
     Keypair::from_secret_key(
-        &Secp256k1::new(),
+        sapio_base::secp::secp(),
         &SecretKey::from_slice(&[96; 32]).unwrap(),
     )
 }

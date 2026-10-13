@@ -6,7 +6,7 @@
 
 use bitcoin::bip32::{Xpriv, Xpub};
 use bitcoin::psbt::Psbt;
-use bitcoin::secp256k1::{Secp256k1, SecretKey};
+use bitcoin::secp256k1::SecretKey;
 use bitcoin::{Address, Amount, Network, OutPoint, Transaction, TxIn, TxOut};
 use emulator_connect::program::completion::SpendIntent;
 use emulator_connect::program::{
@@ -140,7 +140,7 @@ pub fn complete_example_spend(
         let response = oracle.sign(request.clone())?;
         intent.merge_response(compiled, &mut current, index, &response)?;
     }
-    let finalized = intent.finalize(compiled, &current, &Secp256k1::new())?;
+    let finalized = intent.finalize(compiled, &current, sapio_base::secp::secp())?;
     Ok(finalized.extract_tx()?)
 }
 
@@ -152,7 +152,7 @@ pub fn example_root() -> Xpriv {
 
 /// A standard destination used in the example.
 pub fn recipient(seed: u8) -> Address {
-    let secp = Secp256k1::new();
+    let secp = sapio_base::secp::secp();
     let key = bitcoin::CompressedPublicKey(bitcoin::secp256k1::PublicKey::from_secret_key(
         &secp,
         &SecretKey::from_slice(&[seed; 32]).unwrap(),

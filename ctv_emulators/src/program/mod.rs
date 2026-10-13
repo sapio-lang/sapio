@@ -21,7 +21,7 @@ use bitcoin::blockdata::script::Instruction;
 use bitcoin::hashes::Hash;
 use bitcoin::key::TapTweak;
 use bitcoin::psbt::Psbt;
-use bitcoin::secp256k1::{Message, Secp256k1};
+use bitcoin::secp256k1::Message;
 use bitcoin::sighash::{Annex, Prevouts, SighashCache};
 use bitcoin::taproot::{LeafVersion, TapLeafHash, TapNodeHash};
 #[cfg(test)]
@@ -375,7 +375,7 @@ impl ProgramOracle {
             }
         }
         Ok(Self {
-            public_root: Xpub::from_priv(&Secp256k1::new(), &root),
+            public_root: Xpub::from_priv(sapio_base::secp::secp(), &root),
             root,
             evaluators: registry,
         })
@@ -436,10 +436,10 @@ impl ProgramOracle {
         if existing.is_some() {
             return Ok(request.psbt.0);
         }
-        let secp = Secp256k1::new();
+        let secp = sapio_base::secp::secp();
         let derived = self
             .root
-            .derive_priv(&secp, &program_derivation_path(request.instance.id()))
+            .derive_priv(secp, &program_derivation_path(request.instance.id()))
             .map_err(ProgramError::Derivation)?;
         let key = derived.to_keypair(&secp);
         let key = match request.path {
@@ -481,7 +481,7 @@ struct Prepared<'a> {
 impl Prepared<'_> {
     fn verify(&self, signature: &bitcoin::taproot::Signature) -> bool {
         signature.sighash_type == TapSighashType::All
-            && Secp256k1::verification_only()
+            && sapio_base::secp::secp()
                 .verify_schnorr(&signature.signature, &self.message, &self.verification_key)
                 .is_ok()
     }
@@ -551,7 +551,7 @@ fn prepare<'a>(
         .instance
         .derive_public_key(root)
         .map_err(ProgramError::Instance)?;
-    let secp = Secp256k1::verification_only();
+    let secp = sapio_base::secp::secp();
     let (verification_key, internal_key) = match request.path {
         ProgramSpendPath::KeyPath => {
             let (tweaked, _) = program_key.tap_tweak(&secp, input.tap_merkle_root);

@@ -47,7 +47,7 @@ impl SigningKey {
         mut psbt: Psbt,
         hash_ty: bitcoin::TapSighashType,
     ) -> Result<Vec<u8>, PSBTSigningError> {
-        self.sign_psbt_mut(&mut psbt, &Secp256k1::new(), hash_ty)?;
+        self.sign_psbt_mut(&mut psbt, sapio_base::secp::secp(), hash_ty)?;
         let bytes = psbt.serialize();
         Ok(bytes)
     }

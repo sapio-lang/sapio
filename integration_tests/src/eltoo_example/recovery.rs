@@ -7,7 +7,7 @@
 
 use super::runner::{attach_inputs, update_template, Coin, Error, Sponsor};
 use bitcoin::psbt::Input;
-use bitcoin::secp256k1::{schnorr::Signature, Secp256k1};
+use bitcoin::secp256k1::schnorr::Signature;
 use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash};
 use bitcoin::{OutPoint, Transaction, XOnlyPublicKey};
 use emulator_connect::program::{ProgramSigningRequest, ProgramSpendPath, PSBT};
@@ -96,7 +96,7 @@ pub fn recover_update(terms: &Terms, observed: &Transaction) -> Result<Recovered
     encoded.push(0xc0);
     encoded.extend_from_slice(&terms.joint_key().serialize());
     encoded.extend_from_slice(&publication[10..]);
-    let secp = Secp256k1::verification_only();
+    let secp = sapio_base::secp::secp();
     for parity in 0..=1 {
         encoded[0] = 0xc0 | parity;
         let control = ControlBlock::decode(&encoded)?;

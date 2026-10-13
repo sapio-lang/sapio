@@ -21,6 +21,7 @@ the corresponding program's keys.
 | `templatehash.wasm` | v2 | Exact BIP446 TemplateHash, including the selected annex |
 | `template_authorization.wasm` | v2 | TemplateHash plus CSFS under a pinned, physical internal, or proven related key |
 | `op_vault.wasm` | v2 | Dynamic vault leaf update and fixed recovery, under the [single-vault BIP345 profile](op-vault/README.md) |
+| `depots.wasm` | v2 | Depot resolution: target reveal, guess-signature-bound hits/claims and double-hit burns over CTV+CSFS-style commitments |
 
 The v1 programs and `common.rs` retain their original ABI and bytes. V2 programs
 use `v2.rs` for invocation plumbing and the [fragment SDK](fragments/README.md)

@@ -2,7 +2,7 @@ use super::known_tweak_witness;
 use crate::program::{program_derivation_path, EmulatedProgram};
 use bitcoin::bip32;
 use bitcoin::hashes::Hash;
-use bitcoin::secp256k1::{schnorr::Signature, Parity, Scalar, Secp256k1, SecretKey};
+use bitcoin::secp256k1::{schnorr::Signature, Parity, Scalar, SecretKey};
 use bitcoin::taproot::{TapNodeHash, TapTweakHash};
 use bitcoin::XOnlyPublicKey;
 use std::fmt;
@@ -29,7 +29,7 @@ impl KnownTweakProof {
         program: &EmulatedProgram,
         merkle_root: Option<TapNodeHash>,
     ) -> Result<Self, KnownTweakError> {
-        let secp = Secp256k1::verification_only();
+        let secp = crate::secp::secp();
         let root = *program.root();
         let (key, root_parity) = root.public_key.x_only_public_key();
         let mut child = root;
@@ -84,12 +84,10 @@ impl KnownTweakProof {
 
     /// Verify the opening against the actual spent output's x-only key.
     pub fn check_output(&self, output_key: XOnlyPublicKey) -> Result<(), KnownTweakError> {
-        if self.key.tweak_add_check(
-            &Secp256k1::verification_only(),
-            &output_key,
-            self.parity,
-            self.tweak,
-        ) {
+        if self
+            .key
+            .tweak_add_check(crate::secp::secp(), &output_key, self.parity, self.tweak)
+        {
             Ok(())
         } else {
             Err(KnownTweakError::OutputKeyMismatch)

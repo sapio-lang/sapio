@@ -41,9 +41,9 @@ pub mod program;
 pub mod servers;
 mod wire;
 
-thread_local! {
-    /// global SECP instance anyone can use
-    pub static SECP: Secp256k1<All> = Secp256k1::new();
+/// The shared secp context; superseded by [`sapio_base::secp::secp`].
+pub fn secp() -> &'static Secp256k1<All> {
+    sapio_base::secp::secp()
 }
 
 /// Helper function to create an InvalidInput error from a &str

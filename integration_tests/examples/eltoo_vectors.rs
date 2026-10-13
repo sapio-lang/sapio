@@ -1,7 +1,7 @@
 //! Emit a complete eltoo contest scenario for the isolated Core driver.
 
 use bitcoin::consensus::encode::serialize_hex;
-use bitcoin::secp256k1::{schnorr::Signature, Secp256k1};
+use bitcoin::secp256k1::schnorr::Signature;
 use bitcoin::taproot::{LeafVersion, TapLeafHash};
 use bitcoin::{Address, Network, OutPoint, Transaction, Witness};
 use emulator_connect::program::completion::SpendIntent;
@@ -83,7 +83,7 @@ fn non_advancing_update(
     )?;
     let mut signed = oracle.sign(request)?;
     sign_sponsor(&mut signed, &fixture::sponsor_key())?;
-    assert!(sapio_psbt::finalize::finalize(signed.clone(), &Secp256k1::new()).is_err());
+    assert!(sapio_psbt::finalize::finalize(signed.clone(), sapio_base::secp::secp()).is_err());
     let key = requirement.program.derive_public_key()?;
     let signature = signed.inputs[0]
         .tap_script_sigs

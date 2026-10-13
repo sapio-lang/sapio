@@ -15,7 +15,6 @@ use bitcoin::hashes::sha256;
 use bitcoin::hashes::{Hash, HashEngine};
 use bitcoin::secp256k1::schnorr::Signature;
 use bitcoin::secp256k1::Message;
-use bitcoin::secp256k1::Secp256k1;
 use bitcoin::Address;
 use bitcoin::Amount;
 
@@ -180,7 +179,7 @@ impl PaymentPool {
         // collect members with updated balances here
         let mut new_members = self.members.clone();
         // verification context
-        let secp = Secp256k1::new();
+        let secp = sapio_base::secp::secp();
         // collect all the payments
         let mut all_payments = vec![];
         let mut spent = Amount::ZERO;
