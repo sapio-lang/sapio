@@ -14,7 +14,7 @@ schemars = { version = "=1.2.2", features = ["bitcoin032", "miniscript13"] }
 serde_json = "1.0"
 serde = "1.0"
 serde_derive = "1.0"
-rand = "0.8.1"
+rand = "0.10.2"
 base64 = "0.13.0"
 sapio-psbt = { path = "../sapio-psbt" }
 sapio-contrib = { path = "../sapio-contrib" }
