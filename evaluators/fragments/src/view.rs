@@ -29,6 +29,47 @@ impl<'a> Context<'a> {
         self.input_count
     }
 
+    /// Number of outputs in the authenticated transaction projection.
+    pub fn output_count(&self) -> u32 {
+        self.output_count
+    }
+
+    /// The signed transaction version, retaining its signed integer encoding.
+    pub fn transaction_version(&self) -> i32 {
+        i32::from_le_bytes(self.version.try_into().expect("decoded four-byte version"))
+    }
+
+    /// Borrow an input's wire outpoint: transaction ID then little-endian index.
+    pub fn outpoint(&self, index: u32) -> Option<&'a [u8; 36]> {
+        let mut reader = Reader::new(self.inputs);
+        for current in 0..self.input_count {
+            let outpoint = reader.take(36).ok()?;
+            reader.take(12).ok()?;
+            let length = reader.u32().ok()?;
+            reader.take(length as usize).ok()?;
+            if current == index {
+                return outpoint.try_into().ok();
+            }
+        }
+        None
+    }
+
+    /// An input's authenticated transaction sequence.
+    pub fn sequence(&self, index: u32) -> Option<u32> {
+        let mut reader = Reader::new(self.inputs);
+        for current in 0..self.input_count {
+            reader.take(36).ok()?;
+            let sequence = reader.u32().ok()?;
+            reader.take(8).ok()?;
+            let length = reader.u32().ok()?;
+            reader.take(length as usize).ok()?;
+            if current == index {
+                return Some(sequence);
+            }
+        }
+        None
+    }
+
     /// Borrow an input's amount and script from the signed projection.
     pub fn input(&self, index: u32) -> Option<(u64, &'a [u8])> {
         let mut reader = Reader::new(self.inputs);
@@ -324,6 +365,21 @@ mod tests {
         assert_eq!(context.output_key().as_bytes(), &[3; 32]);
         assert_eq!(context.annex(), &[0x50, 7]);
         assert_eq!(context.input_index, 1);
+    }
+
+    #[test]
+    fn transaction_fields_and_outpoints_preserve_the_authenticated_bytes() {
+        let mut encoded = encoded_view();
+        encoded[16..52].copy_from_slice(&[9; 36]);
+        encoded[52..56].copy_from_slice(&144_u32.to_le_bytes());
+        let context = Context::parse_v2(&encoded).unwrap();
+        assert_eq!(context.transaction_version(), 2);
+        assert_eq!(context.output_count(), 1);
+        assert_eq!(context.outpoint(0), Some(&[9; 36]));
+        assert_eq!(context.sequence(0), Some(144));
+        assert_eq!(context.sequence(1), Some(0));
+        assert_eq!(context.sequence(2), None);
+        assert_eq!(context.outpoint(2), None);
     }
 
     #[test]
