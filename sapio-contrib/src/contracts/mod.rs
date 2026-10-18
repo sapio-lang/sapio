@@ -25,6 +25,7 @@ pub mod federated_sidechain;
 pub mod hanukkah;
 pub mod hodl_chicken;
 pub mod op_return_chain;
+pub mod purrfect_vault;
 pub mod readme_contracts;
 pub mod staked_signer;
 pub mod taproot_bet;
