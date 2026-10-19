@@ -6,9 +6,8 @@
 //! Completion spends output zero of the authenticated trigger, paying the
 //! principal to its marker's script after a native twenty-block CSV delay.
 //!
-//! The OP_CAT transaction predicates are evaluated by a pinned WASM program
-//! and enforced through an oracle signature. This is trusted emulation, not
-//! native OP_CAT enforcement. The owner signature and CSV remain native Script
+//! Actual CAT scripts execute in a pinned WASM Script interpreter before the
+//! oracle signs. The owner signature and CSV also remain native Script
 //! requirements; the owner has no unconditional key-path escape. All proposals
 //! use a separate fee sponsor, preserving the vault's entire principal.
 
@@ -19,16 +18,16 @@ use sapio::contract::*;
 use sapio::template::{OutputAmount, Surplus, Template};
 use sapio::util::extended_address::ExtendedAddress;
 use sapio_base::policy::ScriptPolicy;
-use sapio_base::program::{EmulatedProgram, ProgramInstance};
+use sapio_base::program::EmulatedProgram;
 use sapio_base::serialization_helpers::SArc;
 use sapio_base::timelocks::RelHeight;
 use sapio_base::Clause;
 use std::sync::Arc;
 
-/// The exact executable bytes committed by every emulated vault branch.
-pub const PURRFECT_VAULT_WASM: &[u8] =
-    include_bytes!("../../../evaluators/artifacts/purrfect_vault.wasm");
-const _: () = assert!(PURRFECT_VAULT_WASM.len() <= 65_536);
+mod script;
+pub use script::script;
+mod witness;
+pub use witness::{challenge, script_witness, synthetic_signature};
 
 /// Destination output value in the original protocol, separately sponsored.
 pub const MARKER_SATS: u64 = 546;
@@ -37,7 +36,7 @@ pub const WITHDRAWAL_DELAY: u16 = 20;
 /// The native OP_CAT reconstruction must fit a single Script stack element.
 pub const MAX_TRIGGER_BYTES: usize = 520;
 
-/// Transaction predicate selected by the evaluator's single parameter byte.
+/// Select the CAT Script committed as the evaluator's immutable parameters.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Stage {
@@ -58,7 +57,7 @@ fn invalid(error: impl std::fmt::Display) -> CompilationError {
 /// Witnesses do not contribute to the txid and must not enter the OP_CAT
 /// reconstruction. Native witness-v0 fee sponsors have empty scriptSigs, so
 /// their signing cannot change the transaction being authenticated here.
-pub fn complete_evidence(trigger: &Transaction) -> Result<Vec<u8>, CompilationError> {
+pub fn stripped_trigger(trigger: &Transaction) -> Result<Vec<u8>, CompilationError> {
     if trigger.input.len() != 2
         || trigger
             .input
@@ -130,9 +129,8 @@ impl PurrfectVault {
 
     /// The complete, content-addressed transaction predicate for one branch.
     pub fn program(&self, stage: Stage) -> Result<EmulatedProgram, CompilationError> {
-        let instance = ProgramInstance::wasm_v2(PURRFECT_VAULT_WASM.to_vec(), vec![stage as u8])
-            .map_err(invalid)?;
-        EmulatedProgram::new(instance, self.oracle_root).map_err(invalid)
+        sapio_base::bitcoin_script::emulated_script(&script(stage, self.owner), self.oracle_root)
+            .map_err(invalid)
     }
 
     fn policy(&self, stage: Stage) -> Result<ScriptPolicy, CompilationError> {
@@ -190,7 +188,7 @@ impl PurrfectVault {
     ) -> Result<Template, CompilationError> {
         let principal = ctx.funds();
         let own_output = self.principal_output(&ctx)?;
-        let target = script_output(destination, &ctx);
+        let target = destination_output(destination, &ctx)?;
         let mut plan = ctx.template_plan();
         plan.input("fee_sponsor", Amount::from_sat(MARKER_SATS))?;
         plan.output("principal", OutputAmount::Exact(principal), &own_output)?;
@@ -205,7 +203,7 @@ impl PurrfectVault {
         let template = plan.finish()?;
         // Reject destinations whose trigger could never be completed by the
         // native reconstruction. Binding preserves this transaction's size.
-        complete_evidence(&template.tx)?;
+        stripped_trigger(&template.tx)?;
         Ok(template)
     }
 
@@ -226,7 +224,7 @@ impl PurrfectVault {
     /// Pay the authenticated trigger's destination after its twenty-block delay.
     ///
     /// The evaluator checks that input zero spends this transaction's output
-    /// zero. Bind the proposal to that outpoint and supply `complete_evidence`
+    /// zero. Bind the proposal to that outpoint and construct its Script stack
     /// when requesting the oracle signature; no destination is trusted locally.
     #[action(suggested, guarded_by(Self::complete_policy))]
     pub fn complete(
@@ -234,7 +232,7 @@ impl PurrfectVault {
         ctx: Context,
         previous_trigger: Transaction,
     ) -> Result<Template, CompilationError> {
-        complete_evidence(&previous_trigger)?;
+        stripped_trigger(&previous_trigger)?;
         let principal = ctx.funds();
         let own_output = self.principal_output(&ctx)?;
         let own_script: ScriptBuf = (&own_output.address).into();
@@ -245,7 +243,7 @@ impl PurrfectVault {
                 "trigger principal does not match this funded vault",
             ));
         }
-        let target = script_output(previous_trigger.output[1].script_pubkey.clone(), &ctx);
+        let target = destination_output(previous_trigger.output[1].script_pubkey.clone(), &ctx)?;
         let mut plan = ctx.template_plan();
         plan.input("fee_sponsor", Amount::ZERO)?;
         plan.require_older(
@@ -277,6 +275,13 @@ fn script_output(script: ScriptBuf, ctx: &Context) -> Compiled {
         required_input_amount: Amount::ZERO,
         metadata: Default::default(),
     }
+}
+
+fn destination_output(script: ScriptBuf, ctx: &Context) -> Result<Compiled, CompilationError> {
+    if !(1..=127).contains(&script.len()) {
+        return Err(invalid("CAT destinations must contain 1..127 Script bytes"));
+    }
+    Ok(script_output(script, ctx))
 }
 
 #[cfg(test)]
@@ -376,7 +381,7 @@ mod tests {
         let mut witnessed = trigger.tx.clone();
         witnessed.input[0].witness.push([1; 64]);
         assert_eq!(
-            complete_evidence(&witnessed).unwrap(),
+            stripped_trigger(&witnessed).unwrap(),
             serialize(&trigger.tx)
         );
         let complete = vault.complete(context(100_000), witnessed).unwrap();

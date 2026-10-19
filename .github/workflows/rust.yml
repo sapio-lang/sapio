@@ -110,7 +110,7 @@ jobs:
       - name: Test the covenant fragment guest SDK
         run: >-
           cargo test --manifest-path evaluators/Cargo.toml
-          -p sapio-covenant-fragments -p sapio-purrfect-vault-evaluator --locked
+          -p sapio-covenant-fragments -p sapio-bitcoin-script-cat-evaluator --locked
       - run: cargo check -p sapio-wasm-plugin --no-default-features --locked
       - run: cargo check -p sapio-wasm-plugin --no-default-features --features host --locked
       - run: cargo clippy --workspace --all-targets --all-features --locked

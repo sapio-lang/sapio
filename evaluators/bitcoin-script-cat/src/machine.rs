@@ -243,6 +243,18 @@ impl Machine {
                         self.push_number(i64::from(equal))?;
                     }
                 }
+                0x9f | 0xa0 => {
+                    self.need(2)?;
+                    let left = script_number(self.items[self.main - 2].bytes(), 4)?;
+                    let right = script_number(self.items[self.main - 1].bytes(), 4)?;
+                    let result = if opcode == 0x9f {
+                        left < right
+                    } else {
+                        left > right
+                    };
+                    self.main -= 2;
+                    self.push_number(i64::from(result))?;
+                }
                 0xa8 | 0xaa => {
                     self.need(1)?;
                     let mut digest = crypto.hash(self.items[self.main - 1].bytes())?;
@@ -285,7 +297,7 @@ impl Machine {
                 }
                 0xb2 => {
                     self.need(1)?;
-                    let sequence = script_number(self.items[self.main - 1].bytes())?;
+                    let sequence = script_number(self.items[self.main - 1].bytes(), 5)?;
                     if sequence < 0 || !crypto.check_sequence(sequence)? {
                         return Ok(false);
                     }
@@ -336,8 +348,8 @@ fn truth(bytes: &[u8]) -> bool {
         .any(|(index, byte)| *byte != 0 && !(index + 1 == bytes.len() && *byte == 0x80))
 }
 
-fn script_number(bytes: &[u8]) -> Result<i64, Failure> {
-    if bytes.len() > 5 {
+fn script_number(bytes: &[u8], maximum_length: usize) -> Result<i64, Failure> {
+    if bytes.len() > maximum_length {
         return Err(Failure::InvalidEncoding);
     }
     let Some(last) = bytes.last() else {
@@ -483,7 +495,7 @@ mod tests {
         assert!(execute(&[0x51], &items).is_err());
         assert!(execute(&[0x6b, 0x51], &items).is_err());
         let mut script = vec![0x6b; MAX_ITEMS];
-        script.extend(vec![0x6c, 0x75].repeat(MAX_ITEMS));
+        script.extend([0x6c, 0x75].repeat(MAX_ITEMS));
         script.push(0x51);
         assert_eq!(execute(&script, &items), Ok(true));
         assert!(execute(&[], &vec![&[][..]; MAX_ITEMS + 1]).is_err());
@@ -540,6 +552,37 @@ mod tests {
     }
 
     #[test]
+    fn comparisons_consume_ordered_minimal_four_byte_numbers() {
+        assert_eq!(execute(&[0x9f], &[&[1], &[2]]), Ok(true));
+        assert_eq!(execute(&[0xa0], &[&[2], &[1]]), Ok(true));
+        assert_eq!(execute(&[0x9f], &[&[2], &[1]]), Ok(false));
+        assert_eq!(execute(&[0xa0], &[&[1], &[2]]), Ok(false));
+        assert_eq!(execute(&[0x9f], &[&[1], &[1]]), Ok(false));
+        assert_eq!(execute(&[0xa0], &[&[], &[]]), Ok(false));
+        assert_eq!(execute(&[0x9f], &[&[0x81], &[]]), Ok(true));
+        assert_eq!(
+            execute(
+                &[0x9f],
+                &[&[0xff, 0xff, 0xff, 0xff], &[0xff, 0xff, 0xff, 0x7f]]
+            ),
+            Ok(true)
+        );
+        // Comparison results are exactly Script's canonical bool encodings.
+        assert_eq!(execute(&[0x9f, 0x51, 0x87], &[&[1], &[2]]), Ok(true));
+        assert_eq!(execute(&[0x9f, 0x00, 0x87], &[&[2], &[1]]), Ok(true));
+        for nonminimal in [&[0][..], &[0x80][..], &[1, 0][..], &[1, 0x80][..]] {
+            for opcode in [0x9f, 0xa0] {
+                assert!(execute(&[opcode], &[nonminimal, &[1]]).is_err());
+                assert!(execute(&[opcode], &[&[1], nonminimal]).is_err());
+            }
+        }
+        let five_bytes = [0, 0, 0, 0x80, 0];
+        assert!(execute(&[0x9f], &[&five_bytes, &[1]]).is_err());
+        assert!(execute(&[0xa0], &[&[1], &five_bytes]).is_err());
+        assert!(execute(&[0x9f], &[&[1]]).is_err());
+    }
+
+    #[test]
     fn checksig_rejects_bad_encodings_and_nonempty_false_signatures() {
         assert_eq!(execute(&[0xac], &[&[1; 64], &[2; 32]]), Ok(true));
         let mut all = [1; 65];
@@ -566,7 +609,7 @@ mod tests {
     #[test]
     fn repeated_nonempty_signatures_exhaust_bip342_budget() {
         let repeated = |count| {
-            let mut script = vec![0x6e, 0xad].repeat(count);
+            let mut script = [0x6e, 0xad].repeat(count);
             script.extend_from_slice(&[0x75, 0x75, 0x51]);
             script
         };

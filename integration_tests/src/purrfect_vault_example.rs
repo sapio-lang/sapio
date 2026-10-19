@@ -4,7 +4,7 @@ use bitcoin::bip32::{Xpriv, Xpub};
 use bitcoin::hashes::{sha256, Hash};
 use bitcoin::psbt::Psbt;
 use bitcoin::secp256k1::Message;
-use bitcoin::sighash::SighashCache;
+use bitcoin::sighash::{Prevouts, SighashCache};
 use bitcoin::{Address, Amount, CompressedPublicKey, EcdsaSighashType, Network, OutPoint};
 use bitcoin::{ScriptBuf, Transaction, TxOut};
 use emulator_connect::program::completion::SpendIntent;
@@ -16,8 +16,9 @@ use sapio::contract::abi::object::ProgramRequirement;
 use sapio::contract::*;
 use sapio::template::Template;
 use sapio_base::effects::MapEffectDB;
+use sapio_base::util::CTVHash;
 use sapio_contrib::contracts::purrfect_vault::{
-    complete_evidence, PurrfectVault, Stage, WITHDRAWAL_DELAY,
+    script_witness, synthetic_signature, PurrfectVault, Stage, WITHDRAWAL_DELAY,
 };
 use sapio_psbt::SigningKey;
 use std::sync::Arc;
@@ -154,8 +155,14 @@ pub fn sponsor_coin(tag: u8) -> Coin {
 }
 
 /// Bind a proposed transaction to explicit principal and fee coins.
-pub fn bind(compiled: &Compiled, principal: Coin, sponsor: Coin) -> Result<Psbt, Error> {
-    let template = candidate(compiled)?;
+pub fn bind(
+    compiled: &mut Compiled,
+    vault: &PurrfectVault,
+    stage: Stage,
+    principal: Coin,
+    sponsor: Coin,
+) -> Result<Psbt, Error> {
+    let mut template = candidate(compiled)?.clone();
     if principal.txout.script_pubkey != ScriptBuf::from(&compiled.address)
         || principal.txout.value != template.tx.output[0].value
         || sponsor.txout.script_pubkey != sponsor_address().script_pubkey()
@@ -169,8 +176,24 @@ pub fn bind(compiled: &Compiled, principal: Coin, sponsor: Coin) -> Result<Psbt,
     let mut psbt = Psbt::from_unsigned_tx(tx)?;
     psbt.inputs[0].witness_utxo = Some(principal.txout);
     psbt.inputs[1].witness_utxo = Some(sponsor.txout);
-    template.check_funded_psbt(&psbt)?;
-    Ok(psbt)
+    let ProgramSpendPath::ScriptPath(leaf) = requirement(compiled, vault, stage)?.path else {
+        unreachable!()
+    };
+    // The CAT construction increments only the challenge's last byte. Grind
+    // before any signatures exist, using a sponsor sequence with BIP68 disabled.
+    // Retain the chosen proposal and its local fee rules in the saved artifact.
+    for nonce in 0..4_096 {
+        psbt.unsigned_tx.input[1].sequence = bitcoin::Sequence::from_consensus((1 << 31) | nonce);
+        if synthetic_signature(&psbt, leaf)?.is_some() {
+            template.tx.input[1].sequence = psbt.unsigned_tx.input[1].sequence;
+            template.ctv = template.tx.get_ctv_hash(template.ctv_index);
+            template.check_funded_psbt(&psbt)?;
+            compiled.suggested_txs = [(template.ctv, template)].into_iter().collect();
+            compiled.validate()?;
+            return Ok(psbt);
+        }
+    }
+    Err("could not grind a CAT signature within the attempt bound".into())
 }
 
 /// Select one exact script-path predicate from the retained artifact.
@@ -200,13 +223,34 @@ pub fn prepare(
     vault: &PurrfectVault,
     stage: Stage,
     psbt: Psbt,
-    witness: Vec<u8>,
+    parent: Option<&Transaction>,
 ) -> Result<SpendIntent, Error> {
     let requirement = requirement(compiled, vault, stage)?;
     let ProgramSpendPath::ScriptPath(leaf) = requirement.path else {
         unreachable!()
     };
-    let codec = "purrfect-vault/stripped-trigger-v1";
+    let prevouts: Vec<_> = psbt
+        .inputs
+        .iter()
+        .map(|input| input.witness_utxo.clone().ok_or("missing prevout"))
+        .collect::<Result<_, _>>()?;
+    let hash_type = bitcoin::TapSighashType::All;
+    let digest = SighashCache::new(&psbt.unsigned_tx).taproot_script_spend_signature_hash(
+        0,
+        &Prevouts::All(&prevouts),
+        leaf,
+        hash_type,
+    )?;
+    let owner = bitcoin::taproot::Signature {
+        signature: sapio_base::secp::secp().sign_schnorr_no_aux_rand(
+            &Message::from_digest(digest.to_byte_array()),
+            &owner_key().to_keypair(sapio_base::secp::secp()),
+        ),
+        sighash_type: hash_type,
+    };
+    let stack = script_witness(stage, &psbt, leaf, parent, owner)?;
+    let witness = sapio_base::bitcoin_script::encode_stack(&stack)?;
+    let codec = "bitcoin-script/stack-v1";
     let assets = SpendAssets {
         schnorr_keys: [vault.owner()].into_iter().collect(),
         programs: vec![ProgramCapability {
@@ -306,18 +350,10 @@ pub fn execute(
     previous_trigger: Option<&Transaction>,
     oracle: &ProgramOracle,
 ) -> Result<Transaction, Error> {
-    let witness = previous_trigger
-        .map(complete_evidence)
-        .transpose()?
-        .unwrap_or_default();
-    let intent = prepare(
-        compiled,
-        vault,
-        stage,
-        bind(compiled, principal, sponsor)?,
-        witness,
-    )?;
-    finish(compiled, &intent, oracle)
+    let mut compiled = compiled.clone();
+    let psbt = bind(&mut compiled, vault, stage, principal, sponsor)?;
+    let intent = prepare(&compiled, vault, stage, psbt, previous_trigger)?;
+    finish(&compiled, &intent, oracle)
 }
 
 /// Real outpoints supplied by the isolated node driver; all amounts/scripts
@@ -388,9 +424,11 @@ pub fn scenario(supplied: Option<Funding>) -> Result<serde_json::Value, Error> {
         None,
         &oracle,
     )?;
-    let completion = compile_complete(&vault, &trigger_complete)?;
+    let mut completion = compile_complete(&vault, &trigger_complete)?;
     let psbt = bind(
-        &completion,
+        &mut completion,
+        &vault,
+        Stage::Complete,
         principal_coin(&trigger_complete),
         sponsors[3].clone(),
     )?;
@@ -399,7 +437,7 @@ pub fn scenario(supplied: Option<Funding>) -> Result<serde_json::Value, Error> {
         &vault,
         Stage::Complete,
         psbt,
-        complete_evidence(&trigger_complete)?,
+        Some(&trigger_complete),
     )?;
     let signed = sign(&completion, &intent, &oracle)?;
     let requirement = requirement(&completion, &vault, Stage::Complete)?;
@@ -425,7 +463,7 @@ pub fn scenario(supplied: Option<Funding>) -> Result<serde_json::Value, Error> {
     owner_slot.clear();
     missing_owner.input[0].witness = bitcoin::Witness::from_slice(&witness);
     Ok(json!({
-        "enforcement": "OP_CAT transaction predicates emulated by WASM oracle; native owner signatures and CSV",
+        "enforcement": "CAT Script executed by WASM interpreter; native owner signatures and CSV",
         "funding": {"address": Address::from_script(&ScriptBuf::from(&bare.address), Network::Regtest)?.to_string(), "amount_sats": PRINCIPAL_SATS},
         "sponsor": {"address": sponsor_address().to_string(), "amount_sats": SPONSOR_SATS, "count": 4},
         "delay_blocks": WITHDRAWAL_DELAY,
