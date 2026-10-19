@@ -183,6 +183,12 @@ where
     fn compile(&self, mut ctx: Context) -> Result<Compiled, CompilationError> {
         ctx.lowering_plan().validate()?;
         let pinned_internal_key = self.pinned_internal_key(&ctx)?;
+        let nums_internal_key = self.nums_internal_key(&ctx)?;
+        if pinned_internal_key.is_some() && nums_internal_key.is_some() {
+            return Err(CompilationError::Custom(
+                "cannot select both a bare key and a NUMS internal key".into(),
+            ));
+        }
         let mut covenant_requirements = CovenantRequirements {
             lowering: ctx.lowering_plan().clone(),
             predicates: BTreeSet::new(),
@@ -388,7 +394,14 @@ where
             })
             .collect();
         // Only a proven standalone Miniscript key may become a key-path spend.
-        let some_key = if let Some(key) = pinned_internal_key {
+        let some_key = if let Some(opening) = nums_internal_key {
+            if branches.is_empty() {
+                return Err(CompilationError::EmptyPolicy);
+            }
+            opening.internal_key().map_err(|error| {
+                CompilationError::Custom(format!("invalid NUMS opening: {error}").into())
+            })?
+        } else if let Some(key) = pinned_internal_key {
             let matches = |branch: &CompiledBranch| matches!(&branch.script, CompiledScript::Miniscript(script) if bare_key(script) == Some(key));
             if !branches.iter().any(matches) {
                 return Err(CompilationError::UnauthorizedInternalKey { key });
@@ -455,7 +468,7 @@ where
                     LeafVersion::TapScript,
                 )));
             }
-            if bare == Some(some_key) {
+            if nums_internal_key.is_none() && bare == Some(some_key) {
                 paths.insert(ProgramSpendPath::KeyPath);
             }
         }
@@ -508,6 +521,7 @@ where
                 .metadata(metadata_ctx)?
                 .add_guard_simps(all_guard_simps)?;
             let compiled = Compiled {
+                nums_internal_key,
                 committed_policy_guards,
                 alternative_policies,
                 covenant_requirements,

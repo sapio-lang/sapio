@@ -262,6 +262,7 @@ impl PurrfectVault {
 // restricted address class. They carry no asserted descriptor or spend policy.
 fn script_output(script: ScriptBuf, ctx: &Context) -> Compiled {
     Compiled {
+        nums_internal_key: None,
         committed_policy_guards: Default::default(),
         alternative_policies: Vec::new(),
         program_policies: Vec::new(),

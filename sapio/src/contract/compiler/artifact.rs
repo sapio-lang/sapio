@@ -7,7 +7,8 @@ use super::*;
 pub(crate) fn validate_spending_policies(object: &Compiled) -> Result<(), String> {
     use miniscript::policy::Liftable;
 
-    let has_claims = !object.ctv_to_tx.is_empty()
+    let has_claims = object.nums_internal_key.is_some()
+        || !object.ctv_to_tx.is_empty()
         || !object.program_policies.is_empty()
         || !object.committed_policy_guards.is_empty()
         || !object.covenant_requirements.predicates.is_empty()
@@ -143,7 +144,14 @@ pub(crate) fn validate_spending_policies(object: &Compiled) -> Result<(), String
     let internal = input
         .tap_internal_key
         .ok_or("missing Taproot internal key")?;
-    if internal != unspendable_internal_key() && !bare_keys.contains(&internal) {
+    if let Some(opening) = object.nums_internal_key {
+        let opened = opening
+            .internal_key()
+            .map_err(|error| format!("invalid NUMS internal-key opening: {error}"))?;
+        if internal != opened {
+            return Err("NUMS opening does not match the descriptor's internal key".into());
+        }
+    } else if internal != unspendable_internal_key() && !bare_keys.contains(&internal) {
         return Err(
             "internal key is neither NUMS nor an independently sufficient policy branch".into(),
         );
@@ -167,7 +175,7 @@ pub(crate) fn validate_spending_policies(object: &Compiled) -> Result<(), String
     }
     // An explicitly pinned bare-key branch may have been removed from the tree
     // after promotion. Every other complete branch must still be present.
-    if bare_keys.contains(&internal) {
+    if object.nums_internal_key.is_none() && bare_keys.contains(&internal) {
         expected.remove(
             &Clause::Key(internal)
                 .compile::<Tap>()

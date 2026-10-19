@@ -22,6 +22,7 @@ use bitcoin::XOnlyPublicKey;
 pub use compiler::Compilable;
 pub use context::Context;
 pub use object::Object as Compiled;
+use sapio_base::nums::NumsInternalKey;
 
 /// An Iterator which yields TransactionTemplates.
 /// It is boxed to permit flexibility when returning.
@@ -55,6 +56,15 @@ pub trait Contract: Sized + 'static {
         &self,
         _ctx: &Context,
     ) -> Result<Option<XOnlyPublicKey>, CompilationError> {
+        Ok(None)
+    }
+
+    /// Open a script-only internal key as a public tweak of BIP341 NUMS.
+    /// The compiler retains every leaf and grants no key-path authorization.
+    fn nums_internal_key(
+        &self,
+        _ctx: &Context,
+    ) -> Result<Option<NumsInternalKey>, CompilationError> {
         Ok(None)
     }
 }
@@ -92,6 +102,14 @@ pub trait AnyContract: Sized {
         &self,
         _ctx: &Context,
     ) -> Result<Option<XOnlyPublicKey>, CompilationError> {
+        Ok(None)
+    }
+
+    /// Select a script-only internal key with a public BIP341 NUMS opening.
+    fn nums_internal_key(
+        &self,
+        _ctx: &Context,
+    ) -> Result<Option<NumsInternalKey>, CompilationError> {
         Ok(None)
     }
 }
@@ -135,5 +153,12 @@ impl<C: Contract> AnyContract for C {
         ctx: &Context,
     ) -> Result<Option<XOnlyPublicKey>, CompilationError> {
         Contract::pinned_internal_key(self, ctx)
+    }
+
+    fn nums_internal_key(
+        &self,
+        ctx: &Context,
+    ) -> Result<Option<NumsInternalKey>, CompilationError> {
+        Contract::nums_internal_key(self, ctx)
     }
 }

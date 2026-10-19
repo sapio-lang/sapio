@@ -153,6 +153,10 @@ pub struct CommittedPolicy {
 #[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Eq)]
 #[schemars(extend("x-sapio-type" = "sapio.compiled-contract", "x-sapio-role" = "contract"))]
 pub struct Object {
+    /// Public opening of a script-only internal key over fixed BIP341 NUMS.
+    /// Validation rederives this point and never promotes a leaf to key path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nums_internal_key: Option<sapio_base::nums::NumsInternalKey>,
     /// Original complete guard alternatives for each committed template, before
     /// catalog deduplication merges guards. Each branch also requires the
     /// template's covenant. Retained to reproduce its exact descriptor script.
@@ -225,6 +229,7 @@ impl Object {
         required_input_amount: bitcoin::Amount,
     ) -> Object {
         Object {
+            nums_internal_key: None,
             committed_policy_guards: BTreeMap::new(),
             alternative_policies: Vec::new(),
             program_policies: Vec::new(),
@@ -259,6 +264,7 @@ impl Object {
         &'a [u8]: From<&'a I>,
     {
         Ok(Object {
+            nums_internal_key: None,
             committed_policy_guards: BTreeMap::new(),
             alternative_policies: Vec::new(),
             program_policies: Vec::new(),
@@ -284,6 +290,7 @@ impl Object {
         T: MiniscriptKey + ToPublicKey,
     {
         Object {
+            nums_internal_key: None,
             committed_policy_guards: BTreeMap::new(),
             alternative_policies: Vec::new(),
             program_policies: Vec::new(),

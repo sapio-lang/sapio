@@ -130,7 +130,10 @@ impl Object {
                     .push_x_only_key(&key)
                     .push_opcode(OP_CHECKSIG)
                     .into_script();
-                if script == bare && input.tap_internal_key == Some(key) {
+                if self.nums_internal_key.is_none()
+                    && script == bare
+                    && input.tap_internal_key == Some(key)
+                {
                     expected_paths.insert(ProgramSpendPath::KeyPath);
                 }
             }
