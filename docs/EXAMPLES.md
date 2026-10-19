@@ -1,7 +1,7 @@
 # Contract examples
 
 This inventory covers every contract family in `sapio-contrib`, all 21 WASM
-modules and three shared libraries in `plugin-example`, and the two native
+modules and three shared libraries in `plugin-example`, and the native
 executables. The examples demonstrate contract construction and have behavioral
 regressions for their supported paths. They remain research examples: compiling
 an artifact does not establish a deployed protocol, a complete wallet, or an
@@ -13,8 +13,9 @@ fixed-destination vaults, quorum custody, a delayed wallet, and a restricted
 OP_VAULT emulator with dynamic withdrawals and partial revaulting. Its tutorial
 explains the distinct fee, delay and emulation assumptions for each recipe.
 
-The examples use the repository's CTV research semantics. Native demonstrations
-and the WASM catalog use Regtest without funding or broadcasting transactions.
+Most examples use the repository's CTV research semantics. Offline demonstrations
+and the WASM catalog use Regtest without funding or broadcasting transactions;
+dedicated node drivers exercise the explicitly documented emulation flows.
 Read [development setup](DEVELOPMENT.md), [transaction binding](BINDING.md), and
 [inscription support](INSCRIPTIONS.md) before extending those paths.
 
@@ -71,6 +72,7 @@ show how to construct and exercise them.
 | [Tree payment](../sapio-contrib/src/contracts/treepay.rs) | Recursive payment batching with a maximum fanout and strictly shrinking groups. Radix zero/one, empty payments and zero-valued leaves are rejected. | An uneven 11-recipient tree, every leaf value, total conservation, fanout at every level, invalid input, and underfunding. |
 | [Undo send](../sapio-contrib/src/contracts/undo_send.rs) | Immediate return to the sender or delayed forwarding to the recipient. | Both exact destinations and amounts, forward sequence, and underfunding. Undo remains available after the delay until the output is spent; the timeout enables forwarding rather than disabling undo. |
 | [Vaults](../sapio-contrib/src/contracts/vault.rs) | Repeated withdrawals, address-backed vaults, and bounded-fanout vault trees. Step counts and amounts must make progress; the final partial branch receives its actual remainder. | Multi-step compilation, cold/hot branches, a 1,500-satoshi tree split into 1,000 and 500, invalid step count/cap/radix, checked multiplication, and underfunding. |
+| [Purrfect Vault](PURRFECT_VAULT.md) | Shared-address trigger, cancellation and delayed withdrawal, preserving the principal with a separately sponsored 546-satoshi destination marker. OP_CAT transaction introspection is emulated through a pinned WASM-v2 predicate. | The same owner authorizes all three paths; native CSV enforces twenty blocks. Tests authenticate the previous trigger and preserve its exact destination; an isolated Core scenario confirms cancellation and completion at the delay boundary. The oracle is trusted and sponsors use native witness-v0 outputs. |
 
 ## Derivative examples
 
@@ -149,6 +151,7 @@ known input sats have been allocated and must cover fees when present.
 | --- | --- |
 | [payment](../sapio/examples/payment.rs) | Compiles a fixed 1,000-satoshi payment with a 500-satoshi fee reserve. The test checks the destination, value, one-input shape, 1,500-satoshi input requirement and underfunding. |
 | [dcf_mining_pool](../examples/dcf_mining_pool) | Compiles an offline mining reward payout tree from JSON or a deterministic demonstration. Sorted unique keys receive equal shares after every tree transaction's fee is reserved; remainder sats go to the first keys. Tests traverse all levels, check each P2TR recipient exactly once, conserve the full reward and fees, enforce fanout, and reject invalid radix, duplicates, overflow and insufficient rewards. It replaces the unfinished RPC coordinator; share verification, networking and coinbase coordination are not implemented. |
+| [purrfect_vault](PURRFECT_VAULT.md) | Compiles and signs a trigger/cancel/trigger/complete sequence with disposable keys and synthetic coins. A separate signed-vector exporter and isolated Core driver fund and confirm that sequence, checking the twenty-block CSV boundary, exact marker and principal amounts, fees and invalid witnesses. The OP_CAT conditions run under a trusted WASM oracle. |
 
 The [custom policy vector exporter](../sapio/examples/custom_policy_vectors.rs)
 is also an executable test fixture. Its [isolated node driver](../contrib/check_custom_policy.py)

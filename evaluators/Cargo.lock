@@ -29,6 +29,13 @@ name = "sapio-pay-at-least-evaluator"
 version = "0.1.0"
 
 [[package]]
+name = "sapio-purrfect-vault-evaluator"
+version = "0.1.0"
+dependencies = [
+ "sapio-covenant-fragments",
+]
+
+[[package]]
 name = "sapio-template-authorization-evaluator"
 version = "0.1.0"
 dependencies = [
