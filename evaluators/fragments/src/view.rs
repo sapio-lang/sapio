@@ -39,6 +39,15 @@ impl<'a> Context<'a> {
         i32::from_le_bytes(self.version.try_into().expect("decoded four-byte version"))
     }
 
+    /// The signed transaction's consensus lock-time value.
+    pub fn lock_time(&self) -> u32 {
+        u32::from_le_bytes(
+            self.lock_time
+                .try_into()
+                .expect("decoded four-byte lock time"),
+        )
+    }
+
     /// Borrow an input's wire outpoint: transaction ID then little-endian index.
     pub fn outpoint(&self, index: u32) -> Option<&'a [u8; 36]> {
         let mut reader = Reader::new(self.inputs);
