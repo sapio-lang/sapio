@@ -116,6 +116,7 @@ fn check_compilation_budget(version: WasmVersion, module: &[u8]) -> Result<(), E
                     let expected_params = match (import.module, import.name) {
                         (CRYPTO_NAMESPACE, "sha256" | "schnorr_verify") => 3,
                         (CRYPTO_NAMESPACE, "bip32_derive") => 4,
+                        (CRYPTO_NAMESPACE_V2, "xonly_tweak_add") if version == WasmVersion::V2 => 3,
                         (CRYPTO_NAMESPACE_V2, "schnorr_verify" | "xonly_tweak_check")
                             if version == WasmVersion::V2 =>
                         {

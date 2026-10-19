@@ -20,6 +20,20 @@ extern "C" {
         tweaked: *const u8,
         parity: u32,
     ) -> i32;
+    #[link_name = "xonly_tweak_add"]
+    fn host_xonly_tweak_add(original: *const u8, tweak: *const u8, output: *mut u8) -> i32;
+}
+
+/// Compute the x coordinate of `lift_x(original) + tweak*G`.
+///
+/// Scalars must be canonical, including zero. Invalid keys, scalars and
+/// infinity return `None`; a successful result is lifted with even parity
+/// if used as an x-only key in a subsequent operation.
+pub fn xonly_tweak_add(original: &[u8; 32], tweak: &[u8; 32]) -> Option<[u8; 32]> {
+    let mut output = [0; 32];
+    let status =
+        unsafe { host_xonly_tweak_add(original.as_ptr(), tweak.as_ptr(), output.as_mut_ptr()) };
+    (status == 1).then_some(output)
 }
 
 /// Verify BIP340 against the exact message bytes, without an extra hash.

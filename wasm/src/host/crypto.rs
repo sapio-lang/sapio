@@ -30,6 +30,8 @@ pub const SCHNORR_VERIFY_V2_BASE_FUEL: u64 = 50_000;
 pub const SCHNORR_VERIFY_V2_BYTE_FUEL: u64 = 2;
 /// Fixed v2 cost for each x-only key tweak check, including invalid data.
 pub const XONLY_TWEAK_CHECK_FUEL: u64 = 50_000;
+/// Fixed cost for producing an x-only additive tweak, including invalid data.
+pub const XONLY_TWEAK_ADD_FUEL: u64 = 50_000;
 
 /// Crypto imports are unusable until bound to their instantiated guest.
 #[derive(Default)]
@@ -75,7 +77,7 @@ pub fn add_crypto_imports(
     env
 }
 
-/// Add the unchanged v1 imports and two v2 verification imports.
+/// Add the unchanged v1 imports and the v2 cryptographic operations.
 ///
 /// Both namespaces share one environment and the instance's existing fuel
 /// globals. Bind the returned environment once using [`bind_crypto`]. Hosts
@@ -94,6 +96,11 @@ pub fn add_crypto_imports_v2(
         CRYPTO_NAMESPACE_V2,
         "xonly_tweak_check",
         Function::new_typed_with_env(store, &env, xonly_tweak_check_import),
+    );
+    imports.define(
+        CRYPTO_NAMESPACE_V2,
+        "xonly_tweak_add",
+        Function::new_typed_with_env(store, &env, xonly_tweak_add_import),
     );
     env
 }
@@ -355,6 +362,35 @@ fn xonly_tweak_check_import(
         parity,
         tweak,
     )))
+}
+
+fn xonly_tweak_add_import(
+    mut env: FunctionEnvMut<'_, CryptoEnvironment>,
+    original: u32,
+    tweak: u32,
+    output: u32,
+) -> Result<i32, RuntimeError> {
+    let bound = BoundCrypto::from_env(&env)?;
+    bound.charge(&mut env, XONLY_TWEAK_ADD_FUEL)?;
+    let memory = bound.memory.view(&env);
+    let original = read::<32>(&memory, original)?;
+    let tweak = read::<32>(&memory, tweak)?;
+    check_range(&memory, output, 32)?;
+    let (Ok(original), Ok(tweak)) = (
+        XOnlyPublicKey::from_slice(&original),
+        Scalar::from_be_bytes(tweak),
+    ) else {
+        return Ok(0);
+    };
+    let Ok((tweaked, _)) = original.add_tweak(secp(), &tweak) else {
+        return Ok(0);
+    };
+    // The result is x-only: the next operation lifts it with even parity.
+    // Read both inputs before writing, so aliased guest buffers are valid.
+    memory
+        .write(u64::from(output), &tweaked.serialize())
+        .map_err(error)?;
+    Ok(1)
 }
 
 #[cfg(test)]
