@@ -63,7 +63,7 @@ cargo run --locked -p sapio_integration_tests --example purrfect_vault
 It compiles and signs a shared-address trigger, cancellation, another trigger
 and a withdrawal with a native twenty-block CSV guard. The full principal is
 preserved; a separate sponsor funds the 546-satoshi destination marker and
-fees. A pinned WASM-v2 oracle emulates the OP_CAT transaction conditions, while
+fees. A pinned WASM-v2 oracle executes the CAT covenant Script, while
 the owner signs every operation natively.
 
 To fund and confirm that flow on an isolated regtest node:

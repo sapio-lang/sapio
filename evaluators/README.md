@@ -22,18 +22,18 @@ the corresponding program's keys.
 | `template_authorization.wasm` | v2 | TemplateHash plus CSFS under a pinned, physical internal, or proven related key |
 | `op_vault.wasm` | v2 | Dynamic vault leaf update and fixed recovery, under the [single-vault BIP345 profile](op-vault/README.md) |
 | `depots.wasm` | v2 | Depot resolution: target reveal, guess-signature-bound hits/claims and double-hit burns over CTV+CSFS-style commitments |
-| `purrfect_vault.wasm` | v2 | Purrfect Vault trigger/cancel/complete transaction predicates, with authenticated stripped-parent evidence and a separately sponsored destination marker |
+| `bitcoin_script_cat.wasm` | v2 | Bounded Bitcoin Script with CAT, wrapper-leaf CHECKSIG and CSV |
 
 The v1 programs and `common.rs` retain their original ABI and bytes. V2 programs
 use `v2.rs` for invocation plumbing and the [fragment SDK](fragments/README.md)
-for typed operations. There is no interpreter in these libraries for Bitcoin
-Script or arbitrary host code.
+for typed operations. The Script guest implements the explicitly bounded
+[CAT interpreter profile](../docs/BITCOIN_SCRIPT_CAT.md); it cannot run host code.
 
 The fragment SDK's pure decoder/encoding tests can run natively:
 
 ```sh
 cargo test --locked --manifest-path evaluators/Cargo.toml -p sapio-covenant-fragments --lib
-cargo test --locked --manifest-path evaluators/Cargo.toml -p sapio-purrfect-vault-evaluator
+cargo test --locked --manifest-path evaluators/Cargo.toml -p sapio-bitcoin-script-cat-evaluator
 ```
 
 Actual cryptographic and predicate checks execute the compiled modules through
@@ -44,4 +44,4 @@ custody routes run through the oracle in
 The [Purrfect Vault example](../docs/PURRFECT_VAULT.md) composes its evaluator
 with native owner-signature and twenty-block CSV guards. Its Core driver
 confirms cancellation and withdrawal using standard Bitcoin Script witnesses;
-the WASM predicate emulates OP_CAT introspection rather than executing OP_CAT.
+the WASM interpreter executes the committed CAT covenant scripts.
