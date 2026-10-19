@@ -292,7 +292,7 @@ mod tests {
         let root = Xpriv::new_master(Network::Testnet, &[71; 32]).unwrap();
         PurrfectVault::new(
             key(72),
-            Xpub::from_priv(&secp(), &root),
+            Xpub::from_priv(secp(), &root),
             Amount::from_sat(2_000),
         )
         .unwrap()
