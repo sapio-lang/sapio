@@ -2013,6 +2013,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sapio-bitcoin-script-cat-evaluator"
+version = "0.1.0"
+dependencies = [
+ "sapio-covenant-fragments",
+]
+
+[[package]]
 name = "sapio-cli"
 version = "0.2.4"
 dependencies = [
@@ -2051,6 +2058,10 @@ dependencies = [
  "serde_derive",
  "serde_json",
 ]
+
+[[package]]
+name = "sapio-covenant-fragments"
+version = "0.1.0"
 
 [[package]]
 name = "sapio-ctv-emulator-trait"
@@ -2135,7 +2146,9 @@ dependencies = [
  "rand",
  "sapio",
  "sapio-base",
+ "sapio-bitcoin-script-cat-evaluator",
  "sapio-contrib",
+ "sapio-covenant-fragments",
  "sapio-ctv-emulator-trait",
  "sapio-psbt",
  "schemars",

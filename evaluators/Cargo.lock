@@ -3,6 +3,13 @@
 version = 4
 
 [[package]]
+name = "sapio-bitcoin-script-cat-evaluator"
+version = "0.1.0"
+dependencies = [
+ "sapio-covenant-fragments",
+]
+
+[[package]]
 name = "sapio-covenant-fragments"
 version = "0.1.0"
 

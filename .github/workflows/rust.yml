@@ -53,6 +53,9 @@ jobs:
       - name: Build eltoo contest scenario
         if: runner.os == 'Linux'
         run: cargo build --locked -p sapio_integration_tests --example eltoo_vectors
+      - name: Build Purrfect Vault transaction scenario
+        if: runner.os == 'Linux'
+        run: cargo build --locked -p sapio_integration_tests --example purrfect_vault_vectors
       - name: Validate custom policy witnesses with Bitcoin Core
         if: runner.os == 'Linux'
         timeout-minutes: 5
@@ -85,6 +88,14 @@ jobs:
           "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoind"
           "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoin-cli"
           target/debug/examples/eltoo_vectors
+      - name: Verify vault cancellation and delayed withdrawal with Bitcoin Core
+        if: runner.os == 'Linux'
+        timeout-minutes: 5
+        run: >-
+          python3 contrib/check_purrfect_vault.py
+          "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoind"
+          "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoin-cli"
+          target/debug/examples/purrfect_vault_vectors
 
   quality:
     runs-on: ubuntu-24.04
@@ -97,7 +108,9 @@ jobs:
       - name: Verify distributed evaluator WASM bytes
         run: bash evaluators/build.sh --check
       - name: Test the covenant fragment guest SDK
-        run: cargo test --manifest-path evaluators/Cargo.toml -p sapio-covenant-fragments --locked
+        run: >-
+          cargo test --manifest-path evaluators/Cargo.toml
+          -p sapio-covenant-fragments -p sapio-bitcoin-script-cat-evaluator --locked
       - run: cargo check -p sapio-wasm-plugin --no-default-features --locked
       - run: cargo check -p sapio-wasm-plugin --no-default-features --features host --locked
       - run: cargo clippy --workspace --all-targets --all-features --locked

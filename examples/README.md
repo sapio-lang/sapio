@@ -1,7 +1,8 @@
 # Native examples
 
-Both examples compile deterministic Regtest artifacts using native CTV research
-semantics. They run offline and do not fund or broadcast transactions.
+The payment and mining examples compile deterministic Regtest artifacts using
+native CTV research semantics. They run offline and do not fund or broadcast
+transactions.
 
 ```sh
 cargo run --locked -p sapio --example payment > payment.json
@@ -50,3 +51,29 @@ cargo test --locked -p sapio --example payment
 
 See the [complete contract inventory](../docs/EXAMPLES.md) for library and WASM
 examples and their individual assumptions.
+
+## Purrfect Vault transaction flow
+
+The integration workspace also supplies an offline Purrfect Vault example:
+
+```sh
+cargo run --locked -p sapio_integration_tests --example purrfect_vault
+```
+
+It compiles and signs a shared-address trigger, cancellation, another trigger
+and a withdrawal with a native twenty-block CSV guard. The full principal is
+preserved; a separate sponsor funds the 546-satoshi destination marker and
+fees. A pinned WASM-v2 oracle executes the CAT covenant Script, while
+the owner signs every operation natively.
+
+To fund and confirm that flow on an isolated regtest node:
+
+```sh
+cargo build --locked -p sapio_integration_tests --example purrfect_vault_vectors
+python3 contrib/check_purrfect_vault.py /path/to/bitcoind /path/to/bitcoin-cli \
+  target/debug/examples/purrfect_vault_vectors
+```
+
+The driver checks cancellation, the exact CSV boundary, fees, payout and marker
+outputs, and invalid signed witnesses. See [Purrfect Vault](../docs/PURRFECT_VAULT.md)
+for the pinned upstream reference, supported profile and oracle assumptions.

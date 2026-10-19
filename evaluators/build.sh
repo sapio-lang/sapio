@@ -35,6 +35,6 @@ install_artifact() {
 cargo +1.98.1 build --locked --release --target wasm32-unknown-unknown -p sapio-ctv-evaluator
 install_artifact ctv
 cargo +1.98.1 build --locked --release --target wasm32-unknown-unknown
-for name in pay_at_least templatehash template_authorization op_vault depots; do
+for name in pay_at_least templatehash template_authorization op_vault depots bitcoin_script_cat; do
     install_artifact "$name"
 done
