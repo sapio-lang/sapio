@@ -56,6 +56,9 @@ jobs:
       - name: Build Purrfect Vault transaction scenario
         if: runner.os == 'Linux'
         run: cargo build --locked -p sapio_integration_tests --example purrfect_vault_vectors
+      - name: Build the LayerTree transaction scenario
+        if: runner.os == 'Linux'
+        run: cargo build --locked -p sapio_integration_tests --example layertree_vectors
       - name: Validate custom policy witnesses with Bitcoin Core
         if: runner.os == 'Linux'
         timeout-minutes: 5
@@ -96,6 +99,14 @@ jobs:
           "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoind"
           "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoin-cli"
           target/debug/examples/purrfect_vault_vectors
+      - name: Verify the LayerTree lifecycle with Bitcoin Core
+        if: runner.os == 'Linux'
+        timeout-minutes: 5
+        run: >-
+          python3 contrib/check_layertree.py
+          "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoind"
+          "$RUNNER_TEMP/bitcoin-31.1/bin/bitcoin-cli"
+          target/debug/examples/layertree_vectors
 
   quality:
     runs-on: ubuntu-24.04
@@ -110,7 +121,8 @@ jobs:
       - name: Test the covenant fragment guest SDK
         run: >-
           cargo test --manifest-path evaluators/Cargo.toml
-          -p sapio-covenant-fragments -p sapio-bitcoin-script-cat-evaluator --locked
+          -p sapio-covenant-fragments -p sapio-bitcoin-script-cat-evaluator
+          -p sapio-bitcoin-script-mid-evaluator --locked
       - run: cargo check -p sapio-wasm-plugin --no-default-features --locked
       - run: cargo check -p sapio-wasm-plugin --no-default-features --features host --locked
       - run: cargo clippy --workspace --all-targets --all-features --locked
