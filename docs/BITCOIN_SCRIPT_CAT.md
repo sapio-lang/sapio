@@ -56,3 +56,34 @@ The oracle issues its ordinary wrapper signature only after interpretation
 succeeds. Native wrapper policies may add keys and timelocks, as the vault
 does. The oracle’s honesty and availability assumptions remain; this does not
 establish CAT consensus support on the target chain.
+
+## MID execution profile
+
+`emulated_mid_script(script, oracle_root)` commits the exact Script and separate
+`bitcoin_script_mid.wasm` guest used by [LayerTree](LAYERTREE.md). It shares the
+bounded stack machine and BIP341 reconstruction with the CAT guest, while
+enabling the additional instructions required by the pinned MID scripts:
+conditionals, their stack and arithmetic operations, CLTV, transaction
+introspection, data signatures and x-only additive tweaks. Unsupported opcodes
+fail closed, including in unexecuted branches. Minimal IF values are empty or
+`01`.
+
+These experimental opcode assignments match the upstream simulator:
+
+| Operation | Byte | Supported semantics |
+| --- | --- | --- |
+| `OP_TX` | `0xbf` | Selected input index (`0x8000`), selected input amount (`0x10800`), selected input script (`0x20800`), indexed output amount and script (`0x4300`). Selectors are Script numbers. |
+| `OP_TWEAKADD` | `0xc0` | Add a canonical, nonzero 32-byte scalar to a valid x-only key; reject invalid points and infinity. |
+| `OP_CHECKSIGFROMSTACK` | `0xcc` | Verify a raw 64-byte BIP340 signature against the explicit message and 32-byte key. Invalid nonempty signatures fail evaluation. |
+
+The selected Script-path input is zero. At least one additional input is
+required, and all additional inputs must spend native witness-v0 outputs.
+Annexes and additional Taproot covenant inputs are excluded. Script, evidence,
+stack, element, cleanstack and metering bounds remain the same as above; CLTV
+and CSV accept at most five-byte operands. CHECKSIG retains the authenticated
+physical wrapper leaf's DEFAULT/ALL signing context.
+
+MID transactions use ordinary native signatures on chain. The oracle enforces
+the interpreted covenant rules, so its honesty and availability are necessary
+for the pool's security and spending. Running this guest does not activate
+these opcode assignments as Bitcoin consensus rules.

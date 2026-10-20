@@ -77,3 +77,31 @@ python3 contrib/check_purrfect_vault.py /path/to/bitcoind /path/to/bitcoin-cli \
 The driver checks cancellation, the exact CSV boundary, fees, payout and marker
 outputs, and invalid signed witnesses. See [Purrfect Vault](../docs/PURRFECT_VAULT.md)
 for the pinned upstream reference, supported profile and oracle assumptions.
+
+## LayerTree MID transaction flow
+
+Run the signed dense LayerTree lifecycle offline:
+
+```sh
+cargo run --locked -p sapio_integration_tests --example layertree
+```
+
+The example uses disposable keys and synthetic coins to join and graft members,
+rewrite a cohort, update a member, split balances, redeem vouchers, exit, and
+evict expired cohorts. A separate input funds admissions and fees. Each exact
+MID Script executes in a bounded WASM interpreter before the oracle signs its
+native Taproot wrapper. The state root changes the physical internal key while
+the complete script-tree commitment remains stable.
+
+To fund and confirm the lifecycle on an isolated regtest node:
+
+```sh
+cargo build --locked -p sapio_integration_tests --example layertree_vectors
+python3 contrib/check_layertree.py /path/to/bitcoind /path/to/bitcoin-cli \
+  target/debug/examples/layertree_vectors
+```
+
+The [LayerTree documentation](../docs/LAYERTREE.md) specifies the eleven-branch
+profile, upstream vectors, funding and proof requirements, and oracle trust.
+It also explains the terminal empty-tree transaction and the wallet and
+Lightning components outside this implementation.
