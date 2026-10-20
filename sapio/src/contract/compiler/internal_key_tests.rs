@@ -394,7 +394,14 @@ fn nums_opening_cannot_promote_an_emulated_program_to_key_path() {
     let opening =
         NumsInternalKey::new(sha256::Hash::hash(b"program state").to_byte_array()).unwrap();
     let mut compiled = state_compile(opening, program.into());
-    assert_eq!(tree(&compiled).leaves().count(), 1);
+    let mut input = bitcoin::psbt::Input::default();
+    compiled
+        .descriptor
+        .as_ref()
+        .unwrap()
+        .update_psbt_input(&mut input)
+        .unwrap();
+    assert_eq!(input.tap_scripts.len(), 1);
     assert!(compiled
         .program_requirements()
         .unwrap()
@@ -404,4 +411,34 @@ fn nums_opening_cannot_promote_an_emulated_program_to_key_path() {
         .paths
         .insert(ProgramSpendPath::KeyPath);
     assert!(compiled.validate().is_err());
+}
+
+#[test]
+fn many_state_authorization_leaves_round_trip_with_their_exact_depths() {
+    use sapio_base::program::{EmulatedProgram, ProgramInstance};
+    let root = Xpub::from_priv(
+        &Secp256k1::new(),
+        &Xpriv::new_master(Network::Regtest, &[20; 32]).unwrap(),
+    );
+    let policies = (0..10)
+        .map(|index| {
+            EmulatedProgram::new(ProgramInstance::wasm_v2(vec![], vec![index]).unwrap(), root)
+                .unwrap()
+                .into()
+        })
+        .collect();
+    let opening = NumsInternalKey::new(sha256::Hash::hash(b"many leaves").to_byte_array()).unwrap();
+    let compiled = state_compile(opening, ScriptPolicy::Or(policies));
+    let Some(SupportedDescriptors::Taproot(tree)) = &compiled.descriptor else {
+        panic!("state outputs preserve their complete script tree")
+    };
+    assert_eq!(tree.leaves().len(), 10);
+    assert!(tree
+        .leaves()
+        .iter()
+        .all(|(depth, _)| (3..=4).contains(depth)));
+    let decoded: Object = serde_json::from_value(serde_json::to_value(&compiled).unwrap()).unwrap();
+    decoded.validate().unwrap();
+    assert_eq!(decoded, compiled);
+    assert_eq!(decoded.program_requirements().unwrap().len(), 10);
 }

@@ -446,7 +446,24 @@ where
             let tree = branches_to_tree(native);
             let descriptor = Descriptor::Tr(descriptor::Tr::new(some_key, tree)?);
             let weight = descriptor.max_weight_to_satisfy()?;
-            (descriptor.clone().into(), descriptor.into(), Some(weight))
+            if nums_internal_key.is_some() {
+                // Preserve the complete depth-first tree as checked script
+                // data, including every state-opening authorization leaf.
+                let Descriptor::Tr(tree) = &descriptor else {
+                    unreachable!("constructed Taproot descriptor")
+                };
+                let leaves = tree
+                    .leaves()
+                    .map(|leaf| (leaf.depth(), leaf.compute_script()))
+                    .collect();
+                let raw = crate::contract::object::RawTaproot::new(some_key, leaves)?;
+                let address =
+                    bitcoin::Address::p2tr_tweaked(raw.spend_info().output_key(), ctx.network)
+                        .into();
+                (address, raw.into(), Some(weight))
+            } else {
+                (descriptor.clone().into(), descriptor.into(), Some(weight))
+            }
         };
         let leaves: BTreeSet<_> = match &descriptor {
             SupportedDescriptors::XOnly(Descriptor::Tr(tree)) => {
