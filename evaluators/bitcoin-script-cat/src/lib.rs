@@ -16,6 +16,7 @@ mod guest;
 
 pub mod machine;
 pub mod sighash;
+pub use machine::check_sequence;
 
 pub use sapio_covenant_fragments::Failure;
 #[cfg(target_arch = "wasm32")]
@@ -99,24 +100,6 @@ impl machine::Crypto for ScriptContext<'_> {
             sequence,
         ))
     }
-}
-
-/// Apply BIP112's transaction-version, type and relative-sequence constraints.
-pub fn check_sequence(version: i32, actual: u32, required: i64) -> bool {
-    const DISABLED: u64 = 1 << 31;
-    const TIME: u64 = 1 << 22;
-    const MASK: u64 = TIME | 0xffff;
-    if required < 0 {
-        return false;
-    }
-    let required = required as u64;
-    if required & DISABLED != 0 {
-        return true;
-    }
-    version >= 2
-        && u64::from(actual) & DISABLED == 0
-        && u64::from(actual) & TIME == required & TIME
-        && u64::from(actual) & MASK >= required & MASK
 }
 
 #[cfg(target_arch = "wasm32")]

@@ -23,6 +23,22 @@ pub fn emulated_script(script: &Script, root: Xpub) -> Result<EmulatedProgram, P
     )
 }
 
+/// The bounded MID interpreter: CAT, introspection, CSFS and additive tweaks.
+pub const SCRIPT_MID_WASM: &[u8] =
+    include_bytes!("../../evaluators/artifacts/bitcoin_script_mid.wasm");
+const _: () = assert!(SCRIPT_MID_WASM.len() <= crate::program::MAX_PROGRAM_BYTES);
+
+/// Commit Script using the proposed MID operations documented by LayerTree.
+///
+/// The selected input is zero, companion inputs must be native witness-v0,
+/// and CHECKSIG authenticates the physical native wrapper leaf.
+pub fn emulated_mid_script(script: &Script, root: Xpub) -> Result<EmulatedProgram, ProgramError> {
+    EmulatedProgram::new(
+        ProgramInstance::wasm_v2(SCRIPT_MID_WASM.to_vec(), script.as_bytes().to_vec())?,
+        root,
+    )
+}
+
 /// Encode an initial Script stack as count/length-prefixed little-endian u32s.
 ///
 /// The guest independently checks the 1,000-element stack limit, 520-byte

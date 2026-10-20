@@ -1,4 +1,4 @@
-//! Allocation-free execution of the straight-line Tapscript profile used here.
+//! Allocation-free execution of bounded CAT and MID Tapscript profiles.
 //!
 //! Unsupported opcodes, including every OP_SUCCESS opcode, fail closed. This
 //! deliberately bounded profile does not claim to be a consensus interpreter.
@@ -8,6 +8,7 @@ const MAX_SCRIPT: usize = 10_000;
 const MAX_WITNESS: usize = 65_536;
 const MAX_ITEMS: usize = 1_000;
 const MAX_ELEMENT: usize = 520;
+const MAX_CONDITIONALS: usize = 100;
 
 /// Authenticated transaction operations supplied by the evaluator boundary.
 pub trait Crypto {
@@ -17,6 +18,37 @@ pub trait Crypto {
     fn check_signature(&self, signature: &[u8], key: &[u8]) -> Result<bool, Failure>;
     /// Apply BIP112 to the current input and this nonnegative Script number.
     fn check_sequence(&self, operand: i64) -> Result<bool, Failure>;
+    /// Apply BIP65 to the selected input and this nonnegative Script number.
+    fn check_lock_time(&self, _operand: i64) -> Result<bool, Failure> {
+        Err(Failure::InvalidEncoding)
+    }
+    /// Verify a BIP348 signature over the exact supplied message.
+    fn check_data_signature(
+        &self,
+        _signature: &[u8],
+        _message: &[u8],
+        _key: &[u8],
+    ) -> Result<bool, Failure> {
+        Err(Failure::InvalidEncoding)
+    }
+    /// Return x(lift_x(key) + tweak*G), rejecting invalid keys and scalars.
+    fn tweak_add(&self, _tweak: &[u8; 32], _key: &[u8; 32]) -> Result<[u8; 32], Failure> {
+        Err(Failure::InvalidEncoding)
+    }
+    /// Read the authenticated fields selected by the MID OP_TX profile.
+    ///
+    /// Selectors 0x8000, 0x10800 and 0x20800 return the current input's
+    /// minimally encoded index, eight-byte LE amount and raw script. Selector
+    /// 0x4300 takes an output index and returns its script and `Some(amount)`;
+    /// every other selector must return `None` for the optional amount.
+    fn transaction(
+        &self,
+        _selector: u32,
+        _index: Option<u32>,
+        _output: &mut [u8; 520],
+    ) -> Result<(usize, Option<u64>), Failure> {
+        Err(Failure::InvalidEncoding)
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -146,14 +178,69 @@ impl Machine {
         script: &[u8],
         witness: &[u8],
         crypto: &impl Crypto,
+        mid: bool,
     ) -> Result<bool, Failure> {
         if script.len() > MAX_SCRIPT {
             return Err(Failure::InvalidEncoding);
         }
         self.load_witness(witness, script.len())?;
         let mut cursor = 0;
+        let mut conditions = [false; MAX_CONDITIONALS];
+        let mut depth = 0;
+        let mut inactive = 0;
         while cursor < script.len() {
             let opcode = take(script, &mut cursor, 1)?[0];
+            if mid && matches!(opcode, 0x63 | 0x64 | 0x67 | 0x68) {
+                match opcode {
+                    0x63 | 0x64 => {
+                        if depth == MAX_CONDITIONALS {
+                            return Err(Failure::InvalidEncoding);
+                        }
+                        let mut selected = false;
+                        if inactive == 0 {
+                            self.need(1)?;
+                            self.main -= 1;
+                            selected = match self.items[self.main].bytes() {
+                                [] => false,
+                                [1] => true,
+                                _ => return Err(Failure::InvalidEncoding),
+                            };
+                            if opcode == 0x64 {
+                                selected = !selected;
+                            }
+                        }
+                        conditions[depth] = selected;
+                        depth += 1;
+                        inactive += usize::from(!selected);
+                    }
+                    0x67 => {
+                        if depth == 0 {
+                            return Err(Failure::InvalidEncoding);
+                        }
+                        let current = &mut conditions[depth - 1];
+                        if *current {
+                            inactive += 1;
+                        } else {
+                            inactive -= 1;
+                        }
+                        *current = !*current;
+                    }
+                    _ => {
+                        if depth == 0 {
+                            return Err(Failure::InvalidEncoding);
+                        }
+                        depth -= 1;
+                        inactive -= usize::from(!conditions[depth]);
+                    }
+                }
+                continue;
+            }
+            if mid && inactive != 0 && !(0x01..=0x4e).contains(&opcode) {
+                if !supported_mid(opcode) {
+                    return Err(Failure::InvalidEncoding);
+                }
+                continue;
+            }
             match opcode {
                 0x00 => self.push(&[])?,
                 0x01..=0x4e => {
@@ -169,10 +256,12 @@ impl Machine {
                         _ => return Err(Failure::InvalidEncoding),
                     };
                     let bytes = take(script, &mut cursor, length)?;
-                    if !minimal_push(opcode, bytes) {
+                    if !minimal_push(opcode, bytes) || bytes.len() > MAX_ELEMENT {
                         return Err(Failure::InvalidEncoding);
                     }
-                    self.push(bytes)?;
+                    if inactive == 0 {
+                        self.push(bytes)?;
+                    }
                 }
                 0x4f => self.push_number(-1)?,
                 0x51..=0x60 => self.push_number(i64::from(opcode - 0x50))?,
@@ -198,11 +287,44 @@ impl Machine {
                     self.main += 1;
                 }
                 0x6e => self.duplicate(2)?,
+                0x6d if mid => {
+                    self.need(2)?;
+                    self.main -= 2;
+                }
+                0x72 if mid => {
+                    self.need(4)?;
+                    self.items.swap(self.main - 4, self.main - 2);
+                    self.items.swap(self.main - 3, self.main - 1);
+                }
                 0x75 => {
                     self.need(1)?;
                     self.main -= 1;
                 }
                 0x76 => self.duplicate(1)?,
+                0x77 if mid => {
+                    self.need(2)?;
+                    self.items[self.main - 2] = self.items[self.main - 1];
+                    self.main -= 1;
+                }
+                0x78 if mid => {
+                    self.need(2)?;
+                    let item = self.items[self.main - 2];
+                    self.push(item.bytes())?;
+                }
+                0x79 | 0x7a if mid => {
+                    self.need(1)?;
+                    self.main -= 1;
+                    let index = script_number(self.items[self.main].bytes(), 4)?;
+                    let index = usize::try_from(index).map_err(|_| Failure::InvalidEncoding)?;
+                    self.need(index.checked_add(1).ok_or(Failure::InvalidEncoding)?)?;
+                    let position = self.main - index - 1;
+                    let item = self.items[position];
+                    if opcode == 0x7a {
+                        self.items.copy_within(position + 1..self.main, position);
+                        self.main -= 1;
+                    }
+                    self.push(item.bytes())?;
+                }
                 0x7b => {
                     self.need(3)?;
                     self.items.swap(self.main - 3, self.main - 2);
@@ -211,6 +333,15 @@ impl Machine {
                 0x7c => {
                     self.need(2)?;
                     self.items.swap(self.main - 2, self.main - 1);
+                }
+                0x7d if mid => {
+                    self.need(2)?;
+                    self.room(1)?;
+                    let top = self.items[self.main - 1];
+                    self.items[self.main] = top;
+                    self.items[self.main - 1] = self.items[self.main - 2];
+                    self.items[self.main - 2] = top;
+                    self.main += 1;
                 }
                 0x7e => {
                     self.need(2)?;
@@ -242,6 +373,37 @@ impl Machine {
                     } else {
                         self.push_number(i64::from(equal))?;
                     }
+                }
+                0x8b | 0x90..=0x92 if mid => {
+                    self.need(1)?;
+                    self.main -= 1;
+                    let operand = script_number(self.items[self.main].bytes(), 4)?;
+                    self.push_number(match opcode {
+                        0x8b => operand + 1,
+                        0x90 => operand.abs(),
+                        0x91 => i64::from(operand == 0),
+                        _ => i64::from(operand != 0),
+                    })?;
+                }
+                0x93 | 0x94 | 0x9a | 0x9d | 0xa1 | 0xa2 if mid => {
+                    self.need(2)?;
+                    let left = script_number(self.items[self.main - 2].bytes(), 4)?;
+                    let right = script_number(self.items[self.main - 1].bytes(), 4)?;
+                    self.main -= 2;
+                    let result = match opcode {
+                        0x93 => left + right,
+                        0x94 => left - right,
+                        0x9a => i64::from(left != 0 && right != 0),
+                        0x9d => {
+                            if left != right {
+                                return Ok(false);
+                            }
+                            continue;
+                        }
+                        0xa1 => i64::from(left <= right),
+                        _ => i64::from(left >= right),
+                    };
+                    self.push_number(result)?;
                 }
                 0x9f | 0xa0 => {
                     self.need(2)?;
@@ -302,12 +464,91 @@ impl Machine {
                         return Ok(false);
                     }
                 }
+                0xb1 if mid => {
+                    self.need(1)?;
+                    let lock_time = script_number(self.items[self.main - 1].bytes(), 5)?;
+                    if lock_time < 0 || !crypto.check_lock_time(lock_time)? {
+                        return Ok(false);
+                    }
+                }
+                0xbf if mid => {
+                    self.need(1)?;
+                    self.main -= 1;
+                    let selector = script_number(self.items[self.main].bytes(), 4)?;
+                    let selector = u32::try_from(selector).map_err(|_| Failure::InvalidEncoding)?;
+                    let index = match selector {
+                        0x8000 | 0x10800 | 0x20800 => None,
+                        0x4300 => {
+                            self.need(1)?;
+                            self.main -= 1;
+                            let index = script_number(self.items[self.main].bytes(), 4)?;
+                            Some(u32::try_from(index).map_err(|_| Failure::InvalidEncoding)?)
+                        }
+                        _ => return Err(Failure::InvalidEncoding),
+                    };
+                    let mut output = [0; MAX_ELEMENT];
+                    let (length, amount) = crypto.transaction(selector, index, &mut output)?;
+                    if length > MAX_ELEMENT || amount.is_some() != (selector == 0x4300) {
+                        return Err(Failure::InvalidEncoding);
+                    }
+                    if selector == 0x10800 && length != 8 {
+                        return Err(Failure::InvalidEncoding);
+                    }
+                    if selector == 0x8000 && script_number(&output[..length], 4)? < 0 {
+                        return Err(Failure::InvalidEncoding);
+                    }
+                    if let Some(amount) = amount {
+                        self.push(&amount.to_le_bytes())?;
+                    }
+                    self.push(&output[..length])?;
+                }
+                0xc0 if mid => {
+                    self.need(2)?;
+                    let tweak = self.items[self.main - 2]
+                        .bytes()
+                        .try_into()
+                        .map_err(|_| Failure::InvalidEncoding)?;
+                    let key = self.items[self.main - 1]
+                        .bytes()
+                        .try_into()
+                        .map_err(|_| Failure::InvalidEncoding)?;
+                    self.signature_budget = self
+                        .signature_budget
+                        .checked_sub(50)
+                        .ok_or(Failure::Signature)?;
+                    let output = crypto.tweak_add(tweak, key)?;
+                    self.main -= 2;
+                    self.push(&output)?;
+                }
+                0xcc if mid => {
+                    self.need(3)?;
+                    let signature = self.items[self.main - 3].bytes();
+                    let message = self.items[self.main - 2].bytes();
+                    let key = self.items[self.main - 1].bytes();
+                    if key.len() != 32 || (!signature.is_empty() && signature.len() != 64) {
+                        return Err(Failure::Signature);
+                    }
+                    let valid = if signature.is_empty() {
+                        false
+                    } else {
+                        self.signature_budget = self
+                            .signature_budget
+                            .checked_sub(50)
+                            .ok_or(Failure::Signature)?;
+                        if !crypto.check_data_signature(signature, message, key)? {
+                            return Err(Failure::Signature);
+                        }
+                        true
+                    };
+                    self.main -= 3;
+                    self.push_number(i64::from(valid))?;
+                }
                 _ => return Err(Failure::InvalidEncoding),
             }
         }
         // Tapscript requires exactly one true main-stack result. The altstack
         // is not part of cleanstack and may retain values, as in Bitcoin Core.
-        Ok(self.main == 1 && truth(self.items[0].bytes()))
+        Ok(depth == 0 && self.main == 1 && truth(self.items[0].bytes()))
     }
 }
 
@@ -369,6 +610,49 @@ fn script_number(bytes: &[u8], maximum_length: usize) -> Result<i64, Failure> {
     Ok(value)
 }
 
+fn supported_mid(opcode: u8) -> bool {
+    matches!(
+        opcode,
+        0x00..=0x4f
+            | 0x51..=0x60
+            | 0x69
+            | 0x6b..=0x6e
+            | 0x72
+            | 0x75..=0x7e
+            | 0x82
+            | 0x87..=0x88
+            | 0x8b
+            | 0x90..=0x94
+            | 0x9a
+            | 0x9d
+            | 0x9f..=0xa2
+            | 0xa8
+            | 0xaa
+            | 0xac..=0xad
+            | 0xb1..=0xb2
+            | 0xbf..=0xc0
+            | 0xcc
+    )
+}
+
+/// Apply BIP112's transaction-version, type and relative-sequence constraints.
+pub fn check_sequence(version: i32, actual: u32, required: i64) -> bool {
+    const DISABLED: u64 = 1 << 31;
+    const TIME: u64 = 1 << 22;
+    const MASK: u64 = TIME | 0xffff;
+    if required < 0 {
+        return false;
+    }
+    let required = required as u64;
+    if required & DISABLED != 0 {
+        return true;
+    }
+    version >= 2
+        && u64::from(actual) & DISABLED == 0
+        && u64::from(actual) & TIME == required & TIME
+        && u64::from(actual) & MASK >= required & MASK
+}
+
 #[cfg(target_arch = "wasm32")]
 static mut MACHINE: Machine = Machine::new();
 
@@ -385,13 +669,33 @@ static MACHINE: std::sync::Mutex<Machine> = std::sync::Mutex::new(Machine::new()
 /// result. Pushes and CSV numbers must use minimal encodings. CHECKSIG accepts
 /// only 32-byte keys and DEFAULT/ALL signatures and enforces BIP342 NULLFAIL.
 pub fn evaluate(script: &[u8], witness: &[u8], crypto: &impl Crypto) -> Result<bool, Failure> {
+    execute_profile(script, witness, crypto, false)
+}
+
+/// Execute the MID profile with CAT, OP_TX, CSFS and OP_TWEAKADD.
+///
+/// This retains the CAT profile's bounds and strict encodings, while adding
+/// current four-byte Script arithmetic, stack manipulation, BIP65 and bounded
+/// MINIMALIF conditionals. The candidate opcode numbers are the LayerTree
+/// reference simulator's placeholders: TX=0xbf, TWEAKADD=0xc0 and CSFS=0xcc.
+/// Only OP_TX selectors 0x8000, 0x10800, 0x20800 and 0x4300 are supported.
+pub fn evaluate_mid(script: &[u8], witness: &[u8], crypto: &impl Crypto) -> Result<bool, Failure> {
+    execute_profile(script, witness, crypto, true)
+}
+
+fn execute_profile(
+    script: &[u8],
+    witness: &[u8],
+    crypto: &impl Crypto,
+    mid: bool,
+) -> Result<bool, Failure> {
     #[cfg(target_arch = "wasm32")]
     let machine = unsafe { &mut *core::ptr::addr_of_mut!(MACHINE) };
     #[cfg(not(target_arch = "wasm32"))]
     let mut guard = MACHINE.lock().expect("Script execution arena poisoned");
     #[cfg(not(target_arch = "wasm32"))]
     let machine = &mut *guard;
-    machine.run(script, witness, crypto)
+    machine.run(script, witness, crypto, mid)
 }
 
 #[cfg(test)]
@@ -436,6 +740,249 @@ mod tests {
 
     fn execute(script: &[u8], items: &[&[u8]]) -> Result<bool, Failure> {
         evaluate(script, &evidence(items), &TestCrypto::default())
+    }
+
+    #[derive(Default)]
+    struct MidCrypto {
+        basic: TestCrypto,
+        calls: RefCell<Vec<(u32, Option<u32>)>>,
+    }
+
+    impl Crypto for MidCrypto {
+        fn hash(&self, bytes: &[u8]) -> Result<[u8; 32], Failure> {
+            self.basic.hash(bytes)
+        }
+
+        fn check_signature(&self, signature: &[u8], key: &[u8]) -> Result<bool, Failure> {
+            self.basic.check_signature(signature, key)
+        }
+
+        fn check_sequence(&self, operand: i64) -> Result<bool, Failure> {
+            self.basic.check_sequence(operand)
+        }
+
+        fn check_lock_time(&self, operand: i64) -> Result<bool, Failure> {
+            Ok(operand == 500 || operand == 0x8000_0000)
+        }
+
+        fn check_data_signature(
+            &self,
+            signature: &[u8],
+            message: &[u8],
+            key: &[u8],
+        ) -> Result<bool, Failure> {
+            Ok(signature[0] == 1 && message == b"data" && key == [4; 32])
+        }
+
+        fn tweak_add(&self, tweak: &[u8; 32], key: &[u8; 32]) -> Result<[u8; 32], Failure> {
+            if tweak != &[3; 32] || key != &[4; 32] {
+                return Err(Failure::TweakProof);
+            }
+            Ok([5; 32])
+        }
+
+        fn transaction(
+            &self,
+            selector: u32,
+            index: Option<u32>,
+            output: &mut [u8; 520],
+        ) -> Result<(usize, Option<u64>), Failure> {
+            self.calls.borrow_mut().push((selector, index));
+            match (selector, index) {
+                (0x8000, None) => Ok((0, None)),
+                (0x10800, None) => {
+                    output[..8].copy_from_slice(&123_u64.to_le_bytes());
+                    Ok((8, None))
+                }
+                (0x20800, None) => {
+                    output[..2].copy_from_slice(&[0x51, 0x21]);
+                    Ok((2, None))
+                }
+                (0x4300, Some(1)) => {
+                    output[..2].copy_from_slice(&[0x51, 0x21]);
+                    Ok((2, Some(999)))
+                }
+                _ => Err(Failure::InvalidEncoding),
+            }
+        }
+    }
+
+    fn execute_mid(script: &[u8], items: &[&[u8]]) -> Result<bool, Failure> {
+        evaluate_mid(script, &evidence(items), &MidCrypto::default())
+    }
+
+    #[test]
+    fn mid_control_flow_requires_minimal_if_and_balanced_bounded_nesting() {
+        assert_eq!(
+            execute_mid(&[0x63, 0x51, 0x67, 0x00, 0x68], &[&[1]]),
+            Ok(true)
+        );
+        assert_eq!(
+            execute_mid(&[0x64, 0x00, 0x67, 0x51, 0x68], &[&[1]]),
+            Ok(true)
+        );
+        // Inner branches under an inactive outer branch do not consume items.
+        assert_eq!(
+            execute_mid(
+                &[0x00, 0x63, 0x63, 0x75, 0x67, 0x75, 0x68, 0x67, 0x51, 0x68],
+                &[]
+            ),
+            Ok(true)
+        );
+        for condition in [&[2][..], &[0][..], &[0x80][..], &[1, 0][..]] {
+            assert!(execute_mid(&[0x63, 0x51, 0x68], &[condition]).is_err());
+        }
+        for malformed in [&[0x67][..], &[0x68][..], &[0x63][..]] {
+            assert!(execute_mid(malformed, &[]).is_err());
+        }
+        assert_eq!(execute_mid(&[0x51, 0x63, 0x51], &[]), Ok(false));
+        let nested = |depth| {
+            let mut script = [0x51, 0x63].repeat(depth);
+            script.push(0x51);
+            script.extend(vec![0x68; depth]);
+            script
+        };
+        assert_eq!(execute_mid(&nested(MAX_CONDITIONALS), &[]), Ok(true));
+        assert!(execute_mid(&nested(MAX_CONDITIONALS + 1), &[]).is_err());
+        assert!(execute_mid(&[0x00, 0x63, 0xbb, 0x68, 0x51], &[]).is_err());
+        assert!(execute_mid(&[0x00, 0x63, 3, 1, 0x68], &[]).is_err());
+    }
+
+    #[test]
+    fn mid_stack_operations_preserve_order_and_reject_invalid_indices() {
+        assert_eq!(
+            execute_mid(
+                &[0x72, 0x52, 0x88, 0x51, 0x88, 0x54, 0x88, 0x53, 0x87],
+                &[&[1], &[2], &[3], &[4]]
+            ),
+            Ok(true)
+        );
+        assert_eq!(
+            execute_mid(&[0x78, 0x51, 0x88, 0x52, 0x88, 0x51, 0x87], &[&[1], &[2]]),
+            Ok(true)
+        );
+        assert_eq!(
+            execute_mid(&[0x7d, 0x52, 0x88, 0x51, 0x88, 0x52, 0x87], &[&[1], &[2]]),
+            Ok(true)
+        );
+        assert_eq!(execute_mid(&[0x77, 0x52, 0x87], &[&[1], &[2]]), Ok(true));
+        assert_eq!(execute_mid(&[0x6d, 0x51], &[&[1], &[2]]), Ok(true));
+        assert_eq!(
+            execute_mid(
+                &[0x52, 0x79, 0x51, 0x88, 0x6d, 0x51, 0x87],
+                &[&[1], &[2], &[3]]
+            ),
+            Ok(true)
+        );
+        assert_eq!(
+            execute_mid(
+                &[0x52, 0x7a, 0x51, 0x88, 0x53, 0x88, 0x52, 0x87],
+                &[&[1], &[2], &[3]]
+            ),
+            Ok(true)
+        );
+        for index in [&[0x81][..], &[3][..], &[0][..], &[0, 0, 0, 0x80, 0][..]] {
+            assert!(execute_mid(&[0x79], &[&[1], index]).is_err());
+            assert!(execute_mid(&[0x7a], &[&[1], index]).is_err());
+        }
+    }
+
+    #[test]
+    fn mid_arithmetic_uses_minimal_four_byte_operands_and_five_byte_results() {
+        assert_eq!(execute_mid(&[0x93, 0x55, 0x87], &[&[2], &[3]]), Ok(true));
+        assert_eq!(execute_mid(&[0x94, 0x4f, 0x87], &[&[2], &[3]]), Ok(true));
+        assert_eq!(execute_mid(&[0x90, 0x51, 0x87], &[&[0x81]]), Ok(true));
+        assert_eq!(execute_mid(&[0x8b, 0x52, 0x87], &[&[1]]), Ok(true));
+        assert_eq!(execute_mid(&[0x91], &[&[]]), Ok(true));
+        assert_eq!(execute_mid(&[0x92], &[&[0x81]]), Ok(true));
+        assert_eq!(execute_mid(&[0x9a], &[&[0x81], &[2]]), Ok(true));
+        assert_eq!(execute_mid(&[0xa1], &[&[2], &[3]]), Ok(true));
+        assert_eq!(execute_mid(&[0xa2], &[&[3], &[2]]), Ok(true));
+        assert_eq!(execute_mid(&[0x9d, 0x51], &[&[2], &[2]]), Ok(true));
+        assert_eq!(execute_mid(&[0x9d, 0x51], &[&[2], &[3]]), Ok(false));
+        let maximum = [0xff, 0xff, 0xff, 0x7f];
+        assert_eq!(
+            execute_mid(&[0x8b, 5, 0, 0, 0, 0x80, 0, 0x87], &[&maximum]),
+            Ok(true)
+        );
+        assert!(execute_mid(&[0x8b, 0x8b], &[&maximum]).is_err());
+        for nonminimal in [&[0][..], &[0x80][..], &[1, 0][..]] {
+            assert!(execute_mid(&[0x90], &[nonminimal]).is_err());
+            assert!(execute_mid(&[0x93], &[nonminimal, &[1]]).is_err());
+        }
+        // MID's NONNEG check rejects a negative amount before it is hashed.
+        assert_eq!(
+            execute_mid(&[0x76, 0x76, 0x90, 0x88, 0x75, 0x51], &[&[0x81]]),
+            Ok(false)
+        );
+    }
+
+    #[test]
+    fn mid_transaction_selectors_use_raw_amounts_and_ordered_output_fields() {
+        let crypto = MidCrypto::default();
+        let script = [
+            3, 0, 0x80, 0, 0xbf, 0x00, 0x88, 3, 0, 8, 1, 0xbf, 8, 123, 0, 0, 0, 0, 0, 0, 0, 0x88,
+            3, 0, 8, 2, 0xbf, 2, 0x51, 0x21, 0x88, 0x51, 2, 0, 0x43, 0xbf, 2, 0x51, 0x21, 0x88, 8,
+            0xe7, 3, 0, 0, 0, 0, 0, 0, 0x87,
+        ];
+        assert_eq!(evaluate_mid(&script, &evidence(&[]), &crypto), Ok(true));
+        assert_eq!(
+            &*crypto.calls.borrow(),
+            &[
+                (0x8000, None),
+                (0x10800, None),
+                (0x20800, None),
+                (0x4300, Some(1))
+            ]
+        );
+        assert!(execute_mid(&[0x51, 0xbf], &[]).is_err());
+        assert!(execute_mid(&[0x4f, 2, 0, 0x43, 0xbf], &[]).is_err());
+        assert!(execute_mid(&[0x00, 2, 0, 0x43, 0xbf], &[]).is_err());
+        assert!(execute_mid(&[3, 0, 8, 0x81, 0xbf], &[]).is_err());
+    }
+
+    #[test]
+    fn mid_crypto_hooks_are_strict_and_old_profile_remains_closed() {
+        assert_eq!(
+            execute_mid(&[0xcc], &[&[1; 64], b"data", &[4; 32]]),
+            Ok(true)
+        );
+        assert_eq!(execute_mid(&[0xcc], &[&[], b"data", &[4; 32]]), Ok(false));
+        assert_eq!(
+            execute_mid(&[0xcc], &[&[0; 64], b"data", &[4; 32]]),
+            Err(Failure::Signature)
+        );
+        assert_eq!(
+            execute_mid(&[0xcc], &[&[1; 65], b"data", &[4; 32]]),
+            Err(Failure::Signature)
+        );
+        assert_eq!(
+            execute_mid(
+                &[0xc0, 0x82, 1, 32, 0x88, 0x75, 0x51],
+                &[&[3; 32], &[4; 32]]
+            ),
+            Ok(true)
+        );
+        assert!(execute_mid(&[0xc0], &[&[3; 31], &[4; 32]]).is_err());
+        assert!(execute_mid(&[0xc0], &[&[2; 32], &[4; 32]]).is_err());
+        assert_eq!(execute_mid(&[0xb1, 0x75, 0x51], &[&[0xf4, 1]]), Ok(true));
+        assert_eq!(
+            execute_mid(&[0xb1, 0x75, 0x51], &[&[0, 0, 0, 0x80, 0]]),
+            Ok(true)
+        );
+        assert_eq!(execute_mid(&[0xb1], &[&[0x81]]), Ok(false));
+        for opcode in [
+            0x63, 0x6d, 0x72, 0x77, 0x78, 0x79, 0x7a, 0x7d, 0x8b, 0x90, 0x91, 0x92, 0x93, 0x94,
+            0x9a, 0x9d, 0xa1, 0xa2, 0xb1, 0xbf, 0xc0, 0xcc,
+        ] {
+            assert!(execute(&[opcode], &[&[1], &[2], &[3]]).is_err());
+        }
+        assert!(evaluate_mid(
+            &[0xc0],
+            &evidence(&[&[3; 32], &[4; 32]]),
+            &TestCrypto::default()
+        )
+        .is_err());
     }
 
     #[test]
