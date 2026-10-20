@@ -24,6 +24,7 @@ pub mod eltoo_channel;
 pub mod federated_sidechain;
 pub mod hanukkah;
 pub mod hodl_chicken;
+pub mod layertree;
 pub mod op_return_chain;
 pub mod purrfect_vault;
 pub mod readme_contracts;
