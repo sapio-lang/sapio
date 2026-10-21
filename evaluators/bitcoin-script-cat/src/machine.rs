@@ -320,7 +320,9 @@ impl Machine {
                     let position = self.main - index - 1;
                     let item = self.items[position];
                     if opcode == 0x7a {
-                        self.items.copy_within(position + 1..self.main, position);
+                        for slot in position..self.main - 1 {
+                            self.items[slot] = self.items[slot + 1];
+                        }
                         self.main -= 1;
                     }
                     self.push(item.bytes())?;
