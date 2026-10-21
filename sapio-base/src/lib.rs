@@ -7,6 +7,7 @@
 //! base sapio library functionality and definitions, not particular to sapio compiler
 #![deny(missing_docs)]
 pub mod amount;
+pub mod bitcoin_script;
 pub mod schema;
 /// Extra functionality for working with Bitcoin types
 pub mod util;
@@ -16,6 +17,7 @@ pub use util::CTVHash;
 pub mod covenant;
 mod crypto;
 pub mod fragments;
+pub mod nums;
 pub mod op_vault;
 pub mod plugin_args;
 pub mod policy;

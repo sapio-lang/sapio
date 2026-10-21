@@ -13,6 +13,7 @@ use bitcoin::sighash::{Prevouts, SighashCache};
 use bitcoin::{Amount, Network, OutPoint, ScriptBuf, TapSighashType, Transaction, TxIn, TxOut};
 use sapio_base::miniscript::ord::Inscription;
 use sapio_base::miniscript::psbt::{interpreter_check, PsbtExt};
+use sapio_base::nums::NumsInternalKey;
 use sapio_base::policy::ScriptFragment;
 use sapio_base::LoweringPlan;
 
@@ -288,4 +289,156 @@ fn explicit_owner_pin_survives_native_and_emulated_covenant_lowering() {
             .contains(&predicate));
         compiled.validate().unwrap();
     }
+}
+
+struct StateContract {
+    opening: NumsInternalKey,
+    policy: ScriptPolicy,
+    pin: Option<XOnlyPublicKey>,
+}
+
+impl StateContract {
+    fn policy() -> Option<Guard<Self>> {
+        Some(Guard::CachedPolicy(
+            |contract| Ok(contract.policy.clone()),
+            None,
+        ))
+    }
+}
+
+impl Contract for StateContract {
+    crate::declare! {finish, Self::policy}
+
+    fn nums_internal_key(&self, _: &Context) -> Result<Option<NumsInternalKey>, CompilationError> {
+        Ok(Some(self.opening))
+    }
+
+    fn pinned_internal_key(&self, _: &Context) -> Result<Option<XOnlyPublicKey>, CompilationError> {
+        Ok(self.pin)
+    }
+}
+
+fn state_compile(opening: NumsInternalKey, policy: ScriptPolicy) -> Object {
+    StateContract {
+        opening,
+        policy,
+        pin: None,
+    }
+    .compile(Context::new(
+        Network::Regtest,
+        Amount::from_sat(10_000),
+        LoweringPlan::Native,
+        "state_key".try_into().unwrap(),
+        Arc::new(Default::default()),
+        None,
+    ))
+    .unwrap()
+}
+
+#[test]
+fn public_nums_opening_preserves_every_leaf_and_survives_artifact_round_trip() {
+    let opening =
+        NumsInternalKey::new(sha256::Hash::hash(b"state commitment").to_byte_array()).unwrap();
+    let compiled = state_compile(
+        opening,
+        ScriptPolicy::Or(vec![Clause::Key(key(1)).into(), Clause::Key(key(2)).into()]),
+    );
+    let mut input = bitcoin::psbt::Input::default();
+    compiled
+        .descriptor
+        .as_ref()
+        .unwrap()
+        .update_psbt_input(&mut input)
+        .unwrap();
+    assert_eq!(
+        input.tap_internal_key,
+        Some(opening.internal_key().unwrap())
+    );
+    assert_eq!(input.tap_scripts.len(), 2);
+    compiled.validate().unwrap();
+    let decoded: Object = serde_json::from_value(serde_json::to_value(&compiled).unwrap()).unwrap();
+    decoded.validate().unwrap();
+    assert_eq!(decoded, compiled);
+
+    let mut missing = compiled.clone();
+    missing.nums_internal_key = None;
+    assert!(missing.validate().is_err());
+
+    let mut different = compiled.clone();
+    different.nums_internal_key = Some(NumsInternalKey::new([0; 32]).unwrap());
+    assert!(different.validate().is_err());
+
+    let mut omitted = compiled.clone();
+    let descriptor =
+        Descriptor::Tr(descriptor::Tr::new(opening.internal_key().unwrap(), None).unwrap());
+    omitted.address = descriptor.clone().into();
+    omitted.descriptor = Some(descriptor.into());
+    assert!(omitted.validate().is_err());
+
+    let mut encoded = serde_json::to_value(&compiled).unwrap();
+    encoded["nums_internal_key"]["tweak"] =
+        serde_json::to_value(sha256::Hash::from_byte_array([255; 32])).unwrap();
+    let invalid: Object = serde_json::from_value(encoded).unwrap();
+    assert!(invalid.validate().is_err());
+}
+
+#[test]
+fn nums_opening_cannot_promote_an_emulated_program_to_key_path() {
+    use sapio_base::program::{EmulatedProgram, ProgramInstance, ProgramSpendPath};
+    let root = Xpub::from_priv(
+        &Secp256k1::new(),
+        &Xpriv::new_master(Network::Regtest, &[19; 32]).unwrap(),
+    );
+    let program =
+        EmulatedProgram::new(ProgramInstance::wasm_v2(vec![], vec![]).unwrap(), root).unwrap();
+    let opening =
+        NumsInternalKey::new(sha256::Hash::hash(b"program state").to_byte_array()).unwrap();
+    let mut compiled = state_compile(opening, program.into());
+    let mut input = bitcoin::psbt::Input::default();
+    compiled
+        .descriptor
+        .as_ref()
+        .unwrap()
+        .update_psbt_input(&mut input)
+        .unwrap();
+    assert_eq!(input.tap_scripts.len(), 1);
+    assert!(compiled
+        .program_requirements()
+        .unwrap()
+        .iter()
+        .all(|requirement| matches!(requirement.path, ProgramSpendPath::ScriptPath(_))));
+    compiled.program_policies[0]
+        .paths
+        .insert(ProgramSpendPath::KeyPath);
+    assert!(compiled.validate().is_err());
+}
+
+#[test]
+fn many_state_authorization_leaves_round_trip_with_their_exact_depths() {
+    use sapio_base::program::{EmulatedProgram, ProgramInstance};
+    let root = Xpub::from_priv(
+        &Secp256k1::new(),
+        &Xpriv::new_master(Network::Regtest, &[20; 32]).unwrap(),
+    );
+    let policies = (0..10)
+        .map(|index| {
+            EmulatedProgram::new(ProgramInstance::wasm_v2(vec![], vec![index]).unwrap(), root)
+                .unwrap()
+                .into()
+        })
+        .collect();
+    let opening = NumsInternalKey::new(sha256::Hash::hash(b"many leaves").to_byte_array()).unwrap();
+    let compiled = state_compile(opening, ScriptPolicy::Or(policies));
+    let Some(SupportedDescriptors::Taproot(tree)) = &compiled.descriptor else {
+        panic!("state outputs preserve their complete script tree")
+    };
+    assert_eq!(tree.leaves().len(), 10);
+    assert!(tree
+        .leaves()
+        .iter()
+        .all(|(depth, _)| (3..=4).contains(depth)));
+    let decoded: Object = serde_json::from_value(serde_json::to_value(&compiled).unwrap()).unwrap();
+    decoded.validate().unwrap();
+    assert_eq!(decoded, compiled);
+    assert_eq!(decoded.program_requirements().unwrap().len(), 10);
 }

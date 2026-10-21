@@ -14,11 +14,14 @@ const GUEST: &str = r#"(module
         (func $verify (param i32 i32 i32 i32) (result i32)))
     (import "sapio_crypto_v2" "xonly_tweak_check"
         (func $tweak (param i32 i32 i32 i32) (result i32)))
+    (import "sapio_crypto_v2" "xonly_tweak_add"
+        (func $add (param i32 i32 i32) (result i32)))
     (memory (export "memory") 32)
     (export "sha" (func $sha))
     (export "verify_v1" (func $verify_v1))
     (export "verify" (func $verify))
     (export "tweak" (func $tweak))
+    (export "add" (func $add))
     (func (export "noop")))"#;
 
 fn guest(fuel: u64) -> (Store, Instance) {
@@ -268,6 +271,91 @@ fn tweak_rejects_noncanonical_scalars_invalid_points_parity_and_infinity() {
         assert_eq!(check.call(&mut store, 0, 32, 64, 0).unwrap(), 0);
         assert_eq!(check.call(&mut store, 0, 32, 64, 1).unwrap(), 0);
     }
+}
+
+#[test]
+fn additive_tweak_outputs_match_secp_and_reject_invalid_inputs() {
+    let (mut store, instance) = guest(INSTANCE_FUEL);
+    let add = instance
+        .exports
+        .get_typed_function::<(u32, u32, u32), i32>(&store, "add")
+        .unwrap();
+    let secp = Secp256k1::new();
+    let original = SecretKey::from_slice(&Scalar::ONE.to_be_bytes())
+        .unwrap()
+        .x_only_public_key(&secp)
+        .0;
+    let mut parities = [false; 2];
+    for value in [0, 1, 5] {
+        let mut tweak = [0; 32];
+        tweak[31] = value;
+        let (expected, parity) = original
+            .add_tweak(&secp, &Scalar::from_be_bytes(tweak).unwrap())
+            .unwrap();
+        parities[parity.to_u8() as usize] = true;
+        write(&store, &instance, 0, &original.serialize());
+        write(&store, &instance, 32, &tweak);
+        let before = remaining(&mut store, &instance);
+        // The result may alias the original key. Both inputs are read first.
+        assert_eq!(add.call(&mut store, 0, 32, 0).unwrap(), 1);
+        assert_eq!(
+            before - remaining(&mut store, &instance),
+            XONLY_TWEAK_ADD_FUEL
+        );
+        let mut actual = [0; 32];
+        instance
+            .exports
+            .get_memory("memory")
+            .unwrap()
+            .view(&store)
+            .read(0, &mut actual)
+            .unwrap();
+        assert_eq!(actual, expected.serialize());
+    }
+    assert_eq!(parities, [true, true]);
+    write(&store, &instance, 0, &original.serialize());
+    let mut order = Scalar::MAX.to_be_bytes();
+    order[31] += 1;
+    for invalid in [order, [0xff; 32], Scalar::MAX.to_be_bytes()] {
+        write(&store, &instance, 32, &invalid);
+        // The last value is canonical but produces infinity for G.
+        write(&store, &instance, 64, &[0x42; 32]);
+        assert_eq!(add.call(&mut store, 0, 32, 64).unwrap(), 0);
+        let mut untouched = [0; 32];
+        instance
+            .exports
+            .get_memory("memory")
+            .unwrap()
+            .view(&store)
+            .read(64, &mut untouched)
+            .unwrap();
+        assert_eq!(untouched, [0x42; 32]);
+    }
+    write(&store, &instance, 0, &[0xff; 32]);
+    write(&store, &instance, 32, &[0; 32]);
+    assert_eq!(add.call(&mut store, 0, 32, 64).unwrap(), 0);
+    let end = 32 * 65_536;
+    for args in [
+        (end - 31, 32, 64),
+        (0, end - 31, 64),
+        (0, 32, end - 31),
+        (u32::MAX, 32, 64),
+    ] {
+        assert!(add.call(&mut store, args.0, args.1, args.2).is_err());
+    }
+    let (mut store, instance) = guest(XONLY_TWEAK_ADD_FUEL - 1);
+    let add = instance
+        .exports
+        .get_typed_function::<(u32, u32, u32), i32>(&store, "add")
+        .unwrap();
+    let error = add
+        .call(&mut store, u32::MAX, u32::MAX, u32::MAX)
+        .unwrap_err();
+    assert!(error.to_string().contains("exhausted instance fuel"));
+    assert_eq!(
+        get_remaining_points(&mut store, &instance),
+        MeteringPoints::Exhausted
+    );
 }
 
 #[test]

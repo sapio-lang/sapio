@@ -40,3 +40,7 @@ features = ['compiler', 'rand', 'serde']
 [dependencies.sapio-base]
 path = "../sapio-base"
 version = "0.2.0"
+
+[dev-dependencies]
+sapio-bitcoin-script-cat-evaluator = { path = "../evaluators/bitcoin-script-cat" }
+sapio-covenant-fragments = { path = "../evaluators/fragments" }

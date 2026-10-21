@@ -8,7 +8,7 @@ preview, not a production-readiness or security-audit claim.
 
 - `sapio-cli new` supplies a complete manifest, lockfile, pinned Rust toolchain,
   contract source, runner, tests and exact evaluator bytes. The starter pins
-  Sapio revision `88cb0daf23762d942bb5c2532b3d27f770066c43`; its top-level patches
+  Sapio revision `4b4ace2efce0b67763c853c33cb9691d8600b65b`; its top-level patches
   select the matching Bitcoin, Miniscript and schema dependencies.
 - The [quickstart](QUICKSTART.md) and generated README cover authoring, raw
   artifact inspection, preparation, explicit local signing, verified response

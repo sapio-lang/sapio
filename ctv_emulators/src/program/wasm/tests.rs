@@ -627,6 +627,7 @@ fn inline_versions_require_their_own_exports_and_crypto_capabilities() {
             (import "sapio_crypto_v1" "sha256" (func (param i32 i32 i32) (result i32)))
             (import "sapio_crypto_v2" "schnorr_verify" (func (param i32 i32 i32 i32) (result i32)))
             (import "sapio_crypto_v2" "xonly_tweak_check" (func (param i32 i32 i32 i32) (result i32)))
+            (import "sapio_crypto_v2" "xonly_tweak_add" (func (param i32 i32 i32) (result i32)))
             (memory (export "memory") 1)
             (global $heap (mut i32) (i32.const 4096))
             (func (export "sapio_alloc_v{version}") (param $length i32) (result i32)
@@ -652,6 +653,7 @@ fn inline_versions_require_their_own_exports_and_crypto_capabilities() {
     }
     for declaration in [
         r#"(import "sapio_crypto_v2" "schnorr_verify" (func (param i32 i32 i32) (result i32)))"#,
+        r#"(import "sapio_crypto_v2" "xonly_tweak_add" (func (param i32 i32 i32 i32) (result i32)))"#,
         r#"(import "sapio_crypto_v2" "xonly_tweak_check" (func (param i32 i32 i32 i64) (result i32)))"#,
         r#"(import "sapio_crypto_v2" "schnorr_verify" (func (param i32 i32 i32 i32) (result i64)))"#,
         r#"(import "sapio_crypto_v2" "xonly_tweak_check" (memory 1))"#,

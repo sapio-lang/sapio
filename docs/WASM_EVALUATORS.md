@@ -169,12 +169,20 @@ V2 admits the three unchanged `sapio_crypto_v1` imports plus:
 | --- | --- | --- | --- |
 | `schnorr_verify` | message pointer, message length, key32 pointer, signature64 pointer | 1 valid; 0 invalid | 50,000 + 2 per message byte |
 | `xonly_tweak_check` | key32 pointer, scalar32 pointer, output-key32 pointer, parity | 1 valid; 0 invalid | 50,000 |
+| `xonly_tweak_add` | key32 pointer, scalar32 pointer, result32 pointer | 1 written; 0 invalid | 50,000 |
 
 Messages contain at most 1 MiB and are verified directly under BIP340 without
 prehashing. Tweaks are canonical big-endian scalars, including zero; parity is
 exactly `0` or `1`. The check establishes `Q = lift_x(P) + t*G` with the supplied
 output parity. Invalid cryptographic data returns zero; invalid memory ranges
 or resource exhaustion trap. V1 and v2 imports share one fuel environment.
+
+`xonly_tweak_add` computes the x coordinate of `lift_x(P) + t*G`. It rejects
+invalid points, scalars at or above the curve order, and infinity. Zero is
+valid. The result is lifted with even parity if used in another x-only
+operation. Both inputs are read before writing, so buffers may overlap;
+invalid cryptographic data leaves the result buffer unchanged. The host
+charges fuel and checks every buffer before interpreting its contents.
 
 The [covenant fragment library](COVENANT_FRAGMENTS.md) provides typed CSFS
 failure semantics, TemplateHash, internal-key lookup and known-tweak evidence.
